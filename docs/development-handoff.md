@@ -17,9 +17,12 @@ copy under Record. Preserve light/dark/system support and accessible controls.
 The current flat quotation-pair logo is provisional. Identity exploration is open
 again: seek a distinctive connection to Focal's name and voice capture, compatible
 with the selected minimal UI. Do not treat the existing mark as approved or apply
-an exploratory replacement before selection. Avoid decorative 3D. Product/engine
-work may proceed independently; keep pending identity work confined to brand
-assets and exploration files.
+an exploratory replacement before selection. Prioritize an immediately readable
+name, coherent proportions, a related compact mark and fit with the quiet product.
+Space, depth, color or material may support that identity; neither flat-only
+constraints nor elaborate physical metaphors are mandatory. Product/engine work
+may proceed independently; keep pending identity work confined to brand assets
+and exploration files.
 
 The interface is English by default. Speech support must be evaluated for English,
 Russian, German, French, Spanish, Italian and Portuguese. Prioritize Russian
