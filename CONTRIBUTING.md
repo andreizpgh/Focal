@@ -66,3 +66,9 @@ git diff --cached --check
 CI scans the full fetched history on pushes and pull requests. Treat any finding
 as a blocker; do not paste secret values into issues or logs. Coordinate credential
 revocation and any history cleanup with the owner before rewriting public refs.
+
+Testing releases promote an existing successful Android build using the pinned
+manifest in `releases/`. The tag workflow checks the build, artifact checksum,
+unchanged app inputs, and embedded model before publishing the APK and checksums.
+Release notes live in `docs/releases/`. Alpha APKs use development signing;
+stable distribution needs a persistent, separately managed release signing key.
