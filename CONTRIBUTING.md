@@ -45,3 +45,24 @@ stable signing key; release builds refuse to package an absent speech model.
 - Test meaningful lifecycle and recovery behavior when changing capture or storage.
 
 See [architecture](docs/architecture.md) and [device validation](docs/device-validation.md).
+
+## Before publishing
+
+Review the staged diff and your Git author email. Use GitHub's private commit
+email if you do not want a personal address in public history. Keep commits
+focused and explain observable changes and relevant verification.
+
+Never commit credentials, local configuration, signing keys, private recordings,
+transcripts, or device logs. Use synthetic data or documented public fixtures.
+Ignoring a file does not remove earlier committed copies.
+
+With [Gitleaks 8.24.3](https://github.com/gitleaks/gitleaks/releases/tag/v8.24.3):
+
+```sh
+gitleaks git --redact=100 --log-opts="--all --full-history" .
+git diff --cached --check
+```
+
+CI scans the full fetched history on pushes and pull requests. Treat any finding
+as a blocker; do not paste secret values into issues or logs. Coordinate credential
+revocation and any history cleanup with the owner before rewriting public refs.
