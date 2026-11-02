@@ -13,3 +13,5 @@ app/src/main/assets/*.partial
 app/src/main/assets/model-provenance.json
 captures/
 .DS_Store
+__pycache__/
+*.pyc
