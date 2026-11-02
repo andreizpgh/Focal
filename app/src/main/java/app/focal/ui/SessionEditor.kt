@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -115,16 +116,24 @@ import kotlinx.coroutines.launch
             }
             if (inputTooLarge) {
                 val requester = remember(passage.id) { BringIntoViewRequester() }
+                var warningLaidOut by remember(passage.id) { mutableStateOf(false) }
                 val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
                 Text("This text is too long for one passage. Paste a smaller selection.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.fillMaxWidth().bringIntoViewRequester(requester)
+                        .onGloballyPositioned { coordinates ->
+                            if (!warningLaidOut && coordinates.isAttached && coordinates.size.width > 0 && coordinates.size.height > 0)
+                                warningLaidOut = true
+                        }
                         .padding(start = 16.dp, end = 16.dp, top = 4.dp)
                         .semantics { liveRegion = LiveRegionMode.Assertive })
-                LaunchedEffect(passage.id, imeBottom) {
-                    // The keyboard can keep moving after rejection or activity recreation.
-                    withFrameNanos { }
-                    requester.bringIntoView()
+                LaunchedEffect(passage.id, imeBottom, sheetState.currentValue, warningLaidOut) {
+                    // Wait for the warning's first layout and the sheet's visible
+                    // state before revealing it, including after restoration.
+                    if (warningLaidOut && sheetState.currentValue != SheetValue.Hidden) {
+                        withFrameNanos { }
+                        requester.bringIntoView()
+                    }
                 }
             }
             Spacer(Modifier.height(20.dp))

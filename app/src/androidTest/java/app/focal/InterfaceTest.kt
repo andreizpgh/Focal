@@ -19,8 +19,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.ViewCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -342,7 +342,7 @@ class InterfaceTest {
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.onNode(hasSetTextAction()).assertIsNotFocused()
             waitForTitle(target.title)
-            compose.onNodeWithText(target.title).performClick()
+            compose.onNode(hasText(target.title) and hasClickAction() and !hasSetTextAction()).performClick()
             waitForSessionReady(target.title)
             compose.onNodeWithContentDescription("Back to sessions").performClick()
             compose.onNode(hasSetTextAction()).assertIsDisplayed().assertIsNotFocused().assertTextContains(target.title)
@@ -581,14 +581,19 @@ class InterfaceTest {
             compose.onNode(hasText(originals.first()) and hasClickAction()).performScrollTo().performClick()
             waitForEditor()
             compose.onNode(hasSetTextAction()).performTextReplacement(edits.first())
+            // The editor lives in a dialog window, separate from the Activity's
+            // window. Clear the actual text-field root focus and hide its IME.
+            val editorView = checkNotNull(compose.onNode(hasSetTextAction()).fetchSemanticsNode().root as? android.view.View)
             compose.runOnUiThread {
-                WindowCompat.getInsetsController(compose.activity.window, compose.activity.window.decorView)
-                    .hide(WindowInsetsCompat.Type.ime())
+                editorView.clearFocus()
+                editorView.context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                    .hideSoftInputFromWindow(editorView.windowToken, 0)
             }
+            compose.onNode(hasSetTextAction()).assertIsNotFocused()
             compose.waitForIdle()
             compose.waitUntil(5_000) {
                 compose.runOnUiThread {
-                    androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+                    ViewCompat.getRootWindowInsets(editorView)
                         ?.isVisible(WindowInsetsCompat.Type.ime()) != true
                 }
             }
