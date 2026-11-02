@@ -11,9 +11,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
+import java.io.InputStreamReader
 import java.io.RandomAccessFile
 import java.nio.file.Files
 import java.util.UUID
+
+internal const val MAX_PASSAGE_EDIT_BYTES = 128 * 1024
+internal fun fitsPassageDraftBudget(text: String): Boolean =
+    text.length <= MAX_PASSAGE_EDIT_BYTES && text.toByteArray(Charsets.UTF_8).size <= MAX_PASSAGE_EDIT_BYTES
+
+class PassageSizeException(message: String) : IllegalStateException(message)
 
 data class Note(val id: String, val title: String, val created: Long, val language: String,
                 val state: String, val duration: Long, val error: String, val preview: String = "", val reviewCount: Int = 0)
@@ -27,6 +35,8 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         const val BYTES_PER_MS = 32L
         const val MAX_CHUNK_MS = 30_000L
         const val RECOVERY_OVERLAP_MS = 500L
+        const val MAX_LEGACY_PASSAGE_BYTES = 16 * 1024 * 1024
+        const val TEXT_BLOCK_BYTES = 64 * 1024
     }
     val changes = MutableStateFlow(0L)
     val audioDir = File(context.filesDir, "audio").apply { mkdirs() }
@@ -62,7 +72,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     }
     fun notes(query: String = ""): List<Note> {
         val notes = readableDatabase.rawQuery("""SELECT n.*,
-        (SELECT text FROM passages WHERE note_id=n.id ORDER BY start,id LIMIT 1) preview,
+        (SELECT substr(text,1,512) FROM passages WHERE note_id=n.id ORDER BY start,id LIMIT 1) preview,
         (SELECT count(*) FROM passages WHERE note_id=n.id AND uncertain=1 AND reviewed=0) reviews
         FROM notes n ORDER BY created DESC""", null).use { c -> buildList {
         while (c.moveToNext()) add(note(c).copy(preview = c.string("preview"), reviewCount = c.int("reviews")))
@@ -70,12 +80,13 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         val term = query.trim()
         if (term.isEmpty()) return notes
         val matches = notes.filter { it.title.contains(term, ignoreCase = true) }.mapTo(mutableSetOf()) { it.id }
-        // SQLite's built-in LOWER/LIKE only folds ASCII. Keep matching Unicode-aware,
-        // reading one bounded passage at a time rather than loading every transcript.
-        readableDatabase.rawQuery("SELECT note_id,text FROM passages", null).use { cursor ->
+        // Read in bounded byte chunks: legacy passages can exceed a CursorWindow.
+        // Search uses Unicode-aware Kotlin matching, including across chunk boundaries.
+        readableDatabase.rawQuery("SELECT id,note_id,CASE WHEN length(CAST(text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES THEN text END FROM passages", null).use { cursor ->
             while (cursor.moveToNext()) {
-                val id = cursor.getString(0)
-                if (id !in matches && cursor.getString(1).contains(term, ignoreCase = true)) matches += id
+                val id = cursor.getString(1)
+                if (id !in matches && (cursor.getString(2)?.contains(term, ignoreCase = true)
+                        ?: passageContains(cursor.getLong(0), term))) matches += id
             }
         }
         return notes.filter { it.id in matches }
@@ -136,17 +147,77 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     fun pendingCount(note: String): Int = readableDatabase.rawQuery(
         "SELECT count(*) FROM chunks WHERE note_id=? AND state!='DONE'", arrayOf(note)
     ).use { it.moveToFirst(); it.getInt(0) }
-    fun recentPassages(note: String, before: Long): List<Passage> = readableDatabase.rawQuery(
-        "SELECT * FROM passages WHERE note_id=? AND start<? ORDER BY start DESC,id DESC LIMIT 6", arrayOf(note, before.toString())
-    ).use { c -> buildList {
-        while (c.moveToNext()) add(Passage(c.long("id"), c.string("note_id"), c.string("chunk_id"), c.long("start"), c.long("end"), c.string("text"), c.int("uncertain") == 1, c.int("reviewed") == 1))
-    }.asReversed() }
+    fun recentPassages(note: String, before: Long): List<Passage> = readPassages(
+        "SELECT id,note_id,chunk_id,start,end,uncertain,reviewed,CASE WHEN length(CAST(text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES THEN text END AS safe_text FROM passages WHERE note_id=? AND start<? ORDER BY start DESC,id DESC LIMIT 6",
+        arrayOf(note, before.toString())
+    ).asReversed()
     fun chunks(note: String): List<Chunk> = readableDatabase.rawQuery("SELECT * FROM chunks WHERE note_id=? ORDER BY start,rowid", arrayOf(note)).use { c -> buildList {
         while (c.moveToNext()) add(Chunk(c.string("id"), c.string("note_id"), c.long("start"), c.long("end"), c.int("overlap") == 1, c.string("state")))
     } }
-    fun passages(note: String): List<Passage> = readableDatabase.rawQuery("SELECT * FROM passages WHERE note_id=? ORDER BY start,id", arrayOf(note)).use { c -> buildList {
-        while (c.moveToNext()) add(Passage(c.long("id"), c.string("note_id"), c.string("chunk_id"), c.long("start"), c.long("end"), c.string("text"), c.int("uncertain") == 1, c.int("reviewed") == 1))
+    fun passages(note: String): List<Passage> = readPassages(
+        "SELECT id,note_id,chunk_id,start,end,uncertain,reviewed,CASE WHEN length(CAST(text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES THEN text END AS safe_text FROM passages WHERE note_id=? ORDER BY start,id", arrayOf(note)
+    )
+    private fun readPassages(sql: String, args: Array<String>): List<Passage> = readableDatabase.rawQuery(sql, args).use { c -> buildList {
+        while (c.moveToNext()) {
+            val id = c.long("id")
+            val text = c.getString(c.getColumnIndexOrThrow("safe_text")) ?: passageReader(id).use { reader ->
+                val out = StringBuilder()
+                val buffer = CharArray(8192)
+                while (true) { val count = reader.read(buffer); if (count < 0) break; out.append(buffer, 0, count) }
+                out.toString()
+            }
+            add(Passage(id, c.string("note_id"), c.string("chunk_id"), c.long("start"), c.long("end"), text, c.int("uncertain") == 1, c.int("reviewed") == 1))
+        }
     } }
+    // One SQL statement holds a consistent snapshot while individual rows fit safely
+    // inside CursorWindow. The byte stream preserves UTF-8 across block boundaries.
+    private fun passageReader(id: Long, limit: Boolean = true): InputStreamReader {
+        val cursor = readableDatabase.rawQuery("""WITH RECURSIVE offsets(pos,size) AS (
+            SELECT 1,length(CAST(text AS BLOB)) FROM passages WHERE id=?
+            UNION ALL SELECT pos+$TEXT_BLOCK_BYTES,size FROM offsets WHERE pos+$TEXT_BLOCK_BYTES<=size
+        ) SELECT substr(CAST(p.text AS BLOB),offsets.pos,$TEXT_BLOCK_BYTES), offsets.size
+          FROM offsets JOIN passages p ON p.id=?""", arrayOf(id.toString(), id.toString()))
+        val stream = object : InputStream() {
+            var bytes = ByteArray(0)
+            var position = 0
+            var checked = false
+            override fun read(): Int {
+                if (position == bytes.size) {
+                    if (!cursor.moveToNext()) return -1
+                    if (!checked) {
+                        checked = true
+                        if (limit && cursor.getLong(1) > MAX_LEGACY_PASSAGE_BYTES)
+                            throw PassageSizeException("This saved passage is too large to open. Its original text is still saved.")
+                    }
+                    bytes = cursor.getBlob(0) ?: ByteArray(0); position = 0
+                    if (bytes.isEmpty()) return -1
+                }
+                return bytes[position++].toInt() and 0xff
+            }
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (len == 0) return 0
+                val first = read(); if (first < 0) return -1
+                b[off] = first.toByte()
+                val count = minOf(len - 1, bytes.size - position)
+                System.arraycopy(bytes, position, b, off + 1, count); position += count
+                return count + 1
+            }
+            override fun close() { cursor.close() }
+        }
+        return InputStreamReader(stream, Charsets.UTF_8)
+    }
+    private fun passageContains(id: Long, term: String): Boolean = passageReader(id, limit = false).use { reader ->
+        val buffer = CharArray(8192)
+        var carry = ""
+        while (true) {
+            val count = reader.read(buffer)
+            if (count < 0) break
+            val block = carry + String(buffer, 0, count)
+            if (block.contains(term, ignoreCase = true)) return@use true
+            carry = block.takeLast((term.length - 1).coerceAtLeast(0))
+        }
+        false
+    }
     fun complete(chunk: Chunk, results: List<Passage>) {
         val db = writableDatabase
         db.transaction {
@@ -173,6 +244,8 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         changed()
     }
     fun edit(passage: Passage, text: String) {
+        if (!fitsPassageDraftBudget(text))
+            throw PassageSizeException("This passage is too long to save. Shorten it and try again; your draft is still open.")
         val updated = writableDatabase.update("passages", ContentValues().apply { put("text", text.trim()); put("reviewed", 1) },
             "id=? AND note_id=? AND chunk_id=?", arrayOf(passage.id.toString(), passage.noteId, passage.chunkId))
         check(updated == 1) { "This passage is no longer available. Your draft has not been saved." }

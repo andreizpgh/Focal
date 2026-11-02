@@ -380,6 +380,25 @@ class NoteStoreTest {
         assertEquals(correction, store.passages(id).single())
     }
 
+    @Test fun oversizedEditsAreRejectedAndLegacyTextCanBeReadAndSearched() {
+        val id = note(); val chunk = store.beginChunk(id, 0, false)
+        store.finishChunk(chunk, 1000)
+        store.complete(store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = chunk,
+            start = 0, end = 1000, text = "Saved original", uncertain = false)))
+        val original = store.passages(id).single()
+        try { store.edit(original, "🙂".repeat(40_000)); fail("Oversized edit accepted") }
+        catch (_: app.focal.data.PassageSizeException) { }
+        assertEquals("Saved original", store.passages(id).single().text)
+        // Simulate an older install that already saved a passage larger than CursorWindow.
+        val legacy = "a".repeat(2_100_000) + "мАрКеР🙂" + "b".repeat(100)
+        store.writableDatabase.execSQL("UPDATE passages SET text=? WHERE id=?", arrayOf<Any>(legacy, original.id))
+        assertEquals(legacy, store.passages(id).single().text)
+        assertTrue(store.notes().any { it.id == id })
+        assertTrue(store.notes("МаРкЕр🙂").any { it.id == id })
+        store.edit(original, "Shortened safely")
+        assertEquals("Shortened safely", store.passages(id).single().text)
+    }
+
     private fun pendingDeletion(id: String): Long = store.readableDatabase.rawQuery(
         "SELECT count(*) FROM pending_audio_deletions WHERE note_id=?", arrayOf(id)
     ).use { it.moveToFirst(); it.getLong(0) }
