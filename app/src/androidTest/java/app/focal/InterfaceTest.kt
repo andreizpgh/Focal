@@ -1,6 +1,7 @@
 package app.focal
 
 import android.content.ClipboardManager
+import android.content.ClipData
 import android.content.Intent
 import android.graphics.Bitmap
 import androidx.activity.compose.setContent
@@ -17,6 +18,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -28,6 +31,10 @@ import app.focal.recording.LiveSession
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
 import app.focal.ui.FocalApp
+import app.focal.ui.fitsTextTransferBudget
+import app.focal.ui.LARGE_PASSAGE_PART_CHARS
+import app.focal.ui.passageTextPart
+import app.focal.ui.passageTextPartCount
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -274,6 +281,60 @@ class InterfaceTest {
         } finally { ids.forEach(store::delete); app.preferences.theme(initialTheme) }
     }
 
+    @Test fun libraryReviewFilterAndScrollSurviveOpeningSessionAndRotation() {
+        val app = application()
+        val ids = mutableListOf<String>()
+        try {
+            repeat(16) { index ->
+                ids += readySession(app.store, "Review context $index", listOf("Review fixture passage $index."), uncertain = setOf(0))
+            }
+            val filtered = app.store.notes().filter { it.id in ids }
+            val target = filtered.last()
+            waitForTitle(filtered.first().title)
+            val count = app.store.notes().count { it.reviewCount > 0 || it.state in listOf("ERROR", "INTERRUPTED") }
+            reviewFilter("$count to review").performClick()
+            val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+            list.performScrollToNode(hasText(target.title))
+            val rowTop = compose.onNodeWithText(target.title).fetchSemanticsNode().boundsInRoot.top
+            compose.onNodeWithText(target.title).performClick()
+            waitForSessionReady(target.title, "Review fixture passage ${ids.indexOf(target.id)}.")
+            // The library is absent during recreation; its browsing state must still be saved.
+            compose.activityRule.scenario.recreate()
+            waitForSessionReady(target.title)
+            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            waitForTitle(target.title)
+            compose.onNodeWithText(target.title).assertIsDisplayed()
+            assertEquals(rowTop, compose.onNodeWithText(target.title).fetchSemanticsNode().boundsInRoot.top, 1f)
+            list.performScrollToNode(hasText("Show all"))
+            reviewFilter("Show all").assertIsSelected()
+        } finally { ids.forEach(app.store::delete) }
+    }
+
+    @Test fun searchOpensAtTopAndDoesNotRefocusAfterReturningFromSession() {
+        val app = application()
+        val ids = mutableListOf<String>()
+        try {
+            repeat(16) { index ->
+                ids += readySession(app.store, "Search context [$index]", listOf("Search fixture passage $index."))
+            }
+            val sessions = app.store.notes().filter { it.id in ids }
+            waitForTitle(sessions.first().title)
+            val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+            list.performScrollToNode(hasText(sessions.last().title))
+            compose.onNodeWithContentDescription("Search sessions").performClick()
+            compose.onNode(hasSetTextAction()).assertIsDisplayed().assertIsFocused()
+            val target = sessions.first()
+            compose.onNode(hasSetTextAction()).performTextReplacement(target.title)
+            compose.onNode(hasSetTextAction()).performImeAction()
+            compose.onNode(hasSetTextAction()).assertIsNotFocused()
+            waitForTitle(target.title)
+            compose.onNodeWithText(target.title).performClick()
+            waitForSessionReady(target.title)
+            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            compose.onNode(hasSetTextAction()).assertIsDisplayed().assertIsNotFocused().assertTextContains(target.title)
+        } finally { ids.forEach(app.store::delete) }
+    }
+
     @Test fun timedPassageStartsOriginalAudioAndDockRemainsVisibleWhileScrolling() {
         val app = application()
         val parts = List(12) { index ->
@@ -492,5 +553,165 @@ class InterfaceTest {
                     .primaryClip!!.getItemAt(0).text.toString())
             }
         } finally { store.delete(id) }
+    }
+
+    @Test fun saveAndNextAdvancesReviewAndSaveAndCloseCopiesCommittedText() {
+        val app = application()
+        val originals = listOf("Первый фрагмент.", "Второй фрагмент.", "Третий фрагмент.")
+        val edits = listOf("Первый исправленный фрагмент.", "Второй исправленный фрагмент.")
+        val id = readySession(app.store, "Review sequence fixture", originals, language = "ru", uncertain = setOf(0, 1, 2))
+        try {
+            waitForTitle("Review sequence fixture")
+            compose.onNodeWithText("Review sequence fixture").performClick()
+            waitForSessionReady("Review sequence fixture", originals.first())
+            compose.onNode(hasText(originals.first()) and hasClickAction()).performScrollTo().performClick()
+            waitForEditor()
+            compose.onNode(hasSetTextAction()).performTextReplacement(edits.first())
+            compose.runOnUiThread {
+                WindowCompat.getInsetsController(compose.activity.window, compose.activity.window.decorView)
+                    .hide(WindowInsetsCompat.Type.ime())
+            }
+            compose.waitForIdle()
+            val editorTop = compose.onNode(hasSetTextAction()).fetchSemanticsNode().boundsInRoot.top
+            val autoAdvance = compose.mainClock.autoAdvance
+            try {
+                compose.mainClock.autoAdvance = false
+                compose.onNodeWithText("Save & next").performScrollTo().performClick()
+                compose.waitUntil(10_000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    assertEquals(editorTop, compose.onNode(hasSetTextAction()).fetchSemanticsNode().boundsInRoot.top, 1f)
+                    compose.onAllNodes(hasSetTextAction() and hasText(originals[1])).fetchSemanticsNodes().isNotEmpty()
+                }
+                // A new SheetState would replay its entrance after the next passage appears.
+                repeat(24) {
+                    compose.mainClock.advanceTimeByFrame()
+                    assertEquals(editorTop, compose.onNode(hasSetTextAction()).fetchSemanticsNode().boundsInRoot.top, 1f)
+                }
+            } finally {
+                compose.mainClock.autoAdvance = autoAdvance
+            }
+            assertEquals(edits.first(), app.store.passages(id)[0].text)
+            org.junit.Assert.assertTrue(app.store.passages(id)[0].reviewed)
+            compose.onNode(hasSetTextAction()).performTextReplacement(edits[1])
+            compose.onNodeWithText("Save & close").performScrollTo().performClick()
+            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
+            val passages = app.store.passages(id)
+            assertEquals(edits[1], passages[1].text)
+            org.junit.Assert.assertTrue(passages[1].reviewed)
+            org.junit.Assert.assertFalse(passages[2].reviewed)
+            compose.onNodeWithText("Copy text").performClick()
+            compose.runOnIdle {
+                assertEquals((edits + originals.last()).joinToString("\n\n"), app.getSystemService(ClipboardManager::class.java)
+                    .primaryClip!!.getItemAt(0).text.toString())
+            }
+        } finally { app.store.delete(id) }
+    }
+
+    @Test fun textTransferBudgetAccountsForUtf8AndUtf16() {
+        org.junit.Assert.assertTrue(fitsTextTransferBudget("a".repeat(131_072)))
+        org.junit.Assert.assertFalse(fitsTextTransferBudget("a".repeat(131_073)))
+        org.junit.Assert.assertTrue(fitsTextTransferBudget("Ж".repeat(131_072)))
+        org.junit.Assert.assertFalse(fitsTextTransferBudget("€".repeat(90_000)))
+        org.junit.Assert.assertTrue(fitsTextTransferBudget("🙂".repeat(65_536)))
+    }
+
+    @Test fun oversizedCopyAndShareKeepSavedTextAndExistingClipboard() {
+        val app = application()
+        val texts = List(32) { index -> "Passage $index. " + "Synthetic sample. ".repeat(260) }
+        val id = readySession(app.store, "Large transfer fixture", texts)
+        val clipboard = app.getSystemService(ClipboardManager::class.java)
+        try {
+            waitForTitle("Large transfer fixture")
+            compose.onNodeWithText("Large transfer fixture").performClick()
+            waitForSessionReady("Large transfer fixture")
+            compose.runOnIdle { clipboard.setPrimaryClip(ClipData.newPlainText("Test", "Existing clipboard")) }
+            compose.onNodeWithText("Copy text").performClick()
+            compose.onNodeWithText("This transcript is too long to copy at once. Copy a smaller selection from the passage editor.").assertIsDisplayed()
+            compose.runOnIdle { assertEquals("Existing clipboard", clipboard.primaryClip!!.getItemAt(0).text.toString()) }
+            compose.onNodeWithContentDescription("Session options").performClick()
+            compose.onNodeWithText("Share text").performClick()
+            compose.waitUntil(10_000) {
+                compose.onAllNodesWithText("This transcript is too long to share at once. Copy a smaller selection from the passage editor.")
+                    .fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.runOnIdle { assertEquals("Existing clipboard", clipboard.primaryClip!!.getItemAt(0).text.toString()) }
+            assertEquals(texts, app.store.passages(id).map { it.text })
+        } finally { app.store.delete(id) }
+    }
+
+    @Test fun oversizedEditorInputKeepsTheValidDraftThroughRotation() {
+        val app = application()
+        val id = readySession(app.store, "Bounded draft fixture", listOf("Saved original."))
+        val draft = "A valid manual edit stays here."
+        try {
+            waitForTitle("Bounded draft fixture")
+            compose.onNodeWithText("Bounded draft fixture").performClick()
+            waitForSessionReady("Bounded draft fixture", "Saved original.")
+            compose.onNode(hasText("Saved original.") and hasClickAction()).performScrollTo().performClick()
+            waitForEditor()
+            compose.onNode(hasSetTextAction()).performTextReplacement(draft)
+            // UTF-16 length fits, but UTF-8 bytes exceed the shared saved-passage budget.
+            compose.onNode(hasSetTextAction()).performTextReplacement("🙂".repeat(40_000))
+            compose.onNodeWithText("This text is too long for one passage. Paste a smaller selection.").assertIsDisplayed()
+            compose.onNode(hasSetTextAction()).assertTextContains(draft)
+            compose.activityRule.scenario.recreate()
+            waitForEditor()
+            compose.onNode(hasSetTextAction()).assertTextContains(draft)
+            compose.onNodeWithText("This text is too long for one passage. Paste a smaller selection.").assertIsDisplayed()
+            compose.onNodeWithText("Save changes").performScrollTo().performClick()
+            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
+            assertEquals(draft, app.store.passages(id).single().text)
+        } finally { app.store.delete(id) }
+    }
+
+    @Test fun largePassagePartsPreserveSurrogatesAndLineEndings() {
+        val size = LARGE_PASSAGE_PART_CHARS
+        val texts = listOf(
+            "a".repeat(size - 1) + "🙂",
+            "a".repeat(size - 1) + "\r\nb",
+            "a".repeat(size - 1) + "🙂\r\n" + "б".repeat(size) + "\r\n🙂tail",
+        )
+        texts.forEach { text ->
+            val parts = (0 until passageTextPartCount(text)).map { passageTextPart(text, it) }
+            assertEquals(text, parts.joinToString(""))
+            parts.forEach { part ->
+                org.junit.Assert.assertTrue(part.isNotEmpty())
+                org.junit.Assert.assertFalse(part.first().isLowSurrogate())
+                org.junit.Assert.assertFalse(part.last().isHighSurrogate())
+            }
+            parts.zipWithNext().forEach { (left, right) ->
+                org.junit.Assert.assertFalse(left.endsWith("\r") && right.startsWith("\n"))
+            }
+        }
+    }
+
+    @Test fun largeLegacyPassageUsesReadOnlyPagesAndSurvivesRotation() {
+        val app = application()
+        val id = readySession(app.store, "Large legacy fixture", listOf("Initial text."))
+        val legacy = "Legacy start🙂\r\n" + "a".repeat(2_100_000) + "\r\nLegacy end🙂"
+        try {
+            val passage = app.store.passages(id).single()
+            app.store.writableDatabase.execSQL("UPDATE passages SET text=? WHERE id=?", arrayOf(legacy, passage.id))
+            app.store.rename(id, "Large legacy fixture")
+            waitForTitle("Large legacy fixture")
+            compose.onNodeWithText("Large legacy fixture").performClick()
+            waitForSessionReady("Large legacy fixture")
+            compose.onNodeWithText("Open full passage").performScrollTo().performClick()
+            compose.onNodeWithText("Saved passage").assertIsDisplayed()
+            compose.onNode(hasSetTextAction()).assertDoesNotExist()
+            val count = passageTextPartCount(legacy)
+            compose.onNodeWithText("Part 1 of $count").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Next text part").performScrollTo().performClick()
+            compose.onNodeWithText("Part 2 of $count").assertIsDisplayed()
+            // Only the page index and small scroll state belong in saved instance state.
+            compose.activityRule.scenario.recreate()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Part 2 of $count").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(hasSetTextAction()).assertDoesNotExist()
+            compose.onNodeWithContentDescription("Previous text part").performScrollTo().performClick()
+            compose.onNodeWithText("Part 1 of $count").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Close editor").performScrollTo().performClick()
+            compose.onNodeWithText("Discard your changes?").assertDoesNotExist()
+            assertEquals(legacy, app.store.passages(id).single().text)
+        } finally { app.store.delete(id) }
     }
 }

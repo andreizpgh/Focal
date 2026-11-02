@@ -8,7 +8,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -19,7 +21,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +42,7 @@ import app.focal.core.Transcript
 import app.focal.data.Note
 import app.focal.data.Passage
 import app.focal.data.Preferences
+import app.focal.data.fitsPassageDraftBudget
 import app.focal.recording.LiveSession
 import java.time.Instant
 import java.time.LocalDate
@@ -59,10 +61,12 @@ import android.text.format.DateFormat
     query: String = "", setQuery: (String) -> Unit = {},
     searchOpen: Boolean = false, setSearchOpen: (Boolean) -> Unit = {},
     error: String? = null, retryLoad: () -> Unit = {},
+    attentionOnly: Boolean = false, setAttentionOnly: (Boolean) -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
+    focusSearch: Boolean = false, searchFocused: () -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    var attentionOnly by rememberSaveable { mutableStateOf(false) }
     fun needsAttention(note: Note) = note.reviewCount > 0 || note.state in listOf("ERROR", "INTERRUPTED")
     val attentionCount = notes.count(::needsAttention)
     // Text search is supplied by the store, including passages outside the preview.
@@ -78,6 +82,7 @@ import android.text.format.DateFormat
     LaunchedEffect(query) { if (query.isNotBlank()) setSearchOpen(true) }
     LazyColumn(
         Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp),
     ) {
         if (attentionCount > 0 || attentionOnly || searchOpen || query.isNotBlank()) item {
@@ -87,7 +92,7 @@ import android.text.format.DateFormat
                 ) {
                     FilterChip(
                         selected = attentionOnly,
-                        onClick = { attentionOnly = !attentionOnly },
+                        onClick = { setAttentionOnly(!attentionOnly) },
                         label = { Text(if (attentionOnly) "Show all" else "$attentionCount to review", style = MaterialTheme.typography.labelMedium) },
                         colors = focalChipColors(),
                         shape = RoundedCornerShape(50),
@@ -95,7 +100,9 @@ import android.text.format.DateFormat
                 }
                 AnimatedVisibility(searchOpen) {
                     val requester = remember { FocusRequester() }
-                    LaunchedEffect(Unit) { requester.requestFocus(); keyboard?.show() }
+                    LaunchedEffect(focusSearch) {
+                        if (focusSearch) { requester.requestFocus(); keyboard?.show(); searchFocused() }
+                    }
                     TextField(
                         value = query, onValueChange = setQuery,
                         modifier = Modifier.fillMaxWidth().focusRequester(requester).semantics { contentDescription = "Search sessions" }.padding(bottom = 12.dp), singleLine = true,
@@ -134,7 +141,7 @@ import android.text.format.DateFormat
                     style = MaterialTheme.typography.titleLarge,
                 )
                 if (query.isNotBlank() || attentionOnly) TextButton(
-                    onClick = { closeSearch(); attentionOnly = false }, contentPadding = PaddingValues(0.dp),
+                    onClick = { closeSearch(); setAttentionOnly(false) }, contentPadding = PaddingValues(0.dp),
                 ) { Text("Clear filters") }
             }
         }
@@ -332,6 +339,15 @@ import android.text.format.DateFormat
         }
     }
     @Composable fun PassageText(modifier: Modifier) {
+        if (!fitsPassageDraftBudget(passage.text)) {
+            Column(modifier.clickable(role = Role.Button, onClickLabel = "Open full passage at $timestamp", onClick = edit)
+                .semantics { if (active) stateDescription = "Current audio passage" }.padding(top = 1.dp, bottom = 26.dp)) {
+                Text(passageTextPart(passage.text, 0, 512), style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 6, overflow = TextOverflow.Ellipsis)
+                Text("Open full passage", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+            }
+            return
+        }
         Text(passage.text.ifBlank { "Unclear speech" }, style = MaterialTheme.typography.bodyLarge,
             modifier = modifier.clickable(
                 role = Role.Button, onClickLabel = "${if (flagged) "Review passage" else "Edit passage"} at $timestamp", onClick = edit,

@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -57,6 +58,11 @@ private val destinationSaver = androidx.compose.runtime.saveable.Saver<Destinati
     restore = { when { it == "settings" -> Destination.Settings; it.startsWith("session:") -> Destination.Session(it.removePrefix("session:")); else -> Destination.Sessions } }
 )
 
+// Leave room for Android's parcel envelope and other in-flight Binder transactions.
+private const val TEXT_TRANSFER_BYTE_BUDGET = 256 * 1024
+internal fun fitsTextTransferBudget(text: String): Boolean =
+    text.length <= TEXT_TRANSFER_BYTE_BUDGET / 2 && text.toByteArray(Charsets.UTF_8).size <= TEXT_TRANSFER_BYTE_BUDGET
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun FocalApp(model: FocalViewModel, openedNote: StateFlow<Pair<String?, Long>>) {
     val settings by model.settings.collectAsStateWithLifecycle()
@@ -74,6 +80,9 @@ private val destinationSaver = androidx.compose.runtime.saveable.Saver<Destinati
     var modelRetryId by rememberSaveable { mutableStateOf<String?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var searchFocusPending by rememberSaveable { mutableStateOf(false) }
+    var attentionOnly by rememberSaveable { mutableStateOf(false) }
+    val libraryListState = rememberLazyListState()
     var reviewOnly by rememberSaveable(selected) { mutableStateOf(false) }
     var editingId by rememberSaveable(selected) { mutableStateOf<Long?>(null) }
     val editing = library.passages.firstOrNull { it.id == editingId }
@@ -135,7 +144,7 @@ private val destinationSaver = androidx.compose.runtime.saveable.Saver<Destinati
     }
     BackHandler(destination != Destination.Sessions) { open(null) }
     BackHandler(destination == Destination.Sessions && searchOpen) {
-        searchOpen = false; searchQuery = ""; dismissInput()
+        searchOpen = false; searchFocusPending = false; searchQuery = ""; dismissInput()
     }
     LaunchedEffect(selected, library.selectedId, library.note, library.loaded, library.error) {
         if (selected != null && library.loaded && library.selectedId == selected && library.note == null && library.error == null) {
@@ -169,11 +178,27 @@ private val destinationSaver = androidx.compose.runtime.saveable.Saver<Destinati
     val active = note != null && live.noteId == note.id
     val audioAvailable = library.audioBytes > 0 && (live.noteId == null || live.processing)
     val transcript = remember(library.passages) { library.passages.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n") }
+    fun allowTextTransfer(action: String): Boolean {
+        if (fitsTextTransferBudget(transcript)) return true
+        notify("This transcript is too long to $action at once. Copy a smaller selection from the passage editor.")
+        return false
+    }
     fun copyTranscript() {
-        val clip = ClipData.newPlainText("Focal transcript", transcript)
-        if (Build.VERSION.SDK_INT >= 33) clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
-        context.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
-        if (Build.VERSION.SDK_INT < 33) notify("Text copied")
+        if (!allowTextTransfer("copy")) return
+        try {
+            val clip = ClipData.newPlainText("Focal transcript", transcript)
+            if (Build.VERSION.SDK_INT >= 33) clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+            context.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
+            if (Build.VERSION.SDK_INT < 33) notify("Text copied")
+        } catch (_: RuntimeException) {
+            notify("Couldn't copy text. Try copying a smaller selection from the passage editor.")
+        }
+    }
+    fun shareTranscript() {
+        if (!allowTextTransfer("share")) return
+        try { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, transcript), "Share transcript")) }
+        catch (_: ActivityNotFoundException) { notify("No app is available to share text.") }
+        catch (_: RuntimeException) { notify("Couldn't share text. Try copying a smaller selection from the passage editor.") }
     }
 
     FocalTheme(settings.theme) {
@@ -187,6 +212,8 @@ private val destinationSaver = androidx.compose.runtime.saveable.Saver<Destinati
                             Text("Sessions", style = MaterialTheme.typography.headlineLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 4.dp).semantics { heading() })
                             if (library.notes.isNotEmpty() || searchOpen || searchQuery.isNotBlank()) IconAction(Symbol.Search, if (searchOpen) "Close search" else "Search sessions") {
                                 searchOpen = !searchOpen
+                                searchFocusPending = searchOpen
+                                if (searchOpen) libraryListState.requestScrollToItem(0)
                                 if (!searchOpen) { searchQuery = ""; dismissInput() }
                             }
                             IconAction(Symbol.Settings, "Settings") { dismissInput(); destination = Destination.Settings }
@@ -206,8 +233,7 @@ private val destinationSaver = androidx.compose.runtime.saveable.Saver<Destinati
                                         DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; dialog = "rename" })
                                         DropdownMenuItem(text = { Text("Share text") }, enabled = transcript.isNotBlank() && library.error == null, onClick = {
                                             menu = false
-                                            try { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, transcript), "Share transcript")) }
-                                            catch (_: ActivityNotFoundException) { notify("No app is available to share text.") }
+                                            shareTranscript()
                                         })
                                         DropdownMenuItem(text = {
                                             Column {
@@ -283,7 +309,12 @@ private val destinationSaver = androidx.compose.runtime.saveable.Saver<Destinati
                             settings.language, settings.theme, model.app.preferences::language, model.app.preferences::theme,
                             ready, preparing, setupError, { openModel() }, ::notify,
                         )
-                        Destination.Sessions -> LibraryScreen(library.notes, library.loaded, live, ::open, searchQuery, { searchQuery = it.take(200) }, searchOpen, { searchOpen = it }, library.error, model::retryLibrary)
+                        Destination.Sessions -> LibraryScreen(
+                            library.notes, library.loaded, live, ::open, searchQuery, { searchQuery = it.take(200) },
+                            searchOpen, { searchOpen = it; if (!it) searchFocusPending = false }, library.error, model::retryLibrary,
+                            attentionOnly = attentionOnly, setAttentionOnly = { attentionOnly = it }, listState = libraryListState,
+                            focusSearch = searchFocusPending, searchFocused = { searchFocusPending = false },
+                        )
                         is Destination.Session -> if (note != null) NoteScreen(
                             note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { if (library.error == null) editingId = it.id else notify("Reload this session before editing.") }, { if (ready) model.retry(note.id) else openModel(note.id) },
                             playback.isPlaying && playback.noteId == note.id, audioAvailable, { model.playNote(note) }, { dialog = "rename" },
