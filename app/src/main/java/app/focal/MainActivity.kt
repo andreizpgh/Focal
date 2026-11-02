@@ -15,11 +15,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        openedNote.value = intent.getStringExtra(RecordingService.NOTE) to android.os.SystemClock.elapsedRealtime()
+        // The saved Compose destination already reflects any previously handled
+        // notification. Replaying the launch intent would override it on rotation.
+        if (savedInstanceState == null) openFromIntent(intent)
         setContent { val model: FocalViewModel = viewModel(); FocalApp(model, openedNote) }
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        openedNote.value = intent.getStringExtra(RecordingService.NOTE) to android.os.SystemClock.elapsedRealtime()
+        setIntent(intent)
+        openFromIntent(intent)
+    }
+
+    private fun openFromIntent(intent: Intent) {
+        openedNote.value = intent.getStringExtra(RecordingService.NOTE) to (openedNote.value.second + 1)
     }
 }

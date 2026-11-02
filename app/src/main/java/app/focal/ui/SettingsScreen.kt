@@ -1,0 +1,143 @@
+package app.focal.ui
+
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import app.focal.BuildConfig
+import app.focal.data.Preferences
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+@Composable internal fun SettingsScreen(
+    language: String, theme: String, setLanguage: (String) -> Unit, setTheme: (String) -> Unit,
+    modelReady: Boolean, preparing: Boolean, setupError: String?, openModel: () -> Unit, notify: (String) -> Unit,
+) {
+    var choosing by rememberSaveable { mutableStateOf(false) }
+    var help by rememberSaveable { mutableStateOf(false) }
+    var licenses by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(28.dp),
+    ) {
+        Column {
+            SettingsSectionLabel("Recording")
+            SettingsRow("Speech language", "${Preferences.languages[language].orEmpty()} · New recordings", click = { choosing = true })
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SettingsRow("Speech model", when { preparing -> "Preparing…"; setupError != null -> "Needs attention"; modelReady -> "Ready"; else -> "Not installed" },
+                enabled = !preparing, click = openModel)
+            if (setupError != null) Text(setupError, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(bottom = 16.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+        Column {
+            SettingsSectionLabel("Appearance")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
+                listOf("light" to "Light", "dark" to "Dark", "system" to "System").forEach { (id, name) ->
+                    FilterChip(colors = focalChipColors(), shape = RoundedCornerShape(50), selected = theme == id,
+                        onClick = { setTheme(id) }, label = { Text(name) })
+                }
+            }
+        }
+        Column {
+            SettingsSectionLabel("Help & about")
+            SettingsRow("Using Focal", click = { help = true })
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SettingsRow("Source code", click = {
+                try { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/andreizpgh/Focal".toUri())) }
+                catch (_: ActivityNotFoundException) { notify("No app is available to open this link.") }
+                catch (_: SecurityException) { notify("This device cannot open the link.") }
+            })
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SettingsRow("Licenses", click = { licenses = true })
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 18.dp, bottom = 8.dp))
+        }
+    }
+    if (choosing) LanguageDialog(language, setLanguage) { choosing = false }
+    if (help) AlertDialog(
+        onDismissRequest = { help = false }, title = { Text("Using Focal") },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                HelpTopic("Recording", "Record, then finish to review and copy the text. Without a speech model, the audio is saved for transcription later.")
+                HelpTopic("In the background", "Recording can continue with the screen off or in another app. Force-stopping Focal or restarting your phone ends it. Some phones restrict background apps.")
+                HelpTopic("Reviewing words", "A review mark means the recognition may be uncertain. Listen to the original audio and correct the text. Editing text does not change the recording.")
+                HelpTopic("Keeping sessions", "Audio and text are stored on this device. Uninstalling Focal deletes them. Copy or share text you need before uninstalling.")
+            }
+        },
+        confirmButton = { TextButton(onClick = { help = false }) { Text("Done") } },
+    )
+    if (licenses) LicensesDialog { licenses = false }
+}
+
+@Composable private fun SettingsSectionLabel(label: String) {
+    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { heading() })
+}
+
+@Composable private fun SettingsRow(label: String, value: String? = null, enabled: Boolean = true, click: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = click).padding(vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.titleMedium)
+            if (value != null) Text(value, style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+        }
+        if (enabled) Glyph(Symbol.Chevron, Modifier.size(16.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+        else CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 1.5.dp)
+    }
+}
+
+@Composable private fun HelpTopic(title: String, text: String) {
+    Column {
+        Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 7.dp))
+    }
+}
+
+@Composable private fun LicensesDialog(dismiss: () -> Unit) {
+    val context = LocalContext.current
+    var text by remember { mutableStateOf<String?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    var attempt by remember { mutableIntStateOf(0) }
+    LaunchedEffect(attempt) {
+        failed = false
+        try { text = withContext(Dispatchers.IO) { context.assets.open("licenses.txt").bufferedReader().use { it.readText() } } }
+        catch (e: Exception) { if (e is CancellationException) throw e; failed = true }
+    }
+    AlertDialog(
+        onDismissRequest = dismiss, title = { Text("Open-source licenses") },
+        text = {
+            when {
+                text != null -> Text(text.orEmpty(), modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall)
+                failed -> Column {
+                    Text("Couldn't open the licenses.", style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = { attempt++ }, contentPadding = PaddingValues(0.dp)) { Text("Try again") }
+                }
+                else -> Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = dismiss) { Text("Done") } },
+    )
+}

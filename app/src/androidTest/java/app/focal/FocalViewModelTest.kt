@@ -1,0 +1,137 @@
+package app.focal
+
+import android.content.Intent
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.test.core.app.ActivityScenario
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.focal.recording.RecordingService
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.After
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+
+@RunWith(AndroidJUnit4::class)
+class FocalViewModelTest {
+    @get:Rule val compose = createEmptyComposeRule()
+    private lateinit var app: FocalApplication
+    private val owners = mutableListOf<ViewModelStore>()
+    private val created = mutableListOf<String>()
+
+    @Before fun setup() {
+        app = ApplicationProvider.getApplicationContext()
+        runBlocking { app.storageReady.await(); app.initialized.await() }
+    }
+
+    @After fun cleanup() {
+        owners.forEach { it.clear() }
+        created.forEach { app.store.delete(it) }
+    }
+
+    private fun model(read: (() -> Unit)? = null, delete: ((String) -> Unit)? = null): FocalViewModel {
+        val owner = ViewModelStore().also { owners += it }
+        val factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = FocalViewModel(app, read, delete) as T
+        }
+        return ViewModelProvider(owner, factory)[FocalViewModel::class.java]
+    }
+
+    private fun await(model: FocalViewModel, condition: (LibraryState) -> Boolean): LibraryState =
+        runBlocking { withTimeout(10_000) { model.library.first(condition) } }
+
+    @Test fun failedReadsKeepKnownDataAndRetryAfterInitialAndLaterErrors() {
+        val id = app.store.create("en").also { created += it }
+        app.store.rename(id, "Recoverable library")
+        val failing = AtomicBoolean(true)
+        val model = model(read = { if (failing.get()) throw IOException("Synthetic read failure") })
+
+        val initial = await(model) { it.error != null }
+        assertFalse(initial.loaded)
+        assertTrue(initial.notes.isEmpty())
+
+        failing.set(false)
+        model.retryLibrary()
+        await(model) { it.loaded && it.error == null && it.notes.any { note -> note.id == id } }
+        model.select(id)
+        await(model) { it.selectedId == id && it.note?.id == id && it.error == null }
+
+        failing.set(true)
+        model.retryLibrary()
+        val failedAgain = await(model) { it.error != null }
+        assertTrue(failedAgain.loaded)
+        assertEquals(id, failedAgain.note?.id)
+        assertTrue(failedAgain.notes.any { it.id == id })
+        failing.set(false)
+        model.retryLibrary()
+        await(model) { it.error == null && it.selectedId == id && it.note?.id == id }
+    }
+
+    @Test fun delayedDeletionDoesNotClearTheNewSelection() {
+        val first = app.store.create("en").also { created += it }
+        val second = app.store.create("en").also { created += it }
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val model = model(delete = { id ->
+            entered.countDown()
+            check(release.await(10, TimeUnit.SECONDS))
+            app.store.delete(id)
+        })
+        try {
+            model.select(first)
+            await(model) { it.selectedId == first && it.note?.id == first }
+            val deletion = model.delete(first)
+            assertTrue(entered.await(10, TimeUnit.SECONDS))
+            model.select(second)
+            await(model) { it.selectedId == second && it.note?.id == second }
+            release.countDown()
+            runBlocking { withTimeout(10_000) { deletion.join() } }
+            // Force a fresh read after deletion; an old cached StateFlow value
+            // cannot hide an incorrectly cleared selection.
+            app.store.rename(second, "Selection after deletion")
+            val selected = await(model) { it.selectedId == second && it.note?.id == second && it.note?.title == "Selection after deletion" }
+            assertEquals(second, selected.note?.id)
+            assertNull(app.store.note(first))
+        } finally { release.countDown() }
+    }
+
+    @Test fun notificationLaunchIsNotReplayedOverSavedNavigation() {
+        val first = app.store.create("en").also { created += it }
+        val second = app.store.create("en").also { created += it }
+        app.store.rename(first, "Notification session A")
+        app.store.rename(second, "Notification session B")
+        val intent = Intent(app, MainActivity::class.java).putExtra(RecordingService.NOTE, first)
+        ActivityScenario.launch<MainActivity>(intent).use { activity ->
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Notification session A").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Notification session B").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Notification session B").performClick()
+            compose.waitUntil(10_000) {
+                compose.onAllNodesWithText("Notification session B").fetchSemanticsNodes().isNotEmpty() &&
+                    compose.onAllNodesWithContentDescription("Session options").fetchSemanticsNodes().isNotEmpty()
+            }
+            activity.recreate()
+            compose.waitUntil(10_000) {
+                compose.onAllNodesWithText("Notification session B").fetchSemanticsNodes().isNotEmpty() &&
+                    compose.onAllNodesWithText("Notification session A").fetchSemanticsNodes().isEmpty()
+            }
+        }
+    }
+}
