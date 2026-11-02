@@ -31,6 +31,11 @@ background reliability, or Russian recognition quality.
    python3 scripts/fetch-model.py
    ```
 
+   Reuse existing checksum-verified model assets where available. Before any new
+   transfer, carry forward the [shared download ledger](benchmarks/2026-11-03-stt/download-budget.json)
+   and reserve the pinned 59,707,625 model bytes (including any repeated attempt).
+   `fetch-model.py` does not update that cross-environment research ledger; record
+   the reservation explicitly rather than resetting the budget on the laptop.
    Model fetching needs network access. The runner itself does not download the
    model or silently replace it. Gradle may resolve missing build dependencies;
    provision those in advance if working offline. The runner requires a clean,
@@ -96,6 +101,30 @@ its access, so check the parent folder's ACLs. If the emulator disconnects befor
 are restored, reconnect it and restore each value from the manifest with
 `adb -s SERIAL shell settings put global KEY VALUE`; use
 `adb -s SERIAL shell settings delete global KEY` for an original `null` value.
+
+## Current focused reproduction
+
+The checkpoint at `1df8060` has one unresolved API 35 UI failure:
+`InterfaceTest.oversizedEditorInputKeepsTheValidDraftThroughRotation`. The valid
+draft survives activity recreation, but the rejected-input warning exists outside
+the visible viewport even after a bounded visibility wait. The test uses activity
+recreation; actual portrait/landscape rotation still needs manual validation.
+
+After installing the verified app/test APKs on the dedicated AVD, isolate it with:
+
+```sh
+adb -s emulator-5554 shell am instrument -w -e class 'app.focal.InterfaceTest#oversizedEditorInputKeepsTheValidDraftThroughRotation' app.focal.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+This focused command is for diagnosis; it does not satisfy the full-suite or
+five-model-test gate. In Android Studio, debug this test and break in
+`assertWarningVisible` after recreation, before its `finally` removes the
+synthetic fixture. Inspect the real dialog viewport, warning/field bounds,
+scroll offset, IME insets and any overlapping dialog. Record API, window size,
+density, font scale and animation settings. Keep captures and raw diagnostics
+private. Do not weaken the warning-visibility or draft-retention assertions to
+make the result green. After fixing the observed cause, rerun this scenario and
+then the complete `qa-local.py` suite with no skips.
 
 ## Manual longer-session matrix
 

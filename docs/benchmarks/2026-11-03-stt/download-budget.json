@@ -1,0 +1,377 @@
+{
+  "limit": 1000000000,
+  "reservations": [
+    {
+      "name": "base-q5_1-attempt-1",
+      "bytes": 59707625,
+      "kind": "model"
+    },
+    {
+      "name": "ru-test-prefix-probe",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-dev.tsv",
+      "bytes": 213066,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test.tsv",
+      "bytes": 367865,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-dev.tsv",
+      "bytes": 316329,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test.tsv",
+      "bytes": 735259,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-dev.tsv",
+      "bytes": 221692,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test.tsv",
+      "bytes": 559543,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-dev.tsv",
+      "bytes": 180519,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test.tsv",
+      "bytes": 456973,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev.tsv",
+      "bytes": 261639,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test.tsv",
+      "bytes": 599883,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev.tsv",
+      "bytes": 242067,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test.tsv",
+      "bytes": 561610,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-dev.tsv",
+      "bytes": 225325,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test.tsv",
+      "bytes": 563258,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "initial-and-upcoming-model-metadata-allowance",
+      "bytes": 10000000,
+      "kind": "metadata"
+    },
+    {
+      "name": "base-q8_0-attempt-1",
+      "bytes": 81768585,
+      "kind": "model"
+    },
+    {
+      "name": "small-q5_1-attempt-1",
+      "bytes": 190085487,
+      "kind": "model"
+    },
+    {
+      "name": "CI run for e6c15e5: baseline model and repository speech fixtures",
+      "bytes": 61000000,
+      "kind": "ci-model-and-fixtures"
+    },
+    {
+      "name": "Final research and QA checkpoint CI: baseline model and repository fixtures",
+      "bytes": 61000000,
+      "kind": "ci-model-and-fixtures-reserved"
+    },
+    {
+      "name": "Focused UI regression checkpoint CI: baseline model and repository fixtures",
+      "bytes": 61000000,
+      "kind": "ci-model-and-fixtures-reserved"
+    },
+    {
+      "name": "Bounded UI restoration test checkpoint CI: baseline model and fixtures",
+      "bytes": 61000000,
+      "kind": "ci-model-and-fixtures-reserved"
+    }
+  ],
+  "reserved_bytes": 645592677,
+  "note": "Conservative upper bounds including metadata/retries and four completed checkpoint CI model/fixture fetches. Carry the 645,592,677-byte reservation total into future environments; never reset it."
+}

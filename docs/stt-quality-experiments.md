@@ -1,16 +1,33 @@
 # Local speech-quality experiments
 
-Research plan, checked against primary sources on **2026-11-02**. No correction
-model, automatic text replacement, or new Android behavior is enabled by this
-document or its scoring script. The current app keeps its existing speech model.
-Model/corpus hosting remains blocked in this environment, so multilingual quality,
-Russian dictation accuracy, and phone performance are **unmeasured**. Synthetic
-scorer tests establish metric behavior, not recognition quality.
+Research plan and measured checkpoint, **2026-11-03**. No automatic correction
+is enabled. The app retains multilingual base Q5_1, beam 3 and full encoder
+context. The current environment can obtain pinned Hugging Face artifacts;
+paired host measurements now cover seven languages on a small FLEURS subset.
+See [the benchmark report](benchmarks/2026-11-03-stt/report.md) for actual results,
+source hashes and limitations. Read speech on this subset does not establish
+spontaneous dictation quality or phone performance.
 
 Research may investigate local ASR corrections. Shipping a correction requires a
 measured gain and must preserve what was spoken, including deliberate factual
 mistakes, unusual names, repetitions, and imperfect grammar. A text-only model
 cannot establish which of two plausible words was actually said.
+
+## What the measured checkpoint changes
+
+The frozen held-out screen gives small/auto 69/847 word errors versus E0's
+139/847, but English worsens by one word and cold host cost increases. It does
+not pass the all-language or phone gates, so the app default is unchanged.
+
+Actual gate/context replay identifies a more direct next priority. On matched
+quiet development audio, complete source intervals give 84/490 errors; current
+gating gives 172/490 without context and 176/490 with it. Context cannot recover
+excluded audio. Disabling the gate is not a sufficient fix: a 30-second seeded
+noise control produces 87 inserted Russian words in the bypass experiment.
+Evaluate quieter activation/framing or an alternative voice activity detector
+against both omissions and false activation, with fresh held-out phone speech.
+Do not tune another model/policy on the already consumed test split. Keep E5
+and automatic correction off while this capture-to-decoder quality gap is open.
 
 ## Compare bounded alternatives
 
@@ -19,7 +36,7 @@ and test split for each paired run. Change one variable at a time.
 
 | Experiment | Concrete comparison | Evidence it could add | Main cost or failure mode |
 | --- | --- | --- | --- |
-| E0 | Current multilingual base Q5_1, beam 3, current boundary/context handling | Reference system | Current multilingual WER is still unknown |
+| E0 | Current multilingual base Q5_1, beam 3, current boundary/context handling | Reference system | Measured small-corpus baseline; phone dictation remains open |
 | E1 | Base Q8_0 versus base Q5_1, otherwise identical | Isolate quantization loss | More memory/download bytes; a gain is not guaranteed |
 | E2 | Multilingual small Q5_1 as the first pass versus E0 | More acoustic-model capacity | Extra decode time, memory and heat; verify each language |
 | E3 | E0 plus small Q5_1 re-decoding only selected saved-audio ranges | Acoustic evidence for uncertain words and boundary cuts | Cold-load cost, correlated errors, selection misses confident mistakes |
@@ -60,10 +77,13 @@ revisions and SHA-256 hashes, and reserve the full declared size before a reques
 Do not fetch whole corpus shards to obtain a few examples. If a shard or an
 updated model will exceed the reservation, stop and reduce the experiment set.
 
-These are staged upper-bound reservations, not a download target. Use existing
-verified artifacts and local consented audio where possible. Run E0–E4 first;
-do not download Qwen unless their results indicate the E5 comparison is likely
-to add value and enough of the shared budget remains.
+The original prospective allocation below is retained for context, not as
+authorization to exceed the ceiling. The current conservative ledger reserves
+**645,592,677 bytes**, including metadata, repeated probes, four checkpoint CI model/fixture reservations. Selected archive prefixes total 38,797,312 bytes; the separate 1,048,576-byte
+exploratory prefix is also charged. Complete corpus shards were never fetched. The larger corpus overhead means the 639 MB Qwen Q8 artifact
+no longer fits the remaining budget. E5 is deferred; no correction model was
+downloaded. Carry the ledger forward across environments and count future CI
+model fetches too. Use existing verified artifacts and consented local recordings.
 
 | Artifact | Maximum reservation | Stage |
 | --- | ---: | --- |
@@ -86,8 +106,11 @@ Model-file size is not peak runtime memory.
 ([Upstream ASR files](https://huggingface.co/ggerganov/whisper.cpp/tree/main),
 [official Qwen GGUF files](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/tree/main))
 
-Twenty MB of downloaded audio is only a smoke subset. It cannot establish a
-high-precision release claim. Expand the evaluation with consented local phone
+A small downloaded read-speech subset cannot establish a high-precision release
+claim. The current 56 clips span 650.1 seconds; 21 development clips and 35 official
+test clips are selected in archive order without looking at ASR or reference text.
+Speaker IDs are unavailable, so dev/test speaker independence is unverified.
+These are utterance splits, not the speaker/session split required for promotion. Expand the evaluation with consented local phone
 recordings, which require no model/corpus download. Preserve attribution and
 consent provenance outside Git. FLEURS is a candidate multilingual read-speech
 sanity check with CC-BY-4.0 attribution; report it separately from spontaneous
@@ -96,7 +119,8 @@ download. ([Google FLEURS dataset](https://huggingface.co/datasets/google/fleurs
 
 ## Paired seven-language evaluation
 
-Use English, Russian, German, French, Spanish, Italian and Portuguese. Split by
+Use English, Russian, German, French, Spanish, Italian and Portuguese. The
+initial FLEURS sanity check does not satisfy all the following release criteria. Split by
 speaker/session into development and held-out test sets before tuning. Do not put
 adjacent cuts from the same recording in both sets. References are for scoring
 only; the correction runner must never receive them. Freeze model/engine hashes,

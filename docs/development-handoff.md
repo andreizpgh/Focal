@@ -1,11 +1,12 @@
-# Focal: Focus wave integration and STT continuation
+# Focal: whole-app hardening and measured STT checkpoint
 
 Branch: `codex/sessions-stt-handoff`. Baseline before the redesign:
 `14be1ae6afe15e5229982d9e8cfe63d0f276e393`.
 
 The redesign and reliability work are implemented and reviewed. The branch is a
 development checkpoint, not a verified distribution release. The public alpha
-APK is unchanged. Recognition quality and ARM phone performance remain unmeasured.
+APK is unchanged. Seven-language read-speech results are now measured on the host;
+ARM phone performance and full application acceptance remain open.
 
 ## Product direction
 
@@ -58,64 +59,100 @@ host result with another model does not make it loadable in Android automaticall
 change model validation, packaging/import and resource policy intentionally if the
 evidence supports a replacement.
 
-## Verified state
+## Verified state and evidence
 
-See [quality report](quality-report.md) for the evidence and its limits:
+The [quality report](quality-report.md) separates current checks from earlier UI
+runs. Current core tests: **34 passed**. Debug/test APKs, debug/release lint and
+release R8 compilation pass. All five mandatory real-weight JNI/workflow tests pass on the CI emulator,
+including speech decode and activity-independent capture. The owner's accelerated
+local emulator and physical-phone checks remain separate gates.
+The latest source/test checkpoint is `1df8060`: [CI 41538859249](https://github.com/andreizpgh/Focal/actions/runs/41538859249)
+completed 76 Android tests, with **75 passed, one failed, zero skips**. The single
+open failure is rejected-input warning visibility after activity recreation;
+the valid draft is retained, but the warning stays offscreen through a bounded
+wait. The Save assertion later in that test is not reached. Keep this gate open;
+use the focused reproduction in the local QA guide and inspect the actual viewport
+before another fix. Search, scroll restoration and Save & next now pass.
 
-- 30 JVM tests and 53 distinct Android instrumentation tests pass. Five checks
-  requiring real model weights are skipped. Android tests used an Android 10
-  x86-64 emulator and synthetic PCM, not measured speech recognition.
-- Final repeats passed all 11 service tests and 5 relevant UI scenarios after
-  notification cleanup and playback-control polish.
-- 15 correction-scorer host tests pass. Debug/test APKs, debug/release lint and
-  release R8 compilation pass; packaged native libraries have 16 KB LOAD alignment.
-- Full-history and source secret scans passed before publication. No Internet
-  permission, models, recordings, local SDK paths, signing keys or device logs
-  belong in this branch.
-- Focus wave follow-up: the complete 11-scenario UI suite passes, including the
-  new persistent-processing status and real-level/pause assertions. The brand
-  generator's reproducibility check and independent UI/resource reviews pass;
-  debug/release lint and release R8 compilation also pass. See the quality report
-  for initial test-environment/synchronization failures and their resolution.
+All **109 host-tool tests pass**, covering fetch bounds, provenance, paired metrics, gate/
+transcript replay tooling, probe validation and fail-closed test summaries.
+
+Six focused reviewers examined Android/runtime, STT, capture/recovery,
+storage/privacy, playback/state and UX/accessibility. Confirmed findings were
+fixed, regression-tested and independently re-reviewed. Current changes include
+process-wide capture/recovery/delete/playback ownership, route-change pause,
+complete model validation before native opening, bounded long-passage access,
+preserved search/review state and bounded context/overlap processing. Refer to
+[architecture](architecture.md) for exact constraints and resource bounds.
 
 Native screenshots in [interface preview](interface-preview.md) are unretouched
-captures with synthetic notes. The owner-private gallery and its native route are
-linked there. Static deployment source is already saved separately in Sites;
-preserve its private audience. The offline prototype pack remains under
-`design/explorations/`.
+captures with synthetic notes from earlier verified revisions. Preserve the
+private gallery audience and approved brand assets. Screenshot history is not
+proof that new behavioral changes have completed runtime QA.
 
-The Focus wave follow-up is described separately in the quality report; earlier
-whole-app counts do not imply that every historical test was rerun for the logo
-change. This revision does not establish new speech-quality or device-performance
-results.
+## Reproducible speech evaluation
 
-## Continue in the published cloud environment
+Hugging Face access works in this environment. The immutable engine is
+`4979e04f5dcaccb36057e059bbaed8a2f5288315`; do not update it incidentally.
+Models are locked in `models/stt-candidates.json`: base Q5_1, base Q8_0 and small
+Q5_1 from revision `5359861c739e955e79d9a303bcbc70fb988958b1`.
 
-Use the existing checkout and this branch; no checkpoint archive is necessary.
-Read `AGENTS.md`, `CONTRIBUTING.md`, [architecture](architecture.md),
-[device validation](device-validation.md) and
-[speech-quality experiments](stt-quality-experiments.md).
+FLEURS (CC-BY-4.0), revision `70bb2e84b976b7e960aa89f1c648e09c59f894dd`,
+provides 3 development and 5 test utterances per supported language: 56 clips,
+650.1 seconds. Only bounded archive prefixes were fetched, never full shards.
+The source IDs, derived-audio/reference hashes, aggregate results and frozen
+held-out plan are in [the benchmark directory](benchmarks/2026-11-03-stt/report.md).
+Audio, references, hypotheses and raw logs stay in ignored local output.
 
-Initialize the pinned whisper.cpp submodule and use the documented Android tools.
-The preceding runtime retained its old network policy after environment settings
-were published: HF metadata requests still returned CONNECT 403. Check the actual
-network policy of the new runtime and try a bounded metadata request first; do not
-assume that a prior blocked result or newly saved configuration applies to it.
+Speaker IDs are absent and dev/test speaker independence is unverified. This
+small read-speech screen cannot establish release quality, calibrated confidence,
+critical-error precision or Russian spontaneous-dictation performance. Preserve
+these limitations when comparing models; do not turn a fast host run or aggregate
+WER gain into an all-language Android claim.
 
-No model or corpus bytes were downloaded during this implementation. The shared
-transfer ceiling is **1,000,000,000 bytes**, including retries. Fetch metadata,
-pin immutable revisions and hashes, and download only selected licensed samples.
-Do not fetch whole corpus shards. Do not spend the budget on every candidate
-before evaluating whether the earlier comparisons justify the next one.
+The shared ceiling remains **1,000,000,000 downloaded bytes including retries**.
+Current conservative reservation: **645,592,677 bytes**, including four checkpoint CI
+model/fixture reservations. Carry the public budget snapshot forward if the private
+ledger is unavailable; never reset the budget to zero in a fresh environment.
+The 639 MB Qwen artifact no longer fits the remainder. No LLM was downloaded.
+CI model downloads also count; use Actions for bounded checkpoints, and the
+owner's local accelerated emulator for long/repeated app QA.
+
+Use `scripts/fetch-stt-model.py`, `fetch-stt-corpus.py` and `evaluate-stt.py` for
+bounded, hashed experiments. `stt-probe.cpp` exposes JNI-equivalent probabilities
+and load/decode/RSS diagnostics on the host. Actual Kotlin gate/context/reconcile
+replay separates segmentation loss from decoder errors. No automatic correction
+or experimental encoder context is enabled in the application.
+
+## Continue locally and in the cloud
+
+Use this checkout/branch and existing draft PR #1. Initialize the recorded
+submodule. Read `AGENTS.md`, the quality/benchmark reports and
+[the local QA guide](local-emulator-qa.md). Keep public history focused and scan
+full history for secrets before pushing; never publish raw recordings/transcripts,
+model weights, local configuration or signing material.
+
+The local QA runner requires an explicit dedicated emulator serial, verifies the
+model actually installed in app storage, checks all expected tests and all five
+real-model checks, fails on skips, restores animation settings and saves private
+reports. It never uninstalls or wipes app data. Its host tests/source review are
+not substitutes for running it on the owner's accelerated emulator.
 
 ## Remaining sequence
 
-1. Obtain verified baseline weights and bounded public audio, record provenance,
-   and run the five skipped JNI/workflow checks with actual inference.
-2. Measure paired WER/CER on all seven languages. Cover names, numbers, negation,
+1. Reproduce and fix `oversizedEditorInputKeepsTheValidDraftThroughRotation` on
+   the owner's accelerated emulator, inspecting the dialog/IME/scroll geometry.
+   Then pass the complete suite with real model weights and no skipped tests.
+   Include the long-session manual matrix and actual TalkBack/audio-route checks.
+2. Address the measured quiet-speech/gate quality gap before another broad model
+   search: matched quiet full intervals have 84/490 errors versus current gated
+   172/490; bypassing the gate hallucinated 87 Russian words on a 30-second seeded
+   noise control. Validate any candidate against omissions and false activation
+   with fresh held-out evidence. Extend paired WER/CER on all seven languages. Cover names, numbers, negation,
    quiet/noisy speech, silence hallucinations and actual gate boundaries. Distinguish
    host isolated-clip results from continuous Android dictation and phone latency.
-3. Compare base Q5, base Q8 and small Q5 under controlled conditions. Evaluate a
+3. Use the benchmark results to choose the next comparison, without retuning on
+   the consumed test split. Evaluate a
    selective acoustic second pass and context/gate ablations before adding an LLM.
    Use `scripts/evaluate-stt.py` and the staged experiment plan; retain reproducible
    manifests and aggregate results without committing speech or transcripts.
