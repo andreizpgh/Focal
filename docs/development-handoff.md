@@ -1,4 +1,4 @@
-# Sessions redesign: continuation checkpoint
+# Focal: Focus wave integration and STT continuation
 
 Branch: `codex/sessions-stt-handoff`. Baseline before the redesign:
 `14be1ae6afe15e5229982d9e8cfe63d0f276e393`.
@@ -14,15 +14,22 @@ canvas, black primary actions, compact speech-language selection, timed passages
 and persistent original-audio controls. No app name in the main header or filler
 copy under Record. Preserve light/dark/system support and accessible controls.
 
-The current flat quotation-pair logo is provisional. Identity exploration is open
-again: seek a distinctive connection to Focal's name and voice capture, compatible
-with the selected minimal UI. Do not treat the existing mark as approved or apply
-an exploratory replacement before selection. Prioritize an immediately readable
-name, coherent proportions, a related compact mark and fit with the quiet product.
-Space, depth, color or material may support that identity; neither flat-only
-constraints nor elaborate physical metaphors are mandatory. Product/engine work
-may proceed independently; keep pending identity work confined to brand assets
-and exploration files.
+The owner has **approved Focus wave**, supplied in `focal-logo-wave.zip` by a
+separate designer. The selected source and production assets are now in
+[`design/brand/`](../design/brand/). Do not reopen the identity search or restore
+the old quotation pair or other rejected studies. The nine-bar silhouette uses
+a sharp central stroke, progressively softer/less opaque outer strokes and a
+restrained dark material. Preserve selective focus in the primary launcher;
+small/themed/notification variants use a crisp mask. The launcher owns its mask.
+
+The UI uses the same geometry for actual microphone-level feedback and a small
+indeterminate transcription indicator. Recording movement follows measured level;
+pause/silence settle, and processing motion is gated by lifecycle and system
+animation settings. Processing status stays above the persistent audio/copy dock.
+There is no artificial percentage, splash delay, decorative idle loop, extra
+branding in the Sessions header or copy under Record. Keep this integration
+restrained and functional when extending the UI. Do not invent stored audio
+waveforms from a scalar level or from random samples.
 
 The interface is English by default. Speech support must be evaluated for English,
 Russian, German, French, Spanish, Italian and Portuguese. Prioritize Russian
@@ -65,12 +72,22 @@ See [quality report](quality-report.md) for the evidence and its limits:
 - Full-history and source secret scans passed before publication. No Internet
   permission, models, recordings, local SDK paths, signing keys or device logs
   belong in this branch.
+- Focus wave follow-up: the complete 11-scenario UI suite passes, including the
+  new persistent-processing status and real-level/pause assertions. The brand
+  generator's reproducibility check and independent UI/resource reviews pass;
+  debug/release lint and release R8 compilation also pass. See the quality report
+  for initial test-environment/synchronization failures and their resolution.
 
 Native screenshots in [interface preview](interface-preview.md) are unretouched
 captures with synthetic notes. The owner-private gallery and its native route are
 linked there. Static deployment source is already saved separately in Sites;
 preserve its private audience. The offline prototype pack remains under
 `design/explorations/`.
+
+The Focus wave follow-up is described separately in the quality report; earlier
+whole-app counts do not imply that every historical test was rerun for the logo
+change. This revision does not establish new speech-quality or device-performance
+results.
 
 ## Continue in the published cloud environment
 
@@ -124,3 +141,6 @@ before evaluating whether the earlier comparisons justify the next one.
 Use evidence to justify larger refactors or model changes. Keep inference and
 correction off the capture thread, memory and queues bounded, and the original
 audio durable throughout the work.
+
+For a self-contained starting instruction, use
+[`next-session-prompt.md`](next-session-prompt.md).

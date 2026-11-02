@@ -56,6 +56,48 @@ regressions:
   drafts survive rotation and same-session notification navigation. Failed edits
   and renames stay open. Failed/cancelled model imports preserve installed bytes.
 
+## Focus wave follow-up · 2026-11-03
+
+The owner-approved identity is integrated into adaptive/themed/notification
+resources, documentation and compact UI marks. The primary launcher keeps the
+original selective blur and material in static raster layers; the app does not
+compute Gaussian blur while recording. The live microphone-level display shares
+the approved nine-bar geometry and opacity falloff.
+
+- Required core/debug/lint tasks, instrumentation assembly, debug/release lint
+  and release R8 compilation pass. No speech-model or corpus downloads were made.
+- The complete 11-scenario UI suite passes on the Android 10 x86-64 emulator,
+  including 200% text at 320 × 560 dp, actual-level/pause semantics, Russian
+  editing/copy, persistent long-transcript processing status, and removal of
+  progress when processing finishes. Recording and processing also passed
+  targeted runs with system animation scale enabled. These synthetic presentation
+  states do not establish recognition quality or phone power consumption.
+- Asset generation and independent review verify original source hashes,
+  outlined Inter wordmarks, 108 dp/432 px adaptive layers, an opaque full-bleed
+  background, transparent foreground, the 66 dp safe circle, and nine separated
+  notification strokes at 24 px. The themed mask retains source alpha. The
+  pixel-identical rebuild check passes with the recorded Chromium version.
+- Independent UI and asset reviews found no remaining actionable defects.
+  Processing motion reads one phase in drawing, is bounded to nine bars, stops
+  below STARTED, and becomes static when system animations are disabled.
+  Actual TalkBack traversal and Android 13+ launcher tinting still need device
+  validation.
+
+Initial QA exposed a software-emulator System UI ANR (Android denied clipboard
+access while its dialog held focus), an offscreen LazyColumn lookup in the new
+test, and Compose/Espresso idle/reentrant-layout failures while the existing real
+player continuously updated its position. After restoring the emulator, the new
+test uses the lazy list's scroll action. The playback test now explicitly advances
+Compose frames only while audio plays, keeps all seek/Pause/Play assertions, and
+restores the saved clock setting with guaranteed player cleanup. No playback
+production logic was changed to accommodate the test. The subsequent complete UI
+run passed all 11 cases.
+
+The private native gallery was updated with direct Android captures; image
+loading, both theme buttons and 390 px layout were checked. Source and history
+secret scans pass. These checks do not close the speech, ARM-device, signing or
+release gates below.
+
 ## Remaining release gates
 
 1. Obtain the pinned model and a licensed, bounded multilingual corpus. This

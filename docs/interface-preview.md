@@ -10,9 +10,9 @@ recognition quality. These screens describe the working tree, not the existing
 | --- | --- |
 | ![Notes in light theme](screenshots/library-light.png) | ![Notes in dark theme](screenshots/library-dark.png) |
 
-| Recording controls | Transcript review |
+| Recording controls | Processing status |
 | --- | --- |
-| ![Recording layout fixture](screenshots/recording-layout.png) | ![Reviewing a synthetic Russian passage](screenshots/review.png) |
+| ![Recording layout fixture](screenshots/recording-layout.png) | ![Processing remains visible below a long transcript](screenshots/processing.png) |
 
 | Note · light | Note · dark |
 | --- | --- |
@@ -20,14 +20,29 @@ recognition quality. These screens describe the working tree, not the existing
 
 [Vector logo](mark.svg) · [Logo preview](mark-preview.png)
 
+[Approved brand sources and rebuild instructions](../design/brand/README.md)
+
 The owner-private [mobile gallery](https://focal-design-review.andreizakharov.chatgpt.site/native/)
 shows these same unretouched captures with light/dark switching.
 
 The selected Sessions direction uses a white canvas, black primary actions and
-a dated timeline. Recording uses an open timer and the actual microphone level;
+a dated timeline. Recording uses an open timer and a Focus wave amplitude envelope
+driven by the actual microphone level, with brief smoothing and a settled paused
+state. This is a live level meter, not a stored audio waveform;
 transcript passages are timed text with review cues. The app name and redundant
-helper copy are absent from the header and recording footer. The quotation-pair
-mark is flat and monochrome, shared by the launcher, notification and README.
+helper copy are absent from the header and recording footer. The approved Focus
+wave launcher retains selective blur, its central highlight and subtle material.
+Themed, notification and compact UI marks use crisp geometry; the themed/UI
+variants retain the opacity falloff. Source assets and outlined wordmarks are
+versioned with a reproducible generator.
+
+During transcription, a small wave gently shifts emphasis between two adjacent
+strokes while the centre remains stable. One status sits above the audio/copy dock
+and stays visible when the transcript scrolls. It is indeterminate: no invented
+completion percentage. The animation stops when processing ends or the UI leaves
+STARTED, and becomes static when system animations are disabled. No delayed launch
+animation, idle decorative loop or runtime Gaussian blur was added. The settings
+footer uses the same mark beside the version.
 
 The record action stays at the bottom with an explicit speech-language selector.
 Search covers titles and every passage, including Unicode text; the review filter includes interrupted notes.

@@ -16,8 +16,10 @@ The published version was checked for direct navigation, recording → pause →
 resume → review, responsive layout, and JavaScript errors.
 
 The [native Android gallery](https://focal-design-review.andreizakharov.chatgpt.site/native/)
-shows the implemented Sessions interface with light/dark captures and the flat
-quotation-pair mark. It uses synthetic notes and does not establish STT quality.
+shows the implemented Sessions interface with light/dark captures and the approved
+Focus wave identity. It uses synthetic notes and does not establish STT quality.
+The original prototype pack predates the approved identity; production brand
+sources and rebuild instructions are in [`../brand/`](../brand/).
 
 `Focal-interactive-prototypes.zip` is an offline alternative. Extract it and open
 `index.html` in a regular browser, or open `A.html` through `D.html` directly.
