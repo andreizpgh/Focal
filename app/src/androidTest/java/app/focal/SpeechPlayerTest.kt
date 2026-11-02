@@ -1,14 +1,23 @@
 package app.focal
 
 import android.os.SystemClock
+import android.os.Handler
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.Note
 import app.focal.data.NoteStore
 import app.focal.data.Passage
 import app.focal.speech.PlaybackState
 import app.focal.speech.SpeechPlayer
+import app.focal.recording.SessionOperations
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,6 +33,8 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.sin
 
 /** Real AudioTrack checks using small synthetic PCM files; a speech model is not required. */
@@ -86,6 +97,115 @@ class SpeechPlayerTest {
         await { player.playback.value.isPlaying && player.playback.value.positionMs >= paused.positionMs + 120 }
         assertEquals(note.id, player.playback.value.noteId)
         assertTrue(errors.toString(), errors.isEmpty())
+    }
+
+    @Test fun headphonesDisconnectPausesAndKeepsThePlayedPosition() {
+        val note = syntheticNote(5000)
+        val app = ApplicationProvider.getApplicationContext<FocalApplication>()
+        val context = ReceiverTrackingContext(app)
+        val routePlayer = SpeechPlayer(context, store, owner)
+        try {
+            routePlayer.playNote(note, onError)
+            await { routePlayer.playback.value.isPlaying && routePlayer.playback.value.positionMs >= 200 }
+            assertEquals(1, context.registered.size)
+            val oldReceiver = context.registered.single()
+            context.deliver(oldReceiver)
+            await { !routePlayer.playback.value.isPlaying }
+            val paused = routePlayer.playback.value
+            assertEquals(note.id, paused.noteId)
+            assertTrue(paused.positionMs >= 200)
+            assertNull(routePlayer.playing.value)
+            assertTrue(context.registered.isEmpty())
+            SystemClock.sleep(200)
+            assertEquals(paused, routePlayer.playback.value)
+
+            routePlayer.playNote(note, onError)
+            await { routePlayer.playback.value.isPlaying && routePlayer.playback.value.positionMs >= paused.positionMs + 120 }
+            assertEquals(1, context.registered.size)
+            // A broadcast already queued for the old receiver cannot pause a new session.
+            context.deliver(oldReceiver)
+            assertTrue(routePlayer.playback.value.isPlaying)
+            context.deliver(context.registered.single())
+            await { !routePlayer.playback.value.isPlaying }
+            assertTrue(context.registered.isEmpty())
+            assertTrue(errors.toString(), errors.isEmpty())
+        } finally { routePlayer.stop() }
+    }
+
+    @Test fun captureReservationStopsAllPlayersAndBlocksPendingPlayback() {
+        val first = syntheticNote(5000)
+        val second = syntheticNote(5000)
+        val app = ApplicationProvider.getApplicationContext<FocalApplication>()
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val blockedContext = object : ContextWrapper(app) {
+            override fun getSystemService(name: String): Any? {
+                if (name == Context.AUDIO_SERVICE) {
+                    entered.countDown()
+                    check(release.await(10, TimeUnit.SECONDS))
+                }
+                return super.getSystemService(name)
+            }
+        }
+        val pendingPlayer = SpeechPlayer(blockedContext, store, owner)
+        var claim: SessionOperations.SessionClaim? = null
+        try {
+            player.playNote(first, onError)
+            await { player.playback.value.isPlaying }
+            pendingPlayer.playNote(second, onError)
+            assertTrue(entered.await(10, TimeUnit.SECONDS))
+            assertEquals(second.id, pendingPlayer.playback.value.noteId)
+
+            claim = checkNotNull(SessionOperations.reserveSession(capture = true, noteId = null))
+            assertEquals(PlaybackState(), player.playback.value)
+            assertEquals(PlaybackState(), pendingPlayer.playback.value)
+            val denied = CopyOnWriteArrayList<String>()
+            player.playNote(first) { denied += it }
+            assertEquals(1, denied.size)
+            assertFalse(player.playback.value.isPlaying)
+
+            release.countDown()
+            claim.finishCapture()
+            player.playNote(first, onError)
+            await { player.playback.value.isPlaying }
+            player.stopNote(second.id)
+            assertTrue("Removing another note must not stop the current player", player.playback.value.isPlaying)
+            player.stopNote(first.id)
+            assertEquals(PlaybackState(), player.playback.value)
+            assertTrue(errors.toString(), errors.isEmpty())
+        } finally {
+            release.countDown()
+            pendingPlayer.stop()
+            claim?.release()
+        }
+    }
+
+    // Android protects ACTION_AUDIO_BECOMING_NOISY, so ordinary apps cannot
+    // send it. Retain the real registered receivers and deliver that intent
+    // directly to exercise both the callback and receiver lifetime.
+    private class ReceiverTrackingContext(base: Context) : ContextWrapper(base) {
+        val registered = CopyOnWriteArrayList<BroadcastReceiver>()
+        override fun registerReceiver(receiver: BroadcastReceiver?, filter: IntentFilter,
+                                      permission: String?, scheduler: Handler?): Intent? {
+            return super.registerReceiver(receiver, filter, permission, scheduler).also {
+                if (receiver != null && filter.hasAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)) registered += receiver
+            }
+        }
+        override fun registerReceiver(receiver: BroadcastReceiver?, filter: IntentFilter,
+                                      permission: String?, scheduler: Handler?, flags: Int): Intent? {
+            return super.registerReceiver(receiver, filter, permission, scheduler, flags).also {
+                if (receiver != null && filter.hasAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)) registered += receiver
+            }
+        }
+        override fun unregisterReceiver(receiver: BroadcastReceiver) {
+            registered.remove(receiver)
+            super.unregisterReceiver(receiver)
+        }
+        fun deliver(receiver: BroadcastReceiver) {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                receiver.onReceive(this, Intent(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+            }
+        }
     }
 
     @Test fun seekingLeavesAnExcerptAndClampsToTheOriginalAudio() {

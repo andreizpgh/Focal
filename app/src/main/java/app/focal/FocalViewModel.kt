@@ -59,7 +59,7 @@ class FocalViewModel internal constructor(
                             passages = if (sameSelection) previous.passages else emptyList(),
                             audioBytes = if (sameSelection) previous.audioBytes else 0,
                             pending = if (sameSelection) previous.pending else 0,
-                            selectedId = id, error = "Could not load sessions. Try again when storage is available."
+                            selectedId = id, error = if (e is PassageSizeException) e.message else "Could not load sessions. Try again when storage is available."
                         )
                     }
                 }
@@ -92,7 +92,8 @@ class FocalViewModel internal constructor(
         try { app.store.edit(passage, text); true }
         catch (e: Exception) {
             if (e is CancellationException) throw e
-            errors.emit("Could not save changes. Your draft is still open.")
+            errors.emit(if (e is PassageSizeException) e.message ?: "This passage is too large. Your draft is still open."
+                else "Could not save changes. Your draft is still open.")
             false
         }
     }
@@ -105,15 +106,15 @@ class FocalViewModel internal constructor(
             false
         }
     }
-    fun delete(id: String) = work {
-        if (live.value.noteId == id) return@work
-        if (player.playback.value.noteId == id) player.stop()
+    fun delete(id: String) = destructive(id) {
+        check(live.value.noteId != id) { "Finish this recording or transcription before deleting it." }
+        player.stopNote(id)
         (deleteForTests ?: app.store::delete)(id)
         selected.compareAndSet(id, null)
     }
-    fun removeAudio(id: String) = work {
-        if (live.value.noteId == id || app.store.chunks(id).any { it.state != "DONE" }) return@work
-        player.stop(); app.store.removeAudio(id)
+    fun removeAudio(id: String) = destructive(id) {
+        check(live.value.noteId != id && app.store.pendingCount(id) == 0) { "Finish transcription before removing its source audio." }
+        player.stopNote(id); app.store.removeAudio(id)
     }
     fun importModel(uri: Uri, retryId: String? = null) = work {
         initialPreparation.await()
@@ -144,6 +145,17 @@ class FocalViewModel internal constructor(
     fun seekNote(note: Note, positionMs: Long) {
         if (live.value.noteId != null && !live.value.processing) return
         player.seekTo(note, positionMs) { errors.tryEmit(it) }
+    }
+    private fun destructive(id: String, block: suspend () -> Unit): Job {
+        val claim = try { SessionOperations.tryDestructive(id) }
+        catch (e: Exception) { return work { throw e } }
+        if (claim == null) return work { errors.emit("This session is busy. Finish its current operation before changing it.") }
+        return work {
+            try { block() } finally { claim.release() }
+        }.also { job ->
+            // A ViewModel may be cleared before its IO coroutine starts.
+            job.invokeOnCompletion { claim.release() }
+        }
     }
     private fun work(block: suspend () -> Unit) = viewModelScope.launch(Dispatchers.IO) {
         try { block() } catch (e: Exception) {

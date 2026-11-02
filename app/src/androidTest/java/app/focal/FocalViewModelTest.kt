@@ -13,7 +13,12 @@ import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.focal.data.Passage
+import app.focal.data.PassageSizeException
 import app.focal.recording.RecordingService
+import app.focal.recording.SessionOperations
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -110,6 +115,63 @@ class FocalViewModelTest {
             assertEquals(second, selected.note?.id)
             assertNull(app.store.note(first))
         } finally { release.countDown() }
+    }
+
+    @Test fun delayedDeletionExcludesRecoveryAcrossControllersUntilDiskWorkFinishes() {
+        val id = app.store.create("en").also { created += it }
+        app.store.audioFile(id).writeBytes(ByteArray(32_000))
+        val chunk = app.store.beginChunk(id, 0, false)
+        app.store.finishChunk(chunk, 1000)
+        app.store.state(id, "INTERRUPTED")
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val deleting = model(delete = { target ->
+            entered.countDown()
+            check(release.await(10, TimeUnit.SECONDS))
+            app.store.delete(target)
+        })
+        val recovering = model()
+        val deletion = deleting.delete(id)
+        try {
+            assertTrue(entered.await(10, TimeUnit.SECONDS))
+            runBlocking {
+                val rejected = async(start = CoroutineStart.UNDISPATCHED) { withTimeout(10_000) { recovering.errors.first() } }
+                recovering.retry(id)
+                assertTrue(rejected.await().contains("busy"))
+            }
+            assertEquals("INTERRUPTED", app.store.note(id)!!.state)
+            assertEquals(32_000L, app.store.audioBytes(id))
+        } finally {
+            release.countDown()
+            runBlocking { withTimeout(10_000) { deletion.join() } }
+        }
+        assertNull(app.store.note(id))
+        // Completion releases only this deletion's claim, even across controllers.
+        val available = SessionOperations.reserveSession(capture = false, noteId = id)
+        assertNotNull(available)
+        available?.release()
+    }
+
+    @Test fun passageSizeLimitsExplainRecoveryAndKeepTheEditedDraftUnsaved() {
+        val sizeMessage = "This saved passage is too large to open. Its original text is still saved."
+        val unreadable = model(read = { throw PassageSizeException(sizeMessage) })
+        assertEquals(sizeMessage, await(unreadable) { it.error != null }.error)
+
+        val id = app.store.create("en").also { created += it }
+        val chunk = app.store.beginChunk(id, 0, false)
+        app.store.finishChunk(chunk, 1000)
+        app.store.complete(app.store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = chunk,
+            start = 0, end = 1000, text = "Keep the saved text", uncertain = false)))
+        val passage = app.store.passages(id).single()
+        val editing = model()
+        runBlocking {
+            val error = async(start = CoroutineStart.UNDISPATCHED) { withTimeout(10_000) { editing.errors.first() } }
+            assertFalse(editing.edit(passage, "x".repeat(128 * 1024 + 1)))
+            val message = error.await()
+            assertTrue(message.contains("Shorten"))
+            assertTrue(message.contains("draft is still open"))
+        }
+        assertEquals(passage, app.store.passages(id).single())
     }
 
     @Test fun notificationLaunchIsNotReplayedOverSavedNavigation() {

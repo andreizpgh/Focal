@@ -14,9 +14,18 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.Note
+import app.focal.data.Chunk
+import app.focal.data.NoteStore
+import app.focal.data.Passage
+import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingInput
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
+import app.focal.speech.SpeechPlayer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
@@ -289,6 +298,97 @@ class RecordingServiceTest {
         assertEquals(1, app.store.pendingCount(id))
         assertEquals("INTERRUPTED", app.store.note(id)!!.state)
         assertTrue(app.store.note(id)!!.error.contains("Synthetic decoder"))
+    }
+
+    @Test fun startingCaptureExcludesPlaybackBeforeServicePublishesItsNote() {
+        val playbackId = app.store.create("en")
+        app.store.audioFile(playbackId).writeBytes(ByteArray(32_000))
+        app.store.state(playbackId, "READY")
+        val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val otherPlayer = SpeechPlayer(app, app.store, playbackScope)
+        var playbackError: String? = null
+        try {
+            activity.onActivity {
+                RecordingService.command(it, RecordingService.START)
+                // Service callbacks cannot run until this main-thread controller returns.
+                assertNull(RecordingState.live.value.noteId)
+                otherPlayer.playNote(app.store.note(playbackId)!!) { message -> playbackError = message }
+                assertFalse(otherPlayer.playback.value.isPlaying)
+                assertNotNull("Playback must be rejected visibly during capture startup", playbackError)
+            }
+            await { RecordingState.live.value.noteId != null && inputs.isNotEmpty() }
+            val id = RecordingState.live.value.noteId!!
+            send(RecordingService.STOP)
+            finish(id)
+        } finally {
+            otherPlayer.stop(); playbackScope.cancel()
+        }
+    }
+
+    @Test fun sameProcessRecoverySealsWritingRangesBeforeDecodingAndCanRetryAFailedSeal() {
+        val id = app.store.create("en")
+        val original = ByteArray(1500 * 32) { (it % 97).toByte() }
+        app.store.audioFile(id).writeBytes(original)
+        app.store.beginChunk(id, 0, false)
+        app.store.state(id, "INTERRUPTED", "Synthetic failed finalization")
+        val decoded = CopyOnWriteArrayList<Chunk>()
+        completingDecoder(decoded)
+        val trigger = "test_recover_" + id.replace("-", "")
+        app.store.writableDatabase.execSQL("""CREATE TRIGGER $trigger BEFORE UPDATE OF state ON chunks
+            WHEN NEW.note_id='$id' BEGIN SELECT RAISE(ABORT,'Synthetic unavailable metadata'); END""")
+        try {
+            activity.onActivity { RecordingService.command(it, RecordingService.RECOVER, id) }
+            await { app.store.note(id)?.state == "ERROR" }
+            finish(id)
+            assertTrue(decoded.isEmpty())
+            assertEquals("WRITING", app.store.chunks(id).single().state)
+        } finally { app.store.writableDatabase.execSQL("DROP TRIGGER $trigger") }
+
+        activity.onActivity { RecordingService.command(it, RecordingService.RECOVER, id) }
+        await { app.store.note(id)?.state == "READY" }
+        finish(id)
+        assertEquals(listOf(0L to 1500L), decoded.map { it.start to it.end })
+        assertEquals("DONE", app.store.chunks(id).single().state)
+        assertEquals(1500L, app.store.note(id)!!.duration)
+        assertTrue(inputs.isEmpty())
+        assertArrayEquals(original, app.store.audioFile(id).readBytes())
+    }
+
+    @Test fun sameProcessRecoveryFindsUnpublishedTailAndPreservesCompletedEdits() {
+        val id = app.store.create("en")
+        val original = ByteArray(2000 * 32) { (it % 101).toByte() }
+        app.store.audioFile(id).writeBytes(original)
+        val first = app.store.beginChunk(id, 0, false)
+        app.store.finishChunk(first, 1000)
+        app.store.complete(app.store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = first,
+            start = 0, end = 1000, text = "Original", uncertain = true)))
+        app.store.edit(app.store.passages(id).single(), "Keep this correction")
+        val saved = app.store.passages(id).single()
+        app.store.state(id, "INTERRUPTED", "Synthetic lost Begin metadata")
+        val decoded = CopyOnWriteArrayList<Chunk>()
+        completingDecoder(decoded)
+
+        activity.onActivity { RecordingService.command(it, RecordingService.RECOVER, id) }
+        await { app.store.note(id)?.state == "READY" }
+        finish(id)
+        assertEquals(listOf(1000L to 2000L), decoded.map { it.start to it.end })
+        assertTrue(app.store.chunks(id).all { it.state == "DONE" })
+        assertEquals(saved, app.store.passages(id).single())
+        assertTrue(inputs.isEmpty())
+        assertArrayEquals(original, app.store.audioFile(id).readBytes())
+    }
+
+    private fun completingDecoder(decoded: MutableList<Chunk>) {
+        RecordingService.decoderFactoryForTests = {
+            object : RecordingDecoder {
+                override suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int) {
+                    decoded += chunk
+                    store.complete(chunk, emptyList())
+                }
+                override fun cancel() = Unit
+                override fun close() = Unit
+            }
+        }
     }
 
     private fun start(): String {

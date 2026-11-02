@@ -73,6 +73,7 @@ class RecordingService : Service() {
     @Volatile private var captureFailure: String? = null
     @Volatile private var decodeFailure: String? = null
     private var started = false
+    private var ownership: SessionOperations.SessionClaim? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var startup: Job? = null
     private var worker: Job? = null
@@ -102,12 +103,22 @@ class RecordingService : Service() {
                     // A microphone permission can disappear after command validation.
                     // Processing promotion opens no microphone and disarms the FGS deadline.
                     runCatching { foreground("Recording unavailable", true) }
+                    SessionOperations.releasePending(intent.getStringExtra(OPERATION))
                     stopSelfResult(startId); return START_NOT_STICKY
                 }
                 if (recovery && recoverId.isNullOrBlank()) {
                     RecordingState.live.value = LiveSession(message = "This note is no longer available.")
                     stopSelfResult(startId); return START_NOT_STICKY
                 }
+                val claim = try {
+                    SessionOperations.acceptSession(intent.getStringExtra(OPERATION), capture = !recovery, noteId = if (recovery) recoverId else null)
+                } catch (_: Exception) { null }
+                if (claim == null) {
+                    if (RecordingState.live.value.noteId == null)
+                        RecordingState.live.value = LiveSession(message = "This session is busy. Try again when its current operation finishes.")
+                    stopSelfResult(startId); return START_NOT_STICKY
+                }
+                ownership = claim
                 started = true
                 startup = scope.launch { begin(if (recovery) recoverId else null) }
             }
@@ -133,12 +144,20 @@ class RecordingService : Service() {
             val id = recover?.also { checkNotNull(store.note(it)) { "This note is no longer available." } }
                 ?: store.create(app.preferences.settings.value.language)
             noteId = id
+            ownership?.bindNote(id)
             val note = checkNotNull(store.note(id))
             RecordingState.live.value = LiveSession(id, paused = paused.get(), processing = recover != null,
                 duration = note.duration, message = if (recover != null) "Preparing transcript…" else "Starting recording…")
             wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Focal:recording").apply { setReferenceCounted(false) }
             recordingDone = recover != null
-            if (recover != null) store.state(id, "PROCESSING")
+            if (recover != null) {
+                // A failed live finalization can leave WRITING metadata or a
+                // durable tail even though application startup already recovered.
+                store.recover(id)
+                val duration = checkNotNull(store.note(id)).duration
+                RecordingState.live.update { if (it.noteId == id) it.copy(duration = duration) else it }
+                store.state(id, "PROCESSING")
+            }
             else capture = scope.launch(captureDispatcher) { captureAudio(id) }
             worker = scope.launch(speechDispatcher) { processQueue(id, note.language) }
             scope.launch {
@@ -336,6 +355,7 @@ class RecordingService : Service() {
             catch (error: Exception) { captureFailure = error.message ?: "Could not finish saving audio." }
             try { stream?.close() }
             catch (error: Exception) { captureFailure = error.message ?: "Could not close saved audio." }
+            ownership?.finishCapture()
             RecordingState.live.update { if (it.noteId == id) it.copy(processing = true, paused = false, level = 0f, message = captureFailure ?: "Finishing transcript…") else it }
             // The microphone and original file are closed before waiting on any database work.
             withContext(NonCancellable + Dispatchers.IO) {
@@ -537,11 +557,13 @@ class RecordingService : Service() {
                         cleanupMessage = "Recording stopped. Reopen Focal to recover the saved audio."
                     } finally {
                         if (RecordingState.live.value.noteId == id) RecordingState.live.value = LiveSession(message = cleanupMessage)
+                        ownership?.release()
                     }
                 }
             } finally {
                 captureAwake.set(false); decoderAwake.set(false); reconcileWake()
                 captureDispatcher.close(); speechDispatcher.close()
+                ownership?.release()
             }
         }
         super.onDestroy()
@@ -553,6 +575,7 @@ class RecordingService : Service() {
         const val RESUME = "app.focal.RESUME"
         const val RECOVER = "app.focal.RECOVER"
         const val NOTE = "note"
+        private const val OPERATION = "operation"
         private const val CHANNEL = "recording"
         private const val NOTIFICATION = 1
         private const val MIN_FREE_BYTES = 64L * 1024 * 1024
@@ -565,8 +588,17 @@ class RecordingService : Service() {
             if (action == START && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
                 throw SecurityException("Microphone access is required.")
             val intent = Intent(context, RecordingService::class.java).setAction(action).putExtra(NOTE, id)
-            if (action == START || action == RECOVER) ContextCompat.startForegroundService(context, intent)
-            else context.startService(intent)
+            if (action == START || action == RECOVER) {
+                val capture = action == START
+                val claim = SessionOperations.reserveSession(capture, if (capture) null else id)
+                if (claim == null) {
+                    if (SessionOperations.matchesSession(capture, id)) return
+                    error("This session is busy. Finish its current operation before recording or transcribing.")
+                }
+                intent.putExtra(OPERATION, claim.token)
+                try { ContextCompat.startForegroundService(context, intent) }
+                catch (error: Exception) { claim.release(); throw error }
+            } else context.startService(intent)
         }
     }
 }
