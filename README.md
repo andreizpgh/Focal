@@ -29,4 +29,4 @@ English · **Русский** · Deutsch · Français · Español · Italiano ·
 
 ---
 
-[Build & contribute](CONTRIBUTING.md) · [Architecture](docs/architecture.md) · [Testing](docs/device-validation.md) · [MIT license](LICENSE)
+[Build & contribute](CONTRIBUTING.md) · [Interface preview](docs/interface-preview.md) · [Architecture](docs/architecture.md) · [Testing](docs/device-validation.md) · [MIT license](LICENSE)
