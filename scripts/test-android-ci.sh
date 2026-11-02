@@ -15,8 +15,12 @@ PY
 trap report_failure ERR
 test -e /dev/kvm || { echo '::error::Hardware Android virtualization is unavailable'; exit 1; }
 sudo chmod 666 /dev/kvm
+export ANDROID_AVD_HOME="$PWD/build/avd"
+mkdir -p "$ANDROID_AVD_HOME"
 "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-35;default;x86_64'
-printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name focal_test --package 'system-images;android-35;default;x86_64'
+printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name focal_test --path "$ANDROID_AVD_HOME/focal_test.avd" --package 'system-images;android-35;default;x86_64'
+test -f "$ANDROID_AVD_HOME/focal_test.ini"
+"$ANDROID_HOME/emulator/emulator" -list-avds | grep -Fx focal_test
 "$ANDROID_HOME/platform-tools/adb" start-server
 "$ANDROID_HOME/emulator/emulator" -avd focal_test -accel on -no-window -gpu swiftshader -no-boot-anim -no-snapshot -memory 2048 -cores 2 > build/emulator.log 2>&1 &
 emulator_pid=$!
