@@ -64,4 +64,4 @@ val verifyBundledModel by tasks.registering {
         }
     }
 }
-tasks.matching { it.name == "preReleaseBuild" }.configureEach { dependsOn(verifyBundledModel) }
+tasks.matching { it.name in setOf("packageRelease", "bundleRelease") }.configureEach { dependsOn(verifyBundledModel) }

@@ -9,5 +9,7 @@ local.properties
 *.keystore
 models/*.bin
 app/src/main/assets/*.bin
+app/src/main/assets/*.partial
+app/src/main/assets/model-provenance.json
 captures/
 .DS_Store
