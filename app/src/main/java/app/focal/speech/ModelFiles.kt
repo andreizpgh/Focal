@@ -36,7 +36,7 @@ class ModelFiles(private val context: Context) {
             }
             require(partial.length() > 10_000_000) { "This file is not a complete speech model." }
             checkCancelled()
-            val handle = NativeWhisper.open(partial.absolutePath)
+            val handle = NativeWhisper.open(partial.absolutePath, checkCancelled)
             NativeWhisper.close(handle)
             checkCancelled()
             require(partial.renameTo(model)) { "Could not save the model. Check free storage." }

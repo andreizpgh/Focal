@@ -7,6 +7,8 @@ import app.focal.speech.ModelFiles
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.util.UUID
 import java.util.concurrent.CancellationException
 import org.junit.Assert.*
@@ -34,6 +36,34 @@ class ModelFilesTest {
             }
         }
         assertEquals(3, checks)
+    }
+
+    @Test fun malformedNativeMetadataIsRejectedBeforeOpening() = isolated { models ->
+        fun fileWith(vocab: Int, badToken: Boolean = false, tensor: IntArray = intArrayOf()): ByteArray {
+            val bytes = ByteArrayOutputStream()
+            DataOutputStream(bytes).use { out ->
+                fun int(value: Int) = out.writeInt(Integer.reverseBytes(value))
+                listOf(0x67676d6c, 51865, 1500, 512, 8, 6, 448, 512, 8, 6, 80, 1009, 80, 201).forEach(::int)
+                out.write(ByteArray(80 * 201 * 4))
+                int(vocab)
+                if (vocab == 50257) {
+                    if (badToken) int(Int.MAX_VALUE) else repeat(vocab) { int(0) }
+                    tensor.forEach(::int)
+                }
+                out.write(ByteArray(10_000_001))
+            }
+            return bytes.toByteArray()
+        }
+        val fixtures = listOf<() -> ByteArray>(
+            { fileWith(Int.MAX_VALUE) }, // Reject oversized vocabularies.
+            { fileWith(1) }, // Reject incomplete vocabularies.
+            { fileWith(50257, badToken = true) }, // Reject attacker-sized tokens.
+            { fileWith(50257, tensor = intArrayOf(4, 1, 0)) }, // Reject noncanonical dimensions.
+            { fileWith(50257, tensor = intArrayOf(1, Int.MAX_VALUE, 0)) }, // Reject attacker-sized names.
+        )
+        fixtures.forEach { fixture ->
+            assertThrows(IllegalStateException::class.java) { ByteArrayInputStream(fixture()).use { models.install(it) } }
+        }
     }
 
     private fun isolated(block: (ModelFiles) -> Unit) {

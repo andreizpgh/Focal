@@ -163,7 +163,7 @@ jbyteArray decode(JNIEnv *env, jlong handle, jfloatArray samples, jstring langua
 } // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_focal_speech_NativeWhisper_open(JNIEnv *env, jobject, jstring path) {
+Java_app_focal_speech_NativeWhisper_openValidatedRaw(JNIEnv *env, jobject, jstring path) {
     try {
         if (!path) { invalid(env, "The speech model path is missing."); return 0; }
         std::string file;
