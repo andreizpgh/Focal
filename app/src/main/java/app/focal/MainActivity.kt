@@ -11,15 +11,15 @@ import app.focal.ui.FocalApp
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
-    private val openedNote = MutableStateFlow<String?>(null)
+    private val openedNote = MutableStateFlow<Pair<String?, Long>>(null to 0)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        openedNote.value = intent.getStringExtra(RecordingService.NOTE)
+        openedNote.value = intent.getStringExtra(RecordingService.NOTE) to android.os.SystemClock.elapsedRealtime()
         setContent { val model: FocalViewModel = viewModel(); FocalApp(model, openedNote) }
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        openedNote.value = intent.getStringExtra(RecordingService.NOTE)
+        openedNote.value = intent.getStringExtra(RecordingService.NOTE) to android.os.SystemClock.elapsedRealtime()
     }
 }

@@ -1,3 +1,6 @@
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
 plugins {
     id("com.android.application")
     kotlin("android")
@@ -59,9 +62,19 @@ val verifyBundledModel by tasks.registering {
     group = "verification"
     description = "Release APKs must contain the verified offline speech model."
     doLast {
-        check(file("src/main/assets/ggml-base-q5_1.bin").isFile) {
+        val model = file("src/main/assets/ggml-base-q5_1.bin")
+        val provenance = file("src/main/assets/model-provenance.json")
+        check(model.isFile && provenance.isFile) {
             "Missing speech model. Run python3 scripts/fetch-model.py before making a release."
         }
+        val metadata = JsonSlurper().parse(provenance) as Map<*, *>
+        val digest = MessageDigest.getInstance("SHA-256")
+        model.inputStream().use { input ->
+            val buffer = ByteArray(65536)
+            while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) }
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+        check(actual == metadata["sha256"]) { "Bundled model checksum mismatch; run the verified downloader." }
     }
 }
 tasks.matching { it.name in setOf("packageRelease", "bundleRelease") }.configureEach { dependsOn(verifyBundledModel) }

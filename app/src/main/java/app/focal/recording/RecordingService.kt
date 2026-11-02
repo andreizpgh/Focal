@@ -276,6 +276,14 @@ class RecordingService : Service() {
         stopping.set(true); transcriber?.cancel(); scope.cancel()
         if (wakeLock?.isHeld == true) wakeLock?.release()
         captureDispatcher.close(); speechDispatcher.close()
+        app.scope.launch {
+            capture?.join(); worker?.join()
+            noteId?.let { id ->
+                if (store.note(id)?.state in listOf("RECORDING", "PAUSED", "PROCESSING"))
+                    store.state(id, "INTERRUPTED", failure ?: "Recording stopped. Saved audio can be transcribed.")
+                if (RecordingState.live.value.noteId == id) RecordingState.live.value = LiveSession()
+            }
+        }
         super.onDestroy()
     }
     companion object {

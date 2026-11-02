@@ -30,7 +30,10 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
     }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LibraryState())
     init {
         work {
-            try { app.initialized.await(); modelReady.value = app.models.ready() }
+            try {
+                app.initialized.await(); modelReady.value = app.models.ready()
+                app.startupError.value?.let { errors.emit(it) }
+            }
             finally { preparing.value = false }
         }
     }

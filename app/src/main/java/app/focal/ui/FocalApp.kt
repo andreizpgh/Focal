@@ -54,7 +54,7 @@ import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun FocalApp(model: FocalViewModel, openedNote: StateFlow<String?>) {
+@Composable fun FocalApp(model: FocalViewModel, openedNote: StateFlow<Pair<String?, Long>>) {
     val settings by model.settings.collectAsStateWithLifecycle()
     val library by model.library.collectAsStateWithLifecycle()
     val live by model.live.collectAsStateWithLifecycle()
@@ -77,7 +77,7 @@ import java.util.Locale
     fun open(id: String?) { selected = id; model.select(id); settingsOpen = false }
     fun notify(message: String) { scope.launch { snackbar.showSnackbar(message) } }
     LaunchedEffect(selected) { model.select(selected) }
-    LaunchedEffect(requested) { requested?.let { open(it) } }
+    LaunchedEffect(requested) { requested.first?.let { open(it) } }
     LaunchedEffect(live.noteId) { live.noteId?.let { open(it) } }
     LaunchedEffect(live.message) { if (live.noteId == null && live.message.isNotBlank()) notify(live.message) }
     LaunchedEffect(Unit) { model.errors.collect { snackbar.showSnackbar(it) } }
@@ -214,20 +214,17 @@ import java.util.Locale
 @Composable private fun LibraryScreen(notes: List<Note>, loaded: Boolean, live: LiveSession, open: (String?) -> Unit) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp)) {
         item {
-            Text("A little space\nfor your thoughts.", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(top = 20.dp, bottom = 18.dp))
-            Text("Speak freely. Keep what matters.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(48.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("YOUR NOTES", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 18.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+                Text("Notes", style = MaterialTheme.typography.displayLarge)
                 Text(notes.size.toString().padStart(2, '0'), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             HorizontalDivider(Modifier.padding(top = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
         }
         if (loaded && notes.isEmpty()) item {
-            Column(Modifier.padding(vertical = 42.dp)) {
+            Column(Modifier.padding(vertical = 56.dp)) {
                 Glyph(Symbol.Logo, Modifier.size(44.dp), MaterialTheme.colorScheme.outline)
-                Text("Start with a voice note.", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 24.dp))
-                Text("Take your time. Pauses are welcome.\nYour recording stays on your phone.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+                Text("No notes yet.", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 24.dp))
+                Text("Record at your pace.\nReview and copy when you’re done.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
             }
         }
         items(notes, key = { it.id }) { note ->
@@ -257,7 +254,7 @@ import java.util.Locale
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)) {
         item {
             Text(if (live != null && !live.processing) "VOICE NOTE" else date(note.created).uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (note.title == "Untitled note" && live != null) "Go on.\nYou have space." else note.title, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(top = 16.dp, bottom = 12.dp))
+            Text(if (note.title == "Untitled note" && live != null) "New recording" else note.title, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(top = 16.dp, bottom = 12.dp))
             Text("${Transcript.time(live?.duration ?: note.duration)}  ·  ${Preferences.languages[note.language] ?: note.language}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (live != null) {
                 Row(Modifier.fillMaxWidth().padding(vertical = 24.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -332,7 +329,7 @@ import java.util.Locale
     ModalBottomSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(if (passage.uncertain && !passage.reviewed) "A closer listen" else "Edit passage", style = MaterialTheme.typography.headlineMedium)
+                Text(if (passage.uncertain && !passage.reviewed) "Review passage" else "Edit passage", style = MaterialTheme.typography.headlineMedium)
                 Text(Transcript.time(passage.start), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = play, enabled = audio, contentPadding = PaddingValues(vertical = 12.dp)) {
@@ -351,8 +348,6 @@ import java.util.Locale
 @Composable private fun SettingsScreen(language: String, theme: String, setLanguage: (String) -> Unit, setTheme: (String) -> Unit) {
     var choosing by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 24.dp)) {
-        Text("Make room\nfor your voice.", style = MaterialTheme.typography.headlineLarge)
-        Text("Just the essentials.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp, bottom = 36.dp))
         Text("RECORDING", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth().clickable { choosing = true }.padding(vertical = 22.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -369,7 +364,7 @@ import java.util.Locale
             }
         }
         HorizontalDivider(Modifier.padding(vertical = 28.dp), color = MaterialTheme.colorScheme.outlineVariant)
-        Text("Yours, on this device.", style = MaterialTheme.typography.titleLarge)
+        Text("Stored on this device", style = MaterialTheme.typography.titleLarge)
         Text("Audio and text stay in Focal’s private storage. No accounts, analytics, or cloud backup. Copy or share anything you want to keep before uninstalling.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
         Text("Record with the screen off or while using another app. Force-stopping Focal or restarting the phone ends recording. Some phones also restrict background apps.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp))
         Text("Review cues are suggestions. Speech recognition can miss errors even in unmarked text.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp))
