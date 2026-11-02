@@ -39,7 +39,8 @@ class SpeechWorkflowTest {
         ready()
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         automation.grantRuntimePermission(app.packageName, Manifest.permission.RECORD_AUDIO)
-        automation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
+        if (android.os.Build.VERSION.SDK_INT >= 33)
+            automation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
         var id: String? = null
         try {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -56,7 +57,7 @@ class SpeechWorkflowTest {
                 val pausedSize = app.store.audioBytes(id!!)
                 SystemClock.sleep(1200)
                 assertEquals(pausedSize, app.store.audioBytes(id!!))
-                RecordingService.command(app, RecordingService.PAUSE)
+                RecordingService.command(app, RecordingService.RESUME)
                 await { app.store.audioBytes(id!!) > pausedSize }
                 RecordingService.command(app, RecordingService.STOP)
                 await { RecordingState.live.value.noteId == null }
