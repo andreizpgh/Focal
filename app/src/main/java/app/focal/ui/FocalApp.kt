@@ -66,9 +66,10 @@ import java.util.Locale
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var modelOpen by rememberSaveable { mutableStateOf(false) }
     var reviewOnly by rememberSaveable(selected) { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<Passage?>(null) }
-    var confirm by remember { mutableStateOf<String?>(null) }
-    var renaming by remember { mutableStateOf(false) }
+    var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val editing = library.passages.firstOrNull { it.id == editingId }
+    var confirm by rememberSaveable { mutableStateOf<String?>(null) }
+    var renaming by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -177,7 +178,7 @@ import java.util.Locale
             AnimatedContent(targetState = when { settingsOpen -> "settings"; selected != null -> "note"; else -> "library" }, label = "screen", modifier = Modifier.padding(padding)) { screen ->
                 when (screen) {
                     "settings" -> SettingsScreen(settings.language, settings.theme, model.app.preferences::language, model.app.preferences::theme)
-                    "note" -> if (note != null) NoteScreen(note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { editing = it }, { model.retry(note.id) })
+                    "note" -> if (note != null) NoteScreen(note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { editingId = it.id }, { model.retry(note.id) })
                         else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) }
                     else -> LibraryScreen(library.notes, library.loaded, live, ::open)
                 }
@@ -192,14 +193,14 @@ import java.util.Locale
         editing?.let { passage ->
             val available = library.audioBytes > 0 && !active
             EditSheet(passage, playing == passage.id, available, { model.play(passage) }, {
-                model.player.stop(); editing = null
+                model.player.stop(); editingId = null
             }) { text, next ->
                 model.edit(passage, text); model.player.stop()
-                editing = if (next) library.passages.firstOrNull { it.uncertain && !it.reviewed && it.id > passage.id } else null
+                editingId = if (next) library.passages.firstOrNull { it.uncertain && !it.reviewed && it.id > passage.id }?.id else null
             }
         }
         if (renaming && note != null) {
-            var title by remember(note.id) { mutableStateOf(note.title) }
+            var title by rememberSaveable(note.id) { mutableStateOf(note.title) }
             AlertDialog(onDismissRequest = { renaming = false }, title = { Text("Note title") }, text = {
                 OutlinedTextField(title, { title = it.take(120) }, singleLine = true, label = { Text("Title") })
             }, confirmButton = { TextButton(onClick = { model.rename(note.id, title); renaming = false }) { Text("Save") } }, dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } })
@@ -331,7 +332,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun EditSheet(passage: Passage, playing: Boolean, audio: Boolean, play: () -> Unit, dismiss: () -> Unit, save: (String, Boolean) -> Unit) {
-    var text by remember(passage.id) { mutableStateOf(passage.text) }
+    var text by rememberSaveable(passage.id) { mutableStateOf(passage.text) }
     ModalBottomSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {

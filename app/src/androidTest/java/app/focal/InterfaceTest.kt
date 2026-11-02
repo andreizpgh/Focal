@@ -39,6 +39,8 @@ class InterfaceTest {
             compose.onNodeWithText("1 to review").performClick()
             compose.onNodeWithText("Это тестовая запись.").performClick()
             compose.onNode(hasSetTextAction()).performTextReplacement("Это исправленная запись.")
+            compose.activityRule.scenario.recreate()
+            compose.onNode(hasSetTextAction()).assertTextContains("Это исправленная запись.")
             compose.onNodeWithText("Save & next").performClick()
             compose.waitUntil(10_000) { store.passages(id).single().reviewed }
             compose.onNodeWithText("Show all").performClick()
