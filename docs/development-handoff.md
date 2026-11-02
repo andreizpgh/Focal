@@ -14,9 +14,12 @@ canvas, black primary actions, compact speech-language selection, timed passages
 and persistent original-audio controls. No app name in the main header or filler
 copy under Record. Preserve light/dark/system support and accessible controls.
 
-The current flat geometric pair of closing quotation marks is the chosen logo.
-Do not add 3D, depth, gradients or shadows. The next work is product completion,
-speech quality and reliability, not another visual-direction exploration.
+The current flat quotation-pair logo is provisional. Identity exploration is open
+again: seek a distinctive connection to Focal's name and voice capture, compatible
+with the selected minimal UI. Do not treat the existing mark as approved or apply
+an exploratory replacement before selection. Avoid decorative 3D. Product/engine
+work may proceed independently; keep pending identity work confined to brand
+assets and exploration files.
 
 The interface is English by default. Speech support must be evaluated for English,
 Russian, German, French, Spanish, Italian and Portuguese. Prioritize Russian
