@@ -35,12 +35,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--revision", help="Immutable Hugging Face commit from an earlier model-provenance.json")
     args = parser.parse_args()
-    revision = args.revision or metadata(f"https://huggingface.co/api/models/{REPO}")["sha"]
+    lock = json.loads((ROOT / "models/model.json").read_text())
+    revision = args.revision or lock["revision"]
     if not re.fullmatch(r"[a-f0-9]{40}", revision):
         raise ValueError("Expected an immutable upstream commit")
     files = metadata(f"https://huggingface.co/api/models/{REPO}/tree/{revision}")
     info = next(item for item in files if item["path"] == NAME)
     expected = info["lfs"]["oid"]
+    if revision == lock["revision"] and expected != lock["sha256"]:
+        raise ValueError("Upstream model metadata does not match the committed checksum")
     size = info["lfs"]["size"]
     if not re.fullmatch(r"[a-f0-9]{64}", expected) or not 10_000_000 < size < 200_000_000:
         raise ValueError("Unexpected model metadata")

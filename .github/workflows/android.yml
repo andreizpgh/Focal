@@ -54,3 +54,4 @@ jobs:
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
             build/emulator.log
+            build/android-device-tests.log

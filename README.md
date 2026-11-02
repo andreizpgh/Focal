@@ -46,7 +46,7 @@ python3 scripts/fetch-model.py
 ```
 
 `app/build/outputs/apk/debug/app-debug.apk` is the installable output. The model
-downloader verifies the upstream SHA-256 and records its immutable revision.
+downloader verifies the SHA-256 and immutable revision pinned in `models/model.json`.
 Model binaries are excluded from Git. Without the model, a debug build can still
 exercise the interface; it cannot transcribe until a model is imported.
 

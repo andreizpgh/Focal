@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 cd "$(dirname "$0")/.."
+mkdir -p build
+exec > >(tee build/android-device-tests.log) 2>&1
+report_failure() {
+    local result=$?
+    python3 - <<'PY'
+from pathlib import Path
+text = Path('build/android-device-tests.log').read_text(errors='replace')[-5000:]
+print('::error title=Android device test details::' + text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+PY
+    exit "$result"
+}
+trap report_failure ERR
 test -e /dev/kvm || { echo '::error::Hardware Android virtualization is unavailable'; exit 1; }
 sudo chmod 666 /dev/kvm
 "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-35;default;x86_64'
