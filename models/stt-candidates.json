@@ -1,0 +1,22 @@
+{
+  "repository": "ggerganov/whisper.cpp",
+  "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+  "license": "MIT",
+  "models": {
+    "base-q5_1": {
+      "filename": "ggml-base-q5_1.bin",
+      "bytes": 59707625,
+      "sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898"
+    },
+    "base-q8_0": {
+      "filename": "ggml-base-q8_0.bin",
+      "bytes": 81768585,
+      "sha256": "c577b9a86e7e048a0b7eada054f4dd79a56bbfa911fbdacf900ac5b567cbb7d9"
+    },
+    "small-q5_1": {
+      "filename": "ggml-small-q5_1.bin",
+      "bytes": 190085487,
+      "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
+    }
+  }
+}
