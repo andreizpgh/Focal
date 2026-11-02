@@ -151,11 +151,17 @@ import java.util.Locale
                                     LinearProgressIndicator(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceVariant)
                                     Text("${live.message.ifBlank { "Finishing transcript…" }}\nYou can leave Focal open in the background.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
                                 }
-                                note != null -> PrimaryButton("Copy text", Symbol.Copy, transcript.isNotBlank()) {
+                                note != null -> {
+                                    if (playing == -1L) Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Text("Playing recording", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                        IconAction(Symbol.Stop, "Stop playback", model.player::stop)
+                                    }
+                                    PrimaryButton("Copy text", Symbol.Copy, transcript.isNotBlank()) {
                                     val clip = ClipData.newPlainText("Focal note", transcript)
                                     if (Build.VERSION.SDK_INT >= 33) clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
                                     context.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
                                     if (Build.VERSION.SDK_INT < 33) notify("Text copied")
+                                    }
                                 }
                                 live.noteId != null -> PrimaryButton(if (live.processing) "Back to transcript" else "Back to recording", Symbol.Arrow) { open(live.noteId) }
                                 else -> {
@@ -347,6 +353,9 @@ import java.util.Locale
 
 @Composable private fun SettingsScreen(language: String, theme: String, setLanguage: (String) -> Unit, setTheme: (String) -> Unit) {
     var choosing by remember { mutableStateOf(false) }
+    var licenses by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 24.dp)) {
         Text("RECORDING", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth().clickable { choosing = true }.padding(vertical = 22.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -373,6 +382,10 @@ import java.util.Locale
             Glyph(Symbol.Logo, Modifier.size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
             Text("Focal 0.1  ·  Free & open source", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
         }
+        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/andreizpgh/Focal".toUri())) }) { Text("Source code") }
+            TextButton(onClick = { scope.launch { licenses = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { context.assets.open("licenses.txt").bufferedReader().use { it.readText() } } } }) { Text("Licenses") }
+        }
     }
     if (choosing) AlertDialog(onDismissRequest = { choosing = false }, title = { Text("Speech language") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -384,6 +397,9 @@ import java.util.Locale
             }
         }
     }, confirmButton = { TextButton(onClick = { choosing = false }) { Text("Cancel") } })
+    licenses?.let { text -> AlertDialog(onDismissRequest = { licenses = null }, title = { Text("Open-source licenses") },
+        text = { Text(text, modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) },
+        confirmButton = { TextButton(onClick = { licenses = null }) { Text("Done") } }) }
 }
 
 @Composable private fun PrimaryButton(label: String, symbol: Symbol, enabled: Boolean = true, onClick: () -> Unit) {

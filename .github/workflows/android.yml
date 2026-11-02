@@ -33,6 +33,9 @@ jobs:
         run: ./gradlew :core:test :app:lintDebug :app:assembleDebug --console=plain
       - name: Android device tests
         run: bash scripts/test-android-ci.sh
+      - name: Summarize checks
+        if: always()
+        run: python3 scripts/test-summary.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Focal-debug

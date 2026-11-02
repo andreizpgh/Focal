@@ -76,6 +76,7 @@ class RecordingService : Service() {
             }
             PAUSE -> if (!recordingDone && !stopping.get()) {
                 paused.set(!paused.get())
+                if (!paused.get()) keepAwake(true)
                 RecordingState.live.update { it.copy(paused = paused.get(), level = 0f) }
                 noteId?.let { id -> scope.launch { store.state(id, if (paused.get()) "PAUSED" else "RECORDING") } }
                 updateNotification()
@@ -94,7 +95,7 @@ class RecordingService : Service() {
             noteId = id
             val note = checkNotNull(store.note(id))
             RecordingState.live.value = LiveSession(id, processing = recover != null, duration = note.duration, message = "Preparing speech model…")
-            wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Focal:recording").apply { acquire(35 * 60_000L) }
+            wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Focal:recording").apply { setReferenceCounted(false); acquire(35 * 60_000L) }
             recordingDone = recover != null
             if (recover != null) store.state(id, "PROCESSING")
             else capture = scope.launch(captureDispatcher) { captureAudio(id) }
@@ -104,7 +105,7 @@ class RecordingService : Service() {
                 while (isActive && RecordingState.live.value.noteId == id) {
                     delay(1000)
                     if (++ticks % (30 * 60) == 0) {
-                        wakeLock?.let { if (it.isHeld) it.release(); it.acquire(35 * 60_000L) }
+                        wakeLock?.let { if (it.isHeld) { it.release(); it.acquire(35 * 60_000L) } }
                     }
                     RecordingState.live.update { it.copy(pending = store.chunks(id).count { c -> c.state == "PENDING" }) }
                     updateNotification()
@@ -211,9 +212,11 @@ class RecordingService : Service() {
                     val chunk = store.nextChunk(id)
                     if (chunk == null) {
                         if (recordingDone) break
+                        if (paused.get()) keepAwake(false)
                         RecordingState.live.update { it.copy(message = if (paused.get()) "Paused" else "Listening") }
                         delay(350); continue
                     }
+                    keepAwake(true)
                     RecordingState.live.update { it.copy(message = if (recordingDone) "Finishing transcript…" else "Recording · transcribing") }
                     val start = SystemClock.elapsedRealtime()
                     val threads = if (power.isPowerSaveMode || (Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_MODERATE)) 1 else 2
@@ -250,6 +253,12 @@ class RecordingService : Service() {
             builder.addAction(0, "Finish", action(STOP, 2))
         }
         return builder.build()
+    }
+    @Synchronized private fun keepAwake(wanted: Boolean) {
+        wakeLock?.let { lock ->
+            if (wanted && !lock.isHeld) lock.acquire(35 * 60_000L)
+            else if (!wanted && lock.isHeld) lock.release()
+        }
     }
     private fun foreground(text: String, processing: Boolean) {
         val type = if (processing && Build.VERSION.SDK_INT >= 35) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING

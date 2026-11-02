@@ -66,6 +66,8 @@ def main():
                   "sha256": expected, "bytes": size, "license": "MIT"}
     (ASSETS / "model-provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
     print(f"Verified {NAME}: {size:,} bytes, SHA-256 {expected}, upstream {revision}")
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::notice title=Verified speech model::{NAME}, SHA-256 {expected}, upstream {revision}")
 
 
 if __name__ == "__main__":
