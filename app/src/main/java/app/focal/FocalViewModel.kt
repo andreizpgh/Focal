@@ -47,6 +47,10 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
     fun pause() { RecordingService.command(app, RecordingService.PAUSE) }
     fun finish() { RecordingService.command(app, RecordingService.STOP) }
     fun retry(id: String) {
+        if (live.value.noteId != null) {
+            errors.tryEmit("Finish the current recording or transcription first.")
+            return
+        }
         player.stop()
         try { RecordingService.command(app, RecordingService.RECOVER, id) }
         catch (e: Exception) { errors.tryEmit(e.message ?: "Could not continue transcription.") }
@@ -68,7 +72,13 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
             modelReady.value = app.models.ready()
         } finally { preparing.value = false }
     }
-    fun play(passage: Passage) { player.play(passage) { errors.tryEmit(it) } }
+    fun play(passage: Passage) {
+        if (live.value.noteId != null && !live.value.processing) {
+            errors.tryEmit("Finish recording before playing audio.")
+            return
+        }
+        player.play(passage) { errors.tryEmit(it) }
+    }
     fun playNote(note: Note) {
         play(Passage(id = -1, noteId = note.id, chunkId = "", start = 0, end = note.duration, text = "", uncertain = false))
     }

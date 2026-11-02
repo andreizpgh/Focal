@@ -129,7 +129,7 @@ import java.util.Locale
                             IconAction(Symbol.More, "Note options") { menu = true }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                                 DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
-                                DropdownMenuItem(text = { Text(if (playing == -1L) "Stop playback" else "Listen to recording") }, enabled = !active && library.audioBytes > 0,
+                                DropdownMenuItem(text = { Text(if (playing == -1L) "Stop playback" else "Listen to recording") }, enabled = (live.noteId == null || live.processing) && library.audioBytes > 0,
                                     onClick = { menu = false; model.playNote(note) })
                                 DropdownMenuItem(text = { Text("Share text") }, enabled = transcript.isNotBlank(), onClick = {
                                     menu = false
@@ -191,7 +191,7 @@ import java.util.Locale
             dismissButton = { if (!ready) TextButton(onClick = { modelOpen = false }) { Text("Cancel") } }
         )
         editing?.let { passage ->
-            val available = library.audioBytes > 0 && !active
+            val available = library.audioBytes > 0 && (live.noteId == null || live.processing)
             EditSheet(passage, playing == passage.id, available, { model.play(passage) }, {
                 model.player.stop(); editingId = null
             }) { text, next ->
