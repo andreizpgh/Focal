@@ -14,7 +14,8 @@ object TranscriptReplay {
     private const val MAX_TEXT_BYTES = 65_536
     private const val MAX_ENCODED_BYTES = ((MAX_TEXT_BYTES + 2) / 3) * 4
     private const val MAX_ROW_BYTES = MAX_ENCODED_BYTES + 128
-    private const val USAGE = "Usage: TranscriptReplay context previous.tsv beforeMs | reconcile previous.tsv decoded.tsv chunkStartMs chunkEndMs [overlapEndMs]"
+    private const val MAX_PROBABILITIES = 1024
+    private const val USAGE = "Usage: TranscriptReplay context previous.tsv beforeMs | reconcile previous.tsv decoded.tsv chunkStartMs chunkEndMs [overlapEndMs] | review noSpeech probabilitiesCSV"
 
     @JvmStatic fun main(args: Array<String>) {
         try {
@@ -41,6 +42,15 @@ object TranscriptReplay {
                 val result = Transcript.reconcileBoundary(previous, decoded, timestamp(args[3]), timestamp(args[4]),
                     args.getOrNull(5)?.let(::timestamp))
                 writeSegments(result, output)
+            }
+            "review" -> {
+                require(args.size == 3) { USAGE }
+                val csv = args[2]
+                require(args[1].length <= 64 && csv.length <= 65_536 && csv.count { it == ',' } < MAX_PROBABILITIES) {
+                    "Review input is limited to $MAX_PROBABILITIES probabilities and bounded numeric text."
+                }
+                val probabilities = if (csv.isBlank()) emptyList() else csv.split(',').map(::probability)
+                output.append(Transcript.needsReview(probabilities, probability(args[1])).toString()).append('\n')
             }
             else -> error(USAGE)
         }
@@ -106,6 +116,9 @@ object TranscriptReplay {
 
     private fun timestamp(value: String): Long = value.toLongOrNull()?.takeIf { it >= 0 }
         ?: error("Choose nonnegative millisecond timestamps within a signed 64-bit integer.")
+
+    private fun probability(value: String): Float = try { java.lang.Float.parseFloat(value) }
+        catch (_: NumberFormatException) { Float.NaN }
 
     private fun encode(text: String) = Base64.getEncoder().encodeToString(text.toByteArray(Charsets.UTF_8))
 }

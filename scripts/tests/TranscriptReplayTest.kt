@@ -16,6 +16,22 @@ object TranscriptReplayTest {
         check(parsed(wire) == original)
         check(parsed(wire.replace("\n", "\r\n")) == original)
 
+        val threshold = List(10) { "0.99" } + listOf("0.35", "0.35")
+        check(execute("review", "0", threshold.joinToString(",")) == "false\n") { "The strict 0.35f comparison lost Float32 parity." }
+        check(execute("review", "0", (List(10) { "0.99" } + listOf("0.349999", "0.349999")).joinToString(",")) == "true\n")
+        check(execute("review", "0.45", "0.99") == "false\n")
+        check(execute("review", "0.450001", "0.99") == "true\n")
+        check(execute("review", "0", "") == "true\n")
+        for (invalid in listOf("NaN", "Infinity", "-0.1", "1.1", "invalid")) {
+            check(execute("review", "0", invalid) == "true\n")
+            check(execute("review", invalid, "0.99") == "true\n")
+        }
+        check(execute("review", "0", List(1024) { "0.99" }.joinToString(",")) == "false\n")
+        try {
+            execute("review", "0", List(1025) { "0.99" }.joinToString(","))
+            error("Unbounded probabilities were accepted.")
+        } catch (_: IllegalArgumentException) { }
+
         val folder = Files.createTempDirectory("focal-transcript-replay-test-").toFile()
         val previousFile = folder.resolve("previous.tsv")
         val decodedFile = folder.resolve("decoded.tsv")

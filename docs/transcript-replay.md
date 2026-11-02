@@ -18,6 +18,8 @@ java -Xmx32m -cp /tmp/focal-replay.jar app.focal.tools.TranscriptBoundsTest
 java -cp /tmp/focal-replay.jar app.focal.tools.TranscriptReplay \
   context /private/previous.tsv 15500 > /private/context.base64
 java -cp /tmp/focal-replay.jar app.focal.tools.TranscriptReplay \
+  review 0.1 '0.9,0.9,0.9'
+java -cp /tmp/focal-replay.jar app.focal.tools.TranscriptReplay \
   reconcile /private/previous.tsv /private/decoded.tsv 15500 31000 16000 \
   > /private/passages.tsv
 ```
@@ -49,6 +51,14 @@ empty line for empty context. It uses the production 240-character limit.
 `reconcile previous.tsv decoded.tsv chunkStartMs chunkEndMs [overlapEndMs]`
 emits segments after the actual production overlap and missing-audio decisions.
 Omit `overlapEndMs` when the chunk has no prior audio overlap.
+
+`review noSpeech probabilitiesCSV` prints `true` or `false` by calling production
+`Transcript.needsReview` on values parsed with Java's `Float.parseFloat`. This
+preserves Float32 behavior at the strict `0.35f` token threshold. An empty list,
+nonfinite/out-of-range probabilities or invalid numeric text require review;
+malformed numeric text becomes `NaN` before the production decision. Input is
+bounded to 1,024 probabilities and 65,536 characters. This is a review cue, not a
+calibrated probability of error or a reference-based accuracy measurement.
 
 To match the app, supply chronological previous passages selected as the latest
 six whose start precedes the previous chunk end for an overlapped chunk, or the

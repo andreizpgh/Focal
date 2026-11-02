@@ -82,6 +82,53 @@ selection misses, harmed correct words, every language and additional loading
 cost. Preserve original ASR/audio and manual edits, and keep automatic changes
 disabled while accuracy or phone evidence remains inconclusive.
 
+## Cached second-pass shadow comparison
+
+`scripts/evaluate-stt-shadow.py` validates two cached runs and their companion
+aggregate reports, then calls the real Kotlin `Transcript.needsReview` through
+[`TranscriptReplay`](transcript-replay.md). Freeze the replay jar's SHA-256 and
+put its runtime classpath in a local file before running:
+
+```sh
+python3 scripts/evaluate-stt-shadow.py \
+  build/stt/dev-probe-q8-auto.jsonl build/stt/dev-small-q5-auto.jsonl \
+  --split dev --classpath-file /tmp/focal-gate-runtime-classpath.txt \
+  --replay-jar-sha256 "$FROZEN_REPLAY_SHA256" \
+  --allow-mixed-runners --compatibility-run build/stt/dev-base-q8-auto.jsonl \
+  --output build/stt/dev-e3-shadow.json \
+  --records-output build/stt/dev-e3-shadow.jsonl
+```
+
+The tool checks paired IDs, WAV/PCM/reference identity, settings, source-record
+provenance and common Whisper/GGML library hashes. It completes selection using
+only first-pass probability/no-speech features before scoring references. Any
+eligible segment requesting review selects the entire cached second-pass clip.
+Padding-only segments are excluded; no eligible segments means no selection
+under this exact policy. Empty-output misses therefore need explicit reporting.
+
+Decoder and evaluator hashes must match by default. The example explicitly
+allows the probe/CLI caches to differ and supplies a compatibility witness: the
+same first-pass model evaluated with the second pass's runner/evaluator must
+produce identical hypotheses on every paired clip. The aggregate records both
+runner identities and witness hashes. Agreement on this cohort does not prove
+general wrapper equivalence. Replay/stdlib jars are copied into private temporary
+snapshots before selection, so concurrent rebuilds cannot mix policy binaries.
+The pinned jar identifies the Kotlin policy binary; its hash alone does not
+independently prove the source from which it was built.
+
+Private results preserve all three hypotheses, the original revision hash and
+selection evidence. Aggregate results show every language, unflagged errors,
+initially correct clips harmed, and character-error increases that a WER tie can
+hide. Whole-clip error changes still do not adjudicate every changed word, name,
+number or negation. These development results do not establish accepted-span
+precision or speaker-level confidence intervals.
+
+The estimated cold cost adds each cached first pass to the cached second pass
+for selected clips. It excludes selector transport and measures no actual
+combined execution, queueing, model coexistence or phone cost. A successful
+cached comparison requires a subsequent real pipeline experiment; it does not
+enable automatic corrections or change the app's model.
+
 ## Context ablations
 
 The direct probe accepts `--prompt-file PATH`. Generate this file only from
