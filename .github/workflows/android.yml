@@ -36,12 +36,15 @@ jobs:
       - name: Summarize checks
         if: always()
         run: python3 scripts/test-summary.py
+      - name: Prepare APK download
+        run: |
+          mkdir -p build/download
+          cp app/build/outputs/apk/debug/app-debug.apk build/download/Focal.apk
+          cp app/src/main/assets/model-provenance.json build/download/model-provenance.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Focal-debug
-          path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/src/main/assets/model-provenance.json
+          path: build/download/
           if-no-files-found: error
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

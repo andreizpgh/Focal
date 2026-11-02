@@ -47,7 +47,7 @@ class SpeechWorkflowTest {
                 await { RecordingState.live.value.noteId != null }
                 id = RecordingState.live.value.noteId!!
                 await { app.store.audioBytes(id!!) >= 32000 }
-                scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+                scenario.onActivity { it.finishAndRemoveTask() }
                 val before = app.store.audioBytes(id!!)
                 await { app.store.audioBytes(id!!) >= before + 32000 }
                 RecordingService.command(app, RecordingService.PAUSE)

@@ -21,7 +21,7 @@ speech language and appearance.
 
 **Early development build.** In [Actions](https://github.com/andreizpgh/Focal/actions/workflows/android.yml),
 open a successful run and download `Focal-debug` from its artifacts. Extract and
-install `app-debug.apk`. CI bundles the multilingual speech model, so the app
+install `Focal.apk`. CI bundles the multilingual speech model, so the app
 works offline after installation. This is a debug-signed build, not a stable release.
 
 Android 8.0+ and an ARM64 phone are required. x86-64 is included for emulators.
