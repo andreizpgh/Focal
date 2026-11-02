@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Publish test outcomes in the CI summary and public annotations."""
+import argparse
 import os
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -9,6 +10,19 @@ def escape(value):
     return str(value).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--require-model-tests", action="store_true",
+                    help="Fail unless every real-model Android check ran and passed")
+args = parser.parse_args()
+
+required_model_tests = {
+    ("app.focal.NativeWhisperTest", "cancellationIsTerminalAndCloseIsIdempotent"),
+    ("app.focal.NativeWhisperTest", "invalidLanguageAndPcmAreRejectedBeforeInference"),
+    ("app.focal.NativeWhisperTest", "closingAndCancellingOneEngineFromDifferentThreadsIsSafe"),
+    ("app.focal.SpeechWorkflowTest", "realModelRecognizesSpeechThroughAndroidJni"),
+    ("app.focal.SpeechWorkflowTest", "captureContinuesWithoutAnActivityAndCanPauseAndFinish"),
+}
+model_outcomes = {test: [] for test in required_model_tests}
 rows = []
 for label, root in (("Core", Path("core/build/test-results/test")),
                     ("Android", Path("app/build/outputs/androidTest-results/connected"))):
@@ -19,6 +33,10 @@ for label, root in (("Core", Path("core/build/test-results/test")),
         for key in totals:
             totals[key] += int(suite.get(key, "0"))
         for case in suite.iter("testcase"):
+            identity = (case.get("classname"), case.get("name"))
+            if label == "Android" and identity in model_outcomes:
+                model_outcomes[identity].append(
+                    not any(case.find(kind) is not None for kind in ("failure", "error", "skipped")))
             for kind in ("failure", "error"):
                 for failure in case.findall(kind):
                     message = (failure.get("message") or failure.text or "No detail")[:2500]
@@ -34,3 +52,11 @@ if os.environ.get("GITHUB_STEP_SUMMARY"):
         output.write(summary)
 else:
     print(summary)
+
+if args.require_model_tests:
+    incomplete = [f"{classname}.{name}" for (classname, name), outcomes in sorted(model_outcomes.items())
+                  if not outcomes or not all(outcomes)]
+    if incomplete:
+        for test in incomplete:
+            print(f"::error title=Required model test missing or unsuccessful::{escape(test)}")
+        raise SystemExit(1)
