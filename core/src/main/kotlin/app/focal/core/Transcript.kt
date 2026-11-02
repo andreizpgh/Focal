@@ -29,7 +29,9 @@ object Transcript {
         var cursor = before
         for (segment in previous.asReversed()) {
             if (segment.start >= before) continue
-            if (segment.uncertain || segment.text.isBlank()) break
+            // Manual text stays intact, but a NUL cannot enter Whisper's C-string
+            // prompt. Stop the contiguous tail rather than rewriting the correction.
+            if (segment.uncertain || segment.text.isBlank() || '\u0000' in segment.text) break
             // Segment timestamps do not locate individual words. Do not prompt with a
             // partly overlapping segment, or invent a textual cut within it.
             if (segment.end > before) continue
@@ -63,22 +65,23 @@ object Transcript {
         if (overlapEnd == chunkStart) return current.ifEmpty {
             listOf(Segment(chunkStart, chunkEnd, "", uncertain = true))
         }
-        val source = previous.filter { it.end > chunkStart && it.start < overlapEnd }
-            .joinToString(" ") { it.text }
+        val source = trailingWordKeys(previous.filter { it.end > chunkStart && it.start < overlapEnd }.map { it.text })
         val duplicated = current.takeWhile { it.start < overlapEnd && it.end <= overlapEnd }
-        var wordsToDrop = matchingPrefixWords(source, duplicated.joinToString(" ") { it.text }, minimum = 1)
+        var wordsToDrop = matchingPrefixWords(source, leadingWordKeys(duplicated.map { it.text }), minimum = 1)
         val result = current.mapNotNull { segment ->
             if (segment in duplicated && wordsToDrop > 0) {
-                val count = WORD.findAll(segment.text).count()
+                val count = WORD.findAll(segment.text).take(wordsToDrop).count()
                 val removed = minOf(wordsToDrop, count)
                 wordsToDrop -= removed
                 segment.copy(text = dropWords(segment.text, removed), uncertain = true).takeIf { it.text.isNotBlank() }
             } else if (segment.start < overlapEnd && segment.end <= overlapEnd) {
                 // A different hypothesis for the same audio needs a human decision.
                 segment.copy(uncertain = true)
-            } else if (segment.start < overlapEnd && segment.end > overlapEnd &&
-                matchingPrefixWords(source, segment.text, minimum = 1) > 0) {
-                segment.copy(uncertain = true)
+            } else if (segment.start < overlapEnd && segment.end > overlapEnd) {
+                val prefix = leadingWordKeys(listOf(segment.text))
+                if (source.any { it == null } || prefix.any { it == null } || matchingPrefixWords(source, prefix, minimum = 1) > 0)
+                    segment.copy(uncertain = true)
+                else segment
             } else segment
         }
         // Even a conflicting (retained) old-audio hypothesis has not accounted for
@@ -89,16 +92,47 @@ object Transcript {
     }
 
     private val WORD = Regex("\\S+")
+    private const val OVERLAP_WORDS = 12
+    private const val MAX_OVERLAP_WORD_CHARS = 4096
 
-    private fun wordKey(word: String): String = Normalizer.normalize(word, Normalizer.Form.NFC)
-        .lowercase().trim { !it.isLetterOrDigit() }
+    private fun wordKey(word: MatchResult): String? {
+        // A pathological manual token is not evidence for deleting spoken text.
+        // Inspect its range before copying or normalizing the potentially huge word.
+        if (word.range.last - word.range.first >= MAX_OVERLAP_WORD_CHARS) return null
+        return Normalizer.normalize(word.value, Normalizer.Form.NFC).lowercase().trim { !it.isLetterOrDigit() }
+    }
 
-    private fun matchingPrefixWords(previous: String, next: String, minimum: Int): Int {
-        val left = WORD.findAll(previous).map { wordKey(it.value) }.toList().takeLast(12)
-        val right = WORD.findAll(next).take(12).map { wordKey(it.value) }.toList()
+    private fun trailingWordKeys(texts: List<String>): List<String?> {
+        val tail = ArrayDeque<MatchResult>(OVERLAP_WORDS)
+        for (text in texts.asReversed()) {
+            val remaining = OVERLAP_WORDS - tail.size
+            val segmentTail = ArrayDeque<MatchResult>(remaining)
+            for (word in WORD.findAll(text)) {
+                if (segmentTail.size == remaining) segmentTail.removeFirst()
+                segmentTail.addLast(word)
+            }
+            segmentTail.asReversed().forEach(tail::addFirst)
+            if (tail.size == OVERLAP_WORDS) break
+        }
+        return tail.map(::wordKey)
+    }
+
+    private fun leadingWordKeys(texts: List<String>): List<String?> {
+        val head = ArrayList<String?>(OVERLAP_WORDS)
+        for (text in texts) {
+            for (word in WORD.findAll(text).take(OVERLAP_WORDS - head.size)) head += wordKey(word)
+            if (head.size == OVERLAP_WORDS) break
+        }
+        return head
+    }
+
+    private fun matchingPrefixWords(previous: String, next: String, minimum: Int): Int =
+        matchingPrefixWords(trailingWordKeys(listOf(previous)), leadingWordKeys(listOf(next)), minimum)
+
+    private fun matchingPrefixWords(left: List<String?>, right: List<String?>, minimum: Int): Int {
         for (count in minOf(left.size, right.size) downTo minimum) {
             val prefix = right.take(count)
-            if (prefix.all { it.isNotBlank() } && left.takeLast(count) == prefix) return count
+            if (prefix.all { !it.isNullOrBlank() } && left.takeLast(count) == prefix) return count
         }
         return 0
     }

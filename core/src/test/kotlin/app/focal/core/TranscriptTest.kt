@@ -42,6 +42,45 @@ class TranscriptTest {
         assertEquals("beta", result)
         assertEquals("", Transcript.trustedContext(listOf(Transcript.Segment(0, 1000, "оченьдлинноеслово")), 1100, maxChars = 5))
     }
+    @Test fun `a manual NUL correction stops context without losing a newer trusted tail`() {
+        val correction = Transcript.Segment(1000, 2000, "Preserve\u0000this manual correction")
+        val previous = listOf(Transcript.Segment(0, 1000, "Earlier unrelated words"), correction,
+            Transcript.Segment(2000, 3000, "Последние слова 🙂"))
+        val context = Transcript.trustedContext(previous, 3100)
+        assertEquals("Последние слова 🙂", context)
+        assertFalse('\u0000' in context)
+        assertEquals("", Transcript.trustedContext(previous.take(2), 2100))
+        assertEquals("Preserve\u0000this manual correction", correction.text)
+    }
+    @Test fun `legacy multi megabyte corrections keep only the needed overlap tail across passages`() {
+        val legacy = "old ".repeat(500_000) + "До свидания"
+        val previous = listOf(Transcript.Segment(0, 15700, legacy),
+            Transcript.Segment(15700, 16000, "«Кафе» e\u0301lan FINISH"))
+        val next = Transcript.Segment(16020, 17000, "Дальше домой.")
+        val decoded = listOf(Transcript.Segment(15500, 15600, "До"),
+            Transcript.Segment(15600, 15700, "свидания"),
+            Transcript.Segment(15700, 15950, "кафе ÉLAN finish."), next)
+        assertEquals(listOf(next), Transcript.reconcileBoundary(previous, decoded, 15500, 17000, 16000))
+        assertTrue(legacy.endsWith("До свидания"))
+    }
+    @Test fun `bounded overlap preserves Unicode normalization and regex word boundaries`() {
+        assertEquals("дальше", Transcript.removeOverlap("Preceding «Кафе» e\u0301lan.", "кафе ÉLAN, дальше"))
+        assertEquals("one two more", Transcript.removeOverlap("one\u00a0two", "one two more"))
+    }
+    @Test fun `oversized words retain ambiguous speech for review without normalization`() {
+        val allowed = "a".repeat(4096)
+        assertEquals("continue", Transcript.removeOverlap("Before $allowed again", "$allowed again continue"))
+        val giant = "Ж".repeat(4097)
+        val hypothesis = "$giant again continue"
+        assertEquals(hypothesis, Transcript.removeOverlap("Before $giant again", hypothesis))
+        val previous = listOf(Transcript.Segment(0, 16000, "Before $giant"))
+        val oldAudio = Transcript.Segment(15500, 15950, giant)
+        assertEquals(listOf(oldAudio.copy(uncertain = true), Transcript.Segment(16000, 17000, "", true)),
+            Transcript.reconcileBoundary(previous, listOf(oldAudio), 15500, 17000, 16000))
+        val mixed = Transcript.Segment(15500, 17000, "$giant again")
+        assertEquals(listOf(mixed.copy(uncertain = true)),
+            Transcript.reconcileBoundary(previous, listOf(mixed), 15500, 17000, 16000))
+    }
     @Test fun `identical words spoken after the audio overlap are retained`() {
         val next = Transcript.Segment(16020, 17000, "В парк, а затем домой.")
         assertEquals(listOf(next), Transcript.reconcileBoundary(listOf(
