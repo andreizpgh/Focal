@@ -43,4 +43,6 @@ if [[ $booted != true ]]; then report_boot_error; exit 1; fi
 "$ANDROID_HOME/platform-tools/adb" shell settings put global window_animation_scale 0
 "$ANDROID_HOME/platform-tools/adb" shell settings put global transition_animation_scale 0
 "$ANDROID_HOME/platform-tools/adb" shell settings put global animator_duration_scale 0
-./gradlew :app:connectedDebugAndroidTest --console=plain
+# Leave time within the device-step and job limits to publish partial results
+# and emulator logs if instrumentation stalls. A timeout is a test failure.
+timeout --signal=TERM --kill-after=30s 19m ./gradlew :app:connectedDebugAndroidTest --console=plain

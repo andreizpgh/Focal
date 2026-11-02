@@ -34,6 +34,7 @@ jobs:
       - name: Test, lint, and build
         run: ./gradlew :core:test :app:lintDebug :app:assembleDebug --console=plain
       - name: Android device tests
+        timeout-minutes: 25
         run: bash scripts/test-android-ci.sh
       - name: Summarize checks
         if: always()
