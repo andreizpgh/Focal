@@ -5,7 +5,11 @@ copy. Keep the UI quiet, English by default, with explicit speech-language choic
 
 - Use the existing checkout. Each cloud task is isolated; do not create a worktree
   unless the user explicitly requests it.
-- No network permission, analytics, accounts, or automatic rewriting of speech.
+- No network permission, analytics, or accounts. Automatic correction stays
+  disabled until paired speech evaluation demonstrates a clear accuracy benefit
+  within phone resource budgets. Research may compare local correction candidates;
+  preserve original audio/ASR and manual edits, and require visible provenance and
+  undo before enabling corrections. See docs/stt-quality-experiments.md.
 - Preserve original audio and transactional recovery. Never let inference block
   the capture thread. Do not add unbounded in-memory audio queues.
 - Keep third_party/whisper.cpp at the recorded submodule commit unless intentionally

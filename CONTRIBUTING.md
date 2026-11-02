@@ -36,7 +36,10 @@ stable signing key; release builds refuse to package an absent speech model.
 ## Product boundaries
 
 - English interface by default. Speech language is explicit and stored per note.
-- Preserve the original audio and the speaker's meaning. No automatic rewriting.
+- Preserve the original audio and the speaker's meaning. Automatic correction is
+  currently disabled; research candidates must clear the accuracy, provenance,
+  undo and phone-resource gates in [speech-quality experiments](docs/stt-quality-experiments.md)
+  before being enabled.
 - Review cues are heuristics, not guarantees of correctness.
 - Recording must not depend on an Activity remaining alive.
 - Keep work and queues bounded in memory. Audio and completed transcript segments
