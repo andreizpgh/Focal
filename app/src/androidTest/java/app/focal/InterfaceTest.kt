@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
@@ -289,13 +290,22 @@ class InterfaceTest {
                 ids += readySession(app.store, "Review context $index", listOf("Review fixture passage $index."), uncertain = setOf(0))
             }
             val filtered = app.store.notes().filter { it.id in ids }
-            val target = filtered.last()
+            val target = filtered[filtered.size / 2]
             waitForTitle(filtered.first().title)
             val count = app.store.notes().count { it.reviewCount > 0 || it.state in listOf("ERROR", "INTERRUPTED") }
             reviewFilter("$count to review").performClick()
             val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
             list.performScrollToNode(hasText(target.title))
-            val rowTop = compose.onNodeWithText(target.title).fetchSemanticsNode().boundsInRoot.top
+            fun browsingPosition(): Pair<Float, Float> {
+                val listNode = list.fetchSemanticsNode()
+                val rowNode = compose.onNodeWithText(target.title).fetchSemanticsNode()
+                // Read both coordinates in one frame, including while window insets settle.
+                return compose.runOnUiThread {
+                    listNode.config[SemanticsProperties.VerticalScrollAxisRange].value() to
+                        (rowNode.boundsInRoot.top - listNode.boundsInRoot.top)
+                }
+            }
+            val (scrollPosition, rowOffset) = browsingPosition()
             compose.onNodeWithText(target.title).performClick()
             waitForSessionReady(target.title, "Review fixture passage ${ids.indexOf(target.id)}.")
             // The library is absent during recreation; its browsing state must still be saved.
@@ -304,7 +314,11 @@ class InterfaceTest {
             compose.onNodeWithContentDescription("Back to sessions").performClick()
             waitForTitle(target.title)
             compose.onNodeWithText(target.title).assertIsDisplayed()
-            assertEquals(rowTop, compose.onNodeWithText(target.title).fetchSemanticsNode().boundsInRoot.top, 1f)
+            val (restoredPosition, restoredOffset) = browsingPosition()
+            assertEquals("Library logical scroll position changed after navigation and recreation", scrollPosition,
+                restoredPosition, .001f)
+            assertEquals("Session moved within the library viewport after navigation and recreation", rowOffset,
+                restoredOffset, 1f)
             list.performScrollToNode(hasText("Show all"))
             reviewFilter("Show all").assertIsSelected()
         } finally { ids.forEach(app.store::delete) }
@@ -572,20 +586,39 @@ class InterfaceTest {
                     .hide(WindowInsetsCompat.Type.ime())
             }
             compose.waitForIdle()
-            val editorTop = compose.onNode(hasSetTextAction()).fetchSemanticsNode().boundsInRoot.top
+            compose.waitUntil(5_000) {
+                compose.runOnUiThread {
+                    androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+                        ?.isVisible(WindowInsetsCompat.Type.ime()) != true
+                }
+            }
+            val saveNext = compose.onNodeWithText("Save & next").performScrollTo().assertIsDisplayed().assertIsEnabled()
+            compose.waitForIdle()
+            val saveAction = checkNotNull(saveNext.fetchSemanticsNode().config[SemanticsActions.OnClick].action)
+            val sheet = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.PaneTitle)).fetchSemanticsNode()
+            val sheetTop = sheet.boundsInRoot.top
+            fun editableText(node: SemanticsNode): String? =
+                if (node.config.contains(SemanticsProperties.EditableText)) node.config[SemanticsProperties.EditableText].text
+                else node.children.firstNotNullOfOrNull(::editableText)
             val autoAdvance = compose.mainClock.autoAdvance
             try {
                 compose.mainClock.autoAdvance = false
-                compose.onNodeWithText("Save & next").performScrollTo().performClick()
+                // Scroll and fetch while frames advance. Dispatch only the already
+                // resolved semantic click while frozen; never synchronously await scrolling.
+                compose.runOnUiThread { org.junit.Assert.assertTrue(saveAction()) }
                 compose.waitUntil(10_000) {
                     compose.mainClock.advanceTimeByFrame()
-                    assertEquals(editorTop, compose.onNode(hasSetTextAction()).fetchSemanticsNode().boundsInRoot.top, 1f)
-                    compose.onAllNodes(hasSetTextAction() and hasText(originals[1])).fetchSemanticsNodes().isNotEmpty()
+                    compose.runOnUiThread {
+                        assertEquals("Save & next moved or hid the bottom sheet", sheetTop, sheet.boundsInRoot.top, 1f)
+                        editableText(sheet) == originals[1]
+                    }
                 }
                 // A new SheetState would replay its entrance after the next passage appears.
                 repeat(24) {
                     compose.mainClock.advanceTimeByFrame()
-                    assertEquals(editorTop, compose.onNode(hasSetTextAction()).fetchSemanticsNode().boundsInRoot.top, 1f)
+                    compose.runOnUiThread {
+                        assertEquals("The bottom sheet replayed its entrance after advancing review", sheetTop, sheet.boundsInRoot.top, 1f)
+                    }
                 }
             } finally {
                 compose.mainClock.autoAdvance = autoAdvance
@@ -643,6 +676,13 @@ class InterfaceTest {
         val app = application()
         val id = readySession(app.store, "Bounded draft fixture", listOf("Saved original."))
         val draft = "A valid manual edit stays here."
+        fun assertWarningVisible(stage: String) {
+            try {
+                compose.onNodeWithText("This text is too long for one passage. Paste a smaller selection.").assertIsDisplayed()
+            } catch (error: AssertionError) {
+                throw AssertionError("The rejected-input warning must be visible $stage", error)
+            }
+        }
         try {
             waitForTitle("Bounded draft fixture")
             compose.onNodeWithText("Bounded draft fixture").performClick()
@@ -652,12 +692,12 @@ class InterfaceTest {
             compose.onNode(hasSetTextAction()).performTextReplacement(draft)
             // UTF-16 length fits, but UTF-8 bytes exceed the shared saved-passage budget.
             compose.onNode(hasSetTextAction()).performTextReplacement("🙂".repeat(40_000))
-            compose.onNodeWithText("This text is too long for one passage. Paste a smaller selection.").assertIsDisplayed()
+            assertWarningVisible("before rotation")
             compose.onNode(hasSetTextAction()).assertTextContains(draft)
             compose.activityRule.scenario.recreate()
             waitForEditor()
             compose.onNode(hasSetTextAction()).assertTextContains(draft)
-            compose.onNodeWithText("This text is too long for one passage. Paste a smaller selection.").assertIsDisplayed()
+            assertWarningVisible("after rotation")
             compose.onNodeWithText("Save changes").performScrollTo().performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
             assertEquals(draft, app.store.passages(id).single().text)

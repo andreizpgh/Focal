@@ -1,8 +1,11 @@
 package app.focal.ui
 
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -16,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -32,7 +36,7 @@ import app.focal.data.Passage
 import app.focal.data.fitsPassageDraftBudget
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable internal fun EditSheet(
     passage: Passage, playing: Boolean, audio: Boolean, play: () -> Unit, dismiss: () -> Unit,
     hasNextReview: Boolean, audioUnavailableReason: String,
@@ -106,12 +110,22 @@ import kotlinx.coroutines.launch
                     modifier = Modifier.fillMaxWidth().heightIn(min = 144.dp, max = 320.dp), minLines = 3,
                     textStyle = MaterialTheme.typography.bodyLarge, shape = RoundedCornerShape(8.dp), label = { Text("Transcript") },
                     isError = inputTooLarge,
-                    supportingText = if (inputTooLarge) ({
-                        Text("This text is too long for one passage. Paste a smaller selection.",
-                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
-                    }) else null,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 )
+            }
+            if (inputTooLarge) {
+                val requester = remember(passage.id) { BringIntoViewRequester() }
+                val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+                Text("This text is too long for one passage. Paste a smaller selection.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth().bringIntoViewRequester(requester)
+                        .padding(start = 16.dp, end = 16.dp, top = 4.dp)
+                        .semantics { liveRegion = LiveRegionMode.Assertive })
+                LaunchedEffect(passage.id, imeBottom) {
+                    // The keyboard can keep moving after rejection or activity recreation.
+                    withFrameNanos { }
+                    requester.bringIntoView()
+                }
             }
             Spacer(Modifier.height(20.dp))
             if (saveFailed) Text(
