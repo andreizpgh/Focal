@@ -10,6 +10,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
@@ -123,11 +124,42 @@ class InterfaceTest {
             compose.onNodeWithText("Finish").assertIsDisplayed()
             compose.onNodeWithText("focal", ignoreCase = true).assertDoesNotExist()
             compose.onNodeWithText("Text appears after each spoken phrase.").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Microphone level").assertRangeInfoEquals(ProgressBarRangeInfo(.65f, 0f..1f))
             capture("recording-layout")
             RecordingState.live.value = RecordingState.live.value.copy(paused = true, level = 0f)
             compose.onNodeWithContentDescription("Resume recording").assertIsDisplayed()
             compose.onNodeWithText("Recording paused").assertIsDisplayed()
             compose.onNodeWithText("Resume when you're ready.").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Microphone level").assertRangeInfoEquals(ProgressBarRangeInfo(0f, 0f..1f))
+            capture("recording-paused")
+        } finally {
+            RecordingState.live.value = original
+            app.store.delete(id)
+        }
+    }
+
+    @Test fun transcriptionProgressStaysVisibleWithLongTextAndStopsWhenFinished() {
+        val app = application()
+        val original = RecordingState.live.value
+        org.junit.Assume.assumeTrue(original.noteId == null)
+        val id = readySession(app.store, "Processing fixture", List(12) { index ->
+            "Synthetic passage ${index + 1}. The original audio and the written words remain available while transcription continues."
+        })
+        val progress = SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate)
+        try {
+            RecordingState.live.value = LiveSession(noteId = id, processing = true, message = "Transcribing")
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Transcribing").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(progress).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Pause recording").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Microphone level").assertDoesNotExist()
+            val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+            list.performScrollToNode(hasText("Synthetic passage 12.", substring = true))
+            compose.onNode(progress).assertIsDisplayed()
+            compose.onNodeWithText("Transcribing").assertIsDisplayed()
+            capture("processing")
+            RecordingState.live.value = LiveSession()
+            compose.waitUntil(10_000) { compose.onAllNodes(progress).fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithText("Copy text").assertIsDisplayed()
         } finally {
             RecordingState.live.value = original
             app.store.delete(id)
@@ -258,14 +290,30 @@ class InterfaceTest {
             val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
             val timestamp = "Listen from ${Transcript.time(15_000)}"
             list.performScrollToNode(hasContentDescription(timestamp))
-            compose.onNodeWithContentDescription(timestamp).performClick()
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithContentDescription("Pause original audio").fetchSemanticsNodes().isNotEmpty()
-            }
-            compose.waitUntil(10_000) { audioPositionFraction() >= .24f }
-            compose.onNodeWithContentDescription("Pause original audio").performClick()
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithContentDescription("Play original audio").fetchSemanticsNodes().isNotEmpty()
+            // The real player keeps updating its position while playing. Advance Compose
+            // explicitly instead of asking Espresso to wait for a continuously changing UI.
+            val player = compose.runOnUiThread { ViewModelProvider(compose.activity)[FocalViewModel::class.java].player }
+            val autoAdvance = compose.mainClock.autoAdvance
+            try {
+                compose.mainClock.autoAdvance = false
+                compose.onNodeWithContentDescription(timestamp).performClick()
+                compose.waitUntil(10_000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.onAllNodesWithContentDescription("Pause original audio").fetchSemanticsNodes().isNotEmpty()
+                }
+                compose.waitUntil(10_000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    audioPositionFraction() >= .24f
+                }
+                compose.onNodeWithContentDescription("Pause original audio").performClick()
+                compose.waitUntil(10_000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.onAllNodesWithContentDescription("Play original audio").fetchSemanticsNodes().isNotEmpty()
+                }
+            } finally {
+                // Restore idle even if an assertion failed before tapping Pause.
+                player.pause()
+                compose.mainClock.autoAdvance = autoAdvance
             }
             compose.onNodeWithContentDescription("Play original audio").assertIsDisplayed()
             list.performScrollToNode(hasText(parts.last()))
@@ -288,6 +336,7 @@ class InterfaceTest {
             languageOption("Русский").performScrollTo().performClick()
             compose.onNodeWithText("Dark").performClick()
             compose.onNodeWithText("Light").performClick()
+            capture("settings-brand")
             compose.onNodeWithContentDescription("Back to sessions").performClick()
             compose.onNodeWithContentDescription("Speech language: Русский").assertIsDisplayed()
             compose.onNodeWithContentDescription("Settings").performClick()

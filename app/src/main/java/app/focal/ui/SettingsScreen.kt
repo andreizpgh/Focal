@@ -67,8 +67,15 @@ import kotlinx.coroutines.withContext
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             SettingsRow("Licenses", click = { licenses = true })
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 18.dp, bottom = 8.dp))
+            Row(
+                Modifier.padding(top = 18.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                BrandMark(32)
+                Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
     if (choosing) LanguageDialog(language, setLanguage) { choosing = false }

@@ -55,21 +55,7 @@ enum class Symbol { Back, Settings, More, Mic, Record, Pause, Stop, Play, Copy, 
                     line(8f,12f,11f,15f); line(11f,15f,16f,9f)
                 }
                 Symbol.Audio -> { line(4f,10f,4f,14f); line(9f,5f,9f,19f); line(14f,8f,14f,16f); line(19f,3f,19f,21f) }
-                // The compact mark uses the same quotation-pair silhouette as the launcher.
-                Symbol.Logo -> {
-                    drawPath(Path().apply {
-                        moveTo(3.5f,4f); lineTo(10f,4f); cubicTo(10.83f,4f,11.5f,4.67f,11.5f,5.5f)
-                        lineTo(11.5f,13.5f); cubicTo(11.5f,14.1f,11.3f,14.5f,10.9f,14.9f)
-                        lineTo(5.8f,20f); lineTo(2.4f,20f); lineTo(6.8f,14.5f); lineTo(3.5f,14.5f)
-                        cubicTo(2.67f,14.5f,2f,13.83f,2f,13f); lineTo(2f,5.5f)
-                        cubicTo(2f,4.67f,2.67f,4f,3.5f,4f); close()
-                        moveTo(15f,4f); lineTo(21.5f,4f); cubicTo(22.33f,4f,23f,4.67f,23f,5.5f)
-                        lineTo(23f,13.5f); cubicTo(23f,14.1f,22.8f,14.5f,22.4f,14.9f)
-                        lineTo(17.3f,20f); lineTo(13.9f,20f); lineTo(18.3f,14.5f); lineTo(15f,14.5f)
-                        cubicTo(14.17f,14.5f,13.5f,13.83f,13.5f,13f); lineTo(13.5f,5.5f)
-                        cubicTo(13.5f,4.67f,14.17f,4f,15f,4f); close()
-                    }, color)
-                }
+                Symbol.Logo -> drawFocusWave(color, bounds = Size(24f, 24f))
             }
         }
     }

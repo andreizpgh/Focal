@@ -242,7 +242,19 @@ private val destinationSaver = androidx.compose.runtime.saveable.Saver<Destinati
                             when {
                                 active && !live.processing -> RecordingControls(live, model::pause, model::finish)
                                 note != null -> {
-                                    if (active && live.processing) LinearProgressIndicator(Modifier.fillMaxWidth().padding(bottom = 8.dp), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceVariant)
+                                    if (active && live.processing) Row(
+                                        Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        FocusProcessingIndicator()
+                                        Text(
+                                            live.message.ifBlank { "Transcribing" },
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
+                                        )
+                                    }
                                     if (audioAvailable) SessionAudioDock(
                                         note.id, playback, library.audioBytes / 32,
                                         { model.playNote(note) }, { model.seekNote(note, it) }
@@ -278,7 +290,9 @@ private val destinationSaver = androidx.compose.runtime.saveable.Saver<Destinati
                             seek = { model.seekNote(note, it) }, playbackPosition = playback.takeIf { it.noteId == note.id }?.positionMs,
                             retryLoad = model::retryLibrary,
                         ) else if (library.error != null) DataReadError("Couldn't load this session", library.error.orEmpty(), model::retryLibrary,
-                            Modifier.padding(horizontal = 24.dp).verticalScroll(rememberScrollState())) else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) }
+                            Modifier.padding(horizontal = 24.dp).verticalScroll(rememberScrollState())) else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                FocusProcessingIndicator(contentDescription = "Loading session")
+                            }
                     }
                 }
             }

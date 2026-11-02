@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -240,17 +239,6 @@ import android.text.format.DateFormat
         }
         if (library.error != null) item { DataReadError("Couldn't refresh this session", library.error.orEmpty(), retryLoad) }
         if (live != null && !live.processing) item { RecordingReadout(live) }
-        if (live?.processing == true) item {
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                CircularProgressIndicator(Modifier.size(13.dp), strokeWidth = 1.5.dp)
-                Text(live.message.ifBlank { "Transcribing" }, style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-            }
-        }
         if (live == null && (note.error.isNotBlank() || library.pending > 0)) item {
             Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 18.dp)) {
                 Text(
@@ -365,19 +353,17 @@ import android.text.format.DateFormat
     }
 }
 
-@Composable private fun LevelMeter(level: Float, modifier: Modifier = Modifier.width(124.dp)) {
-    val value by animateFloatAsState(level.coerceIn(0f, 1f), animationSpec = tween(120), label = "microphone level")
+@Composable private fun LevelMeter(level: Float, modifier: Modifier = Modifier.width(110.dp)) {
+    val target = if (level.isFinite()) level.coerceIn(0f, 1f) else 0f
+    val value by animateFloatAsState(target, animationSpec = tween(120), label = "microphone level")
     val ink = MaterialTheme.colorScheme.onSurface
-    val track = MaterialTheme.colorScheme.outlineVariant
     Canvas(
-        modifier.height(24.dp).semantics {
+        modifier.height(44.dp).semantics {
             contentDescription = "Microphone level"
             progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f)
         },
     ) {
-        val y = size.height / 2
-        drawLine(track, Offset(0f, y), Offset(size.width, y), 2.dp.toPx(), StrokeCap.Round)
-        if (value > 0f) drawLine(ink, Offset(0f, y), Offset(size.width * value, y), 2.dp.toPx(), StrokeCap.Round)
+        drawFocusWave(ink, level = value, minimumBarHeight = 3.dp.toPx())
     }
 }
 
