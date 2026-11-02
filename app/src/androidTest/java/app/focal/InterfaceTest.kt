@@ -682,8 +682,16 @@ class InterfaceTest {
         val id = readySession(app.store, "Bounded draft fixture", listOf("Saved original."))
         val draft = "A valid manual edit stays here."
         fun assertWarningVisible(stage: String) {
+            val message = "This text is too long for one passage. Paste a smaller selection."
             try {
-                compose.onNodeWithText("This text is too long for one passage. Paste a smaller selection.").assertIsDisplayed()
+                // Sheet and IME restoration can outlast the first editor node.
+                compose.waitUntil(5_000) {
+                    compose.onAllNodesWithText(message).fetchSemanticsNodes().isNotEmpty() &&
+                        compose.onNodeWithText(message).isDisplayed()
+                }
+                compose.onNodeWithText(message).assertIsDisplayed()
+            } catch (error: ComposeTimeoutException) {
+                throw AssertionError("The rejected-input warning must be visible $stage", error)
             } catch (error: AssertionError) {
                 throw AssertionError("The rejected-input warning must be visible $stage", error)
             }
