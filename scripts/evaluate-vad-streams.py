@@ -43,6 +43,68 @@ VAD_SETTINGS = dict(use_gpu=False, threads=1, threshold=0.5, min_speech_ms=250,
 SCOPE = "Offline whole-stream Silero VAD and cold host ASR, at most 400 seconds; not live Android capture, phone latency, energy or thermals."
 
 
+def conditioning_policy(mode):
+    if mode == "none":
+        return dict(mode="none", input="Original prepared PCM, unchanged")
+    if mode != "causal-rms-cap30":
+        raise ValueError("Choose none or causal-rms-cap30 VAD conditioning")
+    import numpy as np
+    return dict(mode=mode, sample_rate=RATE, frame_samples=512, target_rms=0.03,
+                min_gain=1.0, max_gain=30.0, release_seconds=0.5, initial_envelope=0.0,
+                rms="float64 sqrt(mean(square(PCM16 / 32768))); DC included",
+                envelope="max(current_frame_rms, previous_envelope * exp(-frame_samples / 16000 / 0.5))",
+                gain="min(30, max(1, 0.03 / max(envelope, 1e-12)))",
+                partial_tail="Use actual remaining samples for RMS and release; no added samples",
+                pcm="Signed little-endian PCM16; float64 numpy.rint ties-to-even; reject clipping",
+                state="Reset once per source stream; no lookahead beyond the current 512-sample frame",
+                numpy_version=np.__version__, asr_input="Original prepared PCM, unchanged")
+
+
+def conditioned_blocks(source, total):
+    """Yield exact VAD-only bytes with one 512-sample frame and scalar envelope state."""
+    import numpy as np
+    envelope, remaining = 0.0, total
+    while remaining:
+        count = min(512, remaining)
+        block = source.read(count * 2)
+        if len(block) != count * 2:
+            raise ValueError("Prepared PCM was truncated during VAD conditioning")
+        frame = np.frombuffer(block, dtype="<i2").astype(np.float64) / 32768
+        rms = float(np.sqrt(np.mean(frame * frame)))
+        envelope = max(rms, envelope * math.exp(-count / RATE / 0.5))
+        gain = min(30.0, max(1.0, 0.03 / max(envelope, 1e-12)))
+        scaled = np.rint(frame * gain * 32768)
+        if not np.isfinite(scaled).all() or scaled.min() < -32768 or scaled.max() > 32767:
+            raise ValueError("VAD conditioning would clip PCM; refusing changed evidence")
+        yield block, scaled.astype("<i2").tobytes()
+        remaining -= count
+    if source.read(1):
+        raise ValueError("Prepared PCM grew during VAD conditioning")
+
+
+def prepare_conditioned_pcm(pcm, target, total, expected_hash):
+    if type(total) is not int or not 0 < total <= MAX_SAMPLES or pcm.stat().st_size != total * 2:
+        raise ValueError("Invalid bounded PCM size for VAD conditioning")
+    source_hash, output_hash = hashlib.sha256(), hashlib.sha256()
+    created = False
+    try:
+        with pcm.open("rb") as source, target.open("xb") as output:
+            created = True
+            for original, conditioned in conditioned_blocks(source, total):
+                source_hash.update(original)
+                output_hash.update(conditioned)
+                output.write(conditioned)
+        if source_hash.hexdigest() != expected_hash or digest_file(pcm) != expected_hash:
+            raise ValueError("Prepared PCM changed during VAD conditioning")
+        if target.stat().st_size != total * 2 or digest_file(target) != output_hash.hexdigest():
+            raise ValueError("Conditioned VAD PCM differs from its derived bytes")
+    except BaseException:
+        if created:
+            target.unlink(missing_ok=True)
+        raise
+    return output_hash.hexdigest()
+
+
 def reject_nonfinite(value):
     raise ValueError("Nonfinite JSON number")
 
@@ -195,8 +257,17 @@ def prepare_vad(args, case, source_root, output):
     pcm = E4.inside(source_root, case["pcm"])
     if pcm.stat().st_size != case["total_samples"] * 2 or digest_file(pcm) != case["pcm_sha256"]:
         raise ValueError("Prepared PCM changed before VAD")
+    conditioning = conditioning_policy(args.vad_conditioning)
+    vad_pcm, vad_hash = pcm, case["pcm_sha256"]
+    conditioning_started = time.monotonic()
+    derived_name = None
+    if args.vad_conditioning != "none":
+        derived_name = case["name"] + ".vad-input.pcm"
+        vad_pcm = output / derived_name
+        vad_hash = prepare_conditioned_pcm(pcm, vad_pcm, case["total_samples"], case["pcm_sha256"])
+    conditioning_wall = time.monotonic() - conditioning_started
     target = output / (case["name"] + ".vad.json")
-    command = [str(args.vad_probe.resolve()), str(args.vad_model.resolve()), str(pcm), str(target),
+    command = [str(args.vad_probe.resolve()), str(args.vad_model.resolve()), str(vad_pcm), str(target),
                "--samples", str(case["total_samples"]), "--model-sha256", VAD_MODEL["sha256"],
                "--threads", "1", "--threshold", "0.5", "--min-speech-ms", "250", "--min-silence-ms", "600",
                "--max-speech-seconds", "15", "--pad-ms", "500"]
@@ -205,8 +276,8 @@ def prepare_vad(args, case, source_root, output):
     wall = time.monotonic() - started
     (output / (case["name"] + ".vad.log")).write_text(log)
     document, output_hash = read_json_identity(target, 2 * 1024 * 1024)
-    ranges = validate_vad_output(document, case, VAD_MODEL["sha256"])
-    if digest_file(pcm) != case["pcm_sha256"]:
+    ranges = validate_vad_output(document, dict(case, pcm_sha256=vad_hash), VAD_MODEL["sha256"])
+    if digest_file(pcm) != case["pcm_sha256"] or digest_file(vad_pcm) != vad_hash:
         raise ValueError("Prepared PCM changed during VAD")
     # Prepared clips already contain the old gate's coverage; carry only source identity and bounds.
     source_fields = ("id", "language", "split", "audio", "source_text_id", "audio_sha256",
@@ -214,9 +285,12 @@ def prepare_vad(args, case, source_root, output):
     source_intervals = [{key: clip[key] for key in source_fields} for clip in case["clips"]]
     summary = E4.PREPARE.summarize(ranges, source_intervals, inserted_intervals(case), case["total_samples"])
     return dict(case=case["name"], source_pcm_sha256=case["pcm_sha256"], vad_output_sha256=output_hash,
+                vad_input=dict(conditioning=conditioning, pcm_sha256=vad_hash, input_samples=case["total_samples"],
+                               bytes=case["total_samples"] * 2, derived_pcm=derived_name,
+                               source_pcm_unchanged=True),
                 native_ranges=document["ranges"], ranges=ranges, summary=summary,
                 profile={key: document[key] for key in ("load_seconds", "detect_seconds", "segment_seconds", "peak_rss_bytes")},
-                cold_vad_wall_seconds=wall)
+                conditioning_wall_seconds=conditioning_wall, cold_vad_wall_seconds=wall)
 
 
 def evaluate_case(args, case, selection, references, source_root, output, replay):
@@ -274,6 +348,7 @@ def evaluate_case(args, case, selection, references, source_root, output, replay
                       silence=not bool(case["clips"]), source_pcm_sha256=case["pcm_sha256"],
                       reference=reference, hypothesis=hypothesis, passages=passages, chunks=records,
                       vad_output_sha256=selection["vad_output_sha256"],
+                      vad_input=selection["vad_input"],
                       metrics=E4.EVALUATE.score(reference, hypothesis, not bool(case["clips"]),
                           case["total_samples"] / RATE, sum(row["wall_seconds"] for row in records)),
                       orchestration_wall_seconds=time.monotonic() - started)
@@ -318,6 +393,8 @@ def main():
     parser.add_argument("--vad-model", type=Path, required=True)
     parser.add_argument("--vad-model-provenance", type=Path, required=True)
     parser.add_argument("--vad-probe", type=Path, default=Path("build/whisper-host/bin/vad-probe"))
+    parser.add_argument("--vad-conditioning", choices=("none", "causal-rms-cap30"), default="none",
+                        help="Optional causal gain for VAD only; original ASR PCM is never conditioned")
     parser.add_argument("--probe", type=Path, default=Path("build/whisper-host/bin/stt-probe"))
     parser.add_argument("--model", type=Path, default=Path("app/src/main/assets/ggml-base-q5_1.bin"))
     parser.add_argument("--output", type=Path, required=True)
@@ -362,7 +439,8 @@ def main():
         "evaluate-stt.py": E4.EVALUATE.source_sha256, "prepare-gate-experiment.py": E4.PREPARE.source_sha256,
         "replay_compiler.py": E4.REPLAY_HELPER_SHA256,
     }
-    policy = dict(vad=VAD_SETTINGS, vad_model=vad_model, engines=engines, helper_hashes=helper_hashes,
+    policy = dict(vad=VAD_SETTINGS, vad_conditioning=conditioning_policy(args.vad_conditioning),
+                  vad_model=vad_model, engines=engines, helper_hashes=helper_hashes,
                   asr=dict(model_sha256=ASR_MODEL_SHA256, beam_size=3, threads=4, audio_context=0,
                            text_context_tokens=64, temperature=0, temperature_increment=0, best_of=1),
                   framing=dict(max_source_samples=MAX_SAMPLES, max_chunk_samples=MAX_CHUNK, overlap_samples=OVERLAP,
@@ -412,6 +490,8 @@ def main():
         selection = prepare_vad(args, case, args.experiment.parent, output)
         selections.append(selection)
         files[output / (case["name"] + ".vad.json")] = selection["vad_output_sha256"]
+        if selection["vad_input"]["derived_pcm"] is not None:
+            files[output / selection["vad_input"]["derived_pcm"]] = selection["vad_input"]["pcm_sha256"]
         print(f"{case['name']}/offline-vad: {len(selection['ranges'])} bounded candidate ranges", flush=True)
     check_inputs(args, files, engines)
     E4.verify_replay(source, output, runtime)

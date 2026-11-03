@@ -1,7 +1,9 @@
 import copy
+from contextlib import ExitStack
 from decimal import Decimal
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import random
@@ -11,6 +13,7 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+import wave
 
 SCRIPT = Path(__file__).resolve().parents[1] / "evaluate-vad-streams.py"
 SPEC = importlib.util.spec_from_file_location("evaluate_vad", SCRIPT)
@@ -101,7 +104,8 @@ class VadStreamEvaluationTest(unittest.TestCase):
         self.assertEqual(16017, VAD.validate_vad_output(document, case, VAD.VAD_MODEL["sha256"])[0]["end_sample"])
 
     def test_test_split_requires_exact_frozen_policy(self):
-        policy = dict(vad=VAD.VAD_SETTINGS, native_model_sha256=VAD.VAD_MODEL["sha256"])
+        policy = dict(vad=VAD.VAD_SETTINGS, native_model_sha256=VAD.VAD_MODEL["sha256"],
+                      vad_conditioning=VAD.conditioning_policy("none"))
         with self.assertRaisesRegex(ValueError, "before reading"):
             VAD.validate_frozen_policy(None, policy, "test")
         self.assertIsNone(VAD.validate_frozen_policy(None, policy, "dev"))
@@ -111,6 +115,9 @@ class VadStreamEvaluationTest(unittest.TestCase):
             self.assertEqual(VAD.digest_file(path), VAD.validate_frozen_policy(path, policy, "test"))
             with self.assertRaisesRegex(ValueError, "differs"):
                 VAD.validate_frozen_policy(path, dict(policy, contexts=["on"]), "test")
+            with self.assertRaisesRegex(ValueError, "differs"):
+                VAD.validate_frozen_policy(path, dict(policy,
+                    vad_conditioning=VAD.conditioning_policy("causal-rms-cap30")), "test")
         with self.assertRaisesRegex(ValueError, "explicit"):
             VAD.validate_frozen_policy(None, policy, "all")
 
@@ -122,6 +129,39 @@ class VadStreamEvaluationTest(unittest.TestCase):
             with patch("sys.stderr"), self.assertRaises(SystemExit):
                 VAD.main()
             read.assert_not_called()
+
+    def test_cli_rejects_changed_conditioner_before_reading_source_manifest(self):
+        arguments = ["evaluate-vad-streams.py", "--split", "test", "--experiment", "experiment.json",
+                     "--source-manifest", "unread-source.json", "--kotlin-stdlib", "unused",
+                     "--vad-model", "unused", "--vad-model-provenance", "unused", "--output", "unused",
+                     "--frozen-plan", "frozen.json", "--vad-conditioning", "causal-rms-cap30"]
+        original_validate, current_policy = VAD.validate_frozen_policy, {}
+        def capture_policy(path, policy, split):
+            current_policy.update(policy)
+            return original_validate(path, policy, split)
+        def read_input(path, limit):
+            if path == Path("experiment.json"):
+                return dict(implementation=dict(fresh_replay_build={})), "a" * 64
+            if path == Path("frozen.json"):
+                return dict(policy=dict(current_policy, vad_conditioning=VAD.conditioning_policy("none"))), "b" * 64
+            self.fail("Source manifest must not be read under a changed held-out policy")
+        patches = [patch.object(sys, "argv", arguments), patch.object(VAD.os, "umask"),
+                   patch.object(VAD, "read_json_identity", side_effect=read_input),
+                   patch.object(VAD, "validate_frozen_policy", side_effect=capture_policy),
+                   patch.object(VAD, "digest_file", return_value=VAD.ASR_MODEL_SHA256),
+                   patch.object(VAD.E4.PREPARE, "require_private_output", return_value=Path("unused")),
+                   patch.object(VAD.E4, "selected_split"), patch.object(VAD.E4, "verify_replay"),
+                   patch.object(VAD.shutil, "which", return_value="java"),
+                   patch.object(VAD, "verify_vad_model", return_value=VAD.VAD_MODEL),
+                   patch.object(VAD, "checked_engine", return_value=dict(shared_libraries=[])),
+                   patch.object(Path, "is_file", return_value=True),
+                   patch.object(Path, "stat", return_value=SimpleNamespace(st_size=59707625))]
+        with ExitStack() as stack:
+            for item in patches:
+                stack.enter_context(item)
+            with self.assertRaisesRegex(ValueError, "differs"):
+                VAD.main()
+        self.assertEqual("causal-rms-cap30", current_policy["vad_conditioning"]["mode"])
 
     def test_json_identity_stays_bound_to_parsed_bytes_during_mutation(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -197,7 +237,8 @@ class VadStreamEvaluationTest(unittest.TestCase):
                 (root / case["pcm"]).write_bytes(pcm)
                 document = self.document(pcm_hash=case["pcm_sha256"])
                 ranges = VAD.validate_vad_output(document, case, VAD.VAD_MODEL["sha256"])
-                selection = dict(source_pcm_sha256=case["pcm_sha256"], vad_output_sha256="b" * 64, ranges=ranges)
+                selection = dict(source_pcm_sha256=case["pcm_sha256"], vad_output_sha256="b" * 64, ranges=ranges,
+                                 vad_input=dict(conditioning=VAD.conditioning_policy("none")))
                 args = SimpleNamespace(contexts=["off", "on"], split="dev", control_language="en")
                 replay = Mock()
                 with patch.object(VAD.E4, "decode_chunk") as decode:
@@ -230,7 +271,8 @@ class VadStreamEvaluationTest(unittest.TestCase):
             document = self.document(32000, case["pcm_sha256"])
             document["ranges"] = [dict(native_start_cs=0, native_end_cs=100, start_sample=0, end_sample=16000)]
             document["probabilities"] = [.9] * 32 + [0.] * 31
-            args = SimpleNamespace(vad_probe=root / "probe", vad_model=root / "model", vad_timeout=10)
+            args = SimpleNamespace(vad_probe=root / "probe", vad_model=root / "model", vad_timeout=10,
+                                   vad_conditioning="none")
             def native_vad(command, timeout, **kwargs):
                 self.assertEqual(str(source / "input.pcm"), command[2])
                 self.assertEqual("32000", command[command.index("--samples") + 1])
@@ -252,6 +294,119 @@ class VadStreamEvaluationTest(unittest.TestCase):
             self.assertEqual(1., clip["coverage"])
             self.assertEqual(16000, clip["covered_samples"])
             self.assertEqual(VAD.digest_file(output / "en-normal.vad.json"), selection["vad_output_sha256"])
+            self.assertEqual(case["pcm_sha256"], selection["vad_input"]["pcm_sha256"])
+            self.assertIsNone(selection["vad_input"]["derived_pcm"])
+
+    def test_conditioner_is_causal_little_endian_bounded_and_keeps_partial_tail(self):
+        quiet = struct.pack("<hh", 10, -10) * 256
+        loud = struct.pack("<hh", 20000, -20000) * 256
+        tail = struct.pack("<h", 10) * 17
+        blocks = list(VAD.conditioned_blocks(io.BytesIO(quiet + loud + tail), 1041))
+        self.assertEqual([quiet, loud, tail], [source for source, derived in blocks])
+        self.assertEqual(struct.pack("<hh", 300, -300) * 256, blocks[0][1])
+        self.assertEqual(loud, blocks[1][1])
+        self.assertEqual(tail, blocks[2][1])  # A loud preceding frame keeps the envelope high.
+        self.assertEqual(blocks[0], list(VAD.conditioned_blocks(io.BytesIO(quiet), 512))[0])
+        self.assertEqual(2082, sum(len(derived) for source, derived in blocks))
+        # DC participates in RMS; a large constant input is not boosted or removed.
+        dc = struct.pack("<h", 6000) * 17
+        self.assertEqual([(dc, dc)], list(VAD.conditioned_blocks(io.BytesIO(dc), 17)))
+        zero = bytes(34)
+        self.assertEqual([(zero, zero)], list(VAD.conditioned_blocks(io.BytesIO(zero), 17)))
+        with self.assertRaisesRegex(ValueError, "truncated"):
+            list(VAD.conditioned_blocks(io.BytesIO(quiet[:-1]), 512))
+        with self.assertRaisesRegex(ValueError, "grew"):
+            list(VAD.conditioned_blocks(io.BytesIO(quiet + b"\0"), 512))
+
+    def test_conditioned_file_preserves_targets_rejects_bounds_and_binds_consumed_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source, output = Path(directory) / "source.pcm", Path(directory) / "derived.pcm"
+            raw = struct.pack("<h", 10) * 513
+            source.write_bytes(raw)
+            expected_hash = hashlib.sha256(raw).hexdigest()
+            for invalid in (0, True, 513.0, VAD.MAX_SAMPLES + 1, 512, 514):
+                with self.subTest(samples=invalid), self.assertRaisesRegex(ValueError, "size"):
+                    VAD.prepare_conditioned_pcm(source, output, invalid, expected_hash)
+                self.assertFalse(output.exists())
+            output.write_bytes(b"Existing evidence")
+            with self.assertRaises(FileExistsError):
+                VAD.prepare_conditioned_pcm(source, output, 513, expected_hash)
+            self.assertEqual(b"Existing evidence", output.read_bytes())
+            output.unlink()
+            # Restore the original path before the final check: only hashing the path
+            # before/after derivation would miss this different consumed payload.
+            actual_blocks = VAD.conditioned_blocks
+            def changed_consumed_bytes(stream, total):
+                yield from actual_blocks(io.BytesIO(struct.pack("<h", 20) * total), total)
+            with patch.object(VAD, "conditioned_blocks", side_effect=changed_consumed_bytes):
+                with self.assertRaisesRegex(ValueError, "changed during"):
+                    VAD.prepare_conditioned_pcm(source, output, 513, expected_hash)
+            self.assertFalse(output.exists())
+            self.assertEqual(raw, source.read_bytes())
+            derived_hash = VAD.prepare_conditioned_pcm(source, output, 513, expected_hash)
+            self.assertEqual(struct.pack("<h", 300) * 513, output.read_bytes())
+            self.assertEqual(VAD.digest_file(output), derived_hash)
+            self.assertEqual(expected_hash, VAD.digest_file(source))
+
+    def test_conditioned_prepared_stream_feeds_changed_vad_but_original_asr_audio(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, output = root / "source", root / "output"
+            source.mkdir(); output.mkdir()
+            raw = struct.pack("<hh", 10, -10) * 16000
+            pcm = source / "input.pcm"
+            pcm.write_bytes(raw)
+            clip = dict(id="synthetic-source", language="en", split="dev", audio="source.wav",
+                        source_text_id="synthetic-text-id", audio_sha256="c" * 64,
+                        start_sample=8000, end_sample=24000, source_frames=16000,
+                        covered_samples=16000, coverage=1., missing_sample_ranges=[])
+            case = dict(self.case(32000, hashlib.sha256(raw).hexdigest()), name="en-quiet",
+                        language="en", scenario="quiet", gain=.25, clips=[clip])
+            args = SimpleNamespace(vad_probe=root / "vad-probe", vad_model=root / "model", vad_timeout=10,
+                                   vad_conditioning="causal-rms-cap30", contexts=["off"], split="dev",
+                                   control_language="en")
+            def native_vad(command, timeout, **kwargs):
+                derived = Path(command[2])
+                self.assertNotEqual(pcm, derived)
+                self.assertEqual(raw, pcm.read_bytes())
+                self.assertEqual(len(raw), derived.stat().st_size)
+                self.assertNotEqual(case["pcm_sha256"], VAD.digest_file(derived))
+                document = self.document(32000, VAD.digest_file(derived))
+                document["ranges"] = [dict(native_start_cs=0, native_end_cs=100, start_sample=0, end_sample=16000)]
+                with Path(command[3]).open("x") as stream:
+                    json.dump(document, stream)
+                return "Synthetic native VAD output"
+            with patch.object(VAD, "bounded_process", side_effect=native_vad):
+                selection = VAD.prepare_vad(args, case, source, output)
+            self.assertEqual(case["pcm_sha256"], selection["source_pcm_sha256"])
+            self.assertNotEqual(case["pcm_sha256"], selection["vad_input"]["pcm_sha256"])
+            self.assertTrue(selection["vad_input"]["source_pcm_unchanged"])
+            self.assertEqual(64000, selection["vad_input"]["bytes"])
+            self.assertEqual(.5, selection["summary"]["source_clip_coverage"])
+            def native_asr(args, wav, prompt, prefix, language):
+                with wave.open(str(wav)) as audio:
+                    self.assertEqual((1, 2, 16000), (audio.getnchannels(), audio.getsampwidth(), audio.getframerate()))
+                    self.assertEqual(raw[:32000], audio.readframes(audio.getnframes()))
+                document = dict(model=dict(multilingual=True, audio=dict(ctx=1500)),
+                    probe=dict(schema=1, load_seconds=0., decode_seconds=0., peak_rss_bytes=None,
+                        initial_prompt_sha256=VAD.digest_file(prompt), beam_size=3, threads=4,
+                        effective_audio_context=1500, original_audio_frames=16000, decode_audio_frames=16000),
+                    transcription=[dict(offsets={"from": 0, "to": 1000}, text="synthetic", probabilities=[.9], noSpeech=.1)])
+                payload = json.dumps(document)
+                prefix.with_suffix(".json").write_text(payload)
+                return document, json.loads(payload, parse_float=Decimal), 0.
+            replay = Mock()
+            replay.review.return_value = False
+            replay.command.return_value = "startMs\tendMs\tuncertain\ttextBase64\n0\t1000\tfalse\tc3ludGhldGlj\n"
+            with patch.object(VAD.E4, "decode_chunk", side_effect=native_asr) as decode:
+                records = VAD.evaluate_case(args, case, selection,
+                    {clip["id"]: dict(text="synthetic")}, source, output, replay)
+            decode.assert_called_once()
+            self.assertEqual(raw, pcm.read_bytes())
+            self.assertEqual(case["pcm_sha256"], records[0]["source_pcm_sha256"])
+            self.assertEqual(selection["vad_input"], records[0]["vad_input"])
+            self.assertEqual("synthetic", records[0]["hypothesis"])
+            self.assertEqual(0, records[0]["metrics"]["word_errors"])
 
     def test_engine_dependency_and_model_provenance_mismatch_fail(self):
         engine = dict(source_checkout_commit=VAD.ENGINE_COMMIT, shared_libraries=[dict(name="libwhisper.so")])

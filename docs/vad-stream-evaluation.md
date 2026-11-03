@@ -1,7 +1,8 @@
 # Offline VAD framing experiment
 
-The evaluate-vad-streams.py tool compares Silero framing on the **exact PCM**
-from a verified [continuous-source preparation](gate-experiment.md). It uses the
+The evaluate-vad-streams.py tool compares Silero framing on the PCM
+from a verified [continuous-source preparation](gate-experiment.md). ASR always
+reads those exact original bytes. It uses the
 [host VAD probe](vad-probe.md), pinned Silero 5.1.2 and the existing base Q5_1 ASR
 probe. No production capture, gate, JNI or Android dependency is changed.
 
@@ -35,6 +36,34 @@ conditions and context on. The --controls-only option requires explicit named
 controls; their ASR language is --control-language, English by default. Repeat
 relevant controls in other languages before claiming language-wide hallucination
 robustness. Empty candidate ranges perform no ASR.
+
+The optional research flag `--vad-conditioning causal-rms-cap30` derives a
+separate PCM input for VAD only. The default is `--vad-conditioning none`.
+Original prepared PCM, ASR slices, references and scoring remain unchanged.
+The conditioner uses consecutive 512-sample frames at 16 kHz, float64 arithmetic
+and one envelope initialized to zero for each stream:
+
+    rms = sqrt(mean((signed_pcm16 / 32768) ** 2))
+    envelope = max(rms, previous_envelope * exp(-frame_samples / 16000 / 0.5))
+    gain = min(30, max(1, 0.03 / max(envelope, 1e-12)))
+
+RMS includes DC; there is no DC removal, filtering or attenuation. The final
+partial frame uses its actual sample count for RMS and envelope release, adds
+no samples, and follows the same rule. Output uses NumPy `rint` with ties to even,
+then signed little-endian PCM16; nonfinite or out-of-range values fail instead
+of clipping. There is no lookahead beyond the current 32 ms frame. Frame memory
+is bounded independently of source length, with the same 400-second host input
+limit. The optional mode requires NumPy; its version and the exact algorithm
+are included in the frozen policy and its plan hash.
+
+Derived `.vad-input.pcm` files remain in the private output directory alongside
+the evidence. Their byte counts and hashes are recorded separately from the
+original PCM hash. The source hash is computed from the bytes actually used
+during derivation and checked against the prepared identity; source and derived
+files are checked again after VAD. New files never overwrite existing targets.
+Conditioning wall time is reported separately from native VAD time. A candidate
+must still pass paired development accuracy and noise controls before a frozen
+held-out comparison; this research option is not enabled in Android capture.
 
 The fixed VAD configuration is CPU, one thread, threshold 0.5, minimum speech
 250 ms, minimum silence 600 ms, 500 ms padding, nominal maximum speech 15 seconds
@@ -86,6 +115,8 @@ match before the held-out source manifest is read. Prepare that source with
 prepare-gate-experiment.py --split test. Changing the policy after opening
 held-out results requires a fresh held-out cohort. Excluding prior IDs/PCM does
 not establish speaker/session independence.
+The conditioning mode, its algorithm and NumPy version must also match; a plan
+made with `none` cannot authorize a test run using `causal-rms-cap30`.
 
 Reports separate source-clip coverage, candidate audio duration, VAD phase
 timings and ASR text scores. Coverage includes silence within original clips
