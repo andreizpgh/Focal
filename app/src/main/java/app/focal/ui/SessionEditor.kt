@@ -105,8 +105,13 @@ import kotlinx.coroutines.launch
             key(passage.id) {
                 OutlinedTextField(
                     text, {
-                        inputTooLarge = !fitsPassageDraftBudget(it)
-                        if (!inputTooLarge) { text = it; onDirtyChange(it != passage.text) }
+                        // The input connection can replay the accepted value on
+                        // focus loss/recreation after a rejected edit. Only a
+                        // changed draft dismisses that edit's feedback.
+                        if (it != text) {
+                            inputTooLarge = !fitsPassageDraftBudget(it)
+                            if (!inputTooLarge) { text = it; onDirtyChange(it != passage.text) }
+                        }
                     }, enabled = !saving,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 144.dp, max = 320.dp), minLines = 3,
                     textStyle = MaterialTheme.typography.bodyLarge, shape = RoundedCornerShape(8.dp), label = { Text("Transcript") },

@@ -707,13 +707,50 @@ class InterfaceTest {
             compose.onNode(hasSetTextAction()).performTextReplacement("🙂".repeat(40_000))
             assertWarningVisible("before rotation")
             compose.onNode(hasSetTextAction()).assertTextContains(draft)
+            capture("oversized-editor-before-recreation")
             compose.activityRule.scenario.recreate()
             waitForEditor()
             compose.onNode(hasSetTextAction()).assertTextContains(draft)
             assertWarningVisible("after rotation")
+            capture("oversized-editor-after-recreation")
             compose.onNodeWithText("Save changes").performScrollTo().performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
             assertEquals(draft, app.store.passages(id).single().text)
+        } finally { app.store.delete(id) }
+    }
+
+    @Test fun rejectedEditorInputFeedbackClearsOnlyAfterAChangedValidDraft() {
+        val app = application()
+        val original = "Saved original."
+        val id = readySession(app.store, "Rejected input feedback fixture", listOf(original))
+        val draft = "A valid manual edit stays here."
+        val changedDraft = "A changed valid manual edit can be saved."
+        val warning = "This text is too long for one passage. Paste a smaller selection."
+        try {
+            waitForTitle("Rejected input feedback fixture")
+            compose.onNodeWithText("Rejected input feedback fixture").performClick()
+            waitForSessionReady("Rejected input feedback fixture", original)
+            compose.onNode(hasText(original) and hasClickAction()).performScrollTo().performClick()
+            waitForEditor()
+            compose.onNode(hasSetTextAction()).performTextReplacement(draft)
+            compose.onNode(hasSetTextAction()).performTextReplacement("🙂".repeat(40_000))
+            compose.waitUntil(5_000) {
+                compose.onAllNodesWithText(warning).fetchSemanticsNodes().isNotEmpty() &&
+                    compose.onNodeWithText(warning).isDisplayed()
+            }
+            compose.onNodeWithText(warning).assertIsDisplayed()
+            compose.onNode(hasSetTextAction()).assertTextContains(draft)
+            // The input connection may repeat the accepted text after rejecting a paste.
+            compose.onNode(hasSetTextAction()).performTextReplacement(draft)
+            compose.onNodeWithText(warning).assertIsDisplayed()
+            compose.onNode(hasSetTextAction()).assertTextContains(draft)
+            assertEquals(original, app.store.passages(id).single().text)
+            compose.onNode(hasSetTextAction()).performTextReplacement(changedDraft)
+            compose.onNodeWithText(warning).assertDoesNotExist()
+            compose.onNode(hasSetTextAction()).assertTextContains(changedDraft)
+            compose.onNodeWithText("Save changes").performScrollTo().performClick()
+            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
+            assertEquals(changedDraft, app.store.passages(id).single().text)
         } finally { app.store.delete(id) }
     }
 
