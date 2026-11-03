@@ -1,64 +1,79 @@
 # Product verification · 2026-11-03
 
-Report date uses Asia/Tbilisi (UTC+4); the current checks ran on 2026-11-02 UTC.
+The Sessions / Focus wave direction is preserved. The latest production source
+checkpoint is `ff8ea8d`; host dependency setup is `e0a9c78`. This is a development
+checkpoint, not a finished product or verified distribution release. The public
+alpha APK is unchanged. Quiet/noisy speech, physical-phone resources and stable
+signing remain open gates.
 
-The Sessions / Focus wave direction is preserved. This checkpoint hardens the
-whole application and adds reproducible seven-language speech measurements.
-The public alpha APK is unchanged. Full local-emulator QA, physical-phone
-performance and distribution signing remain release gates; this is not a
-claim that the application is finished.
-
-## Current checkpoint
+## Current local evidence
 
 | Area | Evidence and scope |
 | --- | --- |
-| Core logic | 34 JVM tests pass, including bounded context, overlap, invalid confidence and recording boundaries |
-| Host tooling | 109 Python tests pass across fetch/evaluation/probe/correction/gate/shadow/local-QA/CI-summary tools |
-| Build | Debug/test APKs assemble; debug and release lint pass; release R8 compilation passes |
-| Real-model JNI | All five previously skipped model-dependent JNI/workflow checks pass on the API 35 CI emulator, including real speech and capture without an activity |
-| Whole Android suite | Latest [CI run 41538859249](https://github.com/andreizpgh/Focal/actions/runs/41538859249): 76 tests completed, 75 passed, one failed, zero skips; the remaining warning-visibility failure is an open gate |
-| Speech measurements | Real FLEURS audio, pinned engine and three verified models; paired WER/CER per language, with development/test separation and explicit limitations in the [benchmark report](benchmarks/2026-11-03-stt/report.md) |
-| Packaging/privacy | No Internet permission, backups disabled, native ELF/ZIP alignment checked at 16 KiB; full-history/source Gitleaks checks pass at the published checkpoint |
-| Local QA preparation | [Dedicated-emulator runner](local-emulator-qa.md) verifies source, APK and installed model hashes, exact test identities, all five real-model checks and absence of skips; fake-device tests and independent source review pass |
+| Core logic | 34 JVM tests pass |
+| Host tooling | 146 tests pass, including a clean virtual environment with hash-pinned NumPy 2.4.6 |
+| Build | Debug/test APKs, debug/release lint and unsigned release R8 build pass |
+| Whole Android suite | Dedicated API 35 x86_64 AVD with KVM: **80 tests passed, zero failures/skips**, 178.355 seconds |
+| Real-model checks | All eight mandatory JNI/workflow checks pass, including quiet public speech and constant-audio recovery |
+| Manual UI | Real keyboard paste/rotation, Save & next, Russian edit/copy/share, 200% text, dark mode and bounded legacy paging observed |
+| Long capture | 2:32:37 retained audio; task swipe and about 149 minutes screen off survived; a separate 30-minute memory series stayed 177,118–179,802 KiB PSS |
+| Speech research | Fresh development comparisons cover all seven languages; [results and limitations](benchmarks/2026-11-03-local/report.md) retain negative variants and an unconsumed held-out cohort |
 
-The initial full CI passed host tests, real-speech smoke, build/lint and all 34
-core tests. It exposed an oversized-editor visibility assertion, a 24-pixel
-absolute-coordinate scroll assertion after recreation, and a likely paused-clock
-UI test deadlock. The warning now requests visibility outside the capped text
-field; scroll checks
-use logical and viewport-relative position; paused-clock checks avoid synchronous
-scrolling and idle lookups. Independent re-review and the full local build pass.
-The next runs completed all 76 tests with no skips: first 73 passed, then 75.
-They verified all five required model-dependent checks and exposed dialog-window
-keyboard handling, an ambiguous search selector and warning-restoration timing.
-Search, library restoration and Save & next now pass. The final bounded run
-[41538859249](https://github.com/andreizpgh/Focal/actions/runs/41538859249) again completed
-75/76 successfully. The sole remaining failure is warning visibility after
-activity recreation, including after a five-second visibility wait; it is not
-being dismissed as an immediate-assertion race. The valid draft assertion passes
-before that failure; this test does not reach its later Save check. Reproduce
-the actual viewport on the local accelerated emulator before another UI change.
-No further blind Actions cycle is planned; the test and failure remain visible.
-The fail-closed model gate correctly rejected the initial incomplete suite.
-Per-test, suite and job limits now preserve diagnostics instead of hanging silently.
+The [local QA report](benchmarks/2026-11-03-local/emulator-qa.json) records exact
+APK/model hashes and both test checkpoints. The latest runner recorded HEAD
+`c21ae20` with a dirty-source fingerprint; its application/test bytes are now in
+`a5e460d` and `ff8ea8d`. It was not a clean-HEAD run of those later commits.
+Debug APK SHA-256:
+`efd5d5fbbe6fa93e4c52c4b92e58c6921465c75ff049728e937900468157a6e6`.
+No APK has been published as a replacement release.
 
-Host measurements include process/model loading and are not phone latency or
-battery results. The local software-emulated Android guest became too slow to
-complete broad instrumentation reliably; its partial successful JNI checks do
-not count as a full suite pass. Application/source checkpoint: `1df806012e117034f91a8732bd7c32189a3419e7`.
-The final local build includes debug/release lint, test APK, release R8 and bundled
-model verification. Debug APK SHA-256:
-`9c9b8cebff6261ec61b23e02d9ea11cc1b6be7fbd21b73a74fb18df08046c84b`.
-Unsigned release APK SHA-256:
-`e8561b873b39e389904f2a3a54b0bba10b31d1e35594810cf0822bb54d7b2992`.
-These local artifacts are not published replacements for the alpha.
+The emulator uses **KVM with `-accel on`** and host GLES; only Vulkan is disabled.
+Other projects' AVDs and data were preserved. The `-no-audio` setup does not verify
+host microphone input or audible playback. Its captured signal is weak, varying
+synthetic PCM, not necessarily exact zeros. The long-session memory series covers
+30 minutes of quiet capture, not sustained speech/inference or the entire 2.5-hour
+session. Emulator results do not establish phone battery, heat or background behavior.
 
-A hardware-accelerated local emulator is the preferred environment for repeated whole-app and longer-session QA. GitHub
-Actions is used for bounded checkpoint verification, not repeated endurance runs.
+## Confirmed fixes and an open manual failure
+
+The original editor failure was reproduced twice without weakening assertions.
+UI captures and input callbacks disproved the earlier offscreen-warning hypothesis:
+activity recreation replayed the accepted draft and cleared rejection feedback.
+`12e958c` ignores unchanged input callbacks. The warning and valid draft survive
+real keyboard paste, orientation changes and activity recreation; Save & next
+also passed. A separate regression verifies feedback clears on a genuine edit.
+
+Manual permission testing exposed an indefinite, obsolete microphone notice after
+Deny → Retry → Grant. `ff8ea8d` cancels only that notice's coroutine on retry,
+permission result or return with permission granted. The real dialog flow now
+starts recording without the stale notice; unrelated error messages are retained.
+
+Recovery bypasses the live energy gate. A new native regression returned one segment
+from 0.5 seconds of exact zero PCM in English on the previous APK (31.474 seconds).
+That assertion counts segments; it does not separately measure the returned words. `a5e460d` bypasses inference for strictly constant finite
+PCM before padding. All 126 combinations of seven languages, zero/positive/negative
+DC, duration and text context return no segments. The workflow preserves original
+audio and manual edits without adding blank review passages; varying-audio empty
+results retain their existing review cue. The three new real-model tests passed
+in 39.44 seconds, including a public speech fixture scaled to 1% amplitude.
+These test durations are different workloads, not paired phone latency estimates.
+
+**Open:** actual emulator input varies from −8 to 7 PCM16 units (RMS about
+0.000124). Recovery still invents text from that weak signal: observed in Russian
+before the constant guard and English afterward. The exact-constant fix does not
+solve this broader noise case. The final 2.5-second durable tail was preserved even
+though interruption metadata had reached only 2 seconds. No amplitude threshold
+or automatic text correction has been enabled to hide this failure.
+
+The pinned engine's no-speech output is nearly uniform on both speech and noise.
+Source inspection found that initial-prompt decoding requests only the last logits
+row, while no-speech calculation reads the first row. A separate, ignored engine
+snapshot is investigating the correct SOT row; the recorded submodule and shipped
+engine remain unchanged. No threshold is justified by the current no-speech values.
 
 ## Independent whole-app review
 
-Six focused Sol/Terra reviewers covered Android/runtime QA, capture/recovery,
+Focused independent reviewers covered Android/runtime QA, capture/recovery,
 storage/privacy/model import, native STT/evaluation, playback/state, and
 UI/accessibility. Authors and reviewers were separate for changed layers. The
 review/fix cycle also covered the tools used to produce evidence.
@@ -124,10 +139,10 @@ gate threshold, model replacement or automatic correction has been enabled.
 
 ## Remaining release gates
 
-1. Fix and verify the outstanding restored-warning visibility failure, then pass
-   the entire suite without skips. Repeat whole-app UI, interruption/recovery,
-   large-text and recording/playback paths on the owner's
-   accelerated emulator using the [local QA guide](local-emulator-qa.md).
+1. Resolve recovery hallucinations on varying weak noise without suppressing quiet
+   speech. Verify any engine/VAD change with paired development data, frozen fresh
+   held-out evidence and the complete local suite. Keep the observed failure open
+   until the actual UI recovery path passes.
 2. Extend speech evidence beyond the small public read-speech corpus: independent
    speakers/sessions, consented Russian dictation, all seven languages, quiet/noisy
    speech, actual boundaries, names, numbers and negations. Freeze decisions before

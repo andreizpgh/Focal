@@ -51,6 +51,32 @@ background reliability, or Russian recognition quality.
    `--serial` and the dedicated-AVD confirmation are mandatory, and the runner
    verifies that this serial is a booted emulator. Physical phones are rejected.
 
+### Linux launch configuration used for this checkpoint
+
+The local API 35 default x86_64 AVD completed QA with Android Emulator 37.1.11,
+KVM acceleration, host GLES rendering and Vulkan disabled. This combination can
+be selected for an existing dedicated AVD without changing global host settings:
+
+```sh
+emulator -avd focal_local_qa -accel on -gpu host -feature -Vulkan \
+  -cores 2 -memory 2048 -no-snapshot -no-window -no-audio
+```
+
+Replace `focal_local_qa` with the dedicated AVD's name. The emulator raised the
+requested memory to **2560 MiB**; record the effective configuration, not only
+the command-line request. The tested display was 320 × 640 at 160 dpi, with
+font scale 1.0. Other AVDs were untouched; no wipe or global configuration change
+was needed. KVM accelerates the virtual CPU independently of Vulkan graphics;
+disabling Vulkan does not disable KVM.
+
+Two earlier SwiftShader-based launch attempts crashed. The successful attempt
+also changed memory and CPU allocation, so the exact cause is undetermined;
+this is a working local configuration, not a general diagnosis or guarantee.
+The `-no-audio` launch disables host audio, but its recorded PCM need not be
+exactly zero. It supports synthetic and emulator-input checks; it does not verify
+real microphone input or audible playback. Use a separate launch with audio
+enabled for those manual checks.
+
 ## Run
 
 From the repository root, on macOS/Linux:
@@ -102,13 +128,90 @@ are restored, reconnect it and restore each value from the manifest with
 `adb -s SERIAL shell settings put global KEY VALUE`; use
 `adb -s SERIAL shell settings delete global KEY` for an original `null` value.
 
-## Current focused reproduction
+## Verified local checkpoint · 2026-11-03
 
-The checkpoint at `1df8060` has one unresolved API 35 UI failure:
-`InterfaceTest.oversizedEditorInputKeepsTheValidDraftThroughRotation`. The valid
-draft survives activity recreation, but the rejected-input warning exists outside
-the visible viewport even after a bounded visibility wait. The test uses activity
-recreation; actual portrait/landscape rotation still needs manual validation.
+Two complete `qa-local.py --release-checks` runs passed:
+
+| App source checkpoint | Android tests | Failures / skips | Mandatory real-model tests | Instrumentation time |
+| --- | ---: | ---: | ---: | ---: |
+| `12e958c`, editor fix and subsequent long-session manual checks | 77 | 0 / 0 | 5 | 116.109 s |
+| `ff8ea8d`, exact-constant PCM and microphone-notice fixes | 80 | 0 / 0 | 8 | 178.355 s |
+
+The latest run also passed all **34 core tests**, **146 host-tool tests**, debug
+and release lint, and debug, instrumentation and unsigned release/R8 builds.
+The runner recorded dirty working trees at HEAD `388aee0` and `c21ae20`,
+respectively; their tested app changes were subsequently committed through the
+checkpoints above. These are source mappings, not claims of clean-HEAD runs.
+The [public aggregate](benchmarks/2026-11-03-local/emulator-qa.json) retains both
+runner source fingerprints and APK identities. Raw logs and device identifiers
+are not published.
+
+The previously failing
+`InterfaceTest.oversizedEditorInputKeepsTheValidDraftThroughRotation` was
+reproduced twice at checkpoint `388aee0`. Direct observation corrected the earlier
+offscreen-warning hypothesis: after activity recreation, `TextField.onValueChange`
+repeated the already accepted draft, clearing `inputTooLarge`. The editor capture
+showed no warning; scrolling was not the cause. Commit `12e958c` ignores unchanged
+text callbacks, preserving rejection feedback until a real edit. The original
+strict test passed twice after the fix, and an additional regression checks both
+unchanged callbacks and a genuine text change.
+
+Commit `a5e460d` also prevents **exactly constant** zero/DC PCM from reaching
+Whisper during recovery. A new native regression failed on the previous APK:
+0.5 seconds of zero PCM in English returned one segment (focused run: 31.474 s).
+The three added regressions then passed together in 39.440 s: 126 constant-input
+conditions across all seven languages, quiet varying public speech, and recovery
+that preserves original audio and existing manual edits without adding passages.
+These are test-run durations, not phone decoder performance measurements.
+The complete 80-test run includes all three. Varying low-level noise remains an
+open failure described below; the exact-constant fix does not solve it.
+
+The full automated result is separate from the manual observations below.
+The editor test uses activity recreation; actual portrait/landscape rotation
+was also checked manually with a rejected paste and a legacy passage.
+
+### Manual observations
+
+Unless a later build is named, these checks used debug app source `12e958c`,
+synthetic notes and the dedicated emulator above. The public aggregate separates
+these observations from the later build's checks; it contains no recordings,
+transcripts, screenshots or device identifiers.
+
+| Scenario | Observed result |
+| --- | --- |
+| Record, Home, swipe the task away, screen off, return | Capture continued. The final saved recording was 9,157,264 ms (about 2 h 32 min), with `READY` state and 293,032,448 PCM bytes, exactly duration × 32. The live gate produced no chunks or transcript with host audio disabled. |
+| Foreground service and memory during screen-off capture | All 31 samples over 1,800 seconds showed a foreground recording service. PSS ranged from 177,118 to 179,802 KiB; start/end were 179,802/178,768 KiB. This monitoring covered the first 30 minutes only; a separate later snapshot was 180,212 KiB. |
+| Pause, resume and Finish in the app | Two paused checks retained the same 292,534,272-byte file. Resuming added audio before Finish. |
+| Playback and seek after finishing | Playback position advanced and seeking changed the position. Input/output audio was disabled, so this verifies control/state behavior, not audible playback. |
+| Oversized paste and orientation change | The preceding valid draft and rejection warning remained visible with the keyboard and after portrait/landscape rotation. Save & next opened the following review passage. |
+| Russian edit, copy and share | The saved edit copied exactly as the expected 176 UTF-8 bytes, including paragraph breaks; the Android share sheet opened. No external share target was used. |
+| Dark theme and font scale 2.0 | A 4,000-line, 88,000-byte draft remained editable; adding the synthetic marker and saving produced 88,005 bytes after trailing-newline trimming. |
+| Legacy large text and transfer refusal | A 380,017-byte passage opened in 25 read-only parts; Part 2 survived rotation. Refused whole-transcript Copy preserved the previous 176-byte clipboard. |
+| Notification Pause, Resume and Finish | Pause showed 00:29 and persisted `PAUSED`; Resume showed recording at 00:43; Finish produced a completed 00:44 Russian-language session. |
+| Speech-language picker | All seven supported language labels were visible. The automated suite separately checks selection and persistence. |
+| Microphone denial, retry and grant on `ff8ea8d` | Denial showed the Settings notice without starting capture. Retrying showed Android's permission dialog without the stale notice; granting permission started recording and removed obsolete feedback. |
+
+The screen-off interval lasted roughly 2.5 hours, but service/memory samples
+were collected only for the first 30 minutes. This was capture without host audio;
+it does not exercise sustained speech inference, host microphone input, audible
+output, phone battery/thermals, OEM background restrictions, calls or TalkBack.
+The remaining device matrix still needs those separate checks.
+
+### Open manual recovery failure
+
+Force-stop and reopen correctly exposed an interrupted recording; Continue
+transcription recovered its durable 2.5-second audio tail beyond the earlier
+2-second metadata watermark. However, recovery invented text from emulator input
+with host audio disabled. This occurred in Russian before the constant-input fix
+and was reproduced in English on the later build.
+
+The measured PCM varied from **−8 to 7** (PCM16), with normalized RMS approximately
+**0.000124**. It was not constant silence, so the exact-zero/DC guard correctly
+did not apply. The passing constant-input regressions do not close this manual
+failure. A solution still needs paired quiet-speech and noise evidence; this report
+does not claim that silence/noise hallucinations or whole-app acceptance are solved.
+
+## Focused editor regression
 
 After installing the verified app/test APKs on the dedicated AVD, isolate it with:
 
@@ -117,14 +220,15 @@ adb -s emulator-5554 shell am instrument -w -e class 'app.focal.InterfaceTest#ov
 ```
 
 This focused command is for diagnosis; it does not satisfy the full-suite or
-five-model-test gate. In Android Studio, debug this test and break in
+five-model-test gate. If the regression recurs, debug this test and break in
 `assertWarningVisible` after recreation, before its `finally` removes the
-synthetic fixture. Inspect the real dialog viewport, warning/field bounds,
+synthetic fixture. Check whether rejection state survives field callbacks before
+assuming a viewport problem. Inspect the actual dialog, warning/field bounds,
 scroll offset, IME insets and any overlapping dialog. Record API, window size,
 density, font scale and animation settings. Keep captures and raw diagnostics
-private. Do not weaken the warning-visibility or draft-retention assertions to
-make the result green. After fixing the observed cause, rerun this scenario and
-then the complete `qa-local.py` suite with no skips.
+private. Preserve the warning-visibility, draft-retention and successful-save
+assertions. After any fix, rerun this scenario and then the complete `qa-local.py`
+suite with no skips.
 
 ## Manual longer-session matrix
 

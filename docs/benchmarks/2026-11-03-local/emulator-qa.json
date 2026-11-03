@@ -1,0 +1,305 @@
+{
+  "schema_version": 1,
+  "report_date": "2026-11-03",
+  "report_timezone": "Asia/Tbilisi",
+  "scope": "Dedicated local Android emulator; synthetic notes and capture without host audio; open recovery hallucination",
+  "app_builds": {
+    "prior_editor_build": {
+      "app_source_checkpoint_commit": "12e958c8e50b35ed449268a9d99b821aeeda8071",
+      "debug_apk_sha256": "b0aeb764655f132f334479ccb092534ce216a61997580add1cc6e77b6594e8ea",
+      "test_apk_sha256": "f325e8b7a94c9249fb5e94afe340238cff2fdbd479cf72a4f52af7dba1e30862",
+      "runner_source": {
+        "head": "388aee0eefa4b6de36f114ae1b862f0f947f2863",
+        "dirty": true,
+        "source_change_sha256": "5d5393c0985b1edc52c0cb05f4136fe1dc13deadab27de4c55773ce30c937865"
+      },
+      "source_mapping": "Tested app changes subsequently committed through the checkpoint; not a clean-HEAD run"
+    },
+    "current_constant_and_permission_build": {
+      "app_source_checkpoint_commit": "ff8ea8d486c88ce3d37817d66cd293febec15b07",
+      "debug_apk_sha256": "efd5d5fbbe6fa93e4c52c4b92e58c6921465c75ff049728e937900468157a6e6",
+      "test_apk_sha256": "2f1ce9654a8760ff9f38c610f5e62f1a05ece4af942fe9977c06c931c55fe3a7",
+      "runner_source": {
+        "head": "c21ae20a3c0a79011704a513dca89cfa64f89ccc",
+        "dirty": true,
+        "source_change_sha256": "78c738c4ec02daac8f703de27ccc1a2b973e9f76d3b15c1983914dfae7d1992a"
+      },
+      "source_mapping": "Tested app changes subsequently committed through the checkpoint; not a clean-HEAD run"
+    }
+  },
+  "environment": {
+    "host_os": "Linux",
+    "emulator_version": "37.1.11",
+    "android_api": 35,
+    "system_image": "default/x86_64",
+    "vm_acceleration": "KVM",
+    "gpu_mode": "host",
+    "vulkan_enabled": false,
+    "virtual_cpu_count": 2,
+    "requested_memory_mib": 2048,
+    "effective_memory_mib": 2560,
+    "portrait_display_pixels": [
+      320,
+      640
+    ],
+    "density_dpi": 160,
+    "font_scales_checked": [
+      1.0,
+      2.0
+    ],
+    "host_audio_enabled": false,
+    "input_scope": "Emulator launched with -no-audio; no host microphone or audible output; captured PCM may contain varying low-level noise"
+  },
+  "automated_runs": [
+    {
+      "runner": "qa-local.py --release-checks",
+      "android_tests": 77,
+      "android_failures": 0,
+      "android_skips": 0,
+      "required_real_model_tests_passed": 5,
+      "instrumentation_seconds": 116.109,
+      "core_tests_passed": 34,
+      "debug_lint": "passed",
+      "release_lint": "passed",
+      "debug_build": "passed",
+      "instrumentation_build": "passed",
+      "unsigned_release_build": "passed",
+      "app_build": "prior_editor_build"
+    },
+    {
+      "runner": "qa-local.py --release-checks",
+      "android_tests": 80,
+      "android_failures": 0,
+      "android_skips": 0,
+      "required_real_model_tests_passed": 8,
+      "instrumentation_seconds": 178.355,
+      "core_tests_passed": 34,
+      "debug_lint": "passed",
+      "release_lint": "passed",
+      "debug_build": "passed",
+      "instrumentation_build": "passed",
+      "unsigned_release_build": "passed",
+      "app_build": "current_constant_and_permission_build",
+      "host_tool_tests_passed": 146,
+      "release_r8": "passed"
+    }
+  ],
+  "editor_regression": {
+    "test": "InterfaceTest.oversizedEditorInputKeepsTheValidDraftThroughRotation",
+    "baseline_commit": "388aee0",
+    "baseline_failures_reproduced": 2,
+    "observed_cause": "Activity recreation repeated the accepted draft through onValueChange and cleared inputTooLarge; the warning was absent, not offscreen",
+    "fix": "Ignore callbacks whose text equals the current draft",
+    "focused_passes_after_fix": 2,
+    "assertions_weakened": false,
+    "additional_regression": "Unchanged callbacks preserve rejection feedback; a genuine text change clears it"
+  },
+  "constant_pcm_regression": {
+    "fix_commit": "a5e460de6b4869dc2a6f991da21026984415c79d",
+    "baseline_app_build": "prior_editor_build",
+    "baseline_result": "failed as expected",
+    "baseline_language": "en",
+    "baseline_input_seconds": 0.5,
+    "baseline_input": "exact zero PCM",
+    "baseline_unexpected_segment_count": 1,
+    "baseline_focused_run_seconds": 31.474,
+    "fixed_app_build": "current_constant_and_permission_build",
+    "fixed_focused_test_count": 3,
+    "fixed_focused_passes": 3,
+    "fixed_focused_run_seconds": 39.44,
+    "constant_input_conditions": 126,
+    "languages": [
+      "en",
+      "ru",
+      "de",
+      "fr",
+      "es",
+      "it",
+      "pt"
+    ],
+    "constant_values": [
+      0,
+      0.25,
+      -0.25
+    ],
+    "input_durations_seconds": [
+      0.5,
+      2,
+      30
+    ],
+    "contexts": [
+      "empty",
+      "nonempty synthetic context"
+    ],
+    "quiet_varying_public_speech_recognized": true,
+    "quiet_fixture_gain": 0.01,
+    "recovered_constant_chunks_done": true,
+    "recovery_added_passages": 0,
+    "recovery_existing_manual_passages_unchanged": true,
+    "recovery_original_audio_sha256_unchanged": true,
+    "scope": "Exact constant PCM only; varying low-level noise still hallucinates in manual recovery; run durations include setup and are not phone decoder benchmarks"
+  },
+  "manual_cases": [
+    {
+      "id": "screen_off_capture",
+      "status": "observed_pass",
+      "actions": [
+        "Record",
+        "Home",
+        "Swipe task away",
+        "Screen off",
+        "Return"
+      ],
+      "screen_off_start_utc": "2026-11-03T08:19:52.463868Z",
+      "screen_off_return_utc_approximate": "2026-11-03T10:49:00Z",
+      "final_state": "READY",
+      "final_duration_ms": 9157264,
+      "final_pcm_bytes": 293032448,
+      "pcm_bytes_equal_duration_ms_times_32": true,
+      "chunk_count": 0,
+      "transcribed_speech": false,
+      "scope": "Host audio disabled; live gate emitted no candidates; samples not asserted constant; no sustained speech inference",
+      "app_build": "prior_editor_build"
+    },
+    {
+      "id": "screen_off_memory_and_service_samples",
+      "status": "observed_pass",
+      "sample_count": 31,
+      "sample_span_seconds": 1800,
+      "foreground_service_samples": 31,
+      "pss_start_kib": 179802,
+      "pss_end_kib": 178768,
+      "pss_min_kib": 177118,
+      "pss_max_kib": 179802,
+      "separate_later_snapshot_pss_kib": 180212,
+      "scope": "First 30 minutes sampled; not continuous monitoring of the entire recording",
+      "app_build": "prior_editor_build"
+    },
+    {
+      "id": "in_app_pause_resume_finish",
+      "status": "observed_pass",
+      "paused_duration_ms": 9141696,
+      "paused_pcm_bytes_observations": [
+        292534272,
+        292534272
+      ],
+      "resuming_added_audio": true,
+      "finish_reached_ready": true,
+      "app_build": "prior_editor_build"
+    },
+    {
+      "id": "silent_playback_and_seek",
+      "status": "observed_pass",
+      "playback_position_advanced": true,
+      "seek_changed_position": true,
+      "audible_playback_verified": false,
+      "app_build": "prior_editor_build"
+    },
+    {
+      "id": "rejected_paste_and_rotation",
+      "status": "observed_pass",
+      "valid_draft_preserved": true,
+      "warning_visible_with_keyboard": true,
+      "warning_visible_after_orientation_change": true,
+      "save_and_next_opened_following_passage": true,
+      "app_build": "prior_editor_build"
+    },
+    {
+      "id": "russian_edit_copy_share",
+      "status": "observed_pass",
+      "copied_utf8_bytes": 176,
+      "clipboard_equal_expected_text": true,
+      "paragraph_breaks_preserved": true,
+      "android_share_sheet_opened": true,
+      "external_share_target_used": false,
+      "app_build": "prior_editor_build"
+    },
+    {
+      "id": "large_editable_text_dark_large_font",
+      "status": "observed_pass",
+      "theme": "dark",
+      "font_scale": 2.0,
+      "input_lines": 4000,
+      "input_utf8_bytes": 88000,
+      "saved_utf8_bytes": 88005,
+      "edit": "Added synthetic marker QA_END; save trimmed the trailing newline",
+      "app_build": "prior_editor_build"
+    },
+    {
+      "id": "legacy_text_paging_and_copy_refusal",
+      "status": "observed_pass",
+      "source_utf8_bytes": 380017,
+      "read_only_part_count": 25,
+      "part_preserved_after_rotation": 2,
+      "whole_transcript_copy_refused": true,
+      "previous_clipboard_preserved": true,
+      "preserved_clipboard_utf8_bytes": 176,
+      "app_build": "prior_editor_build"
+    },
+    {
+      "id": "notification_pause_resume_finish",
+      "app_build": "prior_editor_build",
+      "status": "observed_pass",
+      "language": "ru",
+      "paused_display_seconds": 29,
+      "paused_persisted_state": "PAUSED",
+      "resumed_display_seconds": 43,
+      "finished_display_seconds": 44,
+      "final_state": "READY"
+    },
+    {
+      "id": "language_picker_labels",
+      "app_build": "prior_editor_build",
+      "status": "observed_pass",
+      "visible_labels": [
+        "English",
+        "Русский",
+        "Deutsch",
+        "Français",
+        "Español",
+        "Italiano",
+        "Português"
+      ],
+      "scope": "Manual label visibility; selection and persistence covered separately by automated tests"
+    },
+    {
+      "id": "microphone_denial_retry_grant",
+      "app_build": "current_constant_and_permission_build",
+      "status": "observed_pass",
+      "denial_shows_settings_notice": true,
+      "denial_does_not_start_capture": true,
+      "retry_shows_permission_dialog_without_stale_notice": true,
+      "grant_starts_capture": true,
+      "obsolete_notice_removed_after_grant": true
+    },
+    {
+      "id": "force_stop_recovery_low_level_noise",
+      "status": "open_failure",
+      "observed_builds": [
+        "prior_editor_build",
+        "current_constant_and_permission_build"
+      ],
+      "baseline_language": "ru",
+      "later_build_language": "en",
+      "pre_recovery_duration_metadata_ms": 2000,
+      "recovered_audio_duration_ms": 2500,
+      "interrupted_state_visible_on_reopen": true,
+      "durable_audio_tail_recovered": true,
+      "invented_text_after_recovery": true,
+      "source_exactly_constant": false,
+      "measured_pcm16_min": -8,
+      "measured_pcm16_max": 7,
+      "normalized_rms_approximate": 0.000124,
+      "scope": "Captured emulator input with host audio disabled; exact constant guard does not apply; no noise-hallucination fix claimed"
+    }
+  ],
+  "remaining_validation": [
+    "Prevent hallucination on varying low-level noise during recovery without suppressing quiet speech",
+    "Sustained capture while speech inference is active",
+    "Real microphone and audible output, including route changes",
+    "Physical ARM64 phone latency, memory, battery, thermals and OEM background behavior",
+    "Calls, real TalkBack traversal and selection",
+    "Seven-language speech-quality acceptance and stable distribution signing"
+  ],
+  "privacy": "Aggregate measurements only; no recordings, transcripts, screenshots, raw logs, local paths or device identifiers"
+}

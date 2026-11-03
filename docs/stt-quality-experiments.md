@@ -15,6 +15,16 @@ cannot establish which of two plausible words was actually said.
 
 ## What the measured checkpoint changes
 
+The [fresh local continuation](benchmarks/2026-11-03-local/report.md) retains
+42 development clips and a separate unconsumed 42-clip cohort. Lower energy
+thresholds were rejected; offline Silero with VAD-only gain improves aggregate
+development WER but has condition-specific regressions. Actual emulator recovery
+still hallucinates on weak varying input. The pinned engine's nearly uniform
+no-speech values are being investigated in a separate research build; they must
+not be treated as calibrated evidence for rejection. Production framing/models
+remain unchanged, apart from a proven exact-constant PCM fast path.
+
+
 The frozen held-out screen gives small/auto 69/847 word errors versus E0's
 139/847, but English worsens by one word and cold host cost increases. It does
 not pass the all-language or phone gates, so the app default is unchanged.
@@ -79,7 +89,10 @@ updated model will exceed the reservation, stop and reduce the experiment set.
 
 The original prospective allocation below is retained for context, not as
 authorization to exceed the ceiling. The current conservative ledger reserves
-**645,592,677 bytes**, including metadata, repeated probes, four checkpoint CI model/fixture reservations. Selected archive prefixes total 38,797,312 bytes; the separate 1,048,576-byte
+**879,645,181 bytes**, including the unchanged 645,592,677-byte prior checkpoint
+and a 61,000,000-byte reserve for one future publication CI run. The remaining
+allowance is **120,354,819 bytes**. The older corpus figures below describe the
+previous cloud study, not an additional allocation. Selected archive prefixes total 38,797,312 bytes; the separate 1,048,576-byte
 exploratory prefix is also charged. Complete corpus shards were never fetched. The larger corpus overhead means the 639 MB Qwen Q8 artifact
 no longer fits the remaining budget. E5 is deferred; no correction model was
 downloaded. Carry the ledger forward across environments and count future CI

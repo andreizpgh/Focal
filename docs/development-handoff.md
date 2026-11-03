@@ -61,34 +61,42 @@ evidence supports a replacement.
 
 ## Verified state and evidence
 
-The [quality report](quality-report.md) separates current checks from earlier UI
-runs. Current core tests: **34 passed**. Debug/test APKs, debug/release lint and
-release R8 compilation pass. All five mandatory real-weight JNI/workflow tests pass on the CI emulator,
-including speech decode and activity-independent capture. The owner's accelerated
-local emulator and physical-phone checks remain separate gates.
-The latest source/test checkpoint is `1df8060`: [CI 41538859249](https://github.com/andreizpgh/Focal/actions/runs/41538859249)
-completed 76 Android tests, with **75 passed, one failed, zero skips**. The single
-open failure is rejected-input warning visibility after activity recreation;
-the valid draft is retained, but the warning stays offscreen through a bounded
-wait. The Save assertion later in that test is not reached. Keep this gate open;
-use the focused reproduction in the local QA guide and inspect the actual viewport
-before another fix. Search, scroll restoration and Save & next now pass.
+Production source is `ff8ea8d` (including `a5e460d` constant-PCM protection and
+`12e958c` editor feedback); host dependency setup is `e0a9c78`.
+The owner's dedicated KVM-accelerated API 35 x86_64 AVD passed **80 Android tests,
+zero failures/skips**, all eight mandatory real-model checks, 34 core tests,
+debug/release lint and debug/test/unsigned release builds. The Python suite passes
+146 tests, also in a clean environment with pinned NumPy. See the
+[quality report](quality-report.md) and exact [emulator evidence](benchmarks/2026-11-03-local/emulator-qa.json)
+for hashes and the dirty-source fingerprints recorded before commits.
 
-All **109 host-tool tests pass**, covering fetch bounds, provenance, paired metrics, gate/
-transcript replay tooling, probe validation and fail-closed test summaries.
+The editor failure is fixed: input-connection replay of the accepted draft cleared
+rejection feedback during recreation. It was not an offscreen warning. The original
+assertions remain; real keyboard paste/rotation and Save & next passed. Manual QA
+also fixed a stale microphone permission notice after a successful grant.
 
-Six focused reviewers examined Android/runtime, STT, capture/recovery,
-storage/privacy, playback/state and UX/accessibility. Confirmed findings were
-fixed, regression-tested and independently re-reviewed. Current changes include
-process-wide capture/recovery/delete/playback ownership, route-change pause,
-complete model validation before native opening, bounded long-passage access,
-preserved search/review state and bounded context/overlap processing. Refer to
-[architecture](architecture.md) for exact constraints and resource bounds.
+A 2:32:37 capture survived task swipe and roughly 149 minutes screen off. The first
+30-minute memory series stayed bounded; pause/resume, Finish, playback position,
+seek, Unicode edit/copy/share, large drafts and legacy paging were observed. This
+AVD has no host audio: actual microphone/sound and phone resource claims remain open.
 
-Native screenshots in [interface preview](interface-preview.md) are unretouched
-captures with synthetic notes from earlier verified revisions. Preserve the
-private gallery audience and approved brand assets. Screenshot history is not
-proof that new behavioral changes have completed runtime QA.
+**Current manual failure:** recovery sends weak varying emulator noise to ASR and
+can invent text. Exact constant zero/DC now skips inference and preserves original
+audio/manual edits, with 126 native language/duration/context combinations and a
+real recovery regression. Actual `-no-audio` input varies by small PCM units, so the
+constant fix alone does not resolve the observed recovery failure. Do not describe
+all manual QA as passing.
+
+The current engine's `noSpeech` is nearly uniform for speech and noise. Source
+inspection identifies an unrequested/wrong initial logits row. A minimal SOT-row
+fix is being researched in an ignored source snapshot, with independent review;
+no submodule or shipped engine change has been made. Validate it on paired speech
+and noise before any threshold or engine adoption.
+
+Focused independent reviews covered capture/recovery, storage/privacy, JNI,
+playback/state, UX and evidence tooling. Source reviews are separate from runtime
+checks. Earlier native screenshots in [interface preview](interface-preview.md)
+remain honest captures of their recorded revisions, not proof of unexecuted checks.
 
 ## Reproducible speech evaluation
 
@@ -104,6 +112,15 @@ The source IDs, derived-audio/reference hashes, aggregate results and frozen
 held-out plan are in [the benchmark directory](benchmarks/2026-11-03-stt/report.md).
 Audio, references, hypotheses and raw logs stay in ignored local output.
 
+The [local continuation](benchmarks/2026-11-03-local/report.md) adds 42 fresh dev
+clips and 42 unconsumed test clips, excluding previously consumed IDs/PCM/reference
+hashes. One repeated Italian test reference was replaced from cached data before
+scoring. Simple lower energy thresholds were rejected for noise and normal-speech
+regressions. Offline Silero with VAD-only causal gain and existing text context
+reduces dev errors from 207/303 to 136/178 for normal/quiet input, but individual
+conditions regress. The same recordings at two gains are correlated. Fresh held-out
+preparation/scoring remains postponed while the engine confidence defect is checked.
+
 Speaker IDs are absent and dev/test speaker independence is unverified. This
 small read-speech screen cannot establish release quality, calibrated confidence,
 critical-error precision or Russian spontaneous-dictation performance. Preserve
@@ -111,8 +128,9 @@ these limitations when comparing models; do not turn a fast host run or aggregat
 WER gain into an all-language Android claim.
 
 The shared ceiling remains **1,000,000,000 downloaded bytes including retries**.
-Current conservative reservation: **645,592,677 bytes**, including four checkpoint CI
-model/fixture reservations. Carry the public budget snapshot forward if the private
+Current conservative reservation: **879,645,181 bytes**, including a
+61,000,000-byte reserve for one future publication CI run; **120,354,819 bytes**
+remain. The old 645,592,677-byte reservation prefix is preserved. Carry the public budget snapshot forward if the private
 ledger is unavailable; never reset the budget to zero in a fresh environment.
 The 639 MB Qwen artifact no longer fits the remainder. No LLM was downloaded.
 CI model downloads also count; use Actions for bounded checkpoints, and the
@@ -133,17 +151,18 @@ full history for secrets before pushing; never publish raw recordings/transcript
 model weights, local configuration or signing material.
 
 The local QA runner requires an explicit dedicated emulator serial, verifies the
-model actually installed in app storage, checks all expected tests and all five
+model actually installed in app storage, checks all expected tests and all eight
 real-model checks, fails on skips, restores animation settings and saves private
 reports. It never uninstalls or wipes app data. Its host tests/source review are
 not substitutes for running it on the owner's accelerated emulator.
 
 ## Remaining sequence
 
-1. Reproduce and fix `oversizedEditorInputKeepsTheValidDraftThroughRotation` on
-   the owner's accelerated emulator, inspecting the dialog/IME/scroll geometry.
-   Then pass the complete suite with real model weights and no skipped tests.
-   Include the long-session manual matrix and actual TalkBack/audio-route checks.
+1. Resolve the observed recovery hallucinations on weak varying noise. Investigate
+   the no-speech logits defect with the pinned source plus an explicit, reviewed
+   research patch; retain the original engine for paired comparison. Do not hide
+   the failure behind a broad amplitude cutoff. Repeat the actual manual recovery
+   path and complete local suite after any production fix.
 2. Address the measured quiet-speech/gate quality gap before another broad model
    search: matched quiet full intervals have 84/490 errors versus current gated
    172/490; bypassing the gate hallucinated 87 Russian words on a 30-second seeded

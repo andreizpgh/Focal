@@ -103,7 +103,9 @@ the boundary cannot be split reliably without word alignment: possible repetitio
 remains visible with a review cue. Missing new-audio output receives a reviewable
 empty passage. Native handles retain shared ownership through cancellation and
 close; cancelled partial output cannot mark a chunk complete. Per-segment token probabilities and the
-decoder's no-speech estimate produce review cues. These are not calibrated error
+decoder's no-speech estimate produce review cues. The pinned engine's no-speech
+value is currently under investigation because its initial logits row is not
+requested; do not use it as a calibrated rejection rule. These are not calibrated error
 probabilities; confident errors and omissions can remain unmarked. Overlap
 comparison retains at most twelve word references on each side and refuses to use
 a token longer than 4,096 characters as evidence for deleting words. A NUL in a

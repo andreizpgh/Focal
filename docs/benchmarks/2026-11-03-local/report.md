@@ -1,0 +1,342 @@
+# Fresh continuous-speech development checkpoint · 2026-11-03
+
+The conditioned Silero candidate reduces combined normal/quiet development word
+errors in all seven languages, but **does not pass every language/condition**:
+normal Russian, German and Portuguese and quiet Italian still regress. It is
+host-only research, not an enabled Android change. The lower RMS threshold is
+**rejected** because of normal-speech and synthetic-noise regressions.
+
+The production SpeechGate and multilingual base Q5_1, beam 3, full-context decoder
+remain unchanged. Automatic correction remains disabled. The refined fresh
+held-out cohort is **unconsumed**. No candidate has been frozen for it: a newly
+confirmed no-speech logit-selection problem requires separate engine research
+before a defensible decision. This checkpoint does not establish an all-language
+product improvement or complete application finalization.
+
+## Data and comparison
+
+FLEURS, Conneau et al. (2022), Google, CC-BY-4.0, revision
+70bb2e84b976b7e960aa89f1c648e09c59f894dd supplies en_us, ru_ru, de_de,
+fr_fr, es_419, it_it and pt_br. [Corpus provenance](corpus-provenance.json)
+contains public IDs, hashes, attribution and selection metadata, with no audio
+or reference text. [Machine-readable aggregates](aggregates.json) retain
+counts and the exact report, executable, library, model, compiler, class,
+source and configuration identities.
+
+The fresh cohort contains six official development clips per language:
+**42 clips, 437.54 seconds, 864 reference words and 4,349 lexical characters**.
+The original 56 previously consumed IDs and canonical PCM16 hashes were
+excluded before selection. A hash-only audit then found one Italian test
+reference identical to a previously consumed reference. That clip was replaced
+in archive order using the existing cache, with **zero additional downloaded
+bytes**. The refined cohort has the same 42 development clips and 42 test
+clips, totaling 482.42 test seconds. Its IDs, canonical PCM16 hashes and exact
+reference hashes are disjoint from the old cohort; its dev/test raw PCM hashes
+are also disjoint. No test references, audio or recognition outputs were
+inspected for this comparison. Exact hash disjointness does not establish
+semantic or speaker independence.
+
+Selection takes the first complete 1–30 second WAVs in archive order after
+exclusions, without ASR-based selection. These are small, non-random read-speech
+subsets with no exposed speaker IDs. Results do not estimate population
+accuracy; no speaker bootstrap or confidence interval is claimed.
+
+Each language's six development clips forms a continuous PCM16 mono 16 kHz
+stream with 2 seconds of leading silence, 1.2-second gaps and 2 seconds of
+trailing silence. Normal gain 1.0 and quiet gain 0.1 reuse the **same source
+clips**. They are correlated transformations, not 84 independent recordings.
+Each gain has seven language streams totaling 507.54 seconds including inserted
+silence. The prepared gain 0.03 condition has gate-only evidence and no ASR
+comparison here. Scoring joins committed passages and source references with
+one space and uses the unchanged NFC/casefold lexical WER/CER definitions.
+
+The baseline replays the actual production Kotlin SpeechGate and Transcript.
+The lower-threshold candidate changes only minimum RMS from 0.002 to 0.0008 in
+a private snapshot; initial adaptive floor remains 0.0007. Trusted-context,
+review and overlap reconciliation use the same Kotlin implementation. Both
+use base Q5_1, beam 3, full encoder context, explicit language, four CPU decoder
+threads and the same pinned whisper.cpp checkout
+4979e04f5dcaccb36057e059bbaed8a2f5288315. The measured executable/library hashes
+identify the binaries; the checkout hash alone does not prove their build
+origin. [The gated evaluation documentation](../../gated-stream-evaluation.md)
+describes the replay and validation boundaries.
+
+## Lower-threshold comparison: normal speech
+
+| Language | Baseline WER errors/words (%) | Candidate WER errors/words (%) | Baseline lexical CER errors/chars (%) | Candidate lexical CER errors/chars (%) |
+| --- | ---: | ---: | ---: | ---: |
+| en | 54/88 (61.36) | 16/88 (18.18) | 207/428 (48.36) | 49/428 (11.45) |
+| ru | 28/105 (26.67) | 30/105 (28.57) | 51/587 (8.69) | 89/587 (15.16) |
+| de | 12/122 (9.84) | 16/122 (13.11) | 15/736 (2.04) | 27/736 (3.67) |
+| fr | 30/128 (23.44) | 72/128 (56.25) | 74/575 (12.87) | 186/575 (32.35) |
+| es | 32/177 (18.08) | 25/177 (14.12) | 73/853 (8.56) | 45/853 (5.28) |
+| it | 40/126 (31.75) | 54/126 (42.86) | 93/616 (15.10) | 135/616 (21.92) |
+| pt | 11/118 (9.32) | 12/118 (10.17) | 32/554 (5.78) | 37/554 (6.68) |
+| All | 207/864 (23.96) | 225/864 (26.04) | 545/4349 (12.53) | 568/4349 (13.06) |
+
+## Lower-threshold comparison: quiet speech
+
+| Language | Baseline WER errors/words (%) | Candidate WER errors/words (%) | Baseline lexical CER errors/chars (%) | Candidate lexical CER errors/chars (%) |
+| --- | ---: | ---: | ---: | ---: |
+| en | 70/88 (79.55) | 62/88 (70.45) | 290/428 (67.76) | 277/428 (64.72) |
+| ru | 50/105 (47.62) | 29/105 (27.62) | 147/587 (25.04) | 59/587 (10.05) |
+| de | 45/122 (36.89) | 19/122 (15.57) | 199/736 (27.04) | 36/736 (4.89) |
+| fr | 43/128 (33.59) | 37/128 (28.91) | 113/575 (19.65) | 87/575 (15.13) |
+| es | 48/177 (27.12) | 17/177 (9.60) | 115/853 (13.48) | 16/853 (1.88) |
+| it | 30/126 (23.81) | 28/126 (22.22) | 50/616 (8.12) | 49/616 (7.95) |
+| pt | 17/118 (14.41) | 11/118 (9.32) | 48/554 (8.66) | 35/554 (6.32) |
+| All | 303/864 (35.07) | 203/864 (23.50) | 962/4349 (22.12) | 559/4349 (12.85) |
+
+Normal speech worsens from 207 to 225 word errors, including regressions in
+Russian, German, French, Italian and Portuguese. Quiet speech improves from
+303 to 203 word errors, with lower WER and lexical CER in all seven languages.
+That useful development signal does not cancel normal-speech or noise
+regressions. Different boundaries also change decoder context, so more source
+coverage need not improve transcription.
+
+## Gate coverage and robustness
+
+Coverage is intersection with whole source-clip intervals, including their
+internal and edge silence. It is **not phoneme recall or word accuracy**.
+The denominator is 7,000,640 source samples, or 437.54 seconds, for every row.
+
+| Gain | Baseline source-clip coverage | Candidate coverage | Clips with no candidate audio, baseline → candidate | Candidate ranges, baseline → candidate |
+| --- | ---: | ---: | ---: | ---: |
+| 1.0 | 85.27% | 95.13% | 2/42 → 0/42 | 58 → 58 |
+| 0.1 | 75.13% | 81.18% | 4/42 → 4/42 | 71 → 55 |
+| 0.03, no ASR | 45.62% | 72.29% | 12/42 → 6/42 | 76 → 72 |
+
+An additional gate-only snapshot lowers both minimum RMS to 0.0008 and initial
+floor to 0.0002. It produces identical coverage summaries after the fixed
+2-second silence. Immediate-start controls expose the startup difference:
+220 Hz tones at PCM16 amplitudes 40 and 64 are retained immediately only by
+the lower-floor snapshot; after 2 seconds of silence both candidate snapshots
+retain them. A synthetic tone is not a human speech-quality test.
+
+The expanded frozen-class suite uses 29 deterministic synthetic streams,
+including **18 pure zero/DC/noise cases** and 11 tone/onset/transition cases.
+Noise is seeded uniform integer PCM16, including ±32, ±48, ±64, ±96 and ±128,
+with immediate and delayed starts, repeated seeds and level transitions.
+The complete synthetic definitions, hashes and aggregate results are published
+in the JSON. No speech corpus or ASR decoder is used in these controls.
+
+| Gate | Activated pure no-speech cases | Candidate ranges | Candidate audio seconds including repeated overlap |
+| --- | ---: | ---: | ---: |
+| Production baseline | 2/18 | 4 | 61.48 |
+| Lower threshold | 7/18 | 14 | 216.38 |
+| Lower threshold and initial floor | 13/18 | 25 | 379.12 |
+| Silero host-only offline candidate | 0/18 | 0 | 0 |
+
+These seconds describe retained audio, not runtime. After 2 seconds of zeros,
+stationary ±48/±64/±96 noise opens both threshold candidates while baseline
+stays closed; the ±64 result repeats across three seeds. Following an active
+tone, those noise levels retain the full 30-second tail in both candidates,
+versus 0.6 seconds in baseline. Baseline also activates on ±128 noise, so the
+controls do not establish that the current gate is generally noise-robust.
+
+The three original 30-second zero/DC/±32-noise controls produce no ranges and
+no ASR calls for either decoded variant. Their apparent success misses the
+expanded-suite regression. Gate activation is not hallucination measurement:
+there is no decoder output on the expanded controls, and a closed gate cannot
+establish the decoder's behavior on noise it was never given.
+
+## Completed host-only Silero development comparison
+
+Three complete runs use the same original stream PCM hashes, ASR model and
+executable/library fingerprints as the baseline. The JSON retains each report,
+plan, policy, source, compiler and binary identity plus original/conditioned PCM
+and bounded-range hashes. The decoder remains base Q5_1, beam 3, full acoustic
+context and four threads; trusted text context is the explicit ablation below.
+
+Silero 5.1.2 runs CPU-only with threshold 0.5, minimum speech 250 ms, minimum
+silence 600 ms, maximum native speech duration 15 seconds, padding 500 ms and one
+VAD thread. Native ranges are unioned and bounded to 16 seconds with 0.5-second
+overlap before ASR because native merging can exceed its configured maximum.
+See [VAD stream evaluation](../../vad-stream-evaluation.md).
+
+- **None/on:** original PCM enters VAD; trusted ASR context is on.
+- **Cap30/on:** only VAD input receives causal RMS conditioning, with context on.
+- **Cap30/off:** identical conditioned VAD PCM and identical selected ranges,
+  with trusted ASR context off.
+
+Conditioning uses 512-sample frames, target RMS 0.03, gain limited to 1–30 and a
+0.5-second peak-envelope release. State resets at each source stream; partial
+frames use their actual length. **ASR always receives the unchanged prepared
+source PCM**, not the amplified VAD input. This tests activation/framing, not
+amplification of the recognizer's audio. These offline whole-stream experiments
+do not implement or measure a bounded Android worker.
+
+| Complete variant | Normal WER | Quiet WER | Normal lexical CER | Quiet lexical CER |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 207/864 (23.96%) | 303/864 (35.07%) | 545/4349 (12.53%) | 962/4349 (22.12%) |
+| None/on | 165/864 (19.10%) | 224/864 (25.93%) | 382/4349 (8.78%) | 582/4349 (13.38%) |
+| Cap30/on | 136/864 (15.74%) | 178/864 (20.60%) | 255/4349 (5.86%) | 352/4349 (8.09%) |
+| Cap30/off | 138/864 (15.97%) | 179/864 (20.72%) | 261/4349 (6.00%) | 348/4349 (8.00%) |
+
+Each cell below gives **word errors/reference words; lexical character
+errors/reference characters**. Counts are per language stream, built from six
+development clips.
+
+### Normal speech counts
+
+| Language | Baseline | None/on | Cap30/on | Cap30/off |
+| --- | ---: | ---: | ---: | ---: |
+| en | 54/88; 207/428 | 37/88; 145/428 | 10/88; 27/428 | 12/88; 33/428 |
+| ru | 28/105; 51/587 | 30/105; 59/587 | 30/105; 54/587 | 27/105; 48/587 |
+| de | 12/122; 15/736 | 14/122; 24/736 | 13/122; 21/736 | 12/122; 20/736 |
+| fr | 30/128; 74/575 | 27/128; 54/575 | 27/128; 54/575 | 27/128; 61/575 |
+| es | 32/177; 73/853 | 16/177; 12/853 | 15/177; 14/853 | 15/177; 14/853 |
+| it | 40/126; 93/616 | 30/126; 52/616 | 29/126; 49/616 | 31/126; 47/616 |
+| pt | 11/118; 32/554 | 11/118; 36/554 | 12/118; 36/554 | 14/118; 38/554 |
+
+### Quiet speech counts
+
+| Language | Baseline | None/on | Cap30/on | Cap30/off |
+| --- | ---: | ---: | ---: | ---: |
+| en | 70/88; 290/428 | 62/88; 277/428 | 26/88; 66/428 | 29/88; 71/428 |
+| ru | 50/105; 147/587 | 35/105; 61/587 | 37/105; 62/587 | 35/105; 64/587 |
+| de | 45/122; 199/736 | 30/122; 64/736 | 18/122; 26/736 | 19/122; 28/736 |
+| fr | 43/128; 113/575 | 36/128; 75/575 | 37/128; 94/575 | 33/128; 75/575 |
+| es | 48/177; 115/853 | 17/177; 17/853 | 13/177; 15/853 | 13/177; 16/853 |
+| it | 30/126; 50/616 | 30/126; 47/616 | 36/126; 53/616 | 36/126; 52/616 |
+| pt | 17/118; 48/554 | 14/118; 41/554 | 11/118; 36/554 | 14/118; 42/554 |
+
+Cap30/on combines to 314 word errors versus baseline 510 across the two gains.
+Per-language combined word errors are en 124 → 36, ru 78 → 67, de 57 → 31,
+fr 73 → 64, es 80 → 28, it 70 → 65 and pt 28 → 23. Those sums reuse each source
+utterance twice; they are correlated development observations, not additional
+independent speech evidence.
+
+The unresolved condition regressions remain material. Normal Russian worsens
+28 → 30 word errors, German 12 → 13 and Portuguese 11 → 12; quiet Italian
+worsens 30 → 36. Lexical CER also worsens in those four cells. Turning context
+off changes the tradeoffs rather than producing a uniformly better policy:
+normal word errors become 138 and quiet errors 179. No language-specific
+switch or automatic correction is selected from these results.
+
+### VAD coverage and controls
+
+Coverage still measures whole source-clip intervals including silence, not
+spoken-word or phoneme recall. Each speech row has 42 clips and the same
+7,000,640 source-sample denominator. Context on/off has identical cap30 coverage.
+
+| VAD input | Gain | Source-clip coverage | Clips without candidate audio | ASR ranges |
+| --- | ---: | ---: | ---: | ---: |
+| None | 1.0 | 83.03% | 1/42 | 43 |
+| None | 0.1 | 80.02% | 4/42 | 42 |
+| Cap30 | 1.0 | 85.59% | 0/42 | 44 |
+| Cap30 | 0.1 | 85.31% | 0/42 | 44 |
+
+All three completed variants emitted no ranges and made no ASR calls on the
+three original 30-second zero/DC/seeded-noise controls. Separately, unconditioned
+Silero produced zero ranges on all 29 expanded synthetic streams, including the
+18 pure no-speech cases. A separate development-only conditioner screen also
+returned zero ranges on the same 29 cases with cap30; its own plan/report/summary
+hashes and settings are retained in the JSON. That screen did not run ASR. The
+completed speech comparisons themselves include only the three original controls.
+Zero activation on these controls does not establish real-room robustness or
+retention of quiet speech at every boundary.
+
+## Confidence diagnostic and held-out status
+
+Two short emulator-input captures contained varying PCM16 values −8…7 with
+normalized RMS about 0.000124, despite host audio being disabled. Their English
+and Russian host decodes each produced one segment. Both unconditioned and
+cap30 Silero selected zero ranges on these two inputs. This limited diagnostic
+does not validate recovery filtering on all seven languages or real-room noise.
+
+The existing engine's no-speech values were about 0.0000193 on both noise and
+most examined development outputs. Source review confirmed the cause: prompt
+preparation requests only the final token's logits, but no-speech softmax reads
+the first block. Fresh contexts therefore use approximately uniform zero-logit
+probabilities (1/51,865); later calls can read stale rows. The official Whisper
+implementation instead uses the actual start-of-transcript token before final-token
+sampling. [OpenAI implementation](https://github.com/openai/whisper/blob/0b1ba3d46ebf7fe6f953acfd8cad62a4f851b49f/whisper/decoding.py#L529-L534).
+
+Token confidence alone also overlaps: the largest noise-segment geometric mean
+was 0.4844, and 19/142 baseline, 11/138 lower-threshold, 3/114 none/on and 5/122
+cap30/on development segments were at or below it. These are correlated,
+unadjudicated segment outputs; this is evidence against treating that exploratory
+cutoff as a calibrated rejection rule, not a critical-error precision estimate.
+
+The engine finding does not invalidate the recorded text/error counts, but it
+blocks interpreting the current no-speech field as reliable acoustic evidence.
+An independently reviewed SOT-logit patch exists only in an isolated research
+snapshot; its paired quality and resource checks are pending. The production
+engine/submodule is unchanged. No candidate freeze, held-out preparation,
+reference inspection or scoring has been performed on the refined test cohort.
+
+## Execution and resource scope
+
+The initial baseline process terminated with SIGTERM/exit 143 during the German
+portion; the cause is unverified. It produced no completed report, and all its
+partial outputs are excluded. A clean full baseline repeat and a subsequent
+full lower-threshold run completed. The first cap30/context-on process also
+terminated with exit 143 before producing a completed report; its cause is
+unverified and all partial outputs are excluded. A detached full repeat completed,
+as did the default Silero and cap30/context-off runs. Only complete reports enter
+the recognition tables above.
+
+| Complete run | Normal cold probe seconds | Quiet cold probe seconds | ASR calls, normal + quiet |
+| --- | ---: | ---: | ---: |
+| Baseline | 199.13 | 234.52 | 58 + 71 = 129 |
+| Lower threshold | 206.59 | 188.12 | 58 + 55 = 113 |
+
+Silero adds separate VAD and conditioning costs. Values below cover the seven
+speech streams in each condition; control costs remain in the JSON.
+
+| Complete VAD run | Condition | Cold ASR seconds | Cold VAD seconds | Conditioning seconds | ASR calls |
+| --- | --- | ---: | ---: | ---: | ---: |
+| None/on | normal | 153.21 | 2.207 | — | 43 |
+| None/on | quiet | 149.19 | 2.257 | — | 42 |
+| Cap30/on | normal | 199.62 | 3.576 | 0.834 | 44 |
+| Cap30/on | quiet | 185.82 | 3.425 | 0.799 | 44 |
+| Cap30/off | normal | 168.22 | 2.208 | 0.517 | 44 |
+| Cap30/off | quiet | 168.08 | 2.458 | 0.543 | 44 |
+
+The none variant has no conditioning step. VAD wall time includes its cold
+process/model work; conditioning is measured separately. No combined phone
+latency is inferred.
+
+Each call starts a cold host process and loads the model. Probe totals exclude
+Kotlin/helper I/O, capture and queueing. These are not randomized repeated
+trials. Some host work overlapped Android build/QA, and contention was not
+experimentally controlled; the timings must not be used to rank candidate speed.
+Different gates change both audio and call counts. These descriptive costs do not
+establish a phone latency, memory, battery, thermal or background-reliability
+improvement. No bounded Android VAD worker or phone resource gate is measured.
+
+## Download budget audit
+
+The existing [public budget snapshot](../2026-11-03-stt/download-budget.json)
+matches all 193 private ledger reservations. The original checkpoint's
+645,592,677-byte reservation prefix is unchanged. The private ledger's cached
+total was corrected to equal its entries; no reservation was added or changed
+by this audit and no download was performed.
+
+| Reservation category added after checkpoint | Bytes |
+| --- | ---: |
+| Local baseline model | 59,707,625 |
+| Future CI model and fixtures | 61,000,000 |
+| Metadata | 16,777,216 |
+| Corpus prefixes | 95,682,564 |
+| VAD model, conservative reservation | 885,099 |
+| Total added | 234,052,504 |
+
+Total reservations are **879,645,181 / 1,000,000,000 bytes**, leaving
+**120,354,819 bytes**. This includes the 61,000,000-byte future CI reserve and
+conservative metadata/retry limits; it is not a count of actual transferred
+bytes. The Italian held-out refinement reused cached data and adds zero bytes.
+
+## Remaining evidence
+
+The lower-threshold candidate fails both development condition and noise criteria.
+Conditioned Silero has a useful completed development signal, but still fails
+several language/condition comparisons. A meaningful no-speech estimate and any
+recovery-presence filter need separate paired development evidence before freezing
+another policy. The refined held-out cohort remains unconsumed.
+
+Broader spontaneous and real-room speech, critical names/numbers/negation
+assessment, independent speakers and phone resource checks remain unconfirmed.
+No production VAD integration, model change, automatic correction or all-language
+product-quality improvement is established by this host checkpoint.
