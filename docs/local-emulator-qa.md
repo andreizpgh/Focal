@@ -134,26 +134,34 @@ are restored, reconnect it and restore each value from the manifest with
 `adb -s SERIAL shell settings put global KEY VALUE`; use
 `adb -s SERIAL shell settings delete global KEY` for an original `null` value.
 
-## Verified local checkpoint · 2026-11-03
+## Verified local checkpoints · 2026-11-03–04
 
-Three complete `qa-local.py --release-checks` runs passed:
+Four complete `qa-local.py --release-checks` runs passed:
 
 | App source checkpoint | Android tests | Failures / skips | Mandatory real-model tests | Instrumentation time |
 | --- | ---: | ---: | ---: | ---: |
 | `12e958c`, editor fix and subsequent long-session manual checks | 77 | 0 / 0 | 5 | 116.109 s |
 | `ff8ea8d`, exact-constant PCM and microphone-notice fixes | 80 | 0 / 0 | 8 | 178.355 s |
 | Clean HEAD `129ee02`, Unicode title and rename-focus fixes | 82 | 0 / 0 | 8 | 180.543 s |
+| Clean HEAD `b59c6ee`, scrollable Rename and search lifecycle/layout fixes | 84 | 0 / 0 | 8 | 144.224 s |
 
 The latest run verified **36 core tests**, debug and release lint, and debug,
-instrumentation and unsigned release/R8 builds at clean HEAD `129ee02`. The
-**146 Python host-tool tests** passed separately in an earlier clean virtual
-environment; they are not part of this runner's build or its new test count.
+instrumentation and unsigned release/R8 builds at clean HEAD `b59c6ee`. The
+**146 Python host-tool tests** passed separately again in the existing hash-pinned
+virtual environment; they are not part of this runner's build or its test count.
 The first two runs recorded dirty working trees at HEAD `388aee0` and `c21ae20`,
 respectively, with 34 core tests; their tested app changes were subsequently
 committed through the checkpoints above. These earlier source mappings are not
 claims of clean-HEAD runs. The [public aggregate](benchmarks/2026-11-03-local/emulator-qa.json)
-retains all three runner source fingerprints and APK identities. Raw logs and
+retains all four runner source fingerprints and APK identities. Raw logs and
 device identifiers are not published.
+
+The 2026-11-04 run limited host work to four logical CPUs, two Gradle workers and
+sequential project execution, with reduced CPU priority. Its debug APK is
+`1ce2ee6c355310d6c42b24cf74da11f993831452ef55d16b1d54a6e46cf990f0`.
+Both debug and unsigned release APKs contain the verified base model without
+Silero assets; neither merged manifest requests Internet permission. Durations
+above are verification workload timings, not comparative app or phone performance.
 
 The previously failing
 `InterfaceTest.oversizedEditorInputKeepsTheValidDraftThroughRotation` was

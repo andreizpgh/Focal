@@ -1,7 +1,8 @@
-# Product verification · 2026-11-03
+# Product verification · 2026-11-04
 
 The Sessions / Focus wave direction is preserved. The latest production source
-checkpoint is `129ee02`, including Unicode title handling in `6872bb4`; host
+checkpoint is `b59c6ee`, including search lifecycle/layout fixes and the Rename
+form fix in `d8df58e`, following the earlier Unicode/title corrections; host
 dependency setup is `e0a9c78`. This is a development checkpoint, not a finished
 product or verified distribution release. The public
 alpha APK is unchanged. Quiet/noisy speech, physical-phone resources and stable
@@ -12,20 +13,21 @@ signing remain open gates.
 | Area | Evidence and scope |
 | --- | --- |
 | Core logic | 36 JVM tests pass |
-| Host tooling | 146 tests passed in a separate earlier clean virtual environment with hash-pinned NumPy 2.4.6; not part of the latest QA runner invocation |
+| Host tooling | 146 tests passed again in the existing hash-pinned NumPy 2.4.6 environment; run separately from the Android QA runner |
 | Build | Debug/test APKs, debug/release lint and unsigned release R8 build pass |
-| Whole Android suite | Clean HEAD `129ee02`, dedicated API 35 x86_64 AVD with KVM: **82 tests passed, zero failures/skips**, 180.543 seconds |
+| Whole Android suite | Clean HEAD `b59c6ee`, dedicated API 35 x86_64 AVD with KVM: **84 tests passed, zero failures/skips**, 144.224 seconds |
 | Real-model checks | All eight mandatory JNI/workflow checks pass, including quiet public speech and constant-audio recovery |
-| Manual UI | Earlier paste/rotation, Save & next, Russian edit/copy/share, 200% text, dark mode and legacy paging; later Unicode title boundaries and rename-dialog rotation checked separately |
+| Manual UI | Earlier paste/rotation, Save & next, Russian edit/copy/share, 200% text, dark mode and legacy paging; later Rename, search caret/rotation and Back → Home → Focal checked separately |
 | Long capture | 2:32:37 retained audio; task swipe and about 149 minutes screen off survived; a separate 30-minute memory series stayed 177,118–179,802 KiB PSS |
 | Speech research | Fresh development comparisons cover all seven languages; [results and limitations](benchmarks/2026-11-03-local/report.md) retain negative variants and an unconsumed held-out cohort |
 
 The [local QA report](benchmarks/2026-11-03-local/emulator-qa.json) records exact
-APK/model hashes and all three full-suite checkpoints. The latest runner recorded
-clean HEAD `129ee02`. The earlier 77- and 80-test runs retain their dirty-source
+APK/model hashes and all four full-suite checkpoints. The latest runner recorded
+clean HEAD `b59c6ee`; the earlier clean 82-test checkpoint remains in the record.
+The earlier 77- and 80-test runs retain their dirty-source
 fingerprints and later commit mappings; they are not relabeled as clean-HEAD runs.
 Debug APK SHA-256:
-`4d6cc4dade4d326e760d20005248ada12314d4983cdbfdf5681379cd67b785f7`.
+`1ce2ee6c355310d6c42b24cf74da11f993831452ef55d16b1d54a6e46cf990f0`.
 No APK has been published as a replacement release.
 
 Local verification has not triggered another Actions run while the separate
@@ -108,9 +110,10 @@ Manual checking on 2026-11-04 at 200% system font confirmed the whole field abov
 the landscape IME, exact continued typing through portrait/landscape/portrait,
 and a hidden keyboard after Back → Home → Focal. The exact debug APK is
 `1ce2ee6c355310d6c42b24cf74da11f993831452ef55d16b1d54a6e46cf990f0`;
-it contains the verified base model and no Silero asset. Core tests and debug
-lint/build pass; a new complete production run is still pending at this focused
-checkpoint. The earlier six-test candidate run at global font 2.0 retains its
+it contains the verified base model and no Silero asset. The subsequent clean
+84-test production run used this same APK and passed the complete release checks.
+Both merged manifests lack Internet permission. The earlier six-test candidate
+run at global font 2.0 retains its
 Rename failure: saved title/text were correct and scrolling exposed the passage,
 but its final immediate-node wait assumed the ordinary viewport. No assertions
 were weakened to turn that failed run into a pass. Physical/mixed hardware
@@ -172,7 +175,7 @@ individual fixes were removed and passed after restoration. Manual English and
 Russian force-stop recovery retained the original varying emulator PCM and showed
 an uncertain empty passage rather than invented text. These are diagnostic
 candidate results, not a clean full-suite checkpoint or an accepted STT policy.
-The verified production checkpoint remains `129ee02`.
+The clean full-suite checkpoint is now `b59c6ee`, with that candidate removed.
 
 Fixed-prefix diagnostics now reproduce the warm decoder's call-history dependency
 and isolate decoder-zero RNG carry on one ES DEV prefix. The pinned beam sampler

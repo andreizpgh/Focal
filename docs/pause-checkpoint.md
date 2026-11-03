@@ -4,7 +4,11 @@ The owner explicitly resumed work on 2026-11-04. The text below preserves the
 historical pause state. On resumption all saved source hashes matched; the
 rejected Android VAD candidate was archived and removed from the working tree,
 including its packaged assets, while the independent search fixes were retained.
-Final UI and full-suite verification are in progress.
+Search verification and the clean `b59c6ee` full suite subsequently passed:
+84 Android tests, eight mandatory model checks, 36 core tests and release builds.
+The previously pending greedy postrun review also completed; its candidate
+remains rejected. See the current quality/benchmark reports for verified scope.
+The dedicated AVD was stopped again after QA to free resources for research.
 
 The owner explicitly paused work to free the laptop. Do not resume builds,
 emulator, inference or agent work until the owner asks to continue. This is an

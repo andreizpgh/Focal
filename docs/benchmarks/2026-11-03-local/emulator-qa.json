@@ -41,6 +41,27 @@
       "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
       "installed_model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
       "source_mapping": "Clean-HEAD run of the committed app and tests"
+    },
+    "clean_search_and_rename_build": {
+      "app_source_checkpoint_commit": "b59c6eea16ef627d3ef524bfe6cc6f4e70b174a4",
+      "debug_apk_sha256": "1ce2ee6c355310d6c42b24cf74da11f993831452ef55d16b1d54a6e46cf990f0",
+      "test_apk_sha256": "69c10021b4976446945541ef8bb1e067b65568e97cfdaf1c60888a6c7b5781b9",
+      "unsigned_release_apk_sha256": "dc7899656440ccfea47e220ef98226acfb3f87855c90f3a145bad1e791fc5437",
+      "runner_source": {
+        "head": "b59c6eea16ef627d3ef524bfe6cc6f4e70b174a4",
+        "dirty": false,
+        "source_change_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "submodule_commits": [
+          "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+        ]
+      },
+      "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "installed_model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "source_mapping": "Clean-HEAD run; rejected Android VAD integration and packaged Silero assets absent",
+      "internet_permission": {
+        "debug": false,
+        "release": false
+      }
     }
   },
   "environment": {
@@ -114,6 +135,32 @@
       "unsigned_release_build": "passed",
       "release_r8": "passed",
       "app_build": "clean_title_and_focus_build"
+    },
+    {
+      "date": "2026-11-04",
+      "runner": "qa-local.py --release-checks",
+      "android_tests": 84,
+      "android_failures": 0,
+      "android_skips": 0,
+      "required_real_model_tests_passed": 8,
+      "instrumentation_seconds": 144.224,
+      "core_tests_passed": 36,
+      "debug_lint": "passed",
+      "release_lint": "passed",
+      "debug_build": "passed",
+      "instrumentation_build": "passed",
+      "unsigned_release_build": "passed",
+      "release_r8": "passed",
+      "app_build": "clean_search_and_rename_build",
+      "host_compute_limits": {
+        "allowed_logical_cpus": 4,
+        "gradle_workers": 2,
+        "parallel_gradle_projects": false,
+        "nice_level": 10
+      },
+      "timing_scope": "Test-run durations only; not a controlled performance comparison or phone result",
+      "instrumentation_runner_elapsed_seconds": 145.187,
+      "full_qa_wrapper_elapsed_seconds": 389.881
     }
   ],
   "editor_regression": {
@@ -345,6 +392,20 @@
       "measured_pcm16_max": 7,
       "normalized_rms_approximate": 0.000124,
       "scope": "Captured emulator input with host audio disabled; exact constant guard does not apply; no noise-hallucination fix claimed"
+    },
+    {
+      "id": "search_large_font_rotation_and_task_return",
+      "date": "2026-11-04",
+      "app_build": "clean_search_and_rename_build",
+      "status": "observed_pass",
+      "font_scale": 2.0,
+      "portrait_landscape_portrait": true,
+      "continued_typing_at_saved_caret": true,
+      "whole_search_field_above_landscape_ime": true,
+      "back_then_home_return_ime_hidden": true,
+      "query_preserved": true,
+      "settings_restored": true,
+      "scope": "Software keyboard on the dedicated AVD; no physical/mixed hardware keyboard or TalkBack claim"
     }
   ],
   "remaining_validation": [
@@ -357,11 +418,14 @@
   ],
   "privacy": "Aggregate measurements only; no recordings, transcripts, screenshots, raw logs, local paths or device identifiers",
   "separate_host_tool_check": {
+    "date": "2026-11-04",
     "tests_passed": 146,
+    "elapsed_seconds": 4.704,
     "numpy_version": "2.4.6",
-    "method": "Earlier separate clean virtual environment with hash-pinned scripts/requirements-host.txt",
+    "method": "Existing hash-pinned virtual environment, complete host suite repeated at clean app checkpoint",
     "included_in_qa_local_runner": false,
-    "rerun_for_latest_android_checkpoint": false
+    "rerun_for_latest_android_checkpoint": true,
+    "source_checkpoint": "b59c6eea16ef627d3ef524bfe6cc6f4e70b174a4"
   },
   "unicode_title_regression": {
     "fix_commit": "6872bb450cb42926823fc11dfa27facbe3af326c",
@@ -389,5 +453,36 @@
     "fixed_focused_run_seconds": 2.905,
     "fixed_app_build": "clean_title_and_focus_build",
     "scope": "Recreation regression checks dialog focus, visible IME, draft and saving; actual orientation change checked separately by hand"
+  },
+  "updated_date": "2026-11-04",
+  "earlier_separate_host_tool_check": {
+    "tests_passed": 146,
+    "numpy_version": "2.4.6",
+    "method": "Earlier separate clean virtual environment with hash-pinned scripts/requirements-host.txt",
+    "included_in_qa_local_runner": false,
+    "rerun_for_latest_android_checkpoint": false
+  },
+  "search_regression": {
+    "app_build": "clean_search_and_rename_build",
+    "original_test_bodies_unchanged": 21,
+    "new_tests": 2,
+    "focused_tests_passed": 6,
+    "focused_seconds": 26.689,
+    "selection_survives_recreation": true,
+    "query_utf16_limit": 200,
+    "surrogate_pair_preserved_at_limit": true,
+    "real_home_active_ime_preserved": true,
+    "real_home_hidden_ime_stays_hidden": true,
+    "compact_layout_checks_full_field_bounds": true,
+    "prior_actual_home_failure_seconds": 11.195,
+    "strengthened_actual_home_failure_seconds": 11.71,
+    "original_oversized_editor_assertions_unchanged": true,
+    "prior_candidate_font2_suite": {
+      "tests": 6,
+      "passed": 5,
+      "failed": 1,
+      "failure": "Rename final immediate-node wait; target saved title/text were exact and scrolling exposed the passage",
+      "not_reclassified_as_pass": true
+    }
   }
 }

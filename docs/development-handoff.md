@@ -4,7 +4,7 @@
 [pause checkpoint](pause-checkpoint.md) records preserved source and evidence.
 The rejected Android VAD candidate has now been archived and removed from the
 working build; independent search fixes passed six focused tests and manual
-200% font rotation/Home checks. The new complete run is pending. Heavy
+200% font rotation/Home checks, followed by a clean 84-test full run at `b59c6ee`. Heavy
 local checks run sequentially to reduce laptop load.
 
 Branch: `codex/sessions-stt-handoff`. Baseline before the redesign:
@@ -68,15 +68,16 @@ evidence supports a replacement.
 
 ## Verified state and evidence
 
-Production source is `129ee02` (including `6872bb4` Unicode title limits,
+The latest clean full-suite app source is `b59c6ee` (search state/layout, scrollable
+Rename in `d8df58e`, and the prior `129ee02`/`6872bb4` title fixes,
 `ff8ea8d` permission feedback, `a5e460d` constant-PCM protection and
 `12e958c` editor feedback); host dependency setup is `e0a9c78`.
-The owner's dedicated KVM-accelerated API 35 x86_64 AVD passed **82 Android tests,
+The owner's dedicated KVM-accelerated API 35 x86_64 AVD passed **84 Android tests,
 zero failures/skips**, all eight mandatory real-model checks, 36 core tests,
 debug/release lint and debug/test/unsigned release builds. The Python suite passes
-146 tests, also in a clean environment with pinned NumPy. See the
+146 tests, repeated separately in the existing hash-pinned NumPy environment. See the
 [quality report](quality-report.md) and exact [emulator evidence](benchmarks/2026-11-03-local/emulator-qa.json)
-for hashes. The latest full run used clean HEAD `129ee02`; earlier dirty-source
+for hashes. The latest full run used clean HEAD `b59c6ee`; earlier dirty-source
 runs retain their original fingerprints and mappings.
 
 The editor failure is fixed: input-connection replay of the accepted draft cleared
