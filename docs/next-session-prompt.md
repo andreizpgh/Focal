@@ -73,7 +73,8 @@ word errors с 207/303 до 179/294 без роста WER/CER в 14 ячейка
 provenance в local benchmark report/engine-dev-results.json. Combined VAD
 завершён с прежними 136/178 errors: четыре регрессии к production остались,
 вариант отклонён для held-out. Выходы baseline/candidate совпали в 28/28
-synthetic positive controls (точное совпадение с reference лишь 8/28),
+synthetic positive controls (нулевая нормализованная WER в 8/28 случаях,
+буквальное совпадение с reference только в 1/28),
 но noise с непустым context дал strict [] только в 13/14 случаях: один французский
 выход содержит пунктуацию. Порог не меняли. VAD-only сохранил все samples этих
 28 синтетических клипов; это не доказательство качества человеческой речи.
@@ -84,17 +85,23 @@ DEV-вариант presence-only дал 179/266 word errors без роста в
 219 inputs, 1638 outputs и 185 VAD decisions, исходный FAILED сохранён. Шесть
 новых пустых chunks и автоматический lexical-loss flag остаются для adjudication;
 reference/time evidence приведено отдельно. Кандидат не принят и не включён
-в Android. Auto encoder context пока лишь предложен, не запускался;
-свежая test-часть по-прежнему закрыта.
+в принятую Android-версию. Auto encoder context уже проверен и отклонён:
+183/249 word errors, но WER/CER ухудшились в 6 ячейках против production и в 9
+против full-context presence; 15 positive canaries провалили gate. Было 150 новых
+ASR calls, VAD decisions использованы из проверенного cache; новых VAD calls нет.
+Свежая test-часть по-прежнему закрыта.
 
 Отдельный research-only VAD API overlay (`docs/whisper-vad-research.md`) исправляет
 возврат успешных частичных probabilities при compute error и добавляет отмену
 между CPU graph nodes. Проверены точное совпадение с исходным engine, отмена и
-reuse; Android/SOT не подключены. Далее нужны native conditioner/presence parity
-на уже использованных DEV inputs и парное сравнение с переиспользуемым ASR context:
-приложение держит engine открытым, прежние прогоны запускали процесс на каждый chunk.
-Не переноси результаты cold probe на этот режим без проверки. Held-out не открывай
-до заморозки окончательного кандидата.
+reuse; SOT не подключён. Native conditioner/presence parity уже прошла на всех
+185 использованных DEV/control requests: точные conditioned PCM, probability bits,
+ranges и decisions (150 present / 35 absent), исходные floats неизменны. Независимо
+проверены 784 frozen inputs. Публичный aggregate — native-presence-parity.json.
+Парное сравнение с переиспользуемым ASR context и локальные проверки Android-кандидата
+идут, итогового принятия пока нет. Приложение держит engine открытым, прежние прогоны
+запускали процесс на каждый chunk. Не переноси cold результаты на этот режим.
+Held-out не открывай до заморозки окончательного кандидата и разбора warm DEV.
 
 Свежая FLEURS-выборка: 42 dev + 42 ещё не использованных test. Старые IDs,
 PCM и совпавшие reference hashes исключены; один итальянский test заменён из

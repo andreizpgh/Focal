@@ -126,17 +126,25 @@ a separately frozen postprocessor recovered counts, with independent review of
 219 inputs, 1,638 outputs and 185 VAD decisions. The original FAILED status and
 lexical-loss flag remain, with separate boundary/reference adjudication evidence.
 It is not an accepted policy or a clean completed run. No Android integration is
-enabled and the fresh test cohort stays closed. Auto encoder context was proposed
-but not run.
+accepted and the fresh test cohort stays closed. The completed shorter encoder
+context variant is rejected: 183/249 word errors, six regressed cells against
+production, nine against full-context presence, and 15 failed positive canaries.
+Its 150 ASR calls reused 185 checked VAD decisions; no new VAD inference ran.
+See the [separate result](benchmarks/2026-11-03-local/auto-context-dev-results.json).
 
 A separate [VAD API research overlay](whisper-vad-research.md) makes compute failure
 return false, clears partial probabilities and adds cooperative CPU cancellation.
 Normal probabilities/ranges match the original engine exactly on the tested
 fixtures; early/mid-graph cancellation and context reuse pass. It is not wired
-into Android or combined with SOT. The next prerequisites are exact native
-conditioning/presence parity and paired development runs with reused ASR contexts:
-the app keeps its engine open, unlike the earlier cold process-per-chunk probes.
-Keep those comparisons separate and freeze any final policy before held-out use.
+into the verified Android checkpoint or combined with SOT. Native
+conditioning/presence now matches all 185 already-used DEV/control requests exactly
+(150 present, 35 absent), including probability bits and ranges; the original
+floats are unchanged. Independent review checked all 784 frozen inputs.
+The [public parity aggregate](benchmarks/2026-11-03-local/native-presence-parity.json)
+does not establish ASR quality or Android/phone performance. A fresh paired
+development run with reused ASR contexts and local Android candidate checks are
+in progress: the app keeps its engine open, unlike earlier cold process-per-chunk
+probes. Keep those comparisons separate and freeze any final policy before held-out use.
 
 Focused independent reviews covered capture/recovery, storage/privacy, JNI,
 playback/state, UX and evidence tooling. Source reviews are separate from runtime

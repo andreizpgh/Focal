@@ -68,7 +68,10 @@ The new recreation/keyboard/draft/save regression failed before the fix (2.017 s
 and passed afterward (2.905 s). Manual rotation on the fixed build preserved the
 draft, focused field and visible keyboard. In landscape, Save was below the IME;
 hiding the keyboard with Back allowed saving the exact draft to SQLite. This
-does not establish that Save is visible with the landscape keyboard open.
+does not establish that Save is visible with the landscape keyboard open. A later
+manual check on the same APK at 200% font confirmed that the visible keyboard Done
+action saved the exact synthetic title to SQLite. The field was usable, although
+the dialog heading was clipped; font and rotation settings were restored.
 
 Recovery bypasses the live energy gate. A new native regression returned one segment
 from 0.5 seconds of exact zero PCM in English on the previous APK (31.474 seconds).
@@ -94,7 +97,7 @@ row, while no-speech calculation reads the first row. The optional
 experiments; it is not adopted by Android. The recorded submodule and shipped
 engine remain unchanged. No threshold is justified by the current no-speech values.
 
-The latest development screen uses VAD only to skip chunks without detected speech,
+The completed cold development screen uses VAD only to skip chunks without detected speech,
 retaining whole original ASR inputs otherwise. Word errors are 179/266 versus
 207/303 at normal/quiet gain, with no increase in the 14 cells; all 28 synthetic
 positive outputs are unchanged and all 28 captured-noise/context cases skip ASR.
@@ -107,8 +110,19 @@ retain their negative control or per-cell results rather than being promoted.
 The separate [VAD API overlay](whisper-vad-research.md) passes normal-output parity,
 CPU cancellation, cleanup and reused-context checks in its host harness. It fixes
 an upstream path that reported success after partial graph failure. The app does
-not use this overlay yet; native policy parity and a paired reused-ASR development
-comparison are required before evaluating a final candidate on fresh held-out data.
+not use this overlay in the verified `129ee02` checkpoint. Subsequent
+[native policy parity](benchmarks/2026-11-03-local/native-presence-parity.json)
+matches all 185 already-used DEV/control requests exactly: conditioned PCM,
+probability bits, ranges and presence decisions, with original samples unchanged.
+There are 150 positive and 35 negative decisions using one reused detector.
+A fresh paired reused-ASR development comparison and Android candidate QA are in
+progress; neither has an acceptance result yet. Fresh held-out data stays closed.
+
+The [shorter encoder-context experiment](benchmarks/2026-11-03-local/report.md#shorter-encoder-context-with-whole-chunk-presence-rejected)
+is rejected: word errors are 183/249, but six of fourteen cells regress against
+production and nine against full-context presence in WER or CER; 15 of 28 positive
+canaries fail the comparison gate. Cached VAD-negative noise decisions add no new
+noise inference evidence. No speed benefit is claimed from these contended cold runs.
 
 ## Independent whole-app review
 

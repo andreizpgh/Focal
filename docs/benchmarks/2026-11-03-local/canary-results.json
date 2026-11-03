@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "scope": "Frozen native decoder canaries: synthetic eSpeak positive speech and private emulator-noise controls with predetermined same-language trusted context. Not human-speech quality, held-out evaluation or production adoption.",
   "outcome": "reject-canary-regression",
   "status": {
@@ -382,8 +382,6 @@
   "noise_failures": [
     "baseline-fr-trusted-context"
   ],
-  "baseline_exact_positive": 8,
-  "candidate_exact_positive": 8,
   "rows": [
     {
       "id": "en-short-negation-gain-1",
@@ -445,8 +443,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": true,
-      "candidate_exact": true
+      "baseline_normalized_word_match": true,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": true,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "en-short-negation-gain-0p1",
@@ -508,8 +508,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": true,
-      "candidate_exact": true
+      "baseline_normalized_word_match": true,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": true,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "en-meeting-negation-gain-1",
@@ -571,8 +573,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "en-meeting-negation-gain-0p1",
@@ -634,8 +638,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "ru-short-negation-gain-1",
@@ -697,8 +703,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "ru-short-negation-gain-0p1",
@@ -760,8 +768,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "ru-meeting-negation-gain-1",
@@ -823,8 +833,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "ru-meeting-negation-gain-0p1",
@@ -886,8 +898,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "de-short-negation-gain-1",
@@ -949,8 +963,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "de-short-negation-gain-0p1",
@@ -1012,8 +1028,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "de-meeting-negation-gain-1",
@@ -1075,8 +1093,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "de-meeting-negation-gain-0p1",
@@ -1138,8 +1158,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "fr-short-negation-gain-1",
@@ -1201,8 +1223,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "fr-short-negation-gain-0p1",
@@ -1264,8 +1288,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": true,
-      "candidate_exact": true
+      "baseline_normalized_word_match": true,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": true,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "fr-meeting-negation-gain-1",
@@ -1327,8 +1353,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "fr-meeting-negation-gain-0p1",
@@ -1390,8 +1418,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "es-short-negation-gain-1",
@@ -1453,8 +1483,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": true,
-      "candidate_exact": true
+      "baseline_normalized_word_match": true,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": true,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "es-short-negation-gain-0p1",
@@ -1516,8 +1548,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": true,
-      "candidate_exact": true
+      "baseline_normalized_word_match": true,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": true,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "es-meeting-negation-gain-1",
@@ -1579,8 +1613,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "es-meeting-negation-gain-0p1",
@@ -1642,8 +1678,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "it-short-negation-gain-1",
@@ -1705,8 +1743,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": true,
-      "candidate_exact": true
+      "baseline_normalized_word_match": true,
+      "baseline_literal_reference_match": true,
+      "candidate_normalized_word_match": true,
+      "candidate_literal_reference_match": true
     },
     {
       "id": "it-short-negation-gain-0p1",
@@ -1768,8 +1808,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": true,
-      "candidate_exact": true
+      "baseline_normalized_word_match": true,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": true,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "it-meeting-negation-gain-1",
@@ -1831,8 +1873,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "it-meeting-negation-gain-0p1",
@@ -1894,8 +1938,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "pt-short-negation-gain-1",
@@ -1957,8 +2003,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": true,
-      "candidate_exact": true
+      "baseline_normalized_word_match": true,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": true,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "pt-short-negation-gain-0p1",
@@ -2020,8 +2068,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "pt-meeting-negation-gain-1",
@@ -2083,8 +2133,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "pt-meeting-negation-gain-0p1",
@@ -2146,8 +2198,10 @@
       "word_error_delta": 0,
       "character_error_delta": 0,
       "newly_empty": false,
-      "baseline_exact": false,
-      "candidate_exact": false
+      "baseline_normalized_word_match": false,
+      "baseline_literal_reference_match": false,
+      "candidate_normalized_word_match": false,
+      "candidate_literal_reference_match": false
     },
     {
       "id": "baseline-en-trusted-context",
@@ -2970,6 +3024,21 @@
     "Short positive audio0.285–0.455s uses native1s padding, original-length filtering is retained.",
     "No held-out access, downloads, production edits or phone speed claim."
   ],
-  "exporter_sha256": "d9ac36877dccd3b84dc14f2be14d828e2133ee7734fb0f56b852379354586377",
-  "public_export_note": "Per-case profiles retain only timings, peak memory, original/padded frame counts and prompt identity. Common decoding settings are recorded once in policy; no native text diagnostics are exported."
+  "exporter_sha256": "1104a775c95e4e6515a350dba415ce6b1c2e64caa97ef98183dde3eb510ba764",
+  "public_export_note": "Per-case profiles retain only timings, peak memory, original/padded frame counts and prompt identity. Common decoding settings are recorded once in policy; no native text diagnostics are exported.",
+  "metric_definitions": {
+    "normalized_word_match": "Applies only to positive controls. Decoded text and reference have identical NFC-normalized, casefolded Unicode alphanumeric token sequences, using the frozen evaluate-stt.py words() function. For these nonempty references this is equivalent to zero word errors; case and punctuation differences do not imply a mismatch.",
+    "literal_reference_match": "Applies only to positive controls. The frozen scored decoded text equals the supplied reference string exactly, including case and punctuation. This compares decoded_text output after its existing segment trimming, joining and duration clipping; it is not a byte comparison of raw native segments."
+  },
+  "baseline_normalized_word_match_positive": 8,
+  "baseline_literal_reference_match_positive": 1,
+  "candidate_normalized_word_match_positive": 8,
+  "candidate_literal_reference_match_positive": 1,
+  "previous_public_export_sha256": "956012b1ea6fffcb8f0ae53ba6a6659867aa2cf554ffae3960d12065fb62b85d",
+  "previous_exporter_sha256": "d9ac36877dccd3b84dc14f2be14d828e2133ee7734fb0f56b852379354586377",
+  "metric_clarification": {
+    "private_results_sha256": "87098de55616ab071ad3ae11bf30c92ed673855e64ba2da0e96338f911d68856",
+    "frozen_scorer_sha256": "dfde50ec467c30bfddabd19593ee00ba187caca0b1d202b557fa2b67a2946abb",
+    "scope": "Labels and additional literal-match counts recomputed from existing hash-bound outputs. No new inference, recordings, downloads, parameters or acceptance changes."
+  }
 }

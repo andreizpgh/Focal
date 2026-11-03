@@ -212,6 +212,7 @@ transcripts, screenshots or device identifiers.
 | Microphone denial, retry and grant on `ff8ea8d` | Denial showed the Settings notice without starting capture. Retrying showed Android's permission dialog without the stale notice; granting permission started recording and removed obsolete feedback. |
 | Unicode title paste/save on `6872bb4` | Real paste at the 120-unit boundary kept complete Unicode characters; saving preserved the exact expected title in SQLite. |
 | Rename rotation on `129ee02` | Actual portrait-to-landscape rotation retained the draft, focused field and visible IME without crashing. Save was below the landscape keyboard; Back hid the IME, after which Save persisted the exact draft. Visibility of Save with the landscape IME open was not established. |
+| Rename at 200% font in landscape on the same APK | The focused field remained usable. The keyboard Done action dismissed the dialog and saved the exact synthetic title, confirmed in SQLite. The dialog heading was clipped at the top; this does not establish visibility of every dialog element while the IME is open. Font and rotation settings were restored afterward. |
 
 The screen-off interval lasted roughly 2.5 hours, but service/memory samples
 were collected only for the first 30 minutes. This was capture without host audio;

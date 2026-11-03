@@ -359,9 +359,11 @@ the decoder pads them to one second. One full-scale Spanish sentence sample is
 recorded in the private validation report; synthesis parameters were not retuned.
 These are synthetic development canaries, not independent human recordings.
 
-All 28 positive native texts were identical before and after the SOT policy;
-WER/CER did not change. Both implementations matched the normalized synthetic
-reference in only 8/28 cases. In particular, quiet Portuguese short negation
+All 28 scored positive texts were identical before and after the SOT policy;
+WER/CER did not change. Both implementations had zero normalized word errors in
+only 8/28 cases; only 1/28 scored texts matched the reference literally, including
+case and punctuation. The JSON distinguishes these two metrics. In particular,
+quiet Portuguese short negation
 produced punctuation but no recognized word in both versions. Preserving a
 baseline result does not establish adequate short-speech recognition.
 
@@ -430,6 +432,49 @@ Android integration, an independently frozen held-out comparison and controlled
 whole-pipeline timing remain open. The fresh 42-clip test cohort is still closed.
 This candidate does not establish better human-speech WER in every language or
 phone performance; improvements and unchanged cells are reported separately.
+
+## Shorter encoder context with whole-chunk presence: rejected
+
+This completed DEV run changed only encoder context to
+`min(1500, max(768, ceil((original_seconds + 2) * 50 / 256) * 256))`.
+It preserved original whole-chunk PCM and generated trusted prompts from each
+candidate stream's own preceding Kotlin-reconciled passages. It made 150 fresh
+cold ASR calls: 149 at context 768 and one at 1024. Its 185 VAD decisions were
+reused verified results; no new VAD inference ran. Both full-context comparators
+are historical cold runs, including the explicitly recovered presence report.
+
+| Run | Normal word errors / words | Quiet word errors / words | Normal character errors / characters | Quiet character errors / characters |
+| --- | ---: | ---: | ---: | ---: |
+| Production full context | 207 / 864 | 303 / 864 | 545 / 4,349 | 962 / 4,349 |
+| Presence, full context | 179 / 864 | 266 / 864 | 438 / 4,349 | 850 / 4,349 |
+| Presence, shorter context | 183 / 864 | 249 / 864 | 457 / 4,349 | 826 / 4,349 |
+
+**The candidate is rejected.** Six of fourteen language/condition cells regress
+against production and nine regress against full-context presence in WER or CER.
+Fifteen of 28 positive canaries fail the frozen gate: six have more word errors,
+seven have more character errors, and seven change text while tying both error
+counts; these groups overlap. Zero-word-error canaries increase from eight to
+nine and the one lexically empty canary becomes nonempty, but neither improvement
+overrides the failed comparisons. Only five candidate texts are exactly unchanged
+from the positive comparators.
+
+All 28 noise cases retain cached VAD-negative decisions, skip ASR and preserve
+their ordinary uncertain review cues. This adds no fresh noise-decoder evidence.
+Five newly empty committed-chunk comparisons against production were already
+skipped by the presence comparator; none is newly empty against presence. They
+must not be attributed to shorter context. Speech-loss adjudication remains
+unperformed because the numerical/control failures already establish rejection.
+
+The [public whitelist](auto-context-dev-results.json) contains per-language
+WER/CER counts, control comparisons and engine/model/result hashes. Independent
+review checked 1,445 frozen inputs, 1,238 non-log outputs and all 150 native
+profiles, invocations and whole-WAV identities. The execution freeze is
+`bc892805b40701db0fe6ad60563137ae18a373518f1c5e92450504ea09ff109e`;
+the completed result binding is
+`d039ba4808377e534676eb9e4118e249aac80b570c2149dfb7c7d83b5ab914c7`.
+The same 42 DEV clips recur across correlated gains. This is not a persistent
+session, controlled speed or phone-resource result, and the rejected candidate
+does not open the held-out cohort.
 
 ## Execution and resource scope
 
