@@ -1,9 +1,10 @@
 # Prepare continuous speech-gate evidence
 
-`scripts/prepare-gate-experiment.py` selects the first three development clips per
-language from an existing hashed manifest, verifies the source PCM16 WAVs, and
-streams one continuous recording per language/scenario. It downloads nothing and
-does no inference. Held-out clips cannot fill a missing development selection.
+`scripts/prepare-gate-experiment.py` selects the first three clips per language
+from an explicit split of an existing hashed manifest, verifies the source PCM16
+WAVs, and streams one continuous recording per language/scenario. `--split dev`
+is the default; `--split test` prepares a frozen held-out comparison. It downloads
+nothing and does no inference. Neither split can fill missing clips in the other.
 
 Provide the cached project Kotlin **2.1.20** compiler classpath and matching
 standard-library jar. E4 evaluation requires that compiler version.
@@ -35,6 +36,12 @@ The entire manifest is checked before selection: byte-identical PCM and declared
 speaker/session groups may not cross dev/test splits. Different speakers are not
 guaranteed when group identifiers are absent. Source audio is checked again after
 each stream is written; do not modify the corpus during preparation.
+The selected split is preserved in the manifest and every source interval. Pass
+the same explicit `--split test` to the evaluator for held-out streams; a mismatch
+fails before decoding. Regenerate older preparations without the explicit split.
+Freeze candidate code and the evaluation plan before preparing or evaluating test
+audio. Consumed test clips cannot become a fresh held-out cohort by changing their
+split label; use the exclusion workflow in [host probes](stt-benchmark-tools.md).
 
 Each language has two seconds of inserted leading and trailing silence and 1.2
 seconds between clips. Scenarios preserve PCM amplitude or apply gains of 0.1 and

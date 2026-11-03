@@ -10,7 +10,9 @@ import argparse
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
+import re
 import tarfile
 import wave
 import zlib
@@ -22,6 +24,75 @@ CONFIGS = dict(en="en_us", ru="ru_ru", de="de_de", fr="fr_fr", es="es_419", it="
 BASE = f"https://huggingface.co/datasets/google/fleurs/resolve/{REVISION}/"
 API = f"https://huggingface.co/api/datasets/google/fleurs/tree/{REVISION}/"
 BLOCK = 1024 * 1024
+
+
+def load_exclusions(paths):
+    """Bind prior public provenance before selecting audio, without reading references."""
+    excluded = dict(ids=set(), canonical_pcm=set(), pcm=set(), sources=[])
+    for path in paths:
+        if path.stat().st_size > 2 * BLOCK:
+            raise ValueError("Exclusion provenance exceeds its size limit")
+        source = path.read_bytes()
+        document = json.loads(source)
+        if not isinstance(document, dict) or document.get("dataset") != "google/fleurs" or document.get("revision") != REVISION:
+            raise ValueError("Exclusions require provenance from the pinned FLEURS revision")
+        clips = document.get("clips")
+        if not isinstance(clips, list) or not 1 <= len(clips) <= 1000:
+            raise ValueError("Exclusion provenance must contain a bounded nonempty clip list")
+        for clip in clips:
+            if not isinstance(clip, dict):
+                raise ValueError("Invalid excluded clip")
+            identifier, canonical_pcm = clip.get("id"), clip.get("pcm16_sha256")
+            if not isinstance(identifier, str) or not re.fullmatch(r"fleurs-(?:" + "|".join(CONFIGS.values()) + r")-(dev|test)-[0-9]+", identifier):
+                raise ValueError("Excluded clips need canonical FLEURS IDs")
+            if not isinstance(canonical_pcm, str) or not re.fullmatch(r"[0-9a-f]{64}", canonical_pcm):
+                raise ValueError("Excluded clips need canonical PCM16 WAV hashes")
+            excluded["ids"].add(identifier)
+            # Historical provenance hashes the canonical PCM16 WAV container.
+            # Conversion below normalizes headers before comparing this identity.
+            excluded["canonical_pcm"].add(canonical_pcm)
+            if "pcm_sha256" in clip:
+                pcm = clip["pcm_sha256"]
+                if not isinstance(pcm, str) or not re.fullmatch(r"[0-9a-f]{64}", pcm):
+                    raise ValueError("Invalid excluded raw PCM hash")
+                excluded["pcm"].add(pcm)
+        excluded["sources"].append(dict(sha256=digest(source), clips=len(clips)))
+    return excluded
+
+
+def pcm_hash(converted):
+    with wave.open(io.BytesIO(converted), "rb") as wav:
+        return digest(wav.readframes(wav.getnframes()))
+
+
+def select_wavs(prefix, config, split, count, excluded):
+    selected, seen = [], set()
+    for name, source in complete_wavs(prefix):
+        identifier = f"fleurs-{config}-{split}-{Path(name).stem}"
+        if identifier in excluded["ids"]:
+            continue
+        converted, seconds = pcm16(source)
+        if not 1 <= seconds <= 30:
+            continue
+        audio_hash = pcm_hash(converted)
+        if digest(converted) in excluded["canonical_pcm"] or audio_hash in excluded["pcm"]:
+            continue
+        if identifier in seen or audio_hash in seen:
+            raise ValueError("Repeated selected source ID or PCM in archive")
+        seen.update((identifier, audio_hash))
+        selected.append((name, source, converted, seconds))
+        if len(selected) == count:
+            break
+    return selected
+
+
+def validate_output(output):
+    if output.exists():
+        if not output.is_dir() or any(path.name != "source" or not path.is_dir() or path.is_symlink()
+                                      for path in output.iterdir()):
+            raise ValueError("Choose a new corpus output directory; existing evidence is preserved, only a source cache may be reused")
+        if os.name != "nt" and output.stat().st_mode & 0o077:
+            raise ValueError("Corpus output must be private to the current OS user")
 
 
 def complete_wavs(prefix):
@@ -66,9 +137,17 @@ def main():
     parser.add_argument("--ledger", type=Path, default=Path("build/stt/download-ledger.json"))
     parser.add_argument("--dev-clips", type=int, default=3)
     parser.add_argument("--test-clips", type=int, default=5)
+    parser.add_argument("--splits", nargs="+", choices=("dev", "test"), default=["dev", "test"])
+    parser.add_argument("--exclude-provenance", type=Path, action="append", default=[],
+                        help="Exclude every prior clip ID and PCM identity in this public provenance; repeat for multiple cohorts")
     args = parser.parse_args()
     if not (1 <= args.dev_clips <= 12 and 1 <= args.test_clips <= 12):
         parser.error("Select 1–12 clips per language/split")
+    if len(args.splits) != len(set(args.splits)):
+        parser.error("Select each corpus split at most once")
+    validate_output(args.output)
+    exclusions = load_exclusions(args.exclude_provenance)
+    os.umask(0o077)
     import subprocess
     repository = Path(__file__).resolve().parent.parent
     for path in (args.output / "manifest.json", args.ledger):
@@ -78,14 +157,19 @@ def main():
                 parser.error("Audio, references and ledger must stay in ignored paths or outside the repository")
     import fcntl
     args.ledger.parent.mkdir(parents=True, exist_ok=True)
-    lock = args.ledger.with_suffix(".lock").open("w")
-    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    with args.ledger.with_suffix(".lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fetch_corpus(args, exclusions)
+
+
+def fetch_corpus(args, exclusions):
     cache = args.output / "source" / REVISION
     manifest, provenance = [], []
     for language, config in CONFIGS.items():
         info = json.loads(fetch(API + f"data/{config}", cache / f"{config}-tree.json", BLOCK, args.ledger, kind="metadata"))
         archives = json.loads(fetch(API + f"data/{config}/audio", cache / f"{config}-audio-tree.json", BLOCK, args.ledger, kind="metadata"))
-        for split, count in (("dev", args.dev_clips), ("test", args.test_clips)):
+        for split in args.splits:
+            count = args.dev_clips if split == "dev" else args.test_clips
             tsv_path = f"data/{config}/{split}.tsv"
             tsv_info = next(item for item in info if item["path"] == tsv_path)
             tsv = fetch(BASE + tsv_path, cache / f"{config}-{split}.tsv", tsv_info["size"] + 1, args.ledger,
@@ -105,14 +189,7 @@ def main():
                     raise ValueError("Refusing to download a whole corpus shard")
                 prefix += fetch(BASE + archive_path, cache / f"{config}-{split}-{block:02d}.gzpart", end-start+1,
                                 args.ledger, (start, end), archive["size"])
-                selected = []
-                for name, source in complete_wavs(prefix):
-                    converted, seconds = pcm16(source)
-                    if not 1 <= seconds <= 30:
-                        continue
-                    selected.append((name, source, converted, seconds))
-                    if len(selected) == count:
-                        break
+                selected = select_wavs(prefix, config, split, count, exclusions)
                 if len(selected) == count:
                     break
             if len(selected) != count:
@@ -127,12 +204,14 @@ def main():
                                      source_text_id=row[0], audio_sha256=digest(converted)))
                 provenance.append(dict(id=identifier, language=language, split=split, source_wav=name,
                                        source_wav_sha256=digest(source), pcm16_sha256=digest(converted),
+                                       pcm_sha256=pcm_hash(converted),
                                        reference_sha256=digest(row[2].encode()), seconds=seconds,
                                        archive=archive_path, archive_expected_sha256=archive["lfs"]["oid"],
                                        prefix_bytes=len(prefix), prefix_sha256=digest(prefix)))
             save_json(args.output / "manifest.json", manifest)
             save_json(args.output / "provenance.json", dict(dataset="google/fleurs", revision=REVISION,
-                      license="CC-BY-4.0", selection="First complete 1–30 s WAVs in archive order; no transcript/ASR selection",
+                      license="CC-BY-4.0", selection="First complete 1–30 s WAVs in archive order after prior ID/PCM exclusions; no transcript/ASR selection",
+                      selected_splits=args.splits, excluded_provenance=exclusions["sources"],
                       attribution="FLEURS, Conneau et al. (2022), Google; https://huggingface.co/datasets/google/fleurs",
                       grouping="Official dev/test splits; no individual speaker IDs exposed and dev/test speaker independence unverified. No speaker-bootstrap claim.",
                       clips=provenance))

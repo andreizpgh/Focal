@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Score prepared continuous dev streams through actual Kotlin replay operations.
+"""Score one explicit prepared source split through actual Kotlin replay operations.
 
 All output is private: WAVs, prompts, native token diagnostics and hypotheses.
 The current baseline is CPU/full-audio-context/beam3/four threads. No downloads.
@@ -81,7 +81,17 @@ def verify_replay(experiment, root, stdlib):
     return str(classes.resolve()) + os.pathsep + str(stdlib.resolve())
 
 
+def selected_split(experiment, requested=None):
+    split = experiment.get("selected_split")
+    if split not in ("dev", "test"):
+        raise ValueError("Regenerate preparation with an explicit dev or test split")
+    if requested is not None and split != requested:
+        raise ValueError("Requested split differs from prepared source split")
+    return split
+
+
 def validate_cases(experiment, root, references, verified):
+    split = selected_split(experiment)
     cases = experiment.get("cases")
     if not isinstance(cases, list) or not 1 <= len(cases) <= 100:
         raise ValueError("Expected a bounded prepared case list")
@@ -133,8 +143,8 @@ def validate_cases(experiment, root, references, verified):
             source = references.get(clip.get("id"))
             audio = verified.get(clip.get("id"))
             first, last = clip.get("start_sample"), clip.get("end_sample")
-            if not source or source.get("split") != "dev" or source["language"] != language or not audio:
-                raise ValueError("Prepared speech must use the declared development sources only")
+            if not source or source.get("split") != split or clip.get("split") != split or source["language"] != language or not audio:
+                raise ValueError("Prepared speech must use the declared source split only")
             frames = round(audio["seconds"] * RATE)
             if type(first) is not int or type(last) is not int or not 0 <= first < last <= total or first < previous or last - first != frames or clip.get("source_frames") != frames or clip.get("audio_sha256") != audio["audio_sha256"]:
                 raise ValueError("Prepared clip intervals do not match their original audio")
@@ -143,10 +153,11 @@ def validate_cases(experiment, root, references, verified):
 
 
 def verify_source_derivation(experiment, cases, manifest):
+    split = selected_split(experiment)
     counts = {len(case["clips"]) for case in cases if case["clips"]}
     if len(counts) > 1:
-        raise ValueError("Prepared languages must use the same declared dev cohort size")
-    selected = PREPARE.select_sources(manifest, next(iter(counts))) if counts else {}
+        raise ValueError("Prepared languages must use the same declared cohort size")
+    selected = PREPARE.select_sources(manifest, next(iter(counts)), split) if counts else {}
     config = experiment["configuration"]
     required = dict(sample_rate=RATE, leading_samples=2 * RATE, gap_samples=12 * RATE // 10,
                     trailing_samples=2 * RATE, gains=PREPARE.GAINS, synthetic_seconds=30, synthetic_seed=0xF0CA1,
@@ -159,7 +170,7 @@ def verify_source_derivation(experiment, cases, manifest):
             if case["clips"]:
                 clips = selected[case["language"]]
                 if [row["id"] for row in case["clips"]] != [row["id"] for row in clips]:
-                    raise ValueError("Prepared cases must preserve the deterministic development selection")
+                    raise ValueError("Prepared cases must preserve the deterministic source split selection")
                 intervals, _, total = PREPARE.write_stream(expected_pcm, clips, manifest.parent,
                     PREPARE.GAINS[case["scenario"]], 2 * RATE, 12 * RATE // 10, 2 * RATE)
                 if any(any(reported.get(key) != value for key, value in original.items())
@@ -168,7 +179,7 @@ def verify_source_derivation(experiment, cases, manifest):
             else:
                 total = PREPARE.write_synthetic(expected_pcm, case["scenario"], 30, 0xF0CA1)
             if total != case["total_samples"] or digest_file(expected_pcm) != case["pcm_sha256"]:
-                raise ValueError("Prepared PCM does not derive from its declared development sources and gain")
+                raise ValueError("Prepared PCM does not derive from its declared source split and gain")
             expected_pcm.unlink()
 
 
@@ -344,7 +355,8 @@ def evaluate_case(args, case, references, source_root, output, replay):
         reference = " ".join(references[row["id"]]["text"] for row in case["clips"])
         probe_seconds = sum(row["wall_seconds"] for row in records)
         result = dict(id=name + "-context-" + context, language=language, condition=case["scenario"], mode=args.mode,
-                      context=context, silence=not bool(case["clips"]), source_pcm_sha256=case["pcm_sha256"],
+                      context=context, split=args.split if case["clips"] else None,
+                      silence=not bool(case["clips"]), source_pcm_sha256=case["pcm_sha256"],
                       reference=reference, hypothesis=hypothesis, passages=passages, chunks=records,
                       metrics=EVALUATE.score(reference, hypothesis, not bool(case["clips"]), case["total_samples"] / RATE, probe_seconds),
                       orchestration_wall_seconds=time.monotonic() - started)
@@ -362,6 +374,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--experiment", type=Path, required=True)
     parser.add_argument("--source-manifest", type=Path, required=True)
+    parser.add_argument("--split", choices=("dev", "test"), default="dev")
     parser.add_argument("--kotlin-stdlib", type=Path, required=True)
     parser.add_argument("--probe", type=Path, default=Path("build/whisper-host/bin/stt-probe"))
     parser.add_argument("--model", type=Path, default=Path("app/src/main/assets/ggml-base-q5_1.bin"))
@@ -388,6 +401,7 @@ def main():
         parser.error("Expected bounded local manifests")
     os.umask(0o077)
     report_source = json.loads(args.experiment.read_text())
+    selected_split(report_source, args.split)
     args.java = shutil.which(args.java or report_source.get("implementation", {}).get("java", {}).get("path", "java"))
     if not args.java:
         parser.error("Choose the existing cached Java runtime")
@@ -400,9 +414,9 @@ def main():
     all_cases = validate_cases(report_source, args.experiment.parent, references, verified)
     verify_source_derivation(report_source, all_cases, args.source_manifest)
     cases = choose_cases(all_cases, args.languages, args.conditions, args.controls, args.controls_only)
-    if not cases or any(references[row["id"]].get("split") != "dev" for case in cases for row in case["clips"]):
-        parser.error("Select prepared development cases only")
-    plan = dict(cases=len(cases), context_policies=args.contexts, mode=args.mode,
+    if not cases or any(references[row["id"]].get("split") != args.split for case in cases for row in case["clips"]):
+        parser.error("Select cases from the explicitly requested source split only")
+    plan = dict(cases=len(cases), selected_split=args.split, context_policies=args.contexts, mode=args.mode,
                 languages=[] if args.controls_only else args.languages, conditions=[] if args.controls_only else args.conditions,
                 controls=args.controls, control_language=args.control_language,
                 cold_probe_calls=sum(len(ranges_for(case, args.mode)) for case in cases) * len(args.contexts),

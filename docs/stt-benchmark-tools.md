@@ -5,6 +5,44 @@ coverage, continuous dictation quality, phone latency, battery use or thermals.
 Keep audio, references, hypotheses, prompts and individual records outside Git.
 The ignored `build/stt/` directory is the normal research destination.
 
+## Select a fresh public held-out cohort
+
+Before another download, carry forward the shared download ledger and reserve
+every transfer under its existing 1 GB ceiling. Do not reset it in a new checkout.
+`fetch-stt-corpus.py` defaults to both official splits; `--splits dev` or
+`--splits test` fetches only the requested split. To select recordings after the
+already consumed cohort without inspecting references or ASR results:
+
+```sh
+python3 scripts/fetch-stt-corpus.py \
+  --output build/stt/fresh-held-out \
+  --ledger build/stt/download-ledger.json \
+  --splits test --test-clips 3 \
+  --exclude-provenance docs/benchmarks/2026-11-03-stt/corpus-provenance.json
+```
+
+Repeat `--exclude-provenance` for every subsequently consumed cohort. The tool
+validates the pinned dataset revision and required identities before any request.
+It excludes prior IDs and audio identities before counting the first requested
+complete 1–30 second recordings in archive order. Historical `pcm16_sha256`
+identifies the canonical PCM16 WAV container; conversion normalizes WAV headers
+before comparing it. New provenance also records raw `pcm_sha256`. Matching audio
+under another ID is excluded, including across languages and official splits.
+The new provenance records the hashes and clip counts of the exclusion inputs.
+An insufficient bounded archive prefix fails without falling back to used clips.
+
+Use a separate ignored output directory to preserve earlier manifests and scores.
+The command refuses an output directory containing existing evidence before any
+request; it may contain only a `source/` cache. On Unix the output directory must
+be private to the current user; new directories use owner-only permissions.
+An existing `source/<revision>/` cache and its `.sha256` files can be copied into
+the new output directory to reuse verified prefixes without another transfer.
+Selection still respects the shared budget and never downloads a complete shard.
+IDs/PCM exclusions prove disjointness only against the supplied cohorts; they do
+not establish independent speakers, sessions or reference text. Freeze the
+candidate and scoring plan before opening held-out audio/results. Raw references,
+audio, hypotheses and local paths remain private.
+
 ## Build the confidence probe
 
 Initialize the pinned whisper.cpp submodule and build its host library first.

@@ -1,4 +1,4 @@
-# Evaluate gate and context effects on continuous dev streams
+# Evaluate gate and context effects on continuous streams
 
 `scripts/evaluate-gated-streams.py` consumes a freshly compiled, attested
 [gate experiment](gate-experiment.md). It calls actual Kotlin gate, context,
@@ -50,7 +50,7 @@ robustness of the decoder. Control language is explicit and is not evidence for
 all seven languages.
 
 Preflight verifies all source splits/audio identities, reconstructs each stream
-from the deterministic dev selection and gain/padding, checks hashed gate TSV
+from the deterministic selected split and gain/padding, checks hashed gate TSV
 against its JSON ranges, verifies the fresh source/compiler/class/runtime
 attestation, and snapshots replay classes/runtime inside the private run output.
 The actual Kotlin gate runs again before each case. Sources and executable
@@ -58,6 +58,15 @@ dependencies are checked again before publishing aggregate results.
 Every requested language/condition/control must be present. Native dependency
 inspection must provide complete dynamic-library hashes; unavailable inspection
 or static probe binaries are unsupported by this runner.
+
+`--split dev` is the default. To evaluate a frozen fresh held-out cohort, prepare
+it with `--split test` and pass `--split test` here as well. The requested split,
+prepared split, source manifest and interval metadata must agree; no implicit
+fallback or relabeling is allowed. Plans and speech records retain the split;
+synthetic control records have no source split. Both halves of a combined source
+manifest still undergo PCM/group leakage checks. Existing preparations must be
+regenerated after this tooling change. Excluding earlier source IDs/PCM prevents
+reuse of those recordings, but does not establish independent speakers or sessions.
 
 Previous passages match the app's chronological last-six query and stable
 insertion-ID ordering. Prompts come only from previously committed ASR through

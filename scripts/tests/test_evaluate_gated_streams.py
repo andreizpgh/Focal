@@ -57,7 +57,7 @@ class GatedStreamRunnerTest(unittest.TestCase):
         pcm.write_bytes(bytes(32000))
         tsv = root / "en-normal.ranges.tsv"
         tsv.write_text("startSample\tendSample\toverlap\n0\t16000\tfalse\n")
-        clip = dict(id="clip", start_sample=0, end_sample=16000, source_frames=16000, audio_sha256="a" * 64)
+        clip = dict(id="clip", split="dev", start_sample=0, end_sample=16000, source_frames=16000, audio_sha256="a" * 64)
         case = dict(name="en-normal", language="en", scenario="normal", gain=1., total_samples=16000,
                     pcm=pcm.name, pcm_sha256=E4.digest_file(pcm), ranges_tsv=tsv.name, ranges_sha256=E4.digest_file(tsv),
                     clips=[clip], ranges=[dict(start_sample=0, end_sample=16000, overlap=False)])
@@ -69,15 +69,35 @@ class GatedStreamRunnerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             case, references, verified = self.case(root)
-            self.assertEqual([case], E4.validate_cases(dict(cases=[case]), root, references, verified))
+            self.assertEqual([case], E4.validate_cases(dict(selected_split="dev", cases=[case]), root, references, verified))
             for name in ("../../escape", "/tmp/escape", "ru-normal"):
                 with self.assertRaisesRegex(ValueError, "names"):
-                    E4.validate_cases(dict(cases=[dict(case, name=name)]), root, references, verified)
-            with self.assertRaisesRegex(ValueError, "development"):
-                E4.validate_cases(dict(cases=[case]), root, dict(clip=dict(references["clip"], split="test")), verified)
+                    E4.validate_cases(dict(selected_split="dev", cases=[dict(case, name=name)]), root, references, verified)
+            with self.assertRaisesRegex(ValueError, "source split"):
+                E4.validate_cases(dict(selected_split="dev", cases=[case]), root, dict(clip=dict(references["clip"], split="test")), verified)
             altered = dict(case, ranges=[dict(start_sample=16, end_sample=16000, overlap=False)])
             with self.assertRaisesRegex(ValueError, "disagree"):
-                E4.validate_cases(dict(cases=[altered]), root, references, verified)
+                E4.validate_cases(dict(selected_split="dev", cases=[altered]), root, references, verified)
+
+    def test_held_out_split_requires_matching_request_source_and_clip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            case, references, verified = self.case(root)
+            references["clip"]["split"] = "test"
+            case["clips"][0]["split"] = "test"
+            experiment = dict(selected_split="test", cases=[case])
+            self.assertEqual("test", E4.selected_split(experiment, "test"))
+            self.assertEqual([case], E4.validate_cases(experiment, root, references, verified))
+            with self.assertRaisesRegex(ValueError, "differs"):
+                E4.selected_split(experiment, "dev")
+            with self.assertRaisesRegex(ValueError, "source split"):
+                E4.validate_cases(dict(experiment, selected_split="dev"), root, references, verified)
+            case["clips"][0]["split"] = "dev"
+            with self.assertRaisesRegex(ValueError, "source split"):
+                E4.validate_cases(experiment, root, references, verified)
+            for declaration in ({}, dict(selected_split="all")):
+                with self.assertRaisesRegex(ValueError, "explicit"):
+                    E4.selected_split(declaration)
 
     def test_replay_attestation_rejects_historical_or_mutated_classes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -108,13 +128,14 @@ class GatedStreamRunnerTest(unittest.TestCase):
         def original_pcm(path, *args):
             path.write_bytes(bytes(32000))
             return [dict(id="source")], [], 16000
-        with patch.object(E4.PREPARE, "select_sources", return_value=dict(en=[dict(id="source")])):
+        with patch.object(E4.PREPARE, "select_sources", return_value=dict(en=[dict(id="source")])) as select:
             with patch.object(E4.PREPARE, "write_stream", side_effect=original_pcm):
                 with self.assertRaisesRegex(ValueError, "does not derive"):
-                    E4.verify_source_derivation(dict(configuration=config), [case], Path("unused-manifest.json"))
+                    E4.verify_source_derivation(dict(selected_split="test", configuration=config), [case], Path("unused-manifest.json"))
+                select.assert_called_once_with(Path("unused-manifest.json"), 1, "test")
                 duplicate = dict(case, clips=[dict(id="source"), dict(id="source")])
                 with self.assertRaisesRegex(ValueError, "deterministic"):
-                    E4.verify_source_derivation(dict(configuration=config), [duplicate], Path("unused-manifest.json"))
+                    E4.verify_source_derivation(dict(selected_split="test", configuration=config), [duplicate], Path("unused-manifest.json"))
 
     def test_control_only_plan_excludes_speech_and_missing_requests_fail(self):
         controls = [dict(name=f"synthetic-{kind}", total_samples=30 * 16000, clips=[], ranges=[]) for kind in ("zero", "dc", "noise")]

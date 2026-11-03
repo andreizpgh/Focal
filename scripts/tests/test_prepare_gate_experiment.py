@@ -36,6 +36,43 @@ class GatePreparationGuardsTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "held-out"):
                 PREPARE.select_sources(manifest, 1)
 
+    def test_explicit_held_out_selection_keeps_its_split_and_audio_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dev = self.source(root)
+            held_out = root / "test.wav"
+            with wave.open(str(held_out), "wb") as wav:
+                wav.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+                wav.writeframes(b"\x01\x00" * 16000)
+            rows = [dict(dev, id=f"dev-{language}", language=language) for language in PREPARE.LANGUAGES]
+            rows += [dict(dev, id=f"test-{language}", language=language, split="test", audio=held_out.name,
+                          audio_sha256=hashlib.sha256(held_out.read_bytes()).hexdigest()) for language in PREPARE.LANGUAGES]
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps(rows))
+            selected = PREPARE.select_sources(manifest, 1, "test")
+            self.assertEqual([f"test-{language}" for language in PREPARE.LANGUAGES],
+                             [selected[language][0]["id"] for language in PREPARE.LANGUAGES])
+            intervals, _, _ = PREPARE.write_stream(root / "test.pcm", selected["en"], root, 1., 0, 0, 0)
+            self.assertEqual("test", intervals[0]["split"])
+            self.assertEqual(b"\x01\x00" * 16000, (root / "test.pcm").read_bytes())
+            with self.assertRaisesRegex(ValueError, "explicit dev or test"):
+                PREPARE.select_sources(manifest, 1, "all")
+            # A missing held-out language cannot be borrowed from development.
+            manifest.write_text(json.dumps(rows[:-1]))
+            with self.assertRaisesRegex(ValueError, "requested test"):
+                PREPARE.select_sources(manifest, 1, "test")
+
+    def test_held_out_selection_still_validates_cross_split_pcm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = self.source(root)
+            rows = [dict(source, id=f"test-{language}", language=language, split="test")
+                    for language in PREPARE.LANGUAGES] + [source]
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps(rows))
+            with self.assertRaisesRegex(ValueError, "Identical PCM"):
+                PREPARE.select_sources(manifest, 1, "test")
+
     def test_duplicate_source_ids_and_unbounded_selection_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

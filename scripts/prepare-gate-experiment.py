@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare local continuous dev PCM and replay the actual Kotlin speech gate.
+"""Prepare one explicit source split as continuous PCM and replay the Kotlin gate.
 
 No downloads or inference. Source references are never copied into the derived
 metadata. Audio, source identifiers and local results must remain ignored/private.
@@ -33,10 +33,12 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def select_sources(manifest_path, count):
+def select_sources(manifest_path, count, split="dev"):
     manifest_path = Path(manifest_path).resolve()
+    if split not in ("dev", "test"):
+        raise ValueError("Select an explicit dev or test split")
     if not 1 <= count <= 12 or manifest_path.stat().st_size > 2 * 1024 * 1024:
-        raise ValueError("Select 1–12 dev clips per language from a bounded manifest")
+        raise ValueError("Select 1–12 clips per language from a bounded manifest")
     rows = json.loads(manifest_path.read_text())
     if not isinstance(rows, list) or len(rows) > 1000:
         raise ValueError("Expected a bounded array of source clips")
@@ -47,10 +49,10 @@ def select_sources(manifest_path, count):
             raise ValueError("Every source clip needs a unique string ID")
         seen.add(row["id"])
         language = row.get("language")
-        if row.get("split") == "dev" and language in selected and len(selected[language]) < count:
+        if row.get("split") == split and language in selected and len(selected[language]) < count:
             selected[language].append(row)
     if any(len(clips) != count for clips in selected.values()):
-        raise ValueError("Each of the seven languages needs the requested dev clips; held-out clips cannot fill gaps")
+        raise ValueError(f"Each language needs the requested {split} clips; development and held-out clips cannot fill each other's gaps")
     # Validate every held-out row before selecting: different WAV headers can
     # encode identical PCM. Also respect explicit speaker/session group labels.
     audio_splits = {}
@@ -172,7 +174,7 @@ def write_stream(path, clips, source_root, gain, leading, gap, trailing):
             if sha256(source_path) != row["audio_sha256"]:
                 raise ValueError("Source audio changed while preparing a stream")
             cursor += frames
-            intervals.append(dict(id=row["id"], language=row["language"], split="dev", audio=row["audio"],
+            intervals.append(dict(id=row["id"], language=row["language"], split=row["split"], audio=row["audio"],
                                   source_text_id=row.get("source_text_id"), audio_sha256=row["audio_sha256"],
                                   start_sample=start, end_sample=cursor, source_frames=frames))
             if index + 1 < len(clips):
@@ -278,13 +280,14 @@ def main():
     parser.add_argument("--kotlin-stdlib", type=Path, required=True)
     parser.add_argument("--java", default=shutil.which("java"))
     parser.add_argument("--clips-per-language", type=int, default=3)
+    parser.add_argument("--split", choices=("dev", "test"), default="dev")
     parser.add_argument("--timeout", type=int, default=120)
     args = parser.parse_args()
     repository = Path(__file__).resolve().parent.parent
     script_hash = sha256(Path(__file__))
     compiler_helper_hash = sha256(repository / "scripts/replay_compiler.py")
     source_manifest_hash = sha256(args.manifest)
-    selected = select_sources(args.manifest, args.clips_per_language)
+    selected = select_sources(args.manifest, args.clips_per_language, args.split)
     if sha256(args.manifest) != source_manifest_hash:
         raise ValueError("Source manifest changed during split validation")
     output = require_private_output(args.output, repository)
@@ -305,9 +308,9 @@ def main():
     provenance = json.loads(provenance_path.read_text()) if provenance_path.is_file() else {}
     if not isinstance(provenance, dict):
         raise ValueError("Expected a source provenance object")
-    report = dict(schema=1, coverage_label=COVERAGE_LABEL,
+    report = dict(schema=2, selected_split=args.split, coverage_label=COVERAGE_LABEL,
                   caveat="Source intervals include leading/trailing and internal source silence; no phoneme alignment, WER or hallucination result is inferred.",
-                  selection="First requested dev clips per language in source manifest order; no reference-text or ASR selection; held-out clips excluded.",
+                  selection=f"First requested {args.split} clips per language in source manifest order; no reference-text or ASR selection; other split excluded.",
                   source_manifest=str(args.manifest.resolve()), source_manifest_sha256=source_manifest_hash,
                   source_provenance_sha256=provenance_hash,
                   dataset={key: provenance.get(key) for key in ("dataset", "revision", "license", "attribution", "grouping")},
@@ -351,7 +354,7 @@ def main():
         raise ValueError("Source manifest changed during the experiment")
     if (sha256(provenance_path) if provenance_path.is_file() else None) != provenance_hash:
         raise ValueError("Source provenance changed during the experiment")
-    select_sources(args.manifest, args.clips_per_language)
+    select_sources(args.manifest, args.clips_per_language, args.split)
     if sha256(args.manifest) != source_manifest_hash:
         raise ValueError("Source manifest changed during final split validation")
     if replay_build["sources"] != {name: digest_file(repository / name) for name in REPLAY_SOURCES}:
