@@ -1,7 +1,7 @@
 # Product verification · 2026-11-04
 
 The Sessions / Focus wave direction is preserved. The latest production source
-checkpoint is `b59c6ee`, including search lifecycle/layout fixes and the Rename
+checkpoint is `101a153`, including retained search caret, lifecycle/layout fixes and the Rename
 form fix in `d8df58e`, following the earlier Unicode/title corrections; host
 dependency setup is `e0a9c78`. This is a development checkpoint, not a finished
 product or verified distribution release. The public
@@ -12,22 +12,22 @@ signing remain open gates.
 
 | Area | Evidence and scope |
 | --- | --- |
-| Core logic | 36 JVM tests pass |
-| Host tooling | 146 tests passed again in the existing hash-pinned NumPy 2.4.6 environment; run separately from the Android QA runner |
+| Core logic | 36 JVM tests verified; cached outputs for unchanged core sources |
+| Host tooling | 146 tests passed at `b59c6ee` in the existing hash-pinned NumPy 2.4.6 environment; unchanged host sources, not rerun for the later UI-only change |
 | Build | Debug/test APKs, debug/release lint and unsigned release R8 build pass |
-| Whole Android suite | Clean HEAD `b59c6ee`, dedicated API 35 x86_64 AVD with KVM: **84 tests passed, zero failures/skips**, 144.224 seconds |
+| Whole Android suite | Clean HEAD `101a153`, dedicated API 35 x86_64 AVD with KVM: **85 tests passed, zero failures/skips**, 151.721 seconds |
 | Real-model checks | All eight mandatory JNI/workflow checks pass, including quiet public speech and constant-audio recovery |
 | Manual UI | Earlier paste/rotation, Save & next, Russian edit/copy/share, 200% text, dark mode and legacy paging; later Rename, search caret/rotation and Back → Home → Focal checked separately |
 | Long capture | 2:32:37 retained audio; task swipe and about 149 minutes screen off survived; a separate 30-minute memory series stayed 177,118–179,802 KiB PSS |
 | Speech research | Fresh development comparisons cover all seven languages; [results and limitations](benchmarks/2026-11-03-local/report.md) retain negative variants and an unconsumed held-out cohort |
 
 The [local QA report](benchmarks/2026-11-03-local/emulator-qa.json) records exact
-APK/model hashes and all four full-suite checkpoints. The latest runner recorded
-clean HEAD `b59c6ee`; the earlier clean 82-test checkpoint remains in the record.
+APK/model hashes and all five full-suite checkpoints. The latest runner recorded
+clean HEAD `101a153`; earlier clean 82- and 84-test checkpoints remain in the record.
 The earlier 77- and 80-test runs retain their dirty-source
 fingerprints and later commit mappings; they are not relabeled as clean-HEAD runs.
 Debug APK SHA-256:
-`1ce2ee6c355310d6c42b24cf74da11f993831452ef55d16b1d54a6e46cf990f0`.
+`6e0d0c9490748aadce443cdf0d7c64d6b16d178253459441c06ebf7a021dcf2d`.
 No APK has been published as a replacement release.
 
 Local verification has not triggered another Actions run while the separate
@@ -43,6 +43,19 @@ synthetic PCM, not necessarily exact zeros. The long-session memory series cover
 session. Emulator results do not establish phone battery, heat or background behavior.
 
 ## Confirmed fixes and an open manual failure
+
+`101a153` retains the search caret when opening a result and returning. The field's
+saved value previously left composition with the Sessions screen, resetting a
+middle caret to the query's end. Moving `TextFieldValue` to the retained app state
+preserves that caret without reactivating the keyboard. The frozen new test failed
+at caret 13 instead of 6 on a source-matched `b59c6ee` rebuild (3.497 s), then
+passed unchanged on the fix (3.395 s); six prior UI cases passed in 21.063 s.
+All 23 earlier InterfaceTest bodies, including the strict oversized-editor test,
+remain unchanged. An earlier draft wrongly expected highlighted selection to
+survive explicit focus clearing; cached Compose code and runtime observation
+showed its deliberate collapse to the selection end. That failed expectation is
+retained separately; the fix does not suppress the framework's callback.
+The focused APK and later clean full-suite APK have separate recorded hashes.
 
 The original editor failure was reproduced twice without weakening assertions.
 UI captures and input callbacks disproved the earlier offscreen-warning hypothesis:
@@ -304,6 +317,14 @@ See the [full results](benchmarks/2026-11-03-stt/report.md). No experimental dec
 gate threshold, model replacement or automatic correction has been enabled.
 
 ## Remaining release gates
+
+Independent source review also found a native allocation-failure ownership defect:
+self-KV growth can free a state still owned by the context, then JNI close frees
+it again. Early initialization and partial-allocation cleanup need related fixes.
+The production JNI/service close path reaches this defect; it has not yet been
+dynamically reproduced. Bounded fault-injection regressions and a reviewed
+production fix remain required. Passing ordinary inference/lifecycle tests does
+not establish safety of these allocation failures; no real OOM is being induced.
 
 1. Resolve recovery hallucinations on varying weak noise without suppressing quiet
    speech. Verify any engine/VAD change with paired development data, frozen fresh

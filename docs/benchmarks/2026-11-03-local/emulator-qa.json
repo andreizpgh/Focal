@@ -62,6 +62,27 @@
         "debug": false,
         "release": false
       }
+    },
+    "clean_search_return_build": {
+      "app_source_checkpoint_commit": "101a1539ba784e6adec5d609ada1d342c43d722b",
+      "debug_apk_sha256": "6e0d0c9490748aadce443cdf0d7c64d6b16d178253459441c06ebf7a021dcf2d",
+      "test_apk_sha256": "2586786327713a9ea911175313a5c26eca2f19706a1d487525ba6e8ea3e0729f",
+      "unsigned_release_apk_sha256": "7b17cf8aa6175301224edd9f3fb4552cda4e6bf8422b79467d2b42a92255206a",
+      "runner_source": {
+        "head": "101a1539ba784e6adec5d609ada1d342c43d722b",
+        "dirty": false,
+        "source_change_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "submodule_commits": [
+          "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+        ]
+      },
+      "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "installed_model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "source_mapping": "Clean-HEAD run with retained search caret on navigation; base-only model assets; exact APKs archived privately",
+      "internet_permission": {
+        "debug": false,
+        "release": false
+      }
     }
   },
   "environment": {
@@ -161,6 +182,32 @@
       "timing_scope": "Test-run durations only; not a controlled performance comparison or phone result",
       "instrumentation_runner_elapsed_seconds": 145.187,
       "full_qa_wrapper_elapsed_seconds": 389.881
+    },
+    {
+      "date": "2026-11-04",
+      "runner": "qa-local.py --release-checks",
+      "android_tests": 85,
+      "android_failures": 0,
+      "android_skips": 0,
+      "required_real_model_tests_passed": 8,
+      "instrumentation_seconds": 151.721,
+      "core_tests_passed": 36,
+      "debug_lint": "passed",
+      "release_lint": "passed",
+      "debug_build": "passed",
+      "instrumentation_build": "passed",
+      "unsigned_release_build": "passed",
+      "release_r8": "passed",
+      "app_build": "clean_search_return_build",
+      "host_compute_limits": {
+        "allowed_logical_cpus": 4,
+        "gradle_workers": 2,
+        "parallel_gradle_projects": false,
+        "nice_level": 10
+      },
+      "timing_scope": "Test-run durations only; not a controlled performance comparison or phone result",
+      "instrumentation_runner_elapsed_seconds": 152.727,
+      "full_qa_wrapper_elapsed_seconds": 491.066
     }
   ],
   "editor_regression": {
@@ -414,7 +461,8 @@
     "Real microphone and audible output, including route changes",
     "Physical ARM64 phone latency, memory, battery, thermals and OEM background behavior",
     "Calls, real TalkBack traversal and selection",
-    "Seven-language speech-quality acceptance and stable distribution signing"
+    "Seven-language speech-quality acceptance and stable distribution signing",
+    "Native allocation-failure ownership and cleanup: static review found invalid frees; bounded dynamic regression and production fix remain pending"
   ],
   "privacy": "Aggregate measurements only; no recordings, transcripts, screenshots, raw logs, local paths or device identifiers",
   "separate_host_tool_check": {
@@ -424,8 +472,9 @@
     "numpy_version": "2.4.6",
     "method": "Existing hash-pinned virtual environment, complete host suite repeated at clean app checkpoint",
     "included_in_qa_local_runner": false,
-    "rerun_for_latest_android_checkpoint": true,
-    "source_checkpoint": "b59c6eea16ef627d3ef524bfe6cc6f4e70b174a4"
+    "rerun_for_latest_android_checkpoint": false,
+    "source_checkpoint": "b59c6eea16ef627d3ef524bfe6cc6f4e70b174a4",
+    "unchanged_host_sources_since_recorded_run": true
   },
   "unicode_title_regression": {
     "fix_commit": "6872bb450cb42926823fc11dfa27facbe3af326c",
@@ -484,5 +533,32 @@
       "failure": "Rename final immediate-node wait; target saved title/text were exact and scrolling exposed the passage",
       "not_reclassified_as_pass": true
     }
+  },
+  "search_caret_return_regression": {
+    "fix_commit": "101a1539ba784e6adec5d609ada1d342c43d722b",
+    "test": "InterfaceTest.searchCaretSurvivesOpeningAResultAndReturning",
+    "baseline_app_source_checkpoint": "b59c6eea16ef627d3ef524bfe6cc6f4e70b174a4",
+    "baseline_apk_sha256": "b521cb5ce54c3759807987b3e237a0b51a8ae86341460b60d1dbf270bb78dd97",
+    "baseline_rebuilt_not_original_artifact": true,
+    "baseline_expected_caret": [
+      6,
+      6
+    ],
+    "baseline_actual_caret": [
+      13,
+      13
+    ],
+    "baseline_seconds": 3.497,
+    "fixed_focused_apk_sha256": "f67fd296d6907cdae6bbfd080e3b114ebb3e33a1531687e52f2e6b52c50d8c66",
+    "unchanged_test_apk_sha256": "2586786327713a9ea911175313a5c26eca2f19706a1d487525ba6e8ea3e0729f",
+    "fixed_test_seconds": 3.395,
+    "six_prior_tests_seconds": 21.063,
+    "focused_unique_tests_passed": 7,
+    "existing_23_test_bodies_unchanged": true,
+    "exact_query_preserved": true,
+    "returned_field_unfocused": true,
+    "returned_ime_hidden": true,
+    "rejected_draft_expectation": "Compose deliberately collapses a highlighted range to its end when focus is cleared. That failed draft expectation was retained privately and replaced by a separately frozen caret test, with fresh baseline RED and unchanged-test GREEN. No focus callback was suppressed.",
+    "full_suite_app_build": "clean_search_return_build"
   }
 }

@@ -4,7 +4,9 @@
 [pause checkpoint](pause-checkpoint.md) records preserved source and evidence.
 The rejected Android VAD candidate has now been archived and removed from the
 working build; independent search fixes passed six focused tests and manual
-200% font rotation/Home checks, followed by a clean 84-test full run at `b59c6ee`. Heavy
+200% font rotation/Home checks, followed by a clean 84-test full run at `b59c6ee`.
+A later caret-return fix passed fresh RED/GREEN and a clean **85-test** full run at
+`101a153`; the AVD is stopped and exact verified APKs are archived privately. Heavy
 local checks run sequentially to reduce laptop load.
 
 Branch: `codex/sessions-stt-handoff`. Baseline before the redesign:
@@ -68,17 +70,26 @@ evidence supports a replacement.
 
 ## Verified state and evidence
 
-The latest clean full-suite app source is `b59c6ee` (search state/layout, scrollable
+The latest clean full-suite app source is `101a153` (search caret return and prior state/layout, scrollable
 Rename in `d8df58e`, and the prior `129ee02`/`6872bb4` title fixes,
 `ff8ea8d` permission feedback, `a5e460d` constant-PCM protection and
 `12e958c` editor feedback); host dependency setup is `e0a9c78`.
-The owner's dedicated KVM-accelerated API 35 x86_64 AVD passed **84 Android tests,
+The owner's dedicated KVM-accelerated API 35 x86_64 AVD passed **85 Android tests,
 zero failures/skips**, all eight mandatory real-model checks, 36 core tests,
 debug/release lint and debug/test/unsigned release builds. The Python suite passes
-146 tests, repeated separately in the existing hash-pinned NumPy environment. See the
+146 tests, repeated separately at `b59c6ee` in the existing hash-pinned NumPy environment;
+host sources are unchanged and that suite was not rerun for the later UI-only fix. See the
 [quality report](quality-report.md) and exact [emulator evidence](benchmarks/2026-11-03-local/emulator-qa.json)
-for hashes. The latest full run used clean HEAD `b59c6ee`; earlier dirty-source
+for hashes. The latest full run used clean HEAD `101a153`; earlier dirty-source
 runs retain their original fingerprints and mappings.
+
+The new caret test uses one unchanged test APK for fresh RED on a source-matched
+`b59c6ee` rebuild and GREEN on the fix: caret 6 previously became 13 after opening
+a result and returning. Exact query, hidden IME and unfocused state also pass.
+All 23 previous InterfaceTest bodies remain unchanged. Do not preserve highlighted
+selection by suppressing Compose deselect callbacks: that earlier draft expectation
+was invalid and is retained separately. The controlled saveable `TextFieldValue`
+now belongs to `FocalApp`, preserving the actual caret through navigation.
 
 The editor failure is fixed: input-connection replay of the accepted draft cleared
 rejection feedback during recreation. It was not an offscreen warning. The original
@@ -289,6 +300,16 @@ reports. It never uninstalls or wipes app data. Its host tests/source review are
 not substitutes for running it on the owner's accelerated emulator.
 
 ## Remaining sequence
+
+Before accepting another engine build, resolve the newly reviewed allocation-error
+ownership defects. Pinned `whisper_full_with_state` can free its borrowed state on
+self-KV growth failure (`-7`); normal JNI/service cleanup then frees it again.
+Uninitialized early `batch` cleanup and partial KV allocation also need bounded
+regressions. This is independently confirmed source evidence, not a reproduced
+OOM test. Prepare an isolated ownership-only patch and targeted allocation hooks;
+preserve external-state ownership, retry behavior and the pinned submodule. Never
+induce real host memory pressure. The separate diagnostic probe's fatal-process
+handling is not a production Android fix.
 
 1. Resolve the observed recovery hallucinations on weak varying noise. Investigate
    the no-speech logits defect with the pinned source plus an explicit, reviewed
