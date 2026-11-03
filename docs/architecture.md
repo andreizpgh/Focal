@@ -77,7 +77,7 @@ this preflight before replacing the installed model; failure or cancellation kee
 the previous model. A host experiment with another architecture does not make it
 loadable by the Android app.
 
-Inference uses deterministic beam search (three candidates), CPU-only, with up to
+Inference requests beam search (three candidates) at temperature zero, CPU-only, with up to
 four threads while reserving a logical processor on smaller CPUs. Power-save mode
 selects one thread; moderate thermal pressure caps work at two. Severe thermal
 pressure pauses inference while capture continues. There is no artificial delay
@@ -88,6 +88,16 @@ real-time speed, or battery life on particular phones. Beam search itself costs
 more than greedy search; end-to-end speed and accuracy require corpus/device tests.
 The speech worker uses normal scheduling priority while the capture worker retains
 audio priority; inference is no longer explicitly assigned background CPU priority.
+
+The [pinned engine's beam implementation](https://github.com/ggml-org/whisper.cpp/blob/4979e04f5dcaccb36057e059bbaed8a2f5288315/src/whisper.cpp)
+nevertheless samples tokens from its
+probability distribution, rather than using the sorted top-k token IDs. Decoder
+zero retains its random-generator state between calls. Consequently, identical
+audio and explicit text prompts can produce different results after different
+call histories, even with temperature zero and `no_context=true`. The earlier
+description of this as deterministic beam search was incorrect. Frozen prefix
+repeats reproduce the history dependence; engine diagnostics and corrected beam
+selection are separate research work, not an accepted production change.
 
 The decoder uses passage timestamps without word alignment. A contiguous tail of
 trusted previous passages supplies at most 240 characters / 64 tokens of context;

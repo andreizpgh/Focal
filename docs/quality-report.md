@@ -131,6 +131,16 @@ an uncertain empty passage rather than invented text. These are diagnostic
 candidate results, not a clean full-suite checkpoint or an accepted STT policy.
 The verified production checkpoint remains `129ee02`.
 
+Fixed-prefix diagnostics now reproduce the warm decoder's call-history dependency
+and isolate decoder-zero RNG carry on one ES DEV prefix. The pinned beam sampler
+sorts logits but samples random IDs; a one-line reset removes the target difference
+in four repeated include/skip sessions. This is a bounded causal result, not an
+accepted STT policy. [Evidence and provenance](benchmarks/2026-11-03-local/report.md#reused-decoder-fixed-prefix-diagnosis).
+A separate Android smoke used seven actual-language DEV first chunks: audio was
+unchanged in 7/7, host text matched in 5/7 and review labels in 6/7. It establishes
+integration only; cross-runtime numerical parity and seven-language quality remain
+unproven. [Android aggregate](benchmarks/2026-11-03-local/android-dev-smoke-results.json).
+
 The [shorter encoder-context experiment](benchmarks/2026-11-03-local/report.md#shorter-encoder-context-with-whole-chunk-presence-rejected)
 is rejected: word errors are 183/249, but six of fourteen cells regress against
 production and nine against full-context presence in WER or CER; 15 of 28 positive

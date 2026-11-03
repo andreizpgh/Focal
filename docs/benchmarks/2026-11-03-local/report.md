@@ -532,6 +532,67 @@ timings are diagnostic, not a speed ranking or phone-resource measurement. This
 rejection neither adopts the policy nor opens the unchanged 42-clip held-out
 cohort. It does not establish an accuracy improvement in every supported language.
 
+## Reused decoder: fixed-prefix diagnosis
+
+The rejected warm candidate exposed a real call-history dependency. Eight fresh
+ES DEV sessions compared the same four-chunk prefix with and without its third,
+already-empty ASR call. Original WAV bytes and explicit prompts were fixed across
+histories, with full encoder context, beam size 3, temperature 0 and unchanged
+0.6/−1 thresholds. Both the original and corrected-SOT engine were repeated twice.
+All four engine/history combinations repeated exactly, and the original inclusive
+prefix reproduced the earlier warm baseline. Nevertheless, skipping the empty call
+changed the later target text and timestamps in both engines. Corrected SOT made
+the target no-speech value identical (0.0152495), without removing the output
+difference. No VAD ran in this diagnostic.
+
+The [pinned engine source](https://github.com/ggml-org/whisper.cpp/blob/4979e04f5dcaccb36057e059bbaed8a2f5288315/src/whisper.cpp)
+sorts token scores in `whisper_sample_token_topk`, but then ignores those sorted
+IDs and samples from the full probability distribution. Decoder zero's RNG state
+persists across calls; only decoders 1 and higher are reseeded for each full call.
+`no_context=true` does not reset that RNG. Calling this deterministic beam search
+in the previous architecture description was incorrect.
+
+A separate causal probe added exactly one RNG-zero reset statement to the
+corrected-SOT parent. Four fresh sessions, again two include/skip repetitions,
+made all target text, timestamps, token probabilities and no-speech values equal.
+The original third chunk remained empty. This supports RNG carry as the mechanism
+for this fixed ES prefix; it neither accepts RNG reset as a production policy nor
+establishes speech quality in other languages. Actual sorted top-k selection is a
+separate candidate requiring its own evaluation.
+
+Independent review verified 1,248 inputs and 65 non-log outputs for the eight-session
+probe. Root independently verified all 2,458 inputs, 33 outputs and exact raw target
+transcriptions for the reset probe, separately from the runner author's checks.
+The public aggregates contain hashes and observations without transcripts:
+
+- [Eight-session history comparison](beam-history-prefix-results.json), SHA-256
+  `3849d50623d38b8b5ad5c5c8d2c0fac97affc8a8a25847150912880c83982cec`.
+- [Four-session reset diagnosis](rng-reset-prefix-results.json), SHA-256
+  `e19e9a4216b8ef81f9624e396c60487f345bb0d49ea938d6f4d13d592639cc13`.
+
+The 28 + 14 ASR calls used already-consumed DEV inputs, not held-out recordings.
+Execution overlapped other local work; durations are diagnostic only. Previous
+quality rejections, lexical flags and the closed 42-clip held-out cohort remain.
+
+## Android seven-language integration smoke
+
+The unpublished VAD candidate was exercised through its actual Android JNI on
+one existing normal DEV first chunk per language, with a fresh engine and empty
+prompt for each. All seven immutable audio inputs and model/APK identities were
+verified; each produced lettered speech. Against the corresponding host results,
+literal text matched in 5/7 cases (RU and FR differed), review labels in 6/7
+(FR differed), and complete text/timestamp/confidence segments in 0/7.
+
+The [public aggregate](android-dev-smoke-results.json) has SHA-256
+`9d869a84ec1c159acd234350d3d5a08190d904bd9c85a5bf248ad91cf8a59dba`.
+Independent review checked the fixture bindings, helper and target APKs, raw JNI
+results and the actual frozen Kotlin review calculation. The target APK was
+`34ea88dfd1ea5a93773efb6a00ffe80815055708e4ddc88393d8a781732dc59d`;
+later UI-only APKs are separate artifacts. This is observable integration evidence,
+not internal VAD numerical parity, seven-language accuracy, speed or phone evidence.
+The host candidate remains rejected. The differences are not attributed to the RNG
+finding without a separate cross-runtime comparison.
+
 ## Execution and resource scope
 
 The initial baseline process terminated with SIGTERM/exit 143 during the German

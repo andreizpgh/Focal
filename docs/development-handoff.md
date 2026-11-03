@@ -155,8 +155,13 @@ preparation/dialog regressions, each checked against removal of its fix.
 Actual English and Russian force-stop recovery now retains varying emulator PCM
 and displays an uncertain empty passage, but the language/control regressions
 prevent acceptance. Do not publish the experimental integration as a verified
-product change. Diagnose the reused-engine difference with fixed-history repeats;
-freeze any final policy before held-out use. All 42 fresh held-out clips remain closed.
+product change. Fixed-history repeats now isolate decoder-zero RNG carry on one
+ES DEV prefix: the pinned beam sampler samples IDs instead of using its sorted
+scores; one reset statement removes the repeated target difference. True top-k
+selection is a separate, unaccepted candidate. Seven real-language Android DEV
+first chunks preserve all inputs, but RU/FR texts and the FR review label differ
+from host results. See the [diagnostic evidence](benchmarks/2026-11-03-local/report.md#reused-decoder-fixed-prefix-diagnosis).
+Freeze any final policy before held-out use. All 42 fresh held-out clips remain closed.
 
 Focused independent reviews covered capture/recovery, storage/privacy, JNI,
 playback/state, UX and evidence tooling. Source reviews are separate from runtime
