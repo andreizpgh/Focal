@@ -160,7 +160,17 @@ The optional [combined beam research build](whisper-beam-research.md) now passes
 eight actual-sampler checks (seven fail on its baseline) and twenty configuration
 cases. A separate fourteen-call ES repeat is history-invariant, but its formerly
 empty 1.06-second input produces a 122-character segment with a native 5-second
-end. The repair is not an accepted quality improvement; full DEV gates remain.
+end. The completed persistent DEV comparison now rejects this repair with the
+presence policy: word errors fall from 223/256 to 176/246, but six language/condition
+cells worsen in WER or CER and 14 positive controls fail. Previously correct quiet
+French/Portuguese negations become empty despite positive VAD. All 28 noise controls
+skip ASR; that does not override speech regressions. Independent review verified
+4,289 inputs, 2,187 outputs and all 335 ASR/185 VAD calls. Eight newly empty DEV
+chunks and seven lexical flags remain open. [Full comparison](benchmarks/2026-11-03-local/report.md#true-top-k-with-persistent-whole-chunk-presence-rejected).
+Source-local English analysis separately confirms that the current gate entirely
+excludes two clips containing 25 reference words. It does not establish a replacement
+framing policy or justify another run of the same rejected decoder. No held-out
+clips were consumed and no speed improvement is claimed.
 A separate Android smoke used seven actual-language DEV first chunks: audio was
 unchanged in 7/7, host text matched in 5/7 and review labels in 6/7. It establishes
 integration only; cross-runtime numerical parity and seven-language quality remain

@@ -601,9 +601,93 @@ has SHA-256 `0bdf471e93d904a0502ca067f56deb0b7423bfa462cb4bdb0dc9424dc0530d2c`.
 The public overlay's model-free verification is bound by runtime result
 `9cc17d9bb409ceb8629845aea1ee904a7e82519dcfade33cf3ac6f082e785c59`
 and configuration result `f3104e7aa78c3bd03b01c96bce14184cab3fbdff5f849b47551e0fc75258066c`.
-Full persistent DEV speech/control comparison, changed-output adjudication,
-Android integration, fresh held-out validation and controlled timing remain
-required. The earlier presence-only candidate remains rejected.
+The completed persistent DEV comparison below rejects this candidate. Android
+integration, fresh held-out validation and controlled timing are not established.
+The earlier presence-only candidate remains rejected.
+
+## True top-k with persistent whole-chunk presence: rejected
+
+The fixed comparison completed 42 fresh sessions, 335 ASR calls and 185 VAD
+calls. Both new arms use the same corrected-SOT/true-top-k engine: one decodes
+every original request, while the other applies the unchanged whole-chunk
+presence policy first. Each engine remains open within its session. Actual Kotlin
+context/reconciliation uses each arm's own preceding output; reference text never
+enters the prompt. The primary comparator is the already verified warm production
+run, not the other new arm. All 42 DEV clips and 56 controls were already consumed;
+the 42 fresh held-out clips remain closed.
+
+**The combined candidate is rejected.** Normal/quiet word errors change from
+223/256 to 176/246, and character errors from 598/822 to 467/820. Six cells worsen
+in WER or CER, and 14 of 28 positive controls fail the unchanged strict gate.
+
+| Language | Normal word errors, production → candidate | Quiet word errors | Normal character errors | Quiet character errors |
+| --- | ---: | ---: | ---: | ---: |
+| English | 54 → 54 | 65 → 62 | 212 → 233 | 293 → 277 |
+| Russian | 26 → 24 | 48 → 47 | 50 → 46 | 153 → 144 |
+| German | 15 → 13 | 42 → 46 | 21 → 20 | 180 → 207 |
+| French | 28 → 29 | 45 → 38 | 60 → 73 | 104 → 98 |
+| Spanish | 23 → 14 | 16 → 17 | 47 → 14 | 18 → 15 |
+| Italian | 65 → 31 | 27 → 26 | 183 → 51 | 41 → 47 |
+| Portuguese | 12 → 11 | 13 → 10 | 25 → 30 | 33 → 32 |
+
+All 28 noise controls skip ASR. All 28 positives are identical between the two
+**new** arms, including native transcription and committed passages; only 6/28
+are literal matches to the old production output. Three positives become empty.
+Targeted source/reference review confirms that previously correct short negations
+in quiet French and Portuguese become empty after ASR despite positive VAD.
+Four failed controls differ only in case/punctuation, but the original strict
+changed-text-tie rule is retained. The decoder-only arm also fails the primary
+gates and seven noise controls. Within the new engine, presence suppresses one
+Spanish quiet output and reduces WER/CER; that secondary result does not override
+rejection.
+
+There are 115 changed DEV chunks, eight newly empty chunks and seven retained
+lexical-loss flags. Targeted reference/time review also identifies two baseline
+reference-matching words absent from all candidate passages overlapping that
+Russian source. This is textual coverage, not word-level acoustic alignment or
+acoustic adjudication of all changes; unresolved speech-loss and critical-error
+review stays open.
+
+Independent post-run review verified 4,289 frozen inputs, 2,187 outputs, eleven
+runtime dependencies, all native call counts and 185 presence-parity rows.
+The 35 skipped requests have no fabricated ASR JSON/profile; present requests
+retain the original float input. The [public aggregate](true-topk-dev-results.json)
+was reproduced exactly from the bound results:
+
+- Launch freeze: `8862774efc56e4323034ce8b46f2e4d3e0312e5dba9f74559c06449b6262e5c2`.
+- Result binding: `b1f633b7969b982365fb37c61ac9d1c6877e4ddce8316dc37a4531238fc1ab8e`.
+- Public aggregate: `c7b92155303e8ed7729605836d3fa51397c71baeeaffc6ecb2d0847900b35558`.
+
+The 1,392.56-second elapsed time includes a contended host run and is diagnostic,
+not a speed comparison or phone measurement. No Android decoder change is adopted.
+
+## English normal source-framing diagnosis
+
+A separate read-only analysis of six already-consumed English DEV clips explains
+why a decoder-only change cannot fix every error. Two complete clips containing
+25 reference words never reach ASR through the current gate. On aligned 20 ms
+frames they have at most one and zero consecutive frames above even the minimum
+RMS 0.002; the gate requires two. Recorded source ranges independently confirm
+their omission. No threshold was tuned or new inference run.
+
+A third 10.02-second clip supplies only 1.86 seconds and accounts for 27 local
+word errors. That does not assign all 27 errors to the gate: separating framing
+and decoder effects requires controlled paired evidence and acoustic review.
+Another partially covered clip recognizes all eight words correctly, so sample
+coverage is not speech recall. The two fully covered clips account for two errors;
+these source-local totals equal the official 54/88 stream count.
+
+The historical global-cap30 cold run submits audio from all six sources and
+scores 10/88. Its framing, prompts and engine history differ, so this is diagnostic
+motivation, not a causal or accepted quality comparison. A proposed fixed-window
+experiment using the same rejected decoder has not run: unchanged control failures
+already prevent its acceptance. A future framing policy must keep capture, memory,
+durability, first-result latency and all quality gates explicit.
+
+The [whitelisted diagnosis](en-framing-diagnosis.json) contains hashes, ordinal
+source rows and aggregate counts, without audio, transcripts or local paths.
+Root verified all 62 input bindings and the exported accounting; its SHA-256 is
+`2cc8900070e0d2d8606bc7ce38c94bb1608cd3639d7b923dd236f58db668c0c7`.
 
 ## Android seven-language integration smoke
 
@@ -683,10 +767,11 @@ by this audit and no download was performed.
 | VAD model, conservative reservation | 885,099 |
 | Total added | 234,052,504 |
 
-Total reservations are **879,645,181 / 1,000,000,000 bytes**, leaving
-**120,354,819 bytes**. This includes the 61,000,000-byte future CI reserve and
-conservative metadata/retry limits; it is not a count of actual transferred
-bytes. The Italian held-out refinement reused cached data and adds zero bytes.
+Total reservations are **879,645,181 / 1,000,000,000 bytes**, including the
+61,000,000-byte future CI reserve and conservative metadata/retry limits.
+An additional **120,354,819 bytes** remain unreserved. Reservations are not a count
+of actual transferred bytes. The Italian held-out refinement reused cached data
+and adds zero bytes.
 
 ## Remaining evidence
 

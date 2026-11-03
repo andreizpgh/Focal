@@ -161,7 +161,18 @@ scores; one reset statement removes the repeated target difference. True top-k
 selection is a separate, unaccepted candidate. The optional
 [combined research build](whisper-beam-research.md) passes actual-sampler and
 configuration checks; its fourteen-call ES repeat is history-invariant but adds
-text on a previously empty short input. Full DEV quality gates still apply.
+text on a previously empty short input. Its full persistent DEV comparison is now
+**rejected**: 335 ASR/185 VAD calls, word errors 223/256 → 176/246, but six cells
+worsen in WER/CER and 14 positive controls fail. Quiet French/Portuguese controls
+lose previously correct negations despite positive VAD. All 28 noises skip ASR;
+28/28 positive identities refer only to the two new arms, not the old production
+baseline (6/28 exact). Independent review checked 4,289 inputs and 2,187 outputs.
+Eight newly empty DEV chunks and seven lexical flags stay open. See the
+[complete result](benchmarks/2026-11-03-local/true-topk-dev-results.json).
+Separate English source accounting confirms two whole clips with 25 reference
+words never reach ASR. Partial-clip errors are not all attributed to framing.
+The proposed fixed-window variant has not run because the same decoder already
+fails unchanged controls; do not promote it or consume held-out data.
 Seven real-language Android DEV first chunks preserve all inputs, but RU/FR texts and the FR review label differ
 from host results. See the [diagnostic evidence](benchmarks/2026-11-03-local/report.md#reused-decoder-fixed-prefix-diagnosis).
 Freeze any final policy before held-out use. All 42 fresh held-out clips remain closed.
