@@ -112,12 +112,24 @@ jbyteArray decode(JNIEnv *env, jlong handle, jfloatArray samples, jstring langua
         invalid(env, "Choose one of the seven supported speech languages."); return nullptr;
     }
     if (prompt.find('\0') != std::string::npos) { invalid(env, "Speech context contains invalid text."); return nullptr; }
-    std::vector<float> audio(std::max(count, 16000), 0.f);
+    std::vector<float> audio(count);
     env->GetFloatArrayRegion(samples, 0, count, audio.data());
     if (env->ExceptionCheck()) return nullptr;
     if (std::any_of(audio.begin(), audio.begin() + count, [](float sample) { return !std::isfinite(sample) || sample < -1.f || sample > 1.f; })) {
         invalid(env, "Audio samples must be finite normalized PCM."); return nullptr;
     }
+    // Recovery can bypass the live gate. Exact zero/DC has no acoustic variation;
+    // check the original samples before padding can introduce a false transition.
+    if (std::all_of(audio.begin() + 1, audio.end(), [&audio](float sample) { return sample == audio.front(); })) {
+        if (engine->cancelled.load()) { cancelled(env); return nullptr; }
+        auto bytes = env->NewByteArray(2);
+        if (!bytes) return nullptr;
+        const jbyte emptySegments[] = {'[', ']'};
+        env->SetByteArrayRegion(bytes, 0, 2, emptySegments);
+        if (engine->cancelled.load()) { cancelled(env); return nullptr; }
+        return env->ExceptionCheck() ? nullptr : bytes;
+    }
+    audio.resize(std::max(count, 16000), 0.f);
     auto p = whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH);
     p.language = lang.c_str();
     p.n_threads = std::clamp(int(threads), 1, 4);

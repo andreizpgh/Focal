@@ -21,6 +21,9 @@ required_model_tests = {
     ("app.focal.NativeWhisperTest", "closingAndCancellingOneEngineFromDifferentThreadsIsSafe"),
     ("app.focal.SpeechWorkflowTest", "realModelRecognizesSpeechThroughAndroidJni"),
     ("app.focal.SpeechWorkflowTest", "captureContinuesWithoutAnActivityAndCanPauseAndFinish"),
+    ("app.focal.NativeWhisperTest", "constantPcmProducesNoSegmentsInAnyLanguageEvenWithContext"),
+    ("app.focal.SpeechWorkflowTest", "quietVaryingSpeechStillReachesTheDecoder"),
+    ("app.focal.SpeechWorkflowTest", "recoveryOfConstantAudioKeepsOriginalAndManualEditsWithoutAddingPassages"),
 }
 model_outcomes = {test: [] for test in required_model_tests}
 rows = []

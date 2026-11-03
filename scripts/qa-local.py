@@ -25,6 +25,9 @@ MODEL_TESTS = {
     ("app.focal.NativeWhisperTest", "closingAndCancellingOneEngineFromDifferentThreadsIsSafe"),
     ("app.focal.SpeechWorkflowTest", "realModelRecognizesSpeechThroughAndroidJni"),
     ("app.focal.SpeechWorkflowTest", "captureContinuesWithoutAnActivityAndCanPauseAndFinish"),
+    ("app.focal.NativeWhisperTest", "constantPcmProducesNoSegmentsInAnyLanguageEvenWithContext"),
+    ("app.focal.SpeechWorkflowTest", "quietVaryingSpeechStillReachesTheDecoder"),
+    ("app.focal.SpeechWorkflowTest", "recoveryOfConstantAudioKeepsOriginalAndManualEditsWithoutAddingPassages"),
 }
 ANIMATIONS = ("window_animation_scale", "transition_animation_scale", "animator_duration_scale")
 MODEL_NAME = "ggml-base-q5_1.bin"

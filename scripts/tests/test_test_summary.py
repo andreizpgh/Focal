@@ -15,6 +15,9 @@ MODEL_CASES = (
     ("app.focal.NativeWhisperTest", "closingAndCancellingOneEngineFromDifferentThreadsIsSafe"),
     ("app.focal.SpeechWorkflowTest", "realModelRecognizesSpeechThroughAndroidJni"),
     ("app.focal.SpeechWorkflowTest", "captureContinuesWithoutAnActivityAndCanPauseAndFinish"),
+    ("app.focal.NativeWhisperTest", "constantPcmProducesNoSegmentsInAnyLanguageEvenWithContext"),
+    ("app.focal.SpeechWorkflowTest", "quietVaryingSpeechStillReachesTheDecoder"),
+    ("app.focal.SpeechWorkflowTest", "recoveryOfConstantAudioKeepsOriginalAndManualEditsWithoutAddingPassages"),
 )
 
 

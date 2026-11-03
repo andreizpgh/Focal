@@ -1,8 +1,11 @@
 package app.focal
 
 import androidx.test.core.app.ApplicationProvider
+import app.focal.data.Preferences
 import app.focal.speech.NativeWhisper
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -57,13 +60,35 @@ class NativeWhisperTest {
                     NativeWhisper.decode(handle, FloatArray(16000), language, 1)
                 }
             }
-            for (sample in listOf(Float.NaN, Float.POSITIVE_INFINITY, 1.1f)) {
-                assertThrows(IllegalArgumentException::class.java) {
-                    NativeWhisper.decode(handle, FloatArray(16000).also { it[0] = sample }, "en", 1)
+            for (sample in listOf(Float.NaN, Float.POSITIVE_INFINITY, 1.1f, -1.1f)) {
+                for (audio in listOf(FloatArray(16000) { sample }, FloatArray(16000).also { it[it.lastIndex] = sample })) {
+                    assertThrows(IllegalArgumentException::class.java) {
+                        NativeWhisper.decode(handle, audio, "en", 1)
+                    }
                 }
             }
-            assertThrows(IllegalArgumentException::class.java) {
-                NativeWhisper.decode(handle, FloatArray(16000), "en", 1, "x".repeat(241))
+            for (context in listOf("x".repeat(241), "Invalid\u0000context")) {
+                assertThrows(IllegalArgumentException::class.java) {
+                    NativeWhisper.decode(handle, FloatArray(16000), "en", 1, context)
+                }
+            }
+        } finally { NativeWhisper.close(handle) }
+    }
+
+    @Test fun constantPcmProducesNoSegmentsInAnyLanguageEvenWithContext() {
+        val handle = realEngine()
+        try {
+            for (language in Preferences.languages.keys) {
+                for (value in listOf(0f, .25f, -.25f)) {
+                    // Subsecond DC must be checked before zero padding changes it.
+                    for (count in listOf(8000, 32000, 30 * 16000)) {
+                        for (context in listOf("", "Synthetic previous sentence.")) {
+                            val result = NativeWhisper.decode(handle, FloatArray(count) { value }, language, 2, context)
+                            assertEquals("Constant PCM must not produce text: $language, $value, $count, context=${context.isNotEmpty()}",
+                                0, JSONArray(result.decodeToString()).length())
+                        }
+                    }
+                }
             }
         } finally { NativeWhisper.close(handle) }
     }

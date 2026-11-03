@@ -28,6 +28,13 @@ class Transcriber(model: String) : AutoCloseable {
         val context = Transcript.trustedContext(recent, chunk.start)
         val json = JSONArray(NativeWhisper.decode(activeHandle(), samples, language, threads, context).decodeToString())
         currentCoroutineContext().ensureActive()
+        // Only exact constant PCM proves an empty result contains no missed speech.
+        // Keep the ordinary missing-range review cue for all varying audio.
+        if (json.length() == 0 && samples.all { it == samples[0] }) {
+            currentCoroutineContext().ensureActive()
+            store.complete(chunk, emptyList())
+            return
+        }
         val duration = pcm.size / 32L
         val decoded = buildList {
             for (i in 0 until json.length()) {
