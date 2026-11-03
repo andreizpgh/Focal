@@ -218,6 +218,18 @@ Targeted regression tests accompany behavioral fixes. Source review cannot
 establish animation smoothness, actual TalkBack traversal or long-session device
 reliability; those remain explicit runtime checks.
 
+The later [preserved-ASR experiment](benchmarks/2026-11-03-local/report.md#preserved-asr-suppression-development-result-not-adoption)
+retains every original decoder call and raw result, then applies VAD only to emitted
+passages. All 185 raw outputs match production; emitted normal/quiet word errors
+are 179/252 versus 223/256, with no regression in 14 cells. All 28 positive controls
+are unchanged, while 28 noise controls have empty emitted output but still contain
+nonempty raw ASR. Independent review verified 2,877 inputs and 945 outputs. Five
+changed DEV ranges received source-local textual review; four lexical flags remain,
+without an acoustic no-omission claim. WER improves only in EN/ES/IT, and extra VAD
+work does not establish a speed improvement. The seven-language, held-out and
+phone gates remain open. Future automatic suppression requires retained original
+ASR, visible provenance and Undo; it has not been enabled in Android.
+
 ## Earlier evidence, retained with its original scope
 
 Before this checkpoint, 53 distinct Android instrumentation tests passed and five

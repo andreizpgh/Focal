@@ -689,6 +689,65 @@ source rows and aggregate counts, without audio, transcripts or local paths.
 Root verified all 62 input bindings and the exported accounting; its SHA-256 is
 `2cc8900070e0d2d8606bc7ce38c94bb1608cd3639d7b923dd236f58db668c0c7`.
 
+## Preserved-ASR suppression: development result, not adoption
+
+A separate experiment runs every original ASR request before VAD, durably retains
+the raw result, and changes only emitted passages when the detector reports no
+speech. This tests the call-history diagnosis without skipping a decoder call or
+changing its randomized beam sampler. It uses the original VAD-API-only engine,
+four ASR threads, one VAD thread, full encoder context and the already-frozen
+cap30 detector settings. No SOT, top-k or RNG-reset patch is used.
+
+The actual same-process run completed 21 sessions with **185 ASR and 185 VAD
+calls**, including 129 DEV and 56 control requests. All 185 canonical raw ASR
+results match the cached production baseline exactly, including serialized text,
+timestamps and token probabilities. Input, prompt, fixed profile parameters and
+request history also match; dynamic timing and RSS are excluded. This is
+serialized-output identity, not a claim about internal ASR
+logit bits. Conditioned PCM, VAD probability bits and ranges independently match
+their frozen expectations. Actual Kotlin context/reconciliation replay agrees
+with the separately frozen conditional replay for every DEV request.
+
+| Condition | Baseline word errors / 864 | Emitted word errors / 864 | Baseline character errors / 4,349 | Emitted character errors / 4,349 |
+| --- | ---: | ---: | ---: | ---: |
+| Normal | 223 | 179 | 598 | 436 |
+| Quiet, same recordings at gain 0.1 | 256 | 252 | 822 | 803 |
+
+None of the 14 language/condition cells regresses. All 28 positive controls retain
+their exact output. All 28 noise controls retain **nonempty raw ASR**, but emit no
+text after suppression; an uncertain review cue remains. These are different properties: the decoder still
+hallucinates on the noise; the research filter hides its output while preserving
+the original result. There are 35 suppressed requests, including five DEV requests
+with nonempty raw output; the other 124 DEV chunks retain their committed passages.
+
+Source-local text/range review of those five changes found no confirmed reference
+content loss. Four global lexical flags remain recorded; this review is not
+acoustic proof that no spoken content was suppressed. The source-local attestation
+is `3c8d4b8fdef951dc25c8cce815e6b235af4136be48bdbaa37f42f4f3d9a50acf`.
+
+**The requested all-language improvement is not achieved:** combined WER improves
+only for EN, ES and IT; RU, DE, FR and PT are unchanged. Existing energy-gate
+omissions remain. There is no speed benefit established: all original ASR work is
+retained and 185 detector calls are added. The contended host duration, 791.50 s,
+is diagnostic rather than a controlled performance comparison. Fresh held-out
+data remains unopened, and no Android or phone acceptance follows from this run.
+
+Independent postrun review verified 2,877 frozen inputs, 945 outputs and 11 native
+dependencies, then reproduced the privacy-filtered [public aggregate](post-asr-dev-results.json)
+exactly. Its SHA-256 is
+`b0b4747b475a72409f9b9000a388d9ad0ba7cff357830059742e9ff38aa5eece`;
+launch freeze is `df270453e8d0980cc68428f67a2715773f2a42a7b6eabc99ebb131b4d4fe3aea`
+and result binding is `3bba7b879125003a4756ff9b8ea8b142fdf8c0b4b7818573125be63fec69c638`.
+The aggregate retains its original machine outcome, requiring source-local review;
+the subsequent review and its limits are recorded above, without rewriting that
+result or clearing its lexical flags.
+
+This is an automatic change to already-produced ASR. Under the repository's
+correction contract, any future application integration must retain immutable
+original ASR, protect manual revisions, expose decision provenance and support
+Undo, in addition to passing quality and phone resource gates. Returning an empty
+JNI result would lose that evidence. No such suppression is enabled in production.
+
 ## Android seven-language integration smoke
 
 The unpublished VAD candidate was exercised through its actual Android JNI on

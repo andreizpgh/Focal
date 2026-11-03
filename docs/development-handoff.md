@@ -233,6 +233,21 @@ and load/decode/RSS diagnostics on the host. Actual Kotlin gate/context/reconcil
 replay separates segmentation loss from decoder errors. No automatic correction
 or experimental encoder context is enabled in the application.
 
+The subsequent preserved-ASR research run executes all original calls before VAD
+and retains raw output separately from suppressed emissions. All 185 raw outputs
+match production, and actual Kotlin replay matches the frozen conditional replay.
+Emitted errors are 179/252 words and 436/803 characters versus 223/256 and 598/822,
+without a regression in 14 cells. All 28 positives are unchanged; 28 noise controls
+retain nonempty raw ASR but emit no text, retaining an uncertain review cue.
+Independent review verified 2,877 inputs,
+945 outputs and the public `post-asr-dev-results.json` export. Five changed DEV
+ranges received textual source-local review; four lexical flags remain, with no
+acoustic no-loss guarantee. WER improves only for EN/ES/IT, and all 185 ASR calls
+plus 185 VAD calls remain: neither all-seven improvement nor acceleration is
+established. Held-out stays closed. Do not silently return empty JNI output in an
+Android integration: immutable original ASR, visible provenance, Undo, manual-edit
+protection and phone resource acceptance are required before enabling this policy.
+
 ## Continue locally and in the cloud
 
 Use this checkout/branch and existing draft PR #1. Initialize the recorded

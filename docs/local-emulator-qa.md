@@ -62,6 +62,11 @@ emulator -avd focal_local_qa -accel on -gpu host -feature -Vulkan \
   -cores 2 -memory 2048 -no-snapshot -no-window -no-audio
 ```
 
+If the dedicated AVD lives in the ignored workspace directory `build/avd`, run
+the command from the repository root with `ANDROID_AVD_HOME="$PWD/build/avd"`
+in its environment. Keep using that same AVD directory on restart; an absent
+default-home AVD is not a reason to create or wipe another device.
+
 Replace `focal_local_qa` with the dedicated AVD's name. The emulator raised the
 requested memory to **2560 MiB**; record the effective configuration, not only
 the command-line request. The tested display was 320 × 640 at 160 dpi, with

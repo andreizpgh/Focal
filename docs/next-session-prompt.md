@@ -142,6 +142,19 @@ Android smoke на семи DEV first chunks сохранил
 Подробности и безопасные aggregates — в local benchmark report.
 Held-out остаётся закрытым до принятия и заморозки окончательного кандидата.
 
+Следующий research-прогон сохранил все исходные ASR calls и raw outputs, применяя
+VAD только после декодирования к выдаваемым passages. Все 185 raw результатов
+совпали с production; 185 ASR + 185 VAD, без skip. WER normal/quiet 223/256 →
+179/252, CER 598/822 → 436/803, без ухудшения 14 ячеек. 28 positives неизменны;
+28 noise имеют nonempty raw ASR, но пустую выдачу. Независимо проверены 2877
+inputs / 945 outputs, actual Kotlin replay и safe export post-asr-dev-results.json.
+Пять изменённых DEV ranges просмотрены по source-local text/time, четыре lexical
+flags сохранены; акустическое отсутствие потерь не доказано. WER улучшился только
+в EN/ES/IT; все семь языков и ускорение не подтверждены. Held-out закрыт.
+Автоматическое скрытие уже полученного ASR требует immutable original ASR,
+видимой provenance, Undo, защиты ручных edits и phone gates; простой JNI return[]
+не соответствует контракту. В Android эту политику не включали.
+
 Свежая FLEURS-выборка: 42 dev + 42 ещё не использованных test. Старые IDs,
 PCM и совпавшие reference hashes исключены; один итальянский test заменён из
 уже скачанного cache до оценки. Старую test-часть облачного исследования нельзя
