@@ -319,14 +319,117 @@ fix changed a root checkout file, although inference executed unchanged snapshot
 bytes. Its outputs remain diagnostic and are excluded as acceptance evidence.
 A separate, independently reviewed freeze of the actual consumed inputs then
 completed with before/after identity checks and identical recognition changes.
-Neither that repeat nor the lexical review opens the fresh test cohort. Combined
-VAD compatibility, short positive controls, fresh held-out evidence, actual Android
-recovery behavior and phone resources remain outstanding before adoption.
+Neither that repeat nor the lexical review opens the fresh test cohort. The
+completed compatibility and control checks below retain blocking negative results.
+Fresh held-out evidence, actual Android recovery and phone resources remain open.
 
 Both baseline and candidate used 129 cold host calls. Their summed probe wall
 costs were 433.65 and 472.57 seconds; background build/QA contention differed.
 These values cannot rank speed or establish phone latency. No performance benefit
 is claimed from this development repeat.
+
+### Completed compatibility and positive/noise controls
+
+The separately frozen combination of SOT `0.8/0` and the existing cap30/context-on
+Silero policy completed 88 ASR calls. It reproduced the unpatched cap30 result
+exactly: 136/178 word errors, with no changed native text/timestamps or newly empty
+chunks. Both original comparators were fixed before inference. Against production,
+four language/condition cells still regress:
+
+| Condition | Word-error increase | Character-error increase |
+| --- | ---: | ---: |
+| Russian normal | +2 | +3 |
+| German normal | +1 | +6 |
+| Italian quiet | +6 | +3 |
+| Portuguese normal | +1 | +4 |
+
+The combined candidate is **rejected for held-out evaluation**. Improved totals
+for every language after pooling its two correlated conditions do not override
+these cells. [Combined counts and provenance](combined-dev-results.json) retain
+both comparisons and the negative decision. This run includes the three original
+synthetic English controls; it does not establish the full combined recovery-noise
+matrix with all language/context choices. Its 391.24-second supervisor duration
+and cold probe timings are descriptive, not a controlled speed comparison.
+
+A further frozen native-decoder check used 14 locally generated eSpeak NG 1.52.0
+positive fixtures: one short negation and one appointment sentence per language,
+each at gains 1 and 0.1, giving 28 cases. Two independent generations produced
+identical PCM; no audio was downloaded. Short negations last about 285–455 ms and
+the decoder pads them to one second. One full-scale Spanish sentence sample is
+recorded in the private validation report; synthesis parameters were not retuned.
+These are synthetic development canaries, not independent human recordings.
+
+All 28 positive native texts were identical before and after the SOT policy;
+WER/CER did not change. Both implementations matched the normalized synthetic
+reference in only 8/28 cases. In particular, quiet Portuguese short negation
+produced punctuation but no recognized word in both versions. Preserving a
+baseline result does not establish adequate short-speech recognition.
+
+The same run tested the two emulator-noise captures in all seven languages with
+fixed, nonempty synthetic context in the corresponding language. Candidate output
+had zero lexical words in 14/14 cases, but only **13/14 had zero native segments**.
+One French case retained a punctuation segment, with SOT no-speech value 0.794683,
+below the frozen 0.8 threshold. The strict empty-output requirement therefore
+**failed**; punctuation was not removed and the threshold was not retuned.
+[Whitelisted canary results](canary-results.json) exclude native text diagnostics.
+The private raw report remains unpublished.
+
+A separate VAD-only screen of the same 28 positive fixtures, with unchanged
+cap30/Silero settings, selected ranges covering all original samples in 28/28
+cases, including every short negation. This is sample coverage, not word accuracy
+or a combined ASR pass. Its private plan/result hashes are
+`2478e005a7f7fd8a15eac28bbf0240623a68bac6097037acef2b54940ac347fe` /
+`cae0b8335821339089b766f7db6f9bacb054b9fca9e9c795702639f31e22281f`.
+
+### Whole-chunk presence: recovered development report
+
+The next variant uses the original unpatched ASR engine and VAD only as a presence
+check on each existing production chunk. A positive decision keeps the entire
+original ASR chunk and its boundaries. A negative decision skips ASR and passes
+an empty decoded list through the actual Kotlin reconciliation code, retaining
+its uncertain review cue and original audio. Neither the model nor decoder
+thresholds change. Causal gain affects only the separate VAD input; recurrent
+state and conditioning reset for each original chunk.
+
+| Condition | Baseline word errors / 864 | Candidate word errors / 864 | Baseline character errors / 4,349 | Candidate character errors / 4,349 |
+| --- | ---: | ---: | ---: | ---: |
+| Normal | 207 | 179 | 545 | 438 |
+| Quiet | 303 | 266 | 962 | 850 |
+
+There is no WER/CER increase in any of the 14 language/condition cells. Seven of
+129 ASR calls are skipped; six previously nonempty native results become empty.
+All 28 synthetic positive native texts remain identical to baseline. The two
+actual noise captures in seven languages and both empty/nonempty text contexts
+skip ASR in **28/28 cases**. These are policy decisions, not 28 native decoder
+calls returning empty output. All allowed ASR inputs retain their original PCM,
+sample counts, boundaries and prompts. The [public result](presence-dev-results.json)
+contains the per-cell counts and hash bindings without transcripts.
+
+**This is a recovered report, not a clean completed run or an accepted policy.**
+Inference and its final identity checks completed, but report assembly raised
+`KeyError: 'wer'` by expecting rates in per-record count data. The original failed
+status, frozen runner and outputs remain unchanged. A separately frozen,
+deterministic postprocessor assembled the report from those completed outputs
+without running inference again. Independent review checked all 219 frozen inputs,
+1,638 preserved non-log outputs, both engine identities and all 185 VAD decisions.
+The original freeze is
+`6662032932949f475d102c21ace258201d369406ed452e460df610e9cb9f65d9`;
+the separate recovery binding is
+`4597ab824f90dbdf0d3dbd307a48b8d75939dd5be94ec18105bb092f303edc55`.
+
+The automatic speech-loss flag remains: one global English reference-token match
+is lost and twelve are gained. Separate source/time review finds all five shared
+English reference positions in the unchanged preceding chunk. The additional
+quiet Spanish removal similarly matches eight positions already retained in its
+preceding chunk. That supports redundant/invented boundary-output removal; it
+does not establish acoustic silence or prove general speech recall. The review
+hash is `95ee1530d3c2e1ad9fe519612729756893f962e8f74d20d43b3ba7c9b63265a5`.
+The automatic flag is not removed by this adjudication evidence.
+
+Android integration, an independently frozen held-out comparison and controlled
+whole-pipeline timing remain open. The fresh 42-clip test cohort is still closed.
+This candidate does not establish better human-speech WER in every language or
+phone performance; improvements and unchanged cells are reported separately.
 
 ## Execution and resource scope
 
@@ -336,8 +439,9 @@ partial outputs are excluded. A clean full baseline repeat and a subsequent
 full lower-threshold run completed. The first cap30/context-on process also
 terminated with exit 143 before producing a completed report; its cause is
 unverified and all partial outputs are excluded. A detached full repeat completed,
-as did the default Silero and cap30/context-off runs. Only complete reports enter
-the recognition tables above.
+as did the default Silero and cap30/context-off runs. Only completed inference enters the recognition tables above. The later presence
+report has the explicitly documented postprocessing recovery described above; its
+original run remains failed.
 
 | Complete run | Normal cold probe seconds | Quiet cold probe seconds | ASR calls, normal + quiet |
 | --- | ---: | ---: | ---: |

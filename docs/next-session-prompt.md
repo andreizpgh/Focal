@@ -70,8 +70,22 @@ word errors с 207/303 до 179/294 без роста WER/CER в 14 ячейка
 отсутствие потери речи. Не стирай этот флаг ради принятия. Первый запуск нарушил
 внешний freeze из-за неисполняемого root-файла; он оставлен диагностическим,
 новый повтор на actual snapshot inputs прошёл проверки хешей. Подробности и
-provenance в local benchmark report/engine-dev-results.json. Combined VAD и
-короткие синтетические positive controls ещё исследуются, test не открывался.
+provenance в local benchmark report/engine-dev-results.json. Combined VAD
+завершён с прежними 136/178 errors: четыре регрессии к production остались,
+вариант отклонён для held-out. Выходы baseline/candidate совпали в 28/28
+synthetic positive controls (точное совпадение с reference лишь 8/28),
+но noise с непустым context дал strict [] только в 13/14 случаях: один французский
+выход содержит пунктуацию. Порог не меняли. VAD-only сохранил все samples этих
+28 синтетических клипов; это не доказательство качества человеческой речи.
+DEV-вариант presence-only дал 179/266 word errors без роста в 14 ячейках;
+28 positive outputs остались прежними, 28 noise cases пропустили ASR. При наличии
+речи весь исходный ASR input и его границы остаются прежними. Это восстановленный
+отчёт после report-only KeyError, не clean run: independent review проверил
+219 inputs, 1638 outputs и 185 VAD decisions, исходный FAILED сохранён. Шесть
+новых пустых chunks и автоматический lexical-loss flag остаются для adjudication;
+reference/time evidence приведено отдельно. Кандидат не принят и не включён
+в Android. Auto encoder context пока лишь предложен, не запускался;
+свежая test-часть по-прежнему закрыта.
 
 Свежая FLEURS-выборка: 42 dev + 42 ещё не использованных test. Старые IDs,
 PCM и совпавшие reference hashes исключены; один итальянский test заменён из

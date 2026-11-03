@@ -94,6 +94,16 @@ row, while no-speech calculation reads the first row. The optional
 experiments; it is not adopted by Android. The recorded submodule and shipped
 engine remain unchanged. No threshold is justified by the current no-speech values.
 
+The latest development screen uses VAD only to skip chunks without detected speech,
+retaining whole original ASR inputs otherwise. Word errors are 179/266 versus
+207/303 at normal/quiet gain, with no increase in the 14 cells; all 28 synthetic
+positive outputs are unchanged and all 28 captured-noise/context cases skip ASR.
+The [benchmark report](benchmarks/2026-11-03-local/report.md#whole-chunk-presence-recovered-development-report)
+records a report-assembly failure, independently checked postprocessing recovery,
+and the unresolved lexical-loss flag. This is not an accepted Android change;
+held-out evidence and controlled timing remain open. Earlier SOT/combined variants
+retain their negative control or per-cell results rather than being promoted.
+
 ## Independent whole-app review
 
 Focused independent reviewers covered Android/runtime QA, capture/recovery,

@@ -113,8 +113,21 @@ speech-loss flag requiring adjudication. Reference/time review suggests a global
 alignment false positive but is not acoustic proof. The initial run failed an
 unused-root-file freeze and remains diagnostic; the completed repeat freezes the
 actual consumed snapshot. See the [exact result and limits](benchmarks/2026-11-03-local/report.md#sot-probability-and-abstention-verified-development-repeat).
-Combined VAD compatibility and short positive controls remain development work;
-the fresh test cohort stays closed.
+Combined VAD compatibility completed at 136/178 word errors, unchanged from
+unpatched cap30. Four production language/condition cells still regress, so it
+is rejected for held-out evaluation. The 28 synthetic positive decoder outputs
+were unchanged, but only 13/14 noise controls with nonempty context were strictly
+empty: a French case retained punctuation. The threshold was not retuned.
+VAD-only coverage retained all samples in those 28 synthetic positives; this is
+not a human-speech accuracy result. The whole-chunk presence variant gives 179/266
+word errors without a cell regression, preserving all 28 positive outputs and
+skipping ASR on all 28 noise/context cases. Report assembly failed after inference;
+a separately frozen postprocessor recovered counts, with independent review of
+219 inputs, 1,638 outputs and 185 VAD decisions. The original FAILED status and
+lexical-loss flag remain, with separate boundary/reference adjudication evidence.
+It is not an accepted policy or a clean completed run. No Android integration is
+enabled and the fresh test cohort stays closed. Auto encoder context was proposed
+but not run.
 
 Focused independent reviews covered capture/recovery, storage/privacy, JNI,
 playback/state, UX and evidence tooling. Source reviews are separate from runtime
