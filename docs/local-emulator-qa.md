@@ -220,7 +220,7 @@ adb -s emulator-5554 shell am instrument -w -e class 'app.focal.InterfaceTest#ov
 ```
 
 This focused command is for diagnosis; it does not satisfy the full-suite or
-five-model-test gate. If the regression recurs, debug this test and break in
+eight-model-test gate. If the regression recurs, debug this test and break in
 `assertWarningVisible` after recreation, before its `finally` removes the
 synthetic fixture. Check whether rejection state survives field callbacks before
 assuming a viewport problem. Inspect the actual dialog, warning/field bounds,

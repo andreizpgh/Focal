@@ -237,7 +237,6 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    val requester = remember { FocusRequester() }
     SideEffect { onDirtyChange(title != note.title) }
     DisposableEffect(note.id) { onDispose { onDirtyChange(false); onSavingChange(false) } }
     fun close() { focus.clearFocus(force = true); keyboard?.hide(); dismiss() }
@@ -256,6 +255,8 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
     AlertDialog(
         onDismissRequest = ::requestClose, title = { Text("Session title") },
         text = {
+            val requester = remember { FocusRequester() }
+            val dialogKeyboard = LocalSoftwareKeyboardController.current
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
                     title, { title = Transcript.truncateUtf16(it, 120); onDirtyChange(title != note.title) }, singleLine = true, enabled = !saving,
@@ -264,6 +265,8 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { commit() }),
                 )
+                // The dialog has its own composition; request focus only after its field is attached.
+                LaunchedEffect(Unit) { requester.requestFocus(); dialogKeyboard?.show() }
                 if (failed) Text("Couldn't save the title. Try again.", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 10.dp).semantics { liveRegion = LiveRegionMode.Assertive })
             }
@@ -271,7 +274,6 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
         confirmButton = { TextButton(onClick = ::commit, enabled = !saving && title.isNotBlank()) { Text(if (saving) "Saving…" else "Save") } },
         dismissButton = { TextButton(onClick = ::requestClose, enabled = !saving) { Text("Cancel") } },
     )
-    LaunchedEffect(Unit) { requester.requestFocus(); keyboard?.show() }
     if (discard) AlertDialog(
         onDismissRequest = { discard = false }, title = { Text("Discard this title?") },
         text = { Text("Your changes won’t be saved.") },

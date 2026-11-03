@@ -677,6 +677,44 @@ class InterfaceTest {
         } finally { app.store.delete(id) }
     }
 
+    @Test fun renamedTitleDraftAndKeyboardSurviveRecreation() {
+        val app = application()
+        val originalTitle = "Rename recreation fixture"
+        val originalText = "The recorded passage stays unchanged."
+        val draft = "a".repeat(118) + "🙂"
+        val id = readySession(app.store, originalTitle, listOf(originalText))
+        fun waitForDialogKeyboard() {
+            val field = compose.onNode(hasSetTextAction())
+            val dialogView = checkNotNull(field.fetchSemanticsNode().root as? android.view.View)
+            compose.waitUntil(5_000) {
+                compose.runOnUiThread {
+                    ViewCompat.getRootWindowInsets(dialogView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+                }
+            }
+            field.assertIsFocused()
+        }
+        try {
+            waitForTitle(originalTitle)
+            compose.onNodeWithText(originalTitle).performClick()
+            waitForSessionReady(originalTitle, originalText)
+            compose.onNodeWithContentDescription("Session options").performClick()
+            compose.onNodeWithText("Rename").performClick()
+            waitForEditor()
+            waitForDialogKeyboard()
+            compose.onNode(hasSetTextAction()).performTextReplacement(draft)
+            assertEquals(originalTitle, app.store.note(id)?.title)
+            compose.activityRule.scenario.recreate()
+            waitForEditor()
+            waitForDialogKeyboard()
+            compose.onNode(hasSetTextAction()).assertTextContains(draft)
+            compose.onNodeWithText("Save").assertIsDisplayed().assertIsEnabled().performClick()
+            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
+            waitForSessionReady(draft, originalText)
+            assertEquals(draft, app.store.note(id)?.title)
+            assertEquals(originalText, app.store.passages(id).single().text)
+        } finally { app.store.delete(id) }
+    }
+
     @Test fun oversizedEditorInputKeepsTheValidDraftThroughRotation() {
         val app = application()
         val id = readySession(app.store, "Bounded draft fixture", listOf("Saved original."))
