@@ -158,8 +158,11 @@ prevent acceptance. Do not publish the experimental integration as a verified
 product change. Fixed-history repeats now isolate decoder-zero RNG carry on one
 ES DEV prefix: the pinned beam sampler samples IDs instead of using its sorted
 scores; one reset statement removes the repeated target difference. True top-k
-selection is a separate, unaccepted candidate. Seven real-language Android DEV
-first chunks preserve all inputs, but RU/FR texts and the FR review label differ
+selection is a separate, unaccepted candidate. The optional
+[combined research build](whisper-beam-research.md) passes actual-sampler and
+configuration checks; its fourteen-call ES repeat is history-invariant but adds
+text on a previously empty short input. Full DEV quality gates still apply.
+Seven real-language Android DEV first chunks preserve all inputs, but RU/FR texts and the FR review label differ
 from host results. See the [diagnostic evidence](benchmarks/2026-11-03-local/report.md#reused-decoder-fixed-prefix-diagnosis).
 Freeze any final policy before held-out use. All 42 fresh held-out clips remain closed.
 

@@ -574,6 +574,37 @@ The 28 + 14 ASR calls used already-consumed DEV inputs, not held-out recordings.
 Execution overlapped other local work; durations are diagnostic only. Previous
 quality rejections, lexical flags and the closed 42-clip held-out cohort remain.
 
+### Actual top-k candidate: bounded contract check
+
+The separate [combined research overlay](../../whisper-beam-research.md) uses the
+sorted highest-scoring IDs with deterministic token-ID ties. It preserves the
+reviewed SOT/VAD API changes and does **not** include the diagnostic RNG reset.
+The same test harness compiles the actual baseline and candidate sampler:
+seven of eight baseline assertions fail; all eight candidate assertions pass.
+CLI help and twenty configuration cases also pass their expected outcomes,
+including eighteen fail-closed cases. Independent source/provenance review checked
+the public files, runtime inputs and generated source hashes. These checks load
+no model and perform no ASR or VAD inference.
+
+A separately frozen four-session ES prefix run then used the new library for
+fourteen ASR calls, without VAD or threshold changes. All target text, timestamps,
+probabilities and no-speech values match across both histories and both repeats.
+However, the formerly empty 1.06-second third input now produces one 122-character
+segment whose native end is 5,000 ms in both inclusive sessions. Stable output is
+not necessarily correct output; this is not an accepted speech-quality result.
+The historical `include-empty` label describes the old baseline, not the new
+candidate's third output.
+
+Root independently verified all 2,463 frozen inputs, 33 non-log outputs, target
+equality and the third-input observations. The [public aggregate](true-topk-prefix-results.json)
+has SHA-256 `0bdf471e93d904a0502ca067f56deb0b7423bfa462cb4bdb0dc9424dc0530d2c`.
+The public overlay's model-free verification is bound by runtime result
+`9cc17d9bb409ceb8629845aea1ee904a7e82519dcfade33cf3ac6f082e785c59`
+and configuration result `f3104e7aa78c3bd03b01c96bce14184cab3fbdff5f849b47551e0fc75258066c`.
+Full persistent DEV speech/control comparison, changed-output adjudication,
+Android integration, fresh held-out validation and controlled timing remain
+required. The earlier presence-only candidate remains rejected.
+
 ## Android seven-language integration smoke
 
 The unpublished VAD candidate was exercised through its actual Android JNI on

@@ -156,6 +156,11 @@ and isolate decoder-zero RNG carry on one ES DEV prefix. The pinned beam sampler
 sorts logits but samples random IDs; a one-line reset removes the target difference
 in four repeated include/skip sessions. This is a bounded causal result, not an
 accepted STT policy. [Evidence and provenance](benchmarks/2026-11-03-local/report.md#reused-decoder-fixed-prefix-diagnosis).
+The optional [combined beam research build](whisper-beam-research.md) now passes
+eight actual-sampler checks (seven fail on its baseline) and twenty configuration
+cases. A separate fourteen-call ES repeat is history-invariant, but its formerly
+empty 1.06-second input produces a 122-character segment with a native 5-second
+end. The repair is not an accepted quality improvement; full DEV gates remain.
 A separate Android smoke used seven actual-language DEV first chunks: audio was
 unchanged in 7/7, host text matched in 5/7 and review labels in 6/7. It establishes
 integration only; cross-runtime numerical parity and seven-language quality remain

@@ -122,7 +122,11 @@ STT-регрессий и не заменяет полный clean QA. Инте�
 prefix: beam sampler сортирует logits, но выбирает случайные IDs; RNG decoder0
 сохраняется между calls. Однострочный reset убрал различия target во всех четырёх
 повторах. Это диагностика, не принятая политика. Настоящий top-k — отдельный
-кандидат, требующий измерений. Android smoke на семи DEV first chunks сохранил
+кандидат: research overlay в `docs/whisper-beam-research.md` прошёл actual-sampler
+RED 7/8 → GREEN 8/8 и 20 configure checks. Его 14-call ES повтор устранил history
+различия, но прежний пустой input 1.06 s теперь даёт 122 символа с native end 5 s.
+Не выдавай детерминизм за качество. Полный DEV comparison/gates ещё требуются.
+Android smoke на семи DEV first chunks сохранил
 все inputs, но тексты RU/FR и review label FR отличаются от host. Не объявляй
 численную идентичность сред или улучшение качества по этим семи примерам.
 Подробности и безопасные aggregates — в local benchmark report.
