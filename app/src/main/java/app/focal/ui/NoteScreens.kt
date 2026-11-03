@@ -24,7 +24,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,7 +39,6 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -73,7 +71,7 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
 @OptIn(ExperimentalFoundationApi::class)
 @Composable internal fun LibraryScreen(
     notes: List<Note>, loaded: Boolean, live: LiveSession, open: (String?) -> Unit,
-    query: String = "", setQuery: (String) -> Unit = {},
+    searchValue: TextFieldValue = TextFieldValue(""), setSearchValue: (TextFieldValue) -> Unit = {},
     searchOpen: Boolean = false, setSearchOpen: (Boolean) -> Unit = {},
     error: String? = null, retryLoad: () -> Unit = {},
     attentionOnly: Boolean = false, setAttentionOnly: (Boolean) -> Unit = {},
@@ -89,12 +87,7 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
     val inputWindowReady by rememberUpdatedState(lifecycleState == Lifecycle.State.RESUMED && windowFocused)
     // Keep the request consumed when the lazy search item leaves the viewport.
     var inputRequestIssued by remember(inputActive) { mutableStateOf(false) }
-    var searchValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(TextFieldValue(query, TextRange(query.length)))
-    }
-    // External query changes, such as Clear, keep a valid selection in the accepted text.
-    val fieldValue = searchValue.copy(text = query)
-    SideEffect { if (searchValue != fieldValue) searchValue = fieldValue }
+    val query = searchValue.text
     var viewportHeight by remember { mutableIntStateOf(0) }
     fun needsAttention(note: Note) = note.reviewCount > 0 || note.state in listOf("ERROR", "INTERRUPTED")
     val attentionCount = notes.count(::needsAttention)
@@ -108,7 +101,7 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
         setInputActive(false)
     }
     fun closeSearch() {
-        setQuery("")
+        setSearchValue(TextFieldValue(""))
         setSearchOpen(false)
         dismissSearchInput()
     }
@@ -151,11 +144,10 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
                         if (focused && viewportHeight > 0) visibilityRequester.bringIntoView()
                     }
                     TextField(
-                        value = fieldValue,
+                        value = searchValue,
                         onValueChange = {
                             val accepted = it.copy(text = Transcript.truncateUtf16(it.text, SEARCH_QUERY_MAX_CHARS))
-                            searchValue = accepted
-                            if (accepted.text != query) setQuery(accepted.text)
+                            setSearchValue(accepted)
                         },
                         modifier = Modifier.fillMaxWidth().focusRequester(requester)
                             .onFocusChanged {
@@ -171,7 +163,7 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
                         keyboardActions = KeyboardActions(onSearch = { dismissSearchInput() }),
                         placeholder = { Text("Search sessions", style = MaterialTheme.typography.bodyMedium) },
                         leadingIcon = { Glyph(Symbol.Search, Modifier.size(17.dp), MaterialTheme.colorScheme.onSurfaceVariant) },
-                        trailingIcon = { if (query.isNotEmpty()) IconAction(Symbol.Close, "Clear search") { setQuery("") } },
+                        trailingIcon = { if (query.isNotEmpty()) IconAction(Symbol.Close, "Clear search") { setSearchValue(TextFieldValue("")) } },
                         shape = RoundedCornerShape(10.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,

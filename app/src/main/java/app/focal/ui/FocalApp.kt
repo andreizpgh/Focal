@@ -37,6 +37,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -86,7 +87,8 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     val selected = (destination as? Destination.Session)?.id
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     var modelRetryId by rememberSaveable { mutableStateOf<String?>(null) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var searchValue by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
+    val searchQuery = searchValue.text
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var searchImeSeen by rememberSaveable { mutableStateOf(false) }
     var searchInputActive by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<Boolean, Boolean>(
@@ -189,7 +191,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
     BackHandler(destination != Destination.Sessions) { open(null) }
     BackHandler(destination == Destination.Sessions && searchOpen) {
-        searchOpen = false; searchQuery = ""; dismissInput()
+        searchOpen = false; searchValue = TextFieldValue(""); dismissInput()
     }
     LaunchedEffect(selected, library.selectedId, library.note, library.loaded, library.error) {
         if (selected != null && library.loaded && library.selectedId == selected && library.note == null && library.error == null) {
@@ -273,7 +275,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                                     searchOpen = !searchOpen
                                     setSearchInputActive(searchOpen)
                                     if (searchOpen) libraryListState.requestScrollToItem(0)
-                                    if (!searchOpen) { searchQuery = ""; dismissInput() }
+                                    if (!searchOpen) { searchValue = TextFieldValue(""); dismissInput() }
                                 }
                                 LaunchedEffect(searchInputActive, searchHasFocus) {
                                     // Keyboard navigation can immediately refocus the field after clearFocus.
@@ -376,7 +378,9 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                             ready, preparing, setupError, { openModel() }, ::notify,
                         )
                         Destination.Sessions -> LibraryScreen(
-                            library.notes, library.loaded, live, ::open, searchQuery, { searchQuery = Transcript.truncateUtf16(it, SEARCH_QUERY_MAX_CHARS) },
+                            library.notes, library.loaded, live, ::open, searchValue, {
+                                searchValue = it.copy(text = Transcript.truncateUtf16(it.text, SEARCH_QUERY_MAX_CHARS))
+                            },
                             searchOpen, { searchOpen = it; if (!it) searchInputActive = false }, library.error, model::retryLibrary,
                             attentionOnly = attentionOnly, setAttentionOnly = { attentionOnly = it }, listState = libraryListState,
                             inputActive = searchInputActive, setInputActive = ::setSearchInputActive,

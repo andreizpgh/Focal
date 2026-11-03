@@ -353,6 +353,41 @@ class InterfaceTest {
     }
 
     @OptIn(ExperimentalTestApi::class)
+    @Test fun searchCaretSurvivesOpeningAResultAndReturning() {
+        val app = application()
+        val query = "Range fixture"
+        val title = "$query target"
+        val passage = "Search selection survives opening this result."
+        val selection = androidx.compose.ui.text.TextRange(6)
+        val id = readySession(app.store, title, listOf(passage))
+        fun assertQueryAndSelection() {
+            compose.onNode(hasSetTextAction()).assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString(query))
+            ).assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, selection))
+        }
+        try {
+            waitForTitle(title)
+            compose.onNodeWithContentDescription("Search sessions").performClick()
+            compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(query)
+            compose.onNode(hasSetTextAction()).performTextInputSelection(selection)
+            assertQueryAndSelection()
+            compose.onNode(hasText(title) and hasClickAction() and !hasSetTextAction()).assertIsDisplayed().performClick()
+            waitForSessionReady(title, passage)
+            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            waitForEditor()
+            val fieldView = checkNotNull(compose.onNode(hasSetTextAction()).fetchSemanticsNode().root as? android.view.View)
+            compose.waitUntil(5_000) {
+                compose.runOnUiThread {
+                    ViewCompat.getRootWindowInsets(fieldView)?.isVisible(WindowInsetsCompat.Type.ime()) == false
+                }
+            }
+            // Preserve the text state without reactivating input after returning to Sessions.
+            compose.onNode(hasSetTextAction()).assertIsNotFocused()
+            assertQueryAndSelection()
+        } finally { app.store.delete(id) }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
     @Test fun activeSearchKeepsSelectionAndKeyboardThroughRecreation() {
         val app = application()
         val prefix = "Search rotation"
