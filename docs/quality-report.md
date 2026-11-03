@@ -115,8 +115,21 @@ not use this overlay in the verified `129ee02` checkpoint. Subsequent
 matches all 185 already-used DEV/control requests exactly: conditioned PCM,
 probability bits, ranges and presence decisions, with original samples unchanged.
 There are 150 positive and 35 negative decisions using one reused detector.
-A fresh paired reused-ASR development comparison and Android candidate QA are in
-progress; neither has an acceptance result yet. Fresh held-out data stays closed.
+The subsequent [paired reused-ASR comparison](benchmarks/2026-11-03-local/report.md#persistent-whole-chunk-presence-rejected)
+is rejected. Normal/quiet word errors change from 223/256 to 176/255, but quiet
+Spanish regresses from 16 to 19 errors and ten positive controls fail, including
+loss of a previously correct Portuguese negation. Independent review checked
+3,129 inputs, 2,176 outputs and the actual Kotlin context/reconciliation replay.
+Five newly empty DEV chunks and four lexical flags remain open. The fresh held-out
+cohort stays closed; functional Android checks cannot override this rejection.
+
+The local, unpublished Android integration passed 26 focused tests and two
+additional preparation/dialog regressions. The latter both failed when their
+individual fixes were removed and passed after restoration. Manual English and
+Russian force-stop recovery retained the original varying emulator PCM and showed
+an uncertain empty passage rather than invented text. These are diagnostic
+candidate results, not a clean full-suite checkpoint or an accepted STT policy.
+The verified production checkpoint remains `129ee02`.
 
 The [shorter encoder-context experiment](benchmarks/2026-11-03-local/report.md#shorter-encoder-context-with-whole-chunk-presence-rejected)
 is rejected: word errors are 183/249, but six of fourteen cells regress against

@@ -476,6 +476,62 @@ The same 42 DEV clips recur across correlated gains. This is not a persistent
 session, controlled speed or phone-resource result, and the rejected candidate
 does not open the held-out cohort.
 
+## Persistent whole-chunk presence: rejected
+
+This completed DEV comparison gives each arm a fresh model context for each of
+21 matched sessions, then reuses that context across the session's requests.
+Both arms use the same reviewed engine with the VAD error/cancellation fix;
+ASR/SOT logic, decoder thresholds and full encoder context 1500 are unchanged.
+The candidate applies the same whole-chunk presence policy. Allowed ASR calls
+retain the entire original input and padding; each arm generates trusted prompts
+from its own preceding Kotlin-reconciled passages.
+
+The same 42 DEV clips form 14 language/condition streams and 129 requests per
+arm. Seven additional sessions interleave 28 synthetic positives with 28 noise
+controls, using the frozen language/context order. The run completed 185 baseline
+and 150 candidate ASR calls, plus 185 fresh candidate VAD checks. These are fresh
+persistent comparators: historical cold outputs bind framing and source identity
+only and do not supply baseline recognition results.
+
+| Condition | Persistent baseline word errors / 864 | Persistent candidate word errors / 864 | Baseline character errors / 4,349 | Candidate character errors / 4,349 |
+| --- | ---: | ---: | ---: | ---: |
+| Normal | 223 | 176 | 598 | 431 |
+| Quiet | 256 | 255 | 822 | 801 |
+
+**The candidate is rejected.** Quiet Spanish word errors rise from 16 to 19 out
+of 177 reference words, although character errors fall from 18 to 16. Ten of 28
+positive controls fail the frozen criteria: four have more word errors, five
+have more character errors, and five change text while tying both error counts;
+these groups overlap. No positive control is skipped or newly empty. All 28
+noise controls skip ASR after fresh VAD checks, preserving uncertain review cues;
+this is not evidence of 28 decoder calls returning empty output.
+
+Thirty DEV chunks change native text or reconciled passages. Five previously
+nonempty native results become empty, and four retain automatic global lexical
+loss flags. Source-local review aids do not resolve acoustic speech loss; the
+flags remain open. A targeted output review confirmed that one Portuguese quiet
+short-negation control changed from a correct normalized result to an incorrect
+result without the negation: word errors rose from 0 to 3 and character errors
+from 0 to 11. Full critical-error and acoustic adjudication remain open. The
+private targeted-review SHA-256 is
+`ec1eaa5042d2534d17871773b7ab085f4bcdf5497dc6c49b92f1a93f3722a41d`.
+
+The [public whitelist](persistent-presence-dev-results.json) contains per-cell
+metrics, control comparisons and hash bindings without transcripts. Its SHA-256 is
+`4db756ae1729def4daa13af29296e67e1c2124c06a326c78e1750762afe46eaf`.
+Independent review verified 3,129 frozen inputs, 2,176 non-log outputs, all 370
+request identities and the 335 native ASR profiles. All 185 VAD decisions matched
+the frozen native-parity expectations. Separate read-only Kotlin replay reproduced
+258 DEV contexts and 370 reconciliation results. The launch freeze is
+`d60947de3e043b8c52c83f81285ba15648f1fbe8662a5052cc2c0571cb5684a2`;
+the completed result binding is
+`0b2009f2e312cd82765fd300a3a5f47dfc79c984f2d51b6b01af616acd6fb3a2`.
+
+Host execution overlapped Android QA; its 1,476.07-second duration and decoder
+timings are diagnostic, not a speed ranking or phone-resource measurement. This
+rejection neither adopts the policy nor opens the unchanged 42-clip held-out
+cohort. It does not establish an accuracy improvement in every supported language.
+
 ## Execution and resource scope
 
 The initial baseline process terminated with SIGTERM/exit 143 during the German
@@ -509,8 +565,9 @@ The none variant has no conditioning step. VAD wall time includes its cold
 process/model work; conditioning is measured separately. No combined phone
 latency is inferred.
 
-Each call starts a cold host process and loads the model. Probe totals exclude
-Kotlin/helper I/O, capture and queueing. These are not randomized repeated
+In the cold runs tabulated above, each ASR call starts a host process and loads
+the model. Probe totals exclude Kotlin/helper I/O, capture and queueing. These
+are not randomized repeated
 trials. Some host work overlapped Android build/QA, and contention was not
 experimentally controlled; the timings must not be used to rank candidate speed.
 Different gates change both audio and call counts. These descriptive costs do not

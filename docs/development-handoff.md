@@ -141,10 +141,22 @@ conditioning/presence now matches all 185 already-used DEV/control requests exac
 (150 present, 35 absent), including probability bits and ranges; the original
 floats are unchanged. Independent review checked all 784 frozen inputs.
 The [public parity aggregate](benchmarks/2026-11-03-local/native-presence-parity.json)
-does not establish ASR quality or Android/phone performance. A fresh paired
-development run with reused ASR contexts and local Android candidate checks are
-in progress: the app keeps its engine open, unlike earlier cold process-per-chunk
-probes. Keep those comparisons separate and freeze any final policy before held-out use.
+does not establish ASR quality or Android/phone performance. The fresh paired
+reused-ASR development run is now **rejected**: normal/quiet word errors change
+from 223/256 to 176/255, but quiet Spanish rises from 16 to 19 and ten positive
+controls fail. Targeted review confirms loss of a previously correct Portuguese
+negation. Independent review verified all 3,129 inputs, 2,176 outputs and actual
+Kotlin replay; five newly empty DEV chunks and four lexical flags stay open.
+See the [persistent comparison](benchmarks/2026-11-03-local/persistent-presence-dev-results.json).
+The app keeps its engine open; cold evidence did not establish this behavior.
+
+An unpublished Android candidate passes 26 focused tests and two additional
+preparation/dialog regressions, each checked against removal of its fix.
+Actual English and Russian force-stop recovery now retains varying emulator PCM
+and displays an uncertain empty passage, but the language/control regressions
+prevent acceptance. Do not publish the experimental integration as a verified
+product change. Diagnose the reused-engine difference with fixed-history repeats;
+freeze any final policy before held-out use. All 42 fresh held-out clips remain closed.
 
 Focused independent reviews covered capture/recovery, storage/privacy, JNI,
 playback/state, UX and evidence tooling. Source reviews are separate from runtime
