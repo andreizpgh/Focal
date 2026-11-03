@@ -89,9 +89,9 @@ updated model will exceed the reservation, stop and reduce the experiment set.
 
 The original prospective allocation below is retained for context, not as
 authorization to exceed the ceiling. The current conservative ledger reserves
-**879,645,181 bytes**, including the unchanged 645,592,677-byte prior checkpoint
+**881,742,333 bytes**, including the unchanged 645,592,677-byte prior checkpoint
 and a 61,000,000-byte reserve for one future publication CI run. The remaining
-allowance is **120,354,819 bytes**. The older corpus figures below describe the
+allowance is **118,257,667 bytes**. The older corpus figures below describe the
 previous cloud study, not an additional allocation. Selected archive prefixes total 38,797,312 bytes; the separate 1,048,576-byte
 exploratory prefix is also charged. Complete corpus shards were never fetched. The larger corpus overhead means the 639 MB Qwen Q8 artifact
 no longer fits the remaining budget. E5 is deferred; no correction model was

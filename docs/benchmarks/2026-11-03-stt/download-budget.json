@@ -965,8 +965,18 @@
       "name": "ggml-silero-v5.1.2.bin",
       "bytes": 885099,
       "kind": "vad-model"
+    },
+    {
+      "name": "libasan-16.2.1-3.fc44.x86_64.rpm",
+      "bytes": 1048576,
+      "kind": "host-sanitizer-runtime"
+    },
+    {
+      "name": "libubsan-16.2.1-3.fc44.x86_64.rpm",
+      "bytes": 1048576,
+      "kind": "host-sanitizer-runtime"
     }
   ],
-  "reserved_bytes": 879645181,
-  "note": "Conservative upper bounds: prior checkpoint transfers, local baseline model, disjoint FLEURS cohort, research-only Silero VAD plus metadata, and one reserved publication CI. Carry the total forward; never reset it."
+  "reserved_bytes": 881742333,
+  "note": "Conservative upper bounds: prior checkpoint transfers, local baseline model, disjoint FLEURS cohort, research-only Silero VAD, matching host sanitizer runtimes, metadata/retries, and one reserved publication CI. Carry the total forward; never reset it."
 }

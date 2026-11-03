@@ -1,0 +1,173 @@
+{
+  "schema": 1,
+  "scope": "Read-only diagnosis of two already executed reused synthetic controls; no new inference, listening, threshold selection or policy change.",
+  "finding": "Both successful decodes have admissible completed hypotheses, including the literal reference short negation in slot0. Every admissible slot meets the existing no-speech conjunction, so output is suppressed regardless of the unrecorded winning index. This is separate from native-11 and from VAD skipping.",
+  "cases": [
+    {
+      "id": "fr-short-negation-gain-0p1",
+      "language": "fr",
+      "decode_return_code": 0,
+      "vad_admitted": true,
+      "original_audio_unchanged": true,
+      "no_speech_probability": {
+        "value": 0.650469184,
+        "nonfinite": null,
+        "bits": "3f268526"
+      },
+      "no_speech_threshold": 0.600000024,
+      "logprob_threshold": -1,
+      "slots": [
+        {
+          "index": 0,
+          "failed": false,
+          "completed": true,
+          "result_len": 4,
+          "score": {
+            "value": -1.641249418258667,
+            "nonfinite": null,
+            "bits": "bffa428ec0000000"
+          },
+          "avg_logprobs": {
+            "value": -1.641249418258667,
+            "nonfinite": null,
+            "bits": "bffa428ec0000000"
+          },
+          "cutoff_condition": true
+        },
+        {
+          "index": 1,
+          "failed": false,
+          "completed": true,
+          "result_len": 4,
+          "score": {
+            "value": -1.691187858581543,
+            "nonfinite": null,
+            "bits": "bffb0f1b00000000"
+          },
+          "avg_logprobs": {
+            "value": -1.691187858581543,
+            "nonfinite": null,
+            "bits": "bffb0f1b00000000"
+          },
+          "cutoff_condition": true
+        },
+        {
+          "index": 2,
+          "failed": false,
+          "completed": true,
+          "result_len": 5,
+          "score": {
+            "value": -1.786661434173584,
+            "nonfinite": null,
+            "bits": "bffc962a4ccccccd"
+          },
+          "avg_logprobs": {
+            "value": -1.786661434173584,
+            "nonfinite": null,
+            "bits": "bffc962a4ccccccd"
+          },
+          "cutoff_condition": true
+        }
+      ],
+      "slot0_literal_matches_reference_casefold": true,
+      "all_admissible_slots_meet_cutoff": true,
+      "same_call_accumulator_count": 0,
+      "diagnostic_sha256": "bacbbd02791157d83b312ecbb915eee30906445ce441acac46f1310e2c4c89f0"
+    },
+    {
+      "id": "pt-short-negation-gain-0p1",
+      "language": "pt",
+      "decode_return_code": 0,
+      "vad_admitted": true,
+      "original_audio_unchanged": true,
+      "no_speech_probability": {
+        "value": 0.636220872,
+        "nonfinite": null,
+        "bits": "3f22df5f"
+      },
+      "no_speech_threshold": 0.600000024,
+      "logprob_threshold": -1,
+      "slots": [
+        {
+          "index": 0,
+          "failed": false,
+          "completed": true,
+          "result_len": 4,
+          "score": {
+            "value": -1.4805666208267212,
+            "nonfinite": null,
+            "bits": "bff7b066a0000000"
+          },
+          "avg_logprobs": {
+            "value": -1.4805666208267212,
+            "nonfinite": null,
+            "bits": "bff7b066a0000000"
+          },
+          "cutoff_condition": true
+        },
+        {
+          "index": 1,
+          "failed": false,
+          "completed": true,
+          "result_len": 13,
+          "score": {
+            "value": -1.7090988525977502,
+            "nonfinite": null,
+            "bits": "bffb587809d89d8a"
+          },
+          "avg_logprobs": {
+            "value": -1.7090988525977502,
+            "nonfinite": null,
+            "bits": "bffb587809d89d8a"
+          },
+          "cutoff_condition": true
+        },
+        {
+          "index": 2,
+          "failed": false,
+          "completed": true,
+          "result_len": 4,
+          "score": {
+            "value": -1.6046041250228882,
+            "nonfinite": null,
+            "bits": "bff9ac7560000000"
+          },
+          "avg_logprobs": {
+            "value": -1.6046041250228882,
+            "nonfinite": null,
+            "bits": "bff9ac7560000000"
+          },
+          "cutoff_condition": true
+        }
+      ],
+      "slot0_literal_matches_reference_casefold": true,
+      "all_admissible_slots_meet_cutoff": true,
+      "same_call_accumulator_count": 0,
+      "diagnostic_sha256": "45fe96c6c119a848c8c97787e0527c09e7dac5cb67968d966f0e549a43744b1b"
+    }
+  ],
+  "source": {
+    "sha256": "4e227a22387519de1b9ca79928df5fe3aa3fc6ccaf690f0ebaf46383e81a1e1b",
+    "ranking_line": 7602,
+    "no_speech_conjunction_line": 7686,
+    "output_guard_line": 7704
+  },
+  "limitations": [
+    "No stored winner index is claimed. All admissible slots satisfy the conjunction, so the conclusion does not depend on that index.",
+    "Correct literal synthetic reference tokens do not establish acoustic correctness or human speech accuracy.",
+    "Legacy baseline no-speech scores use the known wrong/stale logit row and are not a calibrated comparison.",
+    "These two cases do not justify disabling the cutoff, retuning thresholds, or accepting other failed controls."
+  ],
+  "provenance": {
+    "launch_plan_sha256": "3dd074c96099f028cca68178473da4339603aa930766492438875e5fe6e4cc61",
+    "result_binding_sha256": "d319a1fd3a7f84b97033e59a6ec4e4fe562b7eb62967c659d32a43261db566bc",
+    "control_pairs_sha256": "dfaac6ca806500824f9149c1cd91b26d89373962e11309d37ceaa6e5de4fbe57",
+    "script_sha256": "d6bbcc2f9edc0742d7cd4df9524171366e4eff58b51a968040dee068faed509b"
+  },
+  "independent_review_required": true,
+  "revision": {
+    "reason": "Correct source anchor to ranking comment at line7602; native inputs, raw diagnostics and inference conclusions unchanged.",
+    "previous_diagnosis_sha256": "dd7b20c4356c7b4608ccc02461642d2002ecf9675cc3607af32ee2063f8dc1ec",
+    "previous_script_sha256": "bcd40319963f3c88b4646e30dbe1dc1d6d3bae615f5ff16d57d74f57d4f1bf43"
+  }
+}

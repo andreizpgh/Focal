@@ -316,6 +316,15 @@ remains an open product-quality gate even if the functional Android suite passes
 See the [full results](benchmarks/2026-11-03-stt/report.md). No experimental decoder,
 gate threshold, model replacement or automatic correction has been enabled.
 
+A later 56-control screen of corrected SOT, true top-k and beam control-flow
+repairs also failed acceptance: 14 strict positive failures, three successful
+newly empty outputs and one explicit native decoding failure. Critical review
+found lost FR/PT quiet negations and a PT negation loss despite lower WER/CER.
+All noise controls skipped ASR; that does not offset speech regressions. Independent
+review verified 796 inputs and 289 outputs. Only existing synthetic speech controls
+and two previously recorded emulator-noise signals were consumed; fresh held-out
+audio remains closed. The production decoder is unchanged.
+
 ## Remaining release gates
 
 Independent source review also found a native allocation-failure ownership defect:

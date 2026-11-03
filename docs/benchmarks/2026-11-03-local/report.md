@@ -828,6 +828,64 @@ This validates control-flow contracts only. Earlier speech rejections stand;
 seven-language quality, speed, Android adoption and held-out eligibility remain
 unestablished. The pinned submodule and production decoder are unchanged.
 
+## Beam control-flow neural screen: rejected
+
+The combined control-flow candidate subsequently ran the same 56 existing
+controls in seven persistent language contexts: 28 ASR attempts, 56 native VAD
+calls and 28 noise skips. All inputs, prompts, ordering, original ASR PCM and
+thresholds were frozen before execution. No human DEV or held-out audio was
+opened. The 54 model-free/native diagnostic prerequisites and 12 evaluator/stub
+checks had passed first; these did not establish speech quality.
+
+The screen is **rejected**: 14 strict positive gates failed, only 6/28 positive
+texts matched production, and three successful ASR calls newly emitted no text.
+A fourth empty comparison is a separate native failure, never successful silence:
+Russian normal meeting input exhausted all three decoders and returned `-11`.
+Each retained 220 tokens, with failed=true, completed=false, no completed result
+and unscored negative-infinity ranking values. The actual maximum-iteration guard
+marks these zero-result branches failed; final ranking has no winner. The saved
+states do not establish an entropy failure or a correct raw hypothesis.
+
+All 28 noise controls skipped ASR. Textual critical review confirmed loss of
+previously correct short negations in quiet French and Portuguese, and a lost
+negation term in the partly incorrect German normal meeting baseline. Portuguese
+normal meeting also lost a negation despite improving word/character error counts
+by 2/5. Four cosmetic changed-text ties remain failed gates. Raw decoder strings
+are diagnostic hypotheses, not accepted app text or proof of spoken content.
+
+A separate [source-bound diagnosis](quiet-negation-diagnosis.json) explains the
+two quiet FR/PT short-negation omissions: VAD admitted both; ASR completed, and
+raw slot zero already contained the reference short negation. Every admissible
+beam met the existing no-speech conjunction (probability above 0.6 and average
+log probability below −1), so output was suppressed regardless of which beam
+won. This is separate from VAD rejection and native `-11`. It does not establish
+acoustic correctness, justify changing thresholds, or explain the remaining
+nonempty hypothesis regressions. Legacy no-speech scores use the known wrong
+logit row and are not a calibrated comparison. The diagnosis hash is
+`d378cd44928e49c1e54b60a6c269e17ec76430793292083ab0a017754ce09d8a`.
+
+Against the already rejected true-top-k comparator, 27/28 accepted positive
+**texts** were unchanged; the remaining case is the explicit Russian failure.
+This is not equality of native profiles, timestamps, metadata or diagnostics,
+and does not override the production comparison. No retry or threshold tuning
+followed. The 121.454 s host duration is diagnostic, not a paired speed result.
+
+Independent review verified 796 inputs, 289 bound outputs, 11 dependencies,
+all 56 input/prompt/VAD records and 12,809 diagnostic IEEE values. It independently
+recomputed edit distances and all comparison gates. The failed trial retains its
+own error artifact, contributes full-reference deletions only to supplemental
+metrics, and is never omitted from coverage. Later predetermined requests remain
+diagnostic after rejection. The original 42 fresh held-out clips remain unused.
+
+The [safe aggregate](beam-controlflow-neural-results.json), SHA-256
+`9392e4414f319e10694202464b6907b36d11e8c7a55c531592c20b9d211e8b7c`, binds
+launch `3dd074c96099f028cca68178473da4339603aa930766492438875e5fe6e4cc61`
+and result `d319a1fd3a7f84b97033e59a6ec4e4fe562b7eb62967c659d32a43261db566bc`.
+The separate [critical review](beam-controlflow-critical-review.json) records
+text-only conclusions and their source hashes (SHA-256
+`57b2d760f898c54a364ac6731f2b1d67bc672ae0f3641bf1849a6e7c62c29b0d`). No candidate change is enabled
+in Android; seven-language quality and speed remain open.
+
 ## Android seven-language integration smoke
 
 The unpublished VAD candidate was exercised through its actual Android JNI on
@@ -904,13 +962,17 @@ by this audit and no download was performed.
 | Metadata | 16,777,216 |
 | Corpus prefixes | 95,682,564 |
 | VAD model, conservative reservation | 885,099 |
-| Total added | 234,052,504 |
+| Matching host sanitizer runtimes, conservative reservations | 2,097,152 |
+| Total added | 236,149,656 |
 
-Total reservations are **879,645,181 / 1,000,000,000 bytes**, including the
+Total reservations are **881,742,333 / 1,000,000,000 bytes**, including the
 61,000,000-byte future CI reserve and conservative metadata/retry limits.
-An additional **120,354,819 bytes** remain unreserved. Reservations are not a count
+An additional **118,257,667 bytes** remain unreserved. Reservations are not a count
 of actual transferred bytes. The Italian held-out refinement reused cached data
-and adds zero bytes.
+and adds zero bytes. Two matching Fedora GCC sanitizer packages were later fetched
+for isolated memory-cleanup regressions: 834,149 actual bytes, bounded by two
+1 MiB reservations. Their signatures were verified and only the required shared
+libraries extracted into ignored build storage; no system installation occurred.
 
 ## Remaining evidence
 

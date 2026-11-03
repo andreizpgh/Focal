@@ -238,8 +238,8 @@ these limitations when comparing models; do not turn a fast host run or aggregat
 WER gain into an all-language Android claim.
 
 The shared ceiling remains **1,000,000,000 downloaded bytes including retries**.
-Current conservative reservation: **879,645,181 bytes**, including a
-61,000,000-byte reserve for one future publication CI run; **120,354,819 bytes**
+Current conservative reservation: **881,742,333 bytes**, including a
+61,000,000-byte reserve for one future publication CI run; **118,257,667 bytes**
 remain. The old 645,592,677-byte reservation prefix is preserved. Carry the public budget snapshot forward if the private
 ledger is unavailable; never reset the budget to zero in a fresh environment.
 The 639 MB Qwen artifact no longer fits the remainder. No LLM was downloaded.
@@ -284,6 +284,22 @@ used, and no production change or quality/speed claim follows. A later neural
 screen must keep the unchanged positive/noise controls and serialize raw failed
 state before reset/free; final error `-11` is a failed trial, never successful
 silence or an excluded sample. Prior rejections and the closed held-out set stand.
+
+The later frozen neural control screen is now complete and rejected: 56 requests,
+28 ASR attempts (27 success and one explicit `-11`), 56 VAD calls, 28 noise skips.
+Fourteen strict positive gates failed; only six texts exactly match production.
+Three successful calls newly emitted empty text; the Russian failed trial remains
+separate. Critical review confirms quiet FR/PT negation loss and a PT negation
+loss despite improved WER/CER. Against the rejected top-k parent, 27/28 accepted
+positive texts match; the remaining case is explicit decoder exhaustion. This is
+not whole-output equality or acceptance. Independent review checked 796 inputs,
+289 outputs, 11 dependencies and all metrics/diagnostic encodings. No human DEV,
+held-out data or new threshold was used. See the local benchmark report; all-seven
+improvement and speed remain unestablished. Source-bound diagnostics locate the
+two FR/PT quiet short-negation omissions in the existing no-speech conjunction:
+completed raw beams already contain the reference, but all admissible beams meet
+the cutoff. This is not permission to retune or evidence that other regressions
+would be fixed; retain the safe diagnosis and original raw records.
 
 ## Continue locally and in the cloud
 
