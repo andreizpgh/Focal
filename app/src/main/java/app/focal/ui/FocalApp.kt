@@ -41,6 +41,7 @@ import app.focal.core.Transcript
 import app.focal.data.Passage
 import app.focal.data.Preferences
 import app.focal.recording.LiveSession
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -99,7 +100,9 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     fun dismissInput() { focus.clearFocus(force = true); keyboard?.hide() }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var permissionNotice by remember { mutableStateOf<Job?>(null) }
     val lifecycle = LocalLifecycleOwner.current
+    fun dismissPermissionNotice() { permissionNotice?.cancel(); permissionNotice = null }
 
     fun performOpen(id: String?) {
         dismissInput(); editingId = null; dialog = null; pendingOpenTarget = null
@@ -138,7 +141,12 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     LaunchedEffect(live.message) { if (live.noteId == null && live.message.isNotBlank()) notify(live.message) }
     LaunchedEffect(Unit) { model.errors.collect { snackbar.showSnackbar(it) } }
     DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) model.player.pause() }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) model.player.pause()
+            if (event == Lifecycle.Event.ON_RESUME &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                dismissPermissionNotice()
+        }
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer); model.player.pause() }
     }
@@ -153,9 +161,10 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         }
     }
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        dismissPermissionNotice()
         val granted = result[Manifest.permission.RECORD_AUDIO] == true || ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (granted) model.record()
-        else scope.launch {
+        else permissionNotice = scope.launch {
             if (snackbar.showSnackbar("Allow microphone access to record.", "Settings") == SnackbarResult.ActionPerformed)
                 context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri()))
         }
@@ -167,6 +176,9 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     fun openModel(retryId: String? = null) { modelRetryId = retryId; dismissInput(); dialog = "model" }
     fun start() {
         if (!library.loaded || library.error != null) return
+        // Cancelling this request removes its displayed or queued notice without
+        // dismissing unrelated save, playback or transcription errors.
+        dismissPermissionNotice()
         dismissInput()
         val needed = buildList {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) add(Manifest.permission.RECORD_AUDIO)
