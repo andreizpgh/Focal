@@ -22,11 +22,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -36,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import app.focal.FocalViewModel
 import app.focal.core.Transcript
 import app.focal.data.Passage
@@ -75,13 +81,24 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     val playing by model.player.playing.collectAsStateWithLifecycle()
     val playback by model.player.playback.collectAsStateWithLifecycle()
     val requested by openedNote.collectAsStateWithLifecycle()
+    val view = LocalView.current
     var destination by rememberSaveable(stateSaver = destinationSaver) { mutableStateOf<Destination>(Destination.Sessions) }
     val selected = (destination as? Destination.Session)?.id
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     var modelRetryId by rememberSaveable { mutableStateOf<String?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
-    var searchFocusPending by rememberSaveable { mutableStateOf(false) }
+    var searchImeSeen by rememberSaveable { mutableStateOf(false) }
+    var searchInputActive by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<Boolean, Boolean>(
+        // Preserve never-shown hardware input; a dismissed software IME must stay dismissed.
+        save = { active -> active && (!searchImeSeen || ViewCompat.getRootWindowInsets(view)
+            ?.isVisible(WindowInsetsCompat.Type.ime()) != false) },
+        restore = { it },
+    )) { mutableStateOf(false) }
+    var searchHasFocus by remember { mutableStateOf(false) }
+    var searchFieldHeight by remember { mutableIntStateOf(0) }
+    var windowHeight by remember { mutableIntStateOf(0) }
+    var sessionsHeaderHeight by remember { mutableIntStateOf(0) }
     var attentionOnly by rememberSaveable { mutableStateOf(false) }
     val libraryListState = rememberLazyListState()
     var reviewOnly by rememberSaveable(selected) { mutableStateOf(false) }
@@ -97,12 +114,29 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     val context = LocalContext.current
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    fun dismissInput() { focus.clearFocus(force = true); keyboard?.hide() }
+    fun setSearchInputActive(active: Boolean) {
+        if (active && !searchInputActive) searchImeSeen = false
+        searchInputActive = active
+    }
+    fun dismissInput() { focus.clearFocus(force = true); keyboard?.hide(); searchInputActive = false }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var permissionNotice by remember { mutableStateOf<Job?>(null) }
     val lifecycle = LocalLifecycleOwner.current
     fun dismissPermissionNotice() { permissionNotice?.cancel(); permissionNotice = null }
+    DisposableEffect(view, searchInputActive, searchImeSeen) {
+        if (searchInputActive && !searchImeSeen) {
+            val observer = view.viewTreeObserver
+            // Record only the first visible IME; lifecycle hides do not cancel input intent.
+            val listener = android.view.ViewTreeObserver.OnPreDrawListener {
+                if (searchInputActive && ViewCompat.getRootWindowInsets(view)
+                    ?.isVisible(WindowInsetsCompat.Type.ime()) == true) searchImeSeen = true
+                true
+            }
+            observer.addOnPreDrawListener(listener)
+            onDispose { if (observer.isAlive) observer.removeOnPreDrawListener(listener) }
+        } else onDispose { }
+    }
 
     fun performOpen(id: String?) {
         dismissInput(); editingId = null; dialog = null; pendingOpenTarget = null
@@ -142,6 +176,9 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     LaunchedEffect(Unit) { model.errors.collect { snackbar.showSnackbar(it) } }
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
+            // Commit an already hidden search IME before Android can restore its focused editor.
+            if (event == Lifecycle.Event.ON_PAUSE && destination == Destination.Sessions && searchInputActive && searchImeSeen &&
+                ViewCompat.getRootWindowInsets(view)?.isVisible(WindowInsetsCompat.Type.ime()) == false) dismissInput()
             if (event == Lifecycle.Event.ON_STOP) model.player.pause()
             if (event == Lifecycle.Event.ON_RESUME &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
@@ -152,7 +189,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
     BackHandler(destination != Destination.Sessions) { open(null) }
     BackHandler(destination == Destination.Sessions && searchOpen) {
-        searchOpen = false; searchFocusPending = false; searchQuery = ""; dismissInput()
+        searchOpen = false; searchQuery = ""; dismissInput()
     }
     LaunchedEffect(selected, library.selectedId, library.note, library.loaded, library.error) {
         if (selected != null && library.loaded && library.selectedId == selected && library.note == null && library.error == null) {
@@ -213,20 +250,35 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         catch (_: RuntimeException) { notify("Couldn't share text. Try copying a smaller selection from the passage editor.") }
     }
 
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    // Keep the field in the same composition; only make room for it in a short IME viewport.
+    val compactSearch = destination == Destination.Sessions && searchOpen && searchInputActive && searchHasFocus && imeBottom > 0 &&
+        windowHeight - imeBottom - sessionsHeaderHeight < searchFieldHeight
     FocalTheme(settings.theme) {
         Scaffold(
+            modifier = Modifier.onSizeChanged { windowHeight = it.height },
             containerColor = MaterialTheme.colorScheme.background,
             snackbarHost = { SnackbarHost(snackbar) },
             topBar = {
-                Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (!compactSearch) Row(Modifier.fillMaxWidth()
+                    .onSizeChanged { if (destination == Destination.Sessions) sessionsHeaderHeight = it.height }
+                    .statusBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     when (destination) {
                         Destination.Sessions -> {
                             Text("Sessions", style = MaterialTheme.typography.headlineLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 4.dp).semantics { heading() })
-                            if (library.notes.isNotEmpty() || searchOpen || searchQuery.isNotBlank()) IconAction(Symbol.Search, if (searchOpen) "Close search" else "Search sessions") {
-                                searchOpen = !searchOpen
-                                searchFocusPending = searchOpen
-                                if (searchOpen) libraryListState.requestScrollToItem(0)
-                                if (!searchOpen) { searchQuery = ""; dismissInput() }
+                            if (library.notes.isNotEmpty() || searchOpen || searchQuery.isNotBlank()) {
+                                val searchActionFocus = remember { FocusRequester() }
+                                IconAction(Symbol.Search, if (searchOpen) "Close search" else "Search sessions",
+                                    Modifier.focusRequester(searchActionFocus)) {
+                                    searchOpen = !searchOpen
+                                    setSearchInputActive(searchOpen)
+                                    if (searchOpen) libraryListState.requestScrollToItem(0)
+                                    if (!searchOpen) { searchQuery = ""; dismissInput() }
+                                }
+                                LaunchedEffect(searchInputActive, searchHasFocus) {
+                                    // Keyboard navigation can immediately refocus the field after clearFocus.
+                                    if (!searchInputActive && searchHasFocus) searchActionFocus.requestFocus()
+                                }
                             }
                             IconAction(Symbol.Settings, "Settings") { dismissInput(); destination = Destination.Settings }
                         }
@@ -314,7 +366,9 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 }
             }
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
+            Box(Modifier.fillMaxSize().padding(padding)
+                .then(if (destination == Destination.Sessions) Modifier.consumeWindowInsets(padding).imePadding() else Modifier),
+                contentAlignment = Alignment.TopCenter) {
                 Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) {
                     when (destination) {
                         Destination.Settings -> SettingsScreen(
@@ -322,10 +376,11 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                             ready, preparing, setupError, { openModel() }, ::notify,
                         )
                         Destination.Sessions -> LibraryScreen(
-                            library.notes, library.loaded, live, ::open, searchQuery, { searchQuery = it.take(200) },
-                            searchOpen, { searchOpen = it; if (!it) searchFocusPending = false }, library.error, model::retryLibrary,
+                            library.notes, library.loaded, live, ::open, searchQuery, { searchQuery = Transcript.truncateUtf16(it, SEARCH_QUERY_MAX_CHARS) },
+                            searchOpen, { searchOpen = it; if (!it) searchInputActive = false }, library.error, model::retryLibrary,
                             attentionOnly = attentionOnly, setAttentionOnly = { attentionOnly = it }, listState = libraryListState,
-                            focusSearch = searchFocusPending, searchFocused = { searchFocusPending = false },
+                            inputActive = searchInputActive, setInputActive = ::setSearchInputActive,
+                            searchFocusChanged = { searchHasFocus = it }, searchFieldMeasured = { searchFieldHeight = it },
                         )
                         is Destination.Session -> if (note != null) NoteScreen(
                             note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { if (library.error == null) editingId = it.id else notify("Reload this session before editing.") }, { if (ready) model.retry(note.id) else openModel(note.id) },
@@ -501,7 +556,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 12.dp))
     }
 }
-@Composable internal fun IconAction(symbol: Symbol, label: String, click: () -> Unit) {
-    IconButton(onClick = click, modifier = Modifier.semantics { contentDescription = label }) { Glyph(symbol) }
+@Composable internal fun IconAction(symbol: Symbol, label: String, modifier: Modifier = Modifier, click: () -> Unit) {
+    IconButton(onClick = click, modifier = modifier.semantics { contentDescription = label }) { Glyph(symbol) }
 }
 internal fun date(millis: Long) = SimpleDateFormat("MMM d", Locale.ENGLISH).format(Date(millis))

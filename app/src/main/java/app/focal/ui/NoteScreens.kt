@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,6 +13,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -21,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,15 +32,22 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.focal.LibraryState
 import app.focal.core.Transcript
 import app.focal.data.Note
@@ -44,6 +55,7 @@ import app.focal.data.Passage
 import app.focal.data.Preferences
 import app.focal.data.fitsPassageDraftBudget
 import app.focal.recording.LiveSession
+import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -52,10 +64,13 @@ import java.util.Locale
 import java.util.Date
 import android.text.format.DateFormat
 
+internal const val SEARCH_QUERY_MAX_CHARS = 200
+
 @Composable internal fun BrandMark(size: Int = 26) {
     Glyph(Symbol.Logo, Modifier.size(size.dp), MaterialTheme.colorScheme.onSurface)
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable internal fun LibraryScreen(
     notes: List<Note>, loaded: Boolean, live: LiveSession, open: (String?) -> Unit,
     query: String = "", setQuery: (String) -> Unit = {},
@@ -63,25 +78,46 @@ import android.text.format.DateFormat
     error: String? = null, retryLoad: () -> Unit = {},
     attentionOnly: Boolean = false, setAttentionOnly: (Boolean) -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
-    focusSearch: Boolean = false, searchFocused: () -> Unit = {},
+    inputActive: Boolean = false, setInputActive: (Boolean) -> Unit = {},
+    searchFocusChanged: (Boolean) -> Unit = {}, searchFieldMeasured: (Int) -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val lifecycleState by lifecycle.currentStateFlow.collectAsState()
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    val inputWindowReady by rememberUpdatedState(lifecycleState == Lifecycle.State.RESUMED && windowFocused)
+    // Keep the request consumed when the lazy search item leaves the viewport.
+    var inputRequestIssued by remember(inputActive) { mutableStateOf(false) }
+    var searchValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(query, TextRange(query.length)))
+    }
+    // External query changes, such as Clear, keep a valid selection in the accepted text.
+    val fieldValue = searchValue.copy(text = query)
+    SideEffect { if (searchValue != fieldValue) searchValue = fieldValue }
+    var viewportHeight by remember { mutableIntStateOf(0) }
     fun needsAttention(note: Note) = note.reviewCount > 0 || note.state in listOf("ERROR", "INTERRUPTED")
     val attentionCount = notes.count(::needsAttention)
     // Text search is supplied by the store, including passages outside the preview.
     val visible = notes.filter { !attentionOnly || needsAttention(it) }.sortedByDescending { it.created }
     val today = LocalDate.now()
     val groups = visible.groupBy { sessionDay(it.created) }
+    fun dismissSearchInput() {
+        focus.clearFocus(force = true)
+        keyboard?.hide()
+        setInputActive(false)
+    }
     fun closeSearch() {
         setQuery("")
         setSearchOpen(false)
-        focus.clearFocus(force = true)
-        keyboard?.hide()
+        dismissSearchInput()
     }
     LaunchedEffect(query) { if (query.isNotBlank()) setSearchOpen(true) }
+    LaunchedEffect(inputActive) {
+        if (inputActive) listState.requestScrollToItem(0)
+    }
     LazyColumn(
-        Modifier.fillMaxSize(),
+        Modifier.fillMaxSize().onSizeChanged { viewportHeight = it.height },
         state = listState,
         contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp),
     ) {
@@ -100,15 +136,39 @@ import android.text.format.DateFormat
                 }
                 AnimatedVisibility(searchOpen) {
                     val requester = remember { FocusRequester() }
-                    LaunchedEffect(focusSearch) {
-                        if (focusSearch) { requester.requestFocus(); keyboard?.show(); searchFocused() }
+                    val visibilityRequester = remember { BringIntoViewRequester() }
+                    var focused by remember { mutableStateOf(false) }
+                    LaunchedEffect(inputActive) {
+                        if (inputActive && !inputRequestIssued) {
+                            snapshotFlow { inputWindowReady }.first { it }
+                            requester.requestFocus()
+                            keyboard?.show()
+                            inputRequestIssued = true
+                        }
+                    }
+                    LaunchedEffect(focused, viewportHeight) {
+                        // Follow the measured viewport as the keyboard changes its available height.
+                        if (focused && viewportHeight > 0) visibilityRequester.bringIntoView()
                     }
                     TextField(
-                        value = query, onValueChange = setQuery,
-                        modifier = Modifier.fillMaxWidth().focusRequester(requester).semantics { contentDescription = "Search sessions" }.padding(bottom = 12.dp), singleLine = true,
+                        value = fieldValue,
+                        onValueChange = {
+                            val accepted = it.copy(text = Transcript.truncateUtf16(it.text, SEARCH_QUERY_MAX_CHARS))
+                            searchValue = accepted
+                            if (accepted.text != query) setQuery(accepted.text)
+                        },
+                        modifier = Modifier.fillMaxWidth().focusRequester(requester)
+                            .onFocusChanged {
+                                focused = it.isFocused
+                                // Initial focus loss and disposal must not erase saved input intent.
+                                if (it.isFocused) setInputActive(true)
+                                searchFocusChanged(it.isFocused)
+                            }
+                            .onSizeChanged { searchFieldMeasured(it.height) }.bringIntoViewRequester(visibilityRequester)
+                            .semantics { contentDescription = "Search sessions" }.padding(bottom = 12.dp), singleLine = true,
                         textStyle = MaterialTheme.typography.bodyMedium,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { focus.clearFocus(force = true); keyboard?.hide() }),
+                        keyboardActions = KeyboardActions(onSearch = { dismissSearchInput() }),
                         placeholder = { Text("Search sessions", style = MaterialTheme.typography.bodyMedium) },
                         leadingIcon = { Glyph(Symbol.Search, Modifier.size(17.dp), MaterialTheme.colorScheme.onSurfaceVariant) },
                         trailingIcon = { if (query.isNotEmpty()) IconAction(Symbol.Close, "Clear search") { setQuery("") } },
@@ -148,7 +208,7 @@ import android.text.format.DateFormat
         groups.forEach { (day, sessions) ->
             item(key = "day:$day") { SessionDayHeader(dayLabel(day, today)) }
             items(sessions, key = { it.id }) { note ->
-                SessionRow(note, live) { open(note.id) }
+                SessionRow(note, live) { dismissSearchInput(); open(note.id) }
             }
         }
     }

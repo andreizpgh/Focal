@@ -244,6 +244,14 @@ remain unchanged.
 
 ## Focused editor regression
 
+The 2026-11-04 base-only search checkpoint passed six focused tests, including
+the unchanged oversized-editor and Rename tests, in 26.689 seconds. Actual
+200% font portrait/landscape typing and Back → Home → Focal were then checked
+manually: the query/caret survived, the entire field remained above the IME, and
+a dismissed keyboard stayed hidden. The exact build and earlier failed candidate
+scope are recorded in the [quality report](quality-report.md). These focused
+results do not replace the full runner result above.
+
 After installing the verified app/test APKs on the dedicated AVD, isolate it with:
 
 ```sh

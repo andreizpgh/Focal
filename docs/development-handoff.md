@@ -3,7 +3,8 @@
 **Resumed at the owner's explicit request on 2026-11-04.** The historical
 [pause checkpoint](pause-checkpoint.md) records preserved source and evidence.
 The rejected Android VAD candidate has now been archived and removed from the
-working build; independent search fixes remain under final verification. Heavy
+working build; independent search fixes passed six focused tests and manual
+200% font rotation/Home checks. The new complete run is pending. Heavy
 local checks run sequentially to reduce laptop load.
 
 Branch: `codex/sessions-stt-handoff`. Baseline before the redesign:

@@ -93,6 +93,29 @@ is `8d8b25131f82a9812cd1ec5d5bfb84a2097fa5294c118c5f6468813c0b35f738`;
 the rename source is unchanged.
 Real TalkBack remains unverified.
 
+The search follow-up now passes six focused UI regressions on the base-only app
+(26.689 s, zero failures/skips), including the unchanged strict oversized-editor
+and Rename checks. A saved bounded `TextFieldValue` preserves the caret and whole
+UTF-16 characters, measured IME space keeps the field visible in short landscape
+viewports, and a one-shot focus request avoids repeated app requests. Direct
+Home/task testing exposed an additional Android restore path: after Back, the
+retained focused editor reopened its keyboard without another app `show()` call.
+The ON_PAUSE boundary commits already-dismissed software input while retaining
+active input intent. The strengthened test fails before that fix and passes after
+it, covering both active and hidden keyboards in the same Activity.
+
+Manual checking on 2026-11-04 at 200% system font confirmed the whole field above
+the landscape IME, exact continued typing through portrait/landscape/portrait,
+and a hidden keyboard after Back → Home → Focal. The exact debug APK is
+`1ce2ee6c355310d6c42b24cf74da11f993831452ef55d16b1d54a6e46cf990f0`;
+it contains the verified base model and no Silero asset. Core tests and debug
+lint/build pass; a new complete production run is still pending at this focused
+checkpoint. The earlier six-test candidate run at global font 2.0 retains its
+Rename failure: saved title/text were correct and scrolling exposed the passage,
+but its final immediate-node wait assumed the ordinary viewport. No assertions
+were weakened to turn that failed run into a pass. Physical/mixed hardware
+keyboard behavior and TalkBack are not established by these checks.
+
 Recovery bypasses the live energy gate. A new native regression returned one segment
 from 0.5 seconds of exact zero PCM in English on the previous APK (31.474 seconds).
 That assertion counts segments; it does not separately measure the returned words. `a5e460d` bypasses inference for strictly constant finite

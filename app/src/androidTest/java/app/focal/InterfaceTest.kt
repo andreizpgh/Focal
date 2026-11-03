@@ -3,6 +3,8 @@ package app.focal
 import android.content.ClipboardManager
 import android.content.ClipData
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -40,6 +42,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -347,6 +350,193 @@ class InterfaceTest {
             compose.onNodeWithContentDescription("Back to sessions").performClick()
             compose.onNode(hasSetTextAction()).assertIsDisplayed().assertIsNotFocused().assertTextContains(target.title)
         } finally { ids.forEach(app.store::delete) }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun activeSearchKeepsSelectionAndKeyboardThroughRecreation() {
+        val app = application()
+        val prefix = "Search rotation"
+        val suffix = " target"
+        val id = readySession(app.store, prefix + suffix, listOf("The search cursor stays where typing stopped."))
+        fun waitForKeyboard(visible: Boolean) {
+            val fieldView = checkNotNull(compose.onNode(hasSetTextAction()).fetchSemanticsNode().root as? android.view.View)
+            compose.waitUntil(5_000) {
+                compose.runOnUiThread {
+                    ViewCompat.getRootWindowInsets(fieldView)?.isVisible(WindowInsetsCompat.Type.ime()) == visible
+                }
+            }
+        }
+        fun assertSelectionAtEnd(text: String) {
+            compose.onNode(hasSetTextAction()).assert(
+                SemanticsMatcher("Editable text equals the expected draft") {
+                    it.config.contains(SemanticsProperties.EditableText) &&
+                        it.config[SemanticsProperties.EditableText].text == text
+                }
+            ).assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, androidx.compose.ui.text.TextRange(text.length))
+            )
+        }
+        fun returnFromHome(keyboardVisible: Boolean, text: String) {
+            val retainedActivity = compose.activity
+            // Real task focus loss can restore the IME even when a lifecycle-only round trip does not.
+            assertTrue(InstrumentationRegistry.getInstrumentation().uiAutomation
+                .performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME))
+            compose.waitUntil(5_000) {
+                retainedActivity.lifecycle.currentState == androidx.lifecycle.Lifecycle.State.CREATED
+            }
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                retainedActivity.startActivity(Intent(retainedActivity.intent).setClass(retainedActivity, MainActivity::class.java)
+                    .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            }
+            compose.waitUntil(5_000) {
+                retainedActivity.lifecycle.currentState == androidx.lifecycle.Lifecycle.State.RESUMED && retainedActivity.hasWindowFocus()
+            }
+            assertSame(retainedActivity, compose.activity)
+            waitForEditor()
+            waitForKeyboard(keyboardVisible)
+            if (keyboardVisible) compose.onNode(hasSetTextAction()).assertIsFocused()
+            else compose.onNode(hasSetTextAction()).assertIsNotFocused()
+            assertSelectionAtEnd(text)
+        }
+        try {
+            waitForTitle(prefix + suffix)
+            compose.onNodeWithContentDescription("Search sessions").performClick()
+            compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(prefix)
+            compose.onNode(hasSetTextAction()).performTextInputSelection(androidx.compose.ui.text.TextRange(prefix.length))
+            assertSelectionAtEnd(prefix)
+            waitForKeyboard(true)
+            returnFromHome(keyboardVisible = true, prefix)
+
+            // Keep MainActivity's real composition and input connection across recreation.
+            compose.activityRule.scenario.recreate()
+            waitForEditor()
+            assertSelectionAtEnd(prefix)
+            waitForKeyboard(true)
+            compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(suffix)
+            assertSelectionAtEnd(prefix + suffix)
+
+            compose.onNode(hasSetTextAction()).performImeAction()
+            waitForKeyboard(false)
+            compose.onNode(hasSetTextAction()).assertIsNotFocused()
+            compose.activityRule.scenario.recreate()
+            waitForEditor()
+            waitForKeyboard(false)
+            compose.onNode(hasSetTextAction()).assertIsNotFocused()
+            assertSelectionAtEnd(prefix + suffix)
+            compose.onNode(hasText(prefix + suffix) and hasClickAction() and !hasSetTextAction()).performClick()
+            waitForSessionReady(prefix + suffix)
+            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            waitForEditor()
+            waitForKeyboard(false)
+            compose.onNode(hasSetTextAction()).assertIsNotFocused().assertTextEquals(prefix + suffix)
+
+            compose.onNode(hasSetTextAction()).performClick()
+            compose.onNode(hasSetTextAction()).performTextInputSelection(androidx.compose.ui.text.TextRange((prefix + suffix).length))
+            waitForKeyboard(true)
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            waitForKeyboard(false)
+            assertSelectionAtEnd(prefix + suffix)
+            returnFromHome(keyboardVisible = false, prefix + suffix)
+            val retainedActivity = compose.activity
+            compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            assertSame(retainedActivity, compose.activity)
+            waitForEditor()
+            waitForKeyboard(false)
+            assertSelectionAtEnd(prefix + suffix)
+            compose.activityRule.scenario.recreate()
+            waitForEditor()
+            waitForKeyboard(false)
+            compose.onNode(hasSetTextAction()).assertIsNotFocused()
+            assertSelectionAtEnd(prefix + suffix)
+
+            compose.onNode(hasSetTextAction()).performClick()
+            waitForKeyboard(true)
+            val bounded = "a".repeat(199)
+            // The 200th UTF-16 unit would split this emoji; retain only the valid prefix.
+            compose.onNode(hasSetTextAction()).performTextReplacement(bounded + "🙂".repeat(40_000))
+            assertSelectionAtEnd(bounded)
+            compose.activityRule.scenario.recreate()
+            waitForEditor()
+            waitForKeyboard(true)
+            compose.onNode(hasSetTextAction()).assertIsFocused()
+            assertSelectionAtEnd(bounded)
+            compose.onNodeWithContentDescription("Clear search").performClick()
+            assertSelectionAtEnd("")
+            compose.onNode(hasSetTextAction()).performImeAction()
+            waitForKeyboard(false)
+        } finally { app.store.delete(id) }
+    }
+
+    @Test fun largeFontLandscapeSearchKeepsTheWholeFieldAboveTheKeyboard() {
+        val app = application()
+        val originalOrientation = compose.activity.requestedOrientation
+        val id = readySession(app.store, "Accessible search target", listOf("Search remains readable while typing."), uncertain = setOf(0))
+        var lastGeometry = "The search field has not been measured."
+        try {
+            compose.runOnUiThread { compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+            compose.waitUntil(10_000) {
+                compose.runOnUiThread {
+                    compose.activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+                        compose.activity.window.decorView.width > compose.activity.window.decorView.height
+                }
+            }
+            val model = ViewModelProvider(compose.activity)[FocalViewModel::class.java]
+            val density = compose.activity.resources.displayMetrics.density
+            val opened = MutableStateFlow<Pair<String?, Long>>(null to 0)
+            compose.runOnUiThread {
+                compose.activity.setContent {
+                    CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 2f)) {
+                        FocalApp(model, opened)
+                    }
+                }
+            }
+            compose.waitUntil(10_000) {
+                model.library.value.loaded && model.library.value.notes.any { it.id == id }
+            }
+            compose.onNodeWithContentDescription("Search sessions").performClick()
+            val field = compose.onNode(hasSetTextAction())
+            fun wholeFieldAboveKeyboard(): Boolean {
+                val node = field.fetchSemanticsNode()
+                val full = field.getUnclippedBoundsInRoot()
+                val view = checkNotNull(node.root as? android.view.View)
+                return compose.runOnUiThread {
+                    val insets = ViewCompat.getRootWindowInsets(view)
+                    val location = IntArray(2).also(view::getLocationInWindow)
+                    val top = location[1] + full.top.value * density
+                    val bottom = location[1] + full.bottom.value * density
+                    val height = (full.bottom.value - full.top.value) * density
+                    val imeTop = view.rootView.height - (insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0)
+                    val statusBottom = insets?.getInsets(WindowInsetsCompat.Type.statusBars())?.top ?: 0
+                    lastGeometry = "field=$top..$bottom, fullHeight=$height, visibleHeight=${node.boundsInRoot.height}, IME top=$imeTop"
+                    insets?.isVisible(WindowInsetsCompat.Type.ime()) == true && height > 0 &&
+                        node.boundsInRoot.height + 1 >= height && top >= statusBottom - 1 && bottom <= imeTop + 1
+                }
+            }
+            try {
+                compose.waitUntil(5_000) { wholeFieldAboveKeyboard() }
+            } catch (error: ComposeTimeoutException) {
+                throw AssertionError("The whole search field must fit above the real keyboard: $lastGeometry", error)
+            }
+            field.assertIsFocused().performTextInput("Accessible search")
+            field.assertTextContains("Accessible search")
+            assertTrue(lastGeometry, wholeFieldAboveKeyboard())
+            field.performImeAction()
+            compose.waitUntil(5_000) {
+                compose.runOnUiThread {
+                    ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+                        ?.isVisible(WindowInsetsCompat.Type.ime()) == false
+                }
+            }
+            field.assertIsNotFocused().assertTextContains("Accessible search")
+            compose.onNodeWithText("Sessions", substring = false).assertIsDisplayed()
+            compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+                .performScrollToNode(hasText("Accessible search target"))
+            compose.onNodeWithText("Accessible search target").assertIsDisplayed()
+        } finally {
+            app.store.delete(id)
+            compose.runOnUiThread { compose.activity.requestedOrientation = originalOrientation }
+        }
     }
 
     @Test fun timedPassageStartsOriginalAudioAndDockRemainsVisibleWhileScrolling() {
