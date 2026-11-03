@@ -27,6 +27,11 @@ Debug APK SHA-256:
 `efd5d5fbbe6fa93e4c52c4b92e58c6921465c75ff049728e937900468157a6e6`.
 No APK has been published as a replacement release.
 
+This local checkpoint is published without another Actions run while the separate
+engine investigation continues. One final publication CI model/fixture download
+remains reserved in the shared budget. Full-history Gitleaks passed before this
+checkpoint; the secret-scanning workflow remains enabled.
+
 The emulator uses **KVM with `-accel on`** and host GLES; only Vulkan is disabled.
 Other projects' AVDs and data were preserved. The `-no-audio` setup does not verify
 host microphone input or audible playback. Its captured signal is weak, varying
