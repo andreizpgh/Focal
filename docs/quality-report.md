@@ -73,6 +73,26 @@ manual check on the same APK at 200% font confirmed that the visible keyboard Do
 action saved the exact synthetic title to SQLite. The field was usable, although
 the dialog heading was clipped; font and rotation settings were restored.
 
+A later focused UI fix replaces Rename's fixed title/body/actions layout with one
+scrollable form and explicit system/IME insets. Window inspection confirmed that
+Android panned the former oversized dialog beyond the screen; scrolling only its
+body could not restore the heading. At 200% font, actual portrait-to-landscape
+rotation now preserves the field and keyboard, and swipes expose the complete
+heading and both actions above the IME. Tapping Save persists the exact synthetic
+title. Dirty Cancel → Keep editing retains the draft; Discard preserves the saved
+title. The unchanged strict rename-recreation and oversized-draft tests both pass
+(5.964 s), and independent source review found no confirmed regression.
+
+These are focused checks on a working APK containing the still-unaccepted STT
+integration, not a new clean full-suite checkpoint. The initial Rename QA APK is
+`f84afe713bb0de00121cd2d7254a3fc4ce2e3e6c6bdc170a5a9f9c00c5267c44`;
+its `SessionEditor.kt` SHA-256 is
+`55e07b03fbe7522e4e3ae70e1b981b66daadc20c453f7649c68bfec9d80a7550`.
+The subsequent search-candidate APK used for the dirty-cancel checks
+is `8d8b25131f82a9812cd1ec5d5bfb84a2097fa5294c118c5f6468813c0b35f738`;
+the rename source is unchanged.
+Real TalkBack remains unverified.
+
 Recovery bypasses the live energy gate. A new native regression returned one segment
 from 0.5 seconds of exact zero PCM in English on the previous APK (31.474 seconds).
 That assertion counts segments; it does not separately measure the returned words. `a5e460d` bypasses inference for strictly constant finite

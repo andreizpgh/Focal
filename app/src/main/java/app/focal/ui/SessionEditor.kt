@@ -31,6 +31,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import app.focal.core.Transcript
 import app.focal.data.Note
 import app.focal.data.Passage
@@ -225,6 +227,7 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun RenameSessionDialog(
     note: Note, dismiss: () -> Unit,
     onDirtyChange: (Boolean) -> Unit = {}, onSavingChange: (Boolean) -> Unit = {},
@@ -252,12 +255,21 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
             finally { saving = false; onSavingChange(false) }
         }
     }
-    AlertDialog(
-        onDismissRequest = ::requestClose, title = { Text("Session title") },
-        text = {
+    Dialog(
+        onDismissRequest = ::requestClose,
+        properties = DialogProperties(decorFitsSystemWindows = false),
+    ) {
+        Surface(
+            modifier = Modifier.widthIn(max = 560.dp).systemBarsPadding().imePadding().padding(horizontal = 20.dp, vertical = 16.dp),
+            shape = AlertDialogDefaults.shape, color = AlertDialogDefaults.containerColor,
+            tonalElevation = AlertDialogDefaults.TonalElevation,
+        ) {
             val requester = remember { FocusRequester() }
             val dialogKeyboard = LocalSoftwareKeyboardController.current
-            Column(Modifier.verticalScroll(rememberScrollState())) {
+            // Scroll the complete form: fixed title/actions can exceed the space above a landscape IME.
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
+                Text("Session title", style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 16.dp).semantics { heading() })
                 OutlinedTextField(
                     title, { title = Transcript.truncateUtf16(it, 120); onDirtyChange(title != note.title) }, singleLine = true, enabled = !saving,
                     modifier = Modifier.fillMaxWidth().focusRequester(requester), label = { Text("Title") },
@@ -269,11 +281,13 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
                 LaunchedEffect(Unit) { requester.requestFocus(); dialogKeyboard?.show() }
                 if (failed) Text("Couldn't save the title. Try again.", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 10.dp).semantics { liveRegion = LiveRegionMode.Assertive })
+                FlowRow(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = ::requestClose, enabled = !saving) { Text("Cancel") }
+                    TextButton(onClick = ::commit, enabled = !saving && title.isNotBlank()) { Text(if (saving) "Saving…" else "Save") }
+                }
             }
-        },
-        confirmButton = { TextButton(onClick = ::commit, enabled = !saving && title.isNotBlank()) { Text(if (saving) "Saving…" else "Save") } },
-        dismissButton = { TextButton(onClick = ::requestClose, enabled = !saving) { Text("Cancel") } },
-    )
+        }
+    }
     if (discard) AlertDialog(
         onDismissRequest = { discard = false }, title = { Text("Discard this title?") },
         text = { Text("Your changes won’t be saved.") },

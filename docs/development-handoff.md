@@ -168,6 +168,13 @@ playback/state, UX and evidence tooling. Source reviews are separate from runtim
 checks. Earlier native screenshots in [interface preview](interface-preview.md)
 remain honest captures of their recorded revisions, not proof of unexecuted checks.
 
+A subsequent focused Rename fix makes the complete form scroll within explicit
+IME/system insets. At 200% font in landscape, actual swipes now reach the heading
+and both actions above the keyboard; Save, dirty Cancel/Keep editing and Discard
+preserve the expected draft/storage state. Both existing strict editor regressions
+pass (5.964 s). These working-APK checks do not replace clean full QA. Landscape
+search accessibility is still being fixed; see the [quality report](quality-report.md).
+
 ## Reproducible speech evaluation
 
 Hugging Face access works in this environment. The immutable engine is
