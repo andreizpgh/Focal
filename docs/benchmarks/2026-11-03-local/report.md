@@ -261,10 +261,72 @@ cutoff as a calibrated rejection rule, not a critical-error precision estimate.
 
 The engine finding does not invalidate the recorded text/error counts, but it
 blocks interpreting the current no-speech field as reliable acoustic evidence.
-An independently reviewed SOT-logit patch exists only in an isolated research
-snapshot; its paired quality and resource checks are pending. The production
-engine/submodule is unchanged. No candidate freeze, held-out preparation,
-reference inspection or scoring has been performed on the refined test cohort.
+An independently reviewed SOT-logit patch is available through an optional
+[hash-verified research overlay](../../whisper-sot-research.md). The production
+engine/submodule is unchanged. The paired development experiment below is separate
+from held-out validation: no candidate freeze, preparation, reference inspection or
+scoring has been performed on the refined **test** cohort.
+
+### SOT probability and abstention: verified development repeat
+
+One fixed development policy requests the correct SOT logits row and uses
+`no_speech_thold=0.8`, `logprob_thold=0`, with temperature increment zero. It keeps
+base Q5_1, full encoder context, beam 3, four CPU threads and the production Kotlin
+gate/context/reconciliation. This changes the decoder's abstention policy; it is
+not an amplitude cutoff or automatic correction. The plan and exact binaries were
+frozen before inference; [counts and provenance](engine-dev-results.json) bind the
+patched engine explicitly instead of treating its upstream commit as a pristine
+binary identity.
+
+The verified repeat used 42 dev clips and the same normal/quiet PCM and 129 chunks
+as the baseline. WER and CER did not increase in any of the 14 language/condition
+cells. Word-error counts are:
+
+| Language | Normal baseline → candidate | Quiet baseline → candidate | Reference words per condition |
+| --- | ---: | ---: | ---: |
+| English | 54 → 54 | 70 → 61 | 88 |
+| Russian | 28 → 28 | 50 → 50 | 105 |
+| German | 12 → 12 | 45 → 45 | 122 |
+| French | 30 → 30 | 43 → 43 | 128 |
+| Spanish | 32 → 17 | 48 → 48 | 177 |
+| Italian | 40 → 27 | 30 → 30 | 126 |
+| Portuguese | 11 → 11 | 17 → 17 | 118 |
+| Total | **207 → 179** | **303 → 294** | **864** |
+
+Character errors were 545 → 438 for normal and 962 → 946 for quiet speech, with
+4,349 reference characters in each condition. Normal and quiet conditions are
+correlated versions of the same six clips per language. This does not demonstrate improved accuracy
+for every language: four languages have unchanged word-error counts.
+
+On the two original varying emulator-noise captures, all seven language choices
+changed from nonempty output to zero segments: 14/14 paired cases with empty text
+context. These are two signals, not 14 independent recordings or real-room noise
+validation; nonempty trusted contexts remain a separate control requirement.
+
+**The candidate is not accepted.** Five development chunks became empty; all
+other native text/timestamps and prompt inputs were identical. An automatic lexical
+coverage check retained a rejection flag for one lost English reference-token
+match. Reviewing source-clip boundaries shows that global alignment assigned that
+match to a different clip; the removed output resembles repetition or invented
+text at short boundaries. This is evidence to review the flag, not acoustic proof
+that no valid speech was lost. The affected English source tail has measurable
+acoustic energy, so it cannot simply be labeled silence. The original flag,
+reference/time review hashes and measured acoustic-statistics hash are retained.
+Varying-input empty results must remain reviewable with original audio preserved.
+
+The initial attempt failed its outer source freeze because an unrelated title
+fix changed a root checkout file, although inference executed unchanged snapshot
+bytes. Its outputs remain diagnostic and are excluded as acceptance evidence.
+A separate, independently reviewed freeze of the actual consumed inputs then
+completed with before/after identity checks and identical recognition changes.
+Neither that repeat nor the lexical review opens the fresh test cohort. Combined
+VAD compatibility, short positive controls, fresh held-out evidence, actual Android
+recovery behavior and phone resources remain outstanding before adoption.
+
+Both baseline and candidate used 129 cold host calls. Their summed probe wall
+costs were 433.65 and 472.57 seconds; background build/QA contention differed.
+These values cannot rank speed or establish phone latency. No performance benefit
+is claimed from this development repeat.
 
 ## Execution and resource scope
 

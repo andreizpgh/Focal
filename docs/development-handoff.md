@@ -104,6 +104,18 @@ An optional [hash-verified build overlay](whisper-sot-research.md) is now availa
 it is not wired into Android. No submodule or shipped engine change has been made.
 Validate it on paired speech and noise before any threshold or engine adoption.
 
+A verified dev-only SOT/abstention repeat (`0.8` no-speech, `0` log-probability
+threshold) reduced normal/quiet word errors from 207/303 to 179/294, with no
+WER/CER regression in the 14 cells, and emptied both noise captures in all seven
+languages with empty text context. Nonempty contexts remain a separate control.
+It is **not accepted**: five newly empty chunks retain a lexical
+speech-loss flag requiring adjudication. Reference/time review suggests a global
+alignment false positive but is not acoustic proof. The initial run failed an
+unused-root-file freeze and remains diagnostic; the completed repeat freezes the
+actual consumed snapshot. See the [exact result and limits](benchmarks/2026-11-03-local/report.md#sot-probability-and-abstention-verified-development-repeat).
+Combined VAD compatibility and short positive controls remain development work;
+the fresh test cohort stays closed.
+
 Focused independent reviews covered capture/recovery, storage/privacy, JNI,
 playback/state, UX and evidence tooling. Source reviews are separate from runtime
 checks. Earlier native screenshots in [interface preview](interface-preview.md)
