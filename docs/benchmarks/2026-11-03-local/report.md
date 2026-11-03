@@ -886,6 +886,55 @@ text-only conclusions and their source hashes (SHA-256
 `57b2d760f898c54a364ac6731f2b1d67bc672ae0f3641bf1849a6e7c62c29b0d`). No candidate change is enabled
 in Android; seven-language quality and speed remain open.
 
+## Native ownership: model-free allocation-failure regression
+
+An independent source review found a separate production defect: on self-KV
+allocation failure, the pinned engine frees a state still owned by its caller;
+normal JNI close can then access it again. An isolated ownership-only prototype
+retains borrowed state, commits a replacement KV cache only after successful
+allocation, initializes batch storage and uses local RAII for partial state/cache
+and loader-wrapper cleanup. Sampling, SOT, VAD and model weights are unchanged.
+The prototype is not enabled in Android.
+
+The frozen v4 experiment compiled complete actual baseline/patched Whisper sources
+and real CPU GGML with ASan/UBSan; leak detection was enabled. Synthetic descriptors
+and local allocation/exception hooks avoid real memory pressure. Initialization
+stops before graph creation, encoder work is bypassed, and full returns after the
+real KV growth/clear branch. This tests ownership through the decoder boundary,
+not neural inference or actual speech recovery.
+
+All 48 sequential executions matched their predeclared outcomes: baseline four
+healthy controls passed and 20 regressions failed as expected; the patched engine
+passed all 24 cases with zero owned-resource counters and no sanitizer diagnostic.
+Baseline failures comprise two actual ASan heap-use-after-free reports on
+owned/external failure → caller close, three ASan crashes in early batch cleanup,
+and 15 ownership/counter assertions. Nonzero prior state storage deliberately
+exposes uninitialized batch fields. LeakSanitizer also reported after 11 assertion
+failures; fail-stop interrupts cleanup, so these are not 11 independently proven
+engine leak defects. A separate real GGML partial-allocation control passed both
+variants. The synthetic healthy KV-buffer peak increased from 56 to 64 KiB;
+this is a buffer counter, not process RSS. Derived additional base-model KV peak
+is 6 MiB during transactional replacement, not a phone measurement.
+
+Independent postrun review checked all 664 source inputs, 94 tool/link dependencies,
+two binaries, seven actually loaded dependencies in every case, and 48 log hashes.
+All 25 translation units (23 GGML and two harnesses including actual Whisper)
+carried ASan/UBSan/frame-pointer flags; CPU-only options and disabled native tuning
+were verified. One build took 98.625 s; the complete case runner took 21.058 s,
+with no timeout. A preceding v3 attempt failed at linking because the installed
+GCC sanitizer runtime was absent; it executed no cases and is not a regression
+RED. Its evidence remains separate. Matching signed runtime packages fixed only
+the build environment; the ownership patch, harness and 24 oracles stayed exact.
+
+The [safe results](engine-lifetime-model-free-results.json), SHA-256
+`6f288a100b3e974ba0647c4b21a5c6b64f1431433c4e3f3533cd82c2241f9020`, bind
+source freeze `93a52a4eaeccea734787edd2a1644fb2bb757feec4f1873c7ac959eee0aaee9c`,
+build `c41023c547d0db162adb1b6ea843bca40e23ee47beff62aa7e743e6a5377f9b1`,
+and run `36bdf88a58b03a327caec62fa751831286d6aa0f5141f600ef1ae9e8efc7f84c`.
+Actual-model same-state beam/greedy retries and close, all three loader wrappers,
+Android error/recovery/cancel behavior, and phone resources remain unverified.
+This is neither arbitrary OOM hardening nor a production fix.
+
 ## Android seven-language integration smoke
 
 The unpublished VAD candidate was exercised through its actual Android JNI on

@@ -31,6 +31,14 @@ debug/release lint и R8. Host sources не изменились; 146 Python-т�
 Общий бюджет теперь 881 742 333 / 1 000 000 000 байт: добавлены две резервации
 по 1 MiB для matching ASan/UBSan runtime; фактически скачано 834 149 байт.
 Пакеты проверены по подписи и распакованы только в ignored build, без system install.
+Изолированный lifetime v4 теперь прошёл: 24/24 patched cases, исходный engine
+дал 4 GREEN/20 ожидаемых RED, включая два actual ASan use-after-free после
+ошибки self-KV → caller close. Независимо проверены 664 inputs / 94 tool dependencies и 48 logs.
+Это actual source+GGML с synthetic descriptors и graph bypasses, не real ASR.
+Source freeze `93a52a4e…ee9c` сохранён в `build/stt/engine-lifetime-research-v4/`;
+прежняя v3 link failure сохранена отдельно. Следующий этап — realgraph retry/close,
+три loader wrappers, затем Android error/recovery/cancel. В production patch ещё нет;
+phone gates открыты. Не повторяй уже завершённую model-free suite без новой причины.
 
 # Prompt for the next Codex session
 

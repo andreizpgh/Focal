@@ -330,10 +330,14 @@ audio remains closed. The production decoder is unchanged.
 Independent source review also found a native allocation-failure ownership defect:
 self-KV growth can free a state still owned by the context, then JNI close frees
 it again. Early initialization and partial-allocation cleanup need related fixes.
-The production JNI/service close path reaches this defect; it has not yet been
-dynamically reproduced. Bounded fault-injection regressions and a reviewed
-production fix remain required. Passing ordinary inference/lifecycle tests does
-not establish safety of these allocation failures; no real OOM is being induced.
+The production JNI/service close path reaches this defect. Isolated model-free
+regressions now reproduce two ASan use-after-free paths and related cleanup errors:
+baseline four controls pass/20 expected errors; the ownership-only prototype passes
+all 24 cases with clean sanitizers. Independent review verified source/tool hashes,
+all binaries/dependencies and 48 execution logs. These use real engine/GGML source
+with synthetic descriptors and graph bypasses. Actual-model retry, loader wrappers,
+Android recovery/cancellation and a reviewed production integration remain required.
+No real host OOM was induced; the application has not yet received this fix.
 
 1. Resolve recovery hallucinations on varying weak noise without suppressing quiet
    speech. Verify any engine/VAD change with paired development data, frozen fresh

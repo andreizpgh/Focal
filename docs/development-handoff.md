@@ -320,12 +320,19 @@ not substitutes for running it on the owner's accelerated emulator.
 Before accepting another engine build, resolve the newly reviewed allocation-error
 ownership defects. Pinned `whisper_full_with_state` can free its borrowed state on
 self-KV growth failure (`-7`); normal JNI/service cleanup then frees it again.
-Uninitialized early `batch` cleanup and partial KV allocation also need bounded
-regressions. This is independently confirmed source evidence, not a reproduced
-OOM test. Prepare an isolated ownership-only patch and targeted allocation hooks;
-preserve external-state ownership, retry behavior and the pinned submodule. Never
-induce real host memory pressure. The separate diagnostic probe's fatal-process
-handling is not a production Android fix.
+Uninitialized early `batch` cleanup and partial KV allocation are related defects.
+An isolated ownership-only patch now passed all 24 frozen model-free cases;
+baseline four controls passed and 20 expected errors were reproduced, including
+two ASan use-after-free reports on owned/external failure → close. Independent
+review checked 664 source inputs, 94 tool/link inputs and all 48 execution logs.
+The actual engine and CPU GGML run with synthetic descriptors and graph bypasses;
+this is not an actual-model recovery or arbitrary OOM proof. Preserve the v4
+freeze and the failed v3 link attempt separately. Next verify real graphs and
+same-state beam/greedy retries, the three loader wrappers, then Android error →
+close → pending-audio/manual-edit preservation → new-engine recovery/cancellation.
+Production is still unfixed; do not infer phone resource behavior from host tests
+or induce real host memory pressure. The diagnostic probe's fatal-process handling
+is not a production Android fix. See the local benchmark report for scope/hashes.
 
 1. Resolve the observed recovery hallucinations on weak varying noise. Investigate
    the no-speech logits defect with the pinned source plus an explicit, reviewed
