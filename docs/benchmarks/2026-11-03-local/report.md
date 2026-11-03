@@ -786,6 +786,48 @@ The 100.268-second contended host duration is diagnostic, not a speed comparison
 No automatic threshold retuning, full DEV/framing follow-up or Android adoption
 follows from this failed screen. All-seven improvement and speed remain open.
 
+## Beam control-flow ablations: model-free contracts only
+
+Source inspection found two separate problems in the previously rejected
+SOT/true-top-k research parent. Beam allocation can choose duplicate token
+sequences, including on its first step; adjacent-only deduplication also misses
+nonadjacent duplicates when scores tie. Final ranking can emit an unselected or
+stale decoder when every candidate has failed. A failure flag includes heuristic
+repetition rejection and is not evidence of silence.
+
+A frozen harness compiled each actual engine variant and verbatim-extracted
+selection/ranking/output blocks with synthetic state. Four sequential builds and
+22 cases each produced exactly the expected ablation results:
+
+| Research variant | Passing cases | Expected assertion failures |
+| --- | ---: | ---: |
+| Previously rejected true-top-k parent | 7 | 15 |
+| Globally unique, finite beam branches only | 18 | 4 |
+| Explicit final error when no winner exists only | 11 | 11 |
+| Both changes | 22 | 0 |
+
+Checks cover tied scores, masked/nonfinite candidates, constrained one-to-three
+branch expansion, natural failures/completed survivors, KV/grammar/token metadata,
+fallback and stale winners, valid short negation and existing no-speech behavior.
+The candidate retains raw failed decoder state and returns research error `-11`
+at final exhaustion; it does not translate that failure into successful silence.
+The preserved-result fixture concerns only the current call's in-memory
+accumulator, not previous calls or durable app storage. Any later real-data error
+must count as a failed trial, with diagnostics saved before context reset/free.
+
+Independent postrun review verified 1,231 input hashes, 24 bound outputs, all four
+binaries and eight loaded dependencies per variant. Superseded pre-execution plans
+remain private and unexecuted. There were **zero model loads or audio/ASR/VAD
+calls**; unused upstream fixture files were present in the hashed source snapshot.
+The 71.877 s duration is compilation plus synthetic checks, not inference speed.
+The [safe aggregate](beam-controlflow-model-free-results.json), SHA-256
+`1c7c4ffcc82fadecb7e4eab412f9fab97807be688a25ce24cbdc4e2a17f25eaa`, binds
+plan `915cb6bd2e06a7ac2b38538587811c412e5b8bdaebf99bf0e59a5d3535dfaf51`
+and execution `720264b579d6daffaf792ec923ecff90254c79e0a860be3f028166fbfb95a918`.
+This validates control-flow contracts only. Earlier speech rejections stand;
+seven-language quality, speed, Android adoption and held-out eligibility remain
+unestablished. The pinned submodule and production decoder are unchanged.
+
 ## Android seven-language integration smoke
 
 The unpublished VAD candidate was exercised through its actual Android JNI on

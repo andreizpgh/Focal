@@ -264,6 +264,16 @@ criteria. All 28 noise inputs skip ASR. Independent postrun review completed on
 aggregates in the local benchmark report. No human DEV/framing follow-up was run
 for this failed candidate. The fresh held-out cohort remains unconsumed.
 
+The subsequent [model-free control-flow ablations](benchmarks/2026-11-03-local/report.md#beam-control-flow-ablations-model-free-contracts-only)
+confirm duplicate beam allocation and emission without a valid winner in the
+rejected true-top-k parent. Four actual-source variants produced exactly 15/4/11/0
+expected failures; the combined research change passed 22 synthetic cases.
+Independent review verified 1,231 inputs and 24 outputs. No models/audio were
+used, and no production change or quality/speed claim follows. A later neural
+screen must keep the unchanged positive/noise controls and serialize raw failed
+state before reset/free; final error `-11` is a failed trial, never successful
+silence or an excluded sample. Prior rejections and the closed held-out set stand.
+
 ## Continue locally and in the cloud
 
 Use this checkout/branch and existing draft PR #1. Initialize the recorded

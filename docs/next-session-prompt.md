@@ -177,6 +177,17 @@ WER/CER. Все 28 noise пропускают ASR. Независимый postru
 greedy-control-results.json / greedy-critical-review.json. Не запускай автоматически
 полный DEV/framing или retuning для этого отклонённого варианта.
 
+Следующая model-free проверка подтвердила повторный выбор одинаковых beam-веток
+и выдачу невыбранного decoder после отказа всех кандидатов. Четыре actual-source
+варианта дали строго ожидаемые 15/4/11/0 failures; combined прошёл 22 сценария.
+Независимо проверены 1231 inputs и 24 outputs; plan SHA начинается с 915cb6bd,
+safe aggregate — beam-controlflow-model-free-results.json. Модели/аудио не
+запускались: качество, скорость и Android adoption этим не подтверждаются.
+Прежний true-top-k parent всё ещё отклонён. Следующий neural screen требует
+отдельной заморозки исходников, build и diagnostics; все прежние controls
+сохраняются, final error -11 считается провалом, а raw failed state сохраняется
+до reset/free. Не включай эти изменения в Android по одному harness PASS.
+
 Свежая FLEURS-выборка: 42 dev + 42 ещё не использованных test. Старые IDs,
 PCM и совпавшие reference hashes исключены; один итальянский test заменён из
 уже скачанного cache до оценки. Старую test-часть облачного исследования нельзя

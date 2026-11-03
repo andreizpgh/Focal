@@ -265,6 +265,14 @@ results from this screen. The rejected Android VAD integration was archived and
 removed from the working build on 2026-11-04, including its packaged model assets;
 its earlier focused results remain historical candidate evidence.
 
+A later [model-free beam control-flow study](benchmarks/2026-11-03-local/report.md#beam-control-flow-ablations-model-free-contracts-only)
+isolated duplicate branch selection and final emission without a valid winner.
+Four actual-source harness variants produced the frozen 15/4/11/0 assertion-failure
+sets; the combined research variant passed all 22 synthetic cases. Independent
+review verified 1,231 inputs and 24 outputs. No model or audio inference ran;
+this does not reverse prior speech rejections or establish STT quality, speed,
+Android adoption or durable-storage behavior. The production decoder is unchanged.
+
 ## Earlier evidence, retained with its original scope
 
 Before this checkpoint, 53 distinct Android instrumentation tests passed and five
