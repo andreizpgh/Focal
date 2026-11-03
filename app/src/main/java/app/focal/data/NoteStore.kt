@@ -103,7 +103,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         writableDatabase.update("notes", ContentValues().apply { put("duration", ms) }, "id=?", arrayOf(id)); changed()
     }
     fun rename(id: String, title: String) {
-        writableDatabase.update("notes", ContentValues().apply { put("title", title.trim().take(120).ifBlank { "Untitled note" }) }, "id=?", arrayOf(id)); changed()
+        writableDatabase.update("notes", ContentValues().apply { put("title", Transcript.truncateUtf16(title.trim(), 120).ifBlank { "Untitled note" }) }, "id=?", arrayOf(id)); changed()
     }
     fun audioFile(noteId: String) = File(audioDir, "$noteId.pcm")
     fun readChunk(chunk: Chunk): ByteArray {

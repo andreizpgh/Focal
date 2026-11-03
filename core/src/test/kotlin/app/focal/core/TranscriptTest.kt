@@ -123,4 +123,23 @@ class TranscriptTest {
         assertEquals("01:05", Transcript.time(65_000))
         assertEquals("2:03:04", Transcript.time(7_384_000))
     }
+    @Test fun `automatic titles retain complete emoji within the UTF16 limit`() {
+        assertEquals("a".repeat(71), Transcript.title("a".repeat(71) + "🙂"))
+        assertEquals("a".repeat(70) + "🙂", Transcript.title("a".repeat(70) + "🙂tail"))
+        assertEquals("a".repeat(70) + "🙂", Transcript.title("a".repeat(70) + "🙂"))
+        assertEquals("a".repeat(72), Transcript.title("a".repeat(73)))
+        assertEquals("one two three four five six seven", Transcript.title(" one  two three four five six seven eight "))
+        assertEquals("Untitled note", Transcript.title(" "))
+    }
+    @Test fun `manual title prefix keeps the UTF16 cap without splitting emoji`() {
+        assertEquals("a".repeat(119), Transcript.truncateUtf16("a".repeat(119) + "🙂", 120))
+        assertEquals("a".repeat(118) + "🙂", Transcript.truncateUtf16("a".repeat(118) + "🙂tail", 120))
+        assertEquals("a".repeat(118) + "🙂", Transcript.truncateUtf16("a".repeat(118) + "🙂", 120))
+        assertEquals("a".repeat(120), Transcript.truncateUtf16("a".repeat(121), 120))
+        assertEquals("🙂", Transcript.truncateUtf16("🙂", 120))
+        assertEquals("", Transcript.truncateUtf16("🙂", 1))
+        assertEquals("", Transcript.truncateUtf16("🙂", 0))
+        assertEquals("\uD83Dx", Transcript.truncateUtf16("\uD83Dx", 120))
+        assertFailsWith<IllegalArgumentException> { Transcript.truncateUtf16("", -1) }
+    }
 }

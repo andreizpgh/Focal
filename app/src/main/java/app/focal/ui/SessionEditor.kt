@@ -258,7 +258,7 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
-                    title, { title = it.take(120); onDirtyChange(title != note.title) }, singleLine = true, enabled = !saving,
+                    title, { title = Transcript.truncateUtf16(it, 120); onDirtyChange(title != note.title) }, singleLine = true, enabled = !saving,
                     modifier = Modifier.fillMaxWidth().focusRequester(requester), label = { Text("Title") },
                     isError = title.isBlank(), supportingText = if (title.isBlank()) ({ Text("Enter a title.") }) else null,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),

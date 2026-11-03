@@ -153,8 +153,17 @@ object Transcript {
         return trimmed.substring(start).trimStart()
     }
 
-    fun title(text: String): String = text.trim().split(Regex("\\s+")).take(7).joinToString(" ")
-        .take(72).ifBlank { "Untitled note" }
+    /** Keep a UTF-16 prefix without cutting a surrogate pair. */
+    fun truncateUtf16(text: String, maxChars: Int): String {
+        require(maxChars >= 0)
+        if (text.length <= maxChars) return text
+        val end = if (maxChars > 0 && text[maxChars - 1].isHighSurrogate() && text[maxChars].isLowSurrogate())
+            maxChars - 1 else maxChars
+        return text.substring(0, end)
+    }
+
+    fun title(text: String): String = truncateUtf16(text.trim().split(Regex("\\s+")).take(7).joinToString(" "), 72)
+        .ifBlank { "Untitled note" }
 
     fun time(ms: Long): String {
         val s = ms.coerceAtLeast(0) / 1000

@@ -238,6 +238,16 @@ class NoteStoreTest {
         assertNull(store.previousChunkEnd(store.chunks(id).first()))
     }
 
+    @Test fun renamedTitlesPersistWholeEmojiAtTheUtf16Limit() {
+        val id = note()
+        store.rename(id, "  " + "a".repeat(119) + "🙂  ")
+        assertEquals("a".repeat(119), store.note(id)?.title)
+        store.rename(id, "a".repeat(118) + "🙂tail")
+        assertEquals("a".repeat(118) + "🙂", store.note(id)?.title)
+        store.rename(id, "a".repeat(118) + "🙂")
+        assertEquals("a".repeat(118) + "🙂", store.note(id)?.title)
+    }
+
     @Test fun unicodeSearchFindsLaterCorrectedPassagesAndTreatsSqlSymbolsLiterally() {
         val id = note()
         val chunk = store.beginChunk(id, 0, false)
