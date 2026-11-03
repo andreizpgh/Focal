@@ -17,7 +17,7 @@ Obtain the verified VAD model through the shared download budget; the evaluator
 downloads nothing. Build both native probes against the same pinned Whisper/GGML
 libraries. Use a new private, Git-ignored output directory:
 
-    python3 scripts/evaluate-vad-streams.py \
+    build/host-tools/bin/python scripts/evaluate-vad-streams.py \
       --experiment build/stt/gate-dev-baseline/manifest.json \
       --source-manifest build/stt/fleurs-fresh/manifest.json \
       --split dev \
@@ -36,6 +36,11 @@ conditions and context on. The --controls-only option requires explicit named
 controls; their ASR language is --control-language, English by default. Repeat
 relevant controls in other languages before claiming language-wide hallucination
 robustness. Empty candidate ranges perform no ASR.
+
+The optional conditioner and its regressions require Python 3.11+ and NumPy
+2.4.6. Install the hash-pinned host environment described in
+[Contributing](../CONTRIBUTING.md). NumPy's version is part of the frozen policy;
+changing it requires a new development plan before held-out evaluation.
 
 The optional research flag `--vad-conditioning causal-rms-cap30` derives a
 separate PCM input for VAD only. The default is `--vad-conditioning none`.
@@ -128,7 +133,7 @@ does not demonstrate recognition accuracy or phone battery/thermal behavior.
 
 Run the lightweight evaluator regressions with:
 
-    python3 -m unittest discover -s scripts/tests -p test_evaluate_vad_streams.py
+    build/host-tools/bin/python -m unittest discover -s scripts/tests -p test_evaluate_vad_streams.py
 
 These tests use synthetic metadata and mocked native decisions; they perform
 no real ASR and do not establish Silero quality.

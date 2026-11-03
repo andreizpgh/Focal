@@ -30,6 +30,18 @@ An Android emulator or connected phone is needed for device tests:
 a real English speech fixture. This validates model loading and decoding; it does
 not measure Android performance or Russian accuracy.
 
+Host evaluation regressions use Python 3.11+ and the pinned NumPy dependency
+(including the VAD-only conditioning checks). Run them in a local virtual environment:
+
+```sh
+python3 -m venv build/host-tools
+build/host-tools/bin/python -m pip install --require-hashes --only-binary=:all: -r scripts/requirements-host.txt
+build/host-tools/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
+```
+
+On Windows, use `build/host-tools/Scripts/python.exe`. This dependency is for host
+research/tests only; it is not packaged in the Android application.
+
 The debug APK is for development. Distribution releases need a separately managed,
 stable signing key; release builds refuse to package an absent speech model.
 
