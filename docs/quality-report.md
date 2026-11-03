@@ -104,6 +104,12 @@ and the unresolved lexical-loss flag. This is not an accepted Android change;
 held-out evidence and controlled timing remain open. Earlier SOT/combined variants
 retain their negative control or per-cell results rather than being promoted.
 
+The separate [VAD API overlay](whisper-vad-research.md) passes normal-output parity,
+CPU cancellation, cleanup and reused-context checks in its host harness. It fixes
+an upstream path that reported success after partial graph failure. The app does
+not use this overlay yet; native policy parity and a paired reused-ASR development
+comparison are required before evaluating a final candidate on fresh held-out data.
+
 ## Independent whole-app review
 
 Focused independent reviewers covered Android/runtime QA, capture/recovery,

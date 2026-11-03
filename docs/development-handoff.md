@@ -129,6 +129,15 @@ It is not an accepted policy or a clean completed run. No Android integration is
 enabled and the fresh test cohort stays closed. Auto encoder context was proposed
 but not run.
 
+A separate [VAD API research overlay](whisper-vad-research.md) makes compute failure
+return false, clears partial probabilities and adds cooperative CPU cancellation.
+Normal probabilities/ranges match the original engine exactly on the tested
+fixtures; early/mid-graph cancellation and context reuse pass. It is not wired
+into Android or combined with SOT. The next prerequisites are exact native
+conditioning/presence parity and paired development runs with reused ASR contexts:
+the app keeps its engine open, unlike the earlier cold process-per-chunk probes.
+Keep those comparisons separate and freeze any final policy before held-out use.
+
 Focused independent reviews covered capture/recovery, storage/privacy, JNI,
 playback/state, UX and evidence tooling. Source reviews are separate from runtime
 checks. Earlier native screenshots in [interface preview](interface-preview.md)

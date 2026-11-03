@@ -87,6 +87,15 @@ reference/time evidence приведено отдельно. Кандидат н
 в Android. Auto encoder context пока лишь предложен, не запускался;
 свежая test-часть по-прежнему закрыта.
 
+Отдельный research-only VAD API overlay (`docs/whisper-vad-research.md`) исправляет
+возврат успешных частичных probabilities при compute error и добавляет отмену
+между CPU graph nodes. Проверены точное совпадение с исходным engine, отмена и
+reuse; Android/SOT не подключены. Далее нужны native conditioner/presence parity
+на уже использованных DEV inputs и парное сравнение с переиспользуемым ASR context:
+приложение держит engine открытым, прежние прогоны запускали процесс на каждый chunk.
+Не переноси результаты cold probe на этот режим без проверки. Held-out не открывай
+до заморозки окончательного кандидата.
+
 Свежая FLEURS-выборка: 42 dev + 42 ещё не использованных test. Старые IDs,
 PCM и совпавшие reference hashes исключены; один итальянский test заменён из
 уже скачанного cache до оценки. Старую test-часть облачного исследования нельзя
