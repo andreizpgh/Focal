@@ -1,0 +1,24 @@
+{
+  "launch_plan_sha256": "33679e1ba604d6b12c89c942d8e9298150e368ea24360dfa9137c6a0beb55c2e",
+  "result_binding_sha256": "7b6447b2ce1efe2eaaa71a76582f6c4dbea0f219c0aa78a623ba6c6827d52faa",
+  "outcome": "reject",
+  "changed_positive_cases": 21,
+  "strict_positive_failures": 15,
+  "cosmetic_tie_failures_preserved": 4,
+  "newly_empty_positive_cases": 3,
+  "previously_correct_short_negation_losses": 2,
+  "additional_reference_negation_term_loss": 1,
+  "additional_time_component_loss": 1,
+  "metric_gate_pass_but_critical_review_fail": [
+    "it-meeting-negation-gain-1"
+  ],
+  "automatic_followup": false,
+  "limitations": [
+    "Synthetic eSpeak canaries are not human speech accuracy.",
+    "Short empty outputs lack utterance noSpeech/avg_logprob diagnostics; exact empty-result cause cannot be inferred from missing segments.",
+    "Combined corrected-SOT/greedy candidate differs from original baseline in more than sampling; do not attribute every failure solely to greedy.",
+    "The critical findings are sufficient to reject; no exhaustive acoustic alignment or absence of other critical errors is claimed."
+  ],
+  "scope": "Synthetic-canary textual review aggregate, no raw references or hypotheses",
+  "private_review_sha256": "934aa79e94a9114d4920b53415bc831902896da8f9eb7bb26b4ea5c93f360178"
+}

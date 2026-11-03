@@ -230,6 +230,15 @@ work does not establish a speed improvement. The seven-language, held-out and
 phone gates remain open. Future automatic suppression requires retained original
 ASR, visible provenance and Undo; it has not been enabled in Android.
 
+The subsequent [greedy control screen](benchmarks/2026-11-03-local/report.md#greedy-control-screen-rejected-before-human-dev)
+was rejected before human DEV: 15 strict positive failures, including lost correct
+FR/PT negations. Textual review also caught an IT time-component error despite
+passing aggregate metrics. Independent review verified 1,762 inputs, 255 outputs
+and both safe exports. No new held-out data, production policy or speed claim
+results from this screen. The rejected Android VAD integration was archived and
+removed from the working build on 2026-11-04, including its packaged model assets;
+its earlier focused results remain historical candidate evidence.
+
 ## Earlier evidence, retained with its original scope
 
 Before this checkpoint, 53 distinct Android instrumentation tests passed and five

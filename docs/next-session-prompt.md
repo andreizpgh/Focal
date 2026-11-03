@@ -1,3 +1,11 @@
+# Продолжение после паузы · 2026-11-04
+
+Пользователь явно возобновил работу. Состояние паузы сохранено в
+`docs/pause-checkpoint.md`; все исходные хэши совпали. Отклонённая Android VAD
+интеграция сохранена в приватном архиве и удалена из рабочей сборки вместе с
+её assets. Независимые исправления поиска сохранены; завершаются их UI-проверки
+и новый полный QA. Тяжёлые прогоны выполняй последовательно для снижения нагрузки.
+
 # Prompt for the next Codex session
 
 Продолжи разработку Focal в существующем checkout, ветка
@@ -154,6 +162,14 @@ flags сохранены; акустическое отсутствие поте
 Автоматическое скрытие уже полученного ASR требует immutable original ASR,
 видимой provenance, Undo, защиты ручных edits и phone gates; простой JNI return[]
 не соответствует контракту. В Android эту политику не включали.
+
+Greedy1 + corrected SOT + presence screen завершён и отклонён до human DEV:
+15 strict positive failures, включая потери правильных FR/PT отрицаний;
+critical review также нашёл испорченный компонент времени IT при проходящих
+WER/CER. Все 28 noise пропускают ASR. Независимый postrun review завершён
+2026-11-04: проверены 1762 inputs, 255 outputs, 11 dependencies и safe exports
+greedy-control-results.json / greedy-critical-review.json. Не запускай автоматически
+полный DEV/framing или retuning для этого отклонённого варианта.
 
 Свежая FLEURS-выборка: 42 dev + 42 ещё не использованных test. Старые IDs,
 PCM и совпавшие reference hashes исключены; один итальянский test заменён из

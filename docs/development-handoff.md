@@ -1,5 +1,11 @@
 # Focal: whole-app hardening and measured STT checkpoint
 
+**Resumed at the owner's explicit request on 2026-11-04.** The historical
+[pause checkpoint](pause-checkpoint.md) records preserved source and evidence.
+The rejected Android VAD candidate has now been archived and removed from the
+working build; independent search fixes remain under final verification. Heavy
+local checks run sequentially to reduce laptop load.
+
 Branch: `codex/sessions-stt-handoff`. Baseline before the redesign:
 `14be1ae6afe15e5229982d9e8cfe63d0f276e393`.
 
@@ -247,6 +253,14 @@ plus 185 VAD calls remain: neither all-seven improvement nor acceleration is
 established. Held-out stays closed. Do not silently return empty JNI output in an
 Android integration: immutable original ASR, visible provenance, Undo, manual-edit
 protection and phone resource acceptance are required before enabling this policy.
+
+The later fixed GREEDY1/corrected-SOT/presence control screen was rejected:
+15 strict positive failures, including lost previously correct FR/PT negations;
+critical review also found a time-component error in IT despite passing WER/CER
+criteria. All 28 noise inputs skip ASR. Independent postrun review completed on
+2026-11-04: 1,762 inputs, 255 outputs and 11 dependencies verified, with safe
+aggregates in the local benchmark report. No human DEV/framing follow-up was run
+for this failed candidate. The fresh held-out cohort remains unconsumed.
 
 ## Continue locally and in the cloud
 

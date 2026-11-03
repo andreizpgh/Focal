@@ -748,6 +748,44 @@ original ASR, protect manual revisions, expose decision provenance and support
 Undo, in addition to passing quality and phone resource gates. Returning an empty
 JNI result would lose that evidence. No such suppression is enabled in production.
 
+## Greedy control screen: rejected before human DEV
+
+A fixed, preregistered screen tested actual greedy decoding (`best_of=1`,
+temperature 0), corrected SOT logits and the same cap30 presence detector. Seven
+persistent contexts processed the same 56 existing controls: 28 ASR calls after
+positive VAD and 28 VAD skips. No new human DEV or held-out input was evaluated.
+The original warm production controls remain the primary comparator; the earlier
+rejected top-k arm is diagnostic only. The combined candidate changes both SOT
+and sampling, so its failures cannot all be attributed to greedy alone.
+
+The candidate is **rejected**: 15 strict positive-control failures, seven exact
+positive outputs, 21 changed positives and three newly empty positives. All 28
+noise controls skip ASR, but speech regressions prevent acceptance. Four failures
+are changed-text ties with unchanged WER/CER; their frozen rejection rule remains
+intact. Other failures include increased word errors and lost previously correct
+French/Portuguese quiet negations despite positive VAD. Textual review also found
+a German reference-negation loss and an Italian time-component error that passed
+the aggregate metric gate. This confirms why metric improvement alone is
+insufficient. Empty native results lack utterance diagnostics needed to identify
+their exact suppression cause; no acoustic no-loss guarantee is claimed.
+
+Independent postrun review on 2026-11-04 verified 1,762 frozen inputs, 255 outputs,
+11 loaded dependencies, all 56 input/prompt/VAD/ordinal identities, 28 native ASR
+results and the absence of fabricated ASR JSON for skips. Scores and both cached
+comparators were recomputed, and all 21 textual critical-review rows were bound
+to their raw results. The 23 model-free prerequisite checks had passed before
+launch. No new inference was needed for this review.
+
+The privacy-filtered [control aggregate](greedy-control-results.json) has SHA-256
+`ef42a0592d46e3b789d5d1f547112030e951eb868588842d1832e3325cff6ae3`;
+the [critical review aggregate](greedy-critical-review.json) has SHA-256
+`1a26b4c2a6071cf32771184c935ee10f66f4726047bc1dadef7ed85b0f24ceca`.
+Launch freeze is `33679e1ba604d6b12c89c942d8e9298150e368ea24360dfa9137c6a0beb55c2e`;
+result binding is `7b6447b2ce1efe2eaaa71a76582f6c4dbea0f219c0aa78a623ba6c6827d52faa`.
+The 100.268-second contended host duration is diagnostic, not a speed comparison.
+No automatic threshold retuning, full DEV/framing follow-up or Android adoption
+follows from this failed screen. All-seven improvement and speed remain open.
+
 ## Android seven-language integration smoke
 
 The unpublished VAD candidate was exercised through its actual Android JNI on
