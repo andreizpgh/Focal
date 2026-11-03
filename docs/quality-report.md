@@ -1,8 +1,9 @@
 # Product verification · 2026-11-03
 
 The Sessions / Focus wave direction is preserved. The latest production source
-checkpoint is `ff8ea8d`; host dependency setup is `e0a9c78`. This is a development
-checkpoint, not a finished product or verified distribution release. The public
+checkpoint is `129ee02`, including Unicode title handling in `6872bb4`; host
+dependency setup is `e0a9c78`. This is a development checkpoint, not a finished
+product or verified distribution release. The public
 alpha APK is unchanged. Quiet/noisy speech, physical-phone resources and stable
 signing remain open gates.
 
@@ -10,27 +11,27 @@ signing remain open gates.
 
 | Area | Evidence and scope |
 | --- | --- |
-| Core logic | 34 JVM tests pass |
-| Host tooling | 146 tests pass, including a clean virtual environment with hash-pinned NumPy 2.4.6 |
+| Core logic | 36 JVM tests pass |
+| Host tooling | 146 tests passed in a separate earlier clean virtual environment with hash-pinned NumPy 2.4.6; not part of the latest QA runner invocation |
 | Build | Debug/test APKs, debug/release lint and unsigned release R8 build pass |
-| Whole Android suite | Dedicated API 35 x86_64 AVD with KVM: **80 tests passed, zero failures/skips**, 178.355 seconds |
+| Whole Android suite | Clean HEAD `129ee02`, dedicated API 35 x86_64 AVD with KVM: **82 tests passed, zero failures/skips**, 180.543 seconds |
 | Real-model checks | All eight mandatory JNI/workflow checks pass, including quiet public speech and constant-audio recovery |
-| Manual UI | Real keyboard paste/rotation, Save & next, Russian edit/copy/share, 200% text, dark mode and bounded legacy paging observed |
+| Manual UI | Earlier paste/rotation, Save & next, Russian edit/copy/share, 200% text, dark mode and legacy paging; later Unicode title boundaries and rename-dialog rotation checked separately |
 | Long capture | 2:32:37 retained audio; task swipe and about 149 minutes screen off survived; a separate 30-minute memory series stayed 177,118–179,802 KiB PSS |
 | Speech research | Fresh development comparisons cover all seven languages; [results and limitations](benchmarks/2026-11-03-local/report.md) retain negative variants and an unconsumed held-out cohort |
 
 The [local QA report](benchmarks/2026-11-03-local/emulator-qa.json) records exact
-APK/model hashes and both test checkpoints. The latest runner recorded HEAD
-`c21ae20` with a dirty-source fingerprint; its application/test bytes are now in
-`a5e460d` and `ff8ea8d`. It was not a clean-HEAD run of those later commits.
+APK/model hashes and all three full-suite checkpoints. The latest runner recorded
+clean HEAD `129ee02`. The earlier 77- and 80-test runs retain their dirty-source
+fingerprints and later commit mappings; they are not relabeled as clean-HEAD runs.
 Debug APK SHA-256:
-`efd5d5fbbe6fa93e4c52c4b92e58c6921465c75ff049728e937900468157a6e6`.
+`4d6cc4dade4d326e760d20005248ada12314d4983cdbfdf5681379cd67b785f7`.
 No APK has been published as a replacement release.
 
-This local checkpoint is published without another Actions run while the separate
+Local verification has not triggered another Actions run while the separate
 engine investigation continues. One final publication CI model/fixture download
-remains reserved in the shared budget. Full-history Gitleaks passed before this
-checkpoint; the secret-scanning workflow remains enabled.
+remains reserved in the shared budget. Full-history Gitleaks passed before the
+earlier published checkpoint; the secret-scanning workflow remains enabled.
 
 The emulator uses **KVM with `-accel on`** and host GLES; only Vulkan is disabled.
 Other projects' AVDs and data were preserved. The `-no-audio` setup does not verify
@@ -53,6 +54,22 @@ Deny → Retry → Grant. `ff8ea8d` cancels only that notice's coroutine on retr
 permission result or return with permission granted. The real dialog flow now
 starts recording without the stale notice; unrelated error messages are retained.
 
+Title truncation could split a UTF-16 surrogate pair. A real paste of 119 ASCII
+characters followed by an emoji displayed a replacement glyph and saved a lone
+high surrogate (`ED A0 BD`) in SQLite. `6872bb4` preserves complete pairs while
+retaining the 120-unit manual and 72-unit automatic title limits. The repeated
+paste retained 119 valid characters; 118 characters plus the complete emoji
+survived saving at exactly 120 UTF-16 units (`F0 9F 99 82` for the emoji).
+
+An actual portrait-to-landscape rotation with Rename and the keyboard open then
+exposed a separate crash on `6872bb4`: the focus request ran before the dialog's
+field was attached. `129ee02` moves that request into the dialog composition.
+The new recreation/keyboard/draft/save regression failed before the fix (2.017 s)
+and passed afterward (2.905 s). Manual rotation on the fixed build preserved the
+draft, focused field and visible keyboard. In landscape, Save was below the IME;
+hiding the keyboard with Back allowed saving the exact draft to SQLite. This
+does not establish that Save is visible with the landscape keyboard open.
+
 Recovery bypasses the live energy gate. A new native regression returned one segment
 from 0.5 seconds of exact zero PCM in English on the previous APK (31.474 seconds).
 That assertion counts segments; it does not separately measure the returned words. `a5e460d` bypasses inference for strictly constant finite
@@ -72,8 +89,9 @@ or automatic text correction has been enabled to hide this failure.
 
 The pinned engine's no-speech output is nearly uniform on both speech and noise.
 Source inspection found that initial-prompt decoding requests only the last logits
-row, while no-speech calculation reads the first row. A separate, ignored engine
-snapshot is investigating the correct SOT row; the recorded submodule and shipped
+row, while no-speech calculation reads the first row. The optional
+[SOT research overlay](whisper-sot-research.md) in `9a27635` supports separate host
+experiments; it is not adopted by Android. The recorded submodule and shipped
 engine remain unchanged. No threshold is justified by the current no-speech values.
 
 ## Independent whole-app review

@@ -25,6 +25,22 @@
         "source_change_sha256": "78c738c4ec02daac8f703de27ccc1a2b973e9f76d3b15c1983914dfae7d1992a"
       },
       "source_mapping": "Tested app changes subsequently committed through the checkpoint; not a clean-HEAD run"
+    },
+    "clean_title_and_focus_build": {
+      "app_source_checkpoint_commit": "129ee02d0630447cb296c587cfc6df18dee74025",
+      "debug_apk_sha256": "4d6cc4dade4d326e760d20005248ada12314d4983cdbfdf5681379cd67b785f7",
+      "test_apk_sha256": "16acc3cb51fbf520c86592b76193494086f36ed3b8453172270004b246e8a0e6",
+      "runner_source": {
+        "head": "129ee02d0630447cb296c587cfc6df18dee74025",
+        "dirty": false,
+        "source_change_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "submodule_commits": [
+          "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+        ]
+      },
+      "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "installed_model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "source_mapping": "Clean-HEAD run of the committed app and tests"
     }
   },
   "environment": {
@@ -80,8 +96,24 @@
       "instrumentation_build": "passed",
       "unsigned_release_build": "passed",
       "app_build": "current_constant_and_permission_build",
-      "host_tool_tests_passed": 146,
       "release_r8": "passed"
+    },
+    {
+      "runner": "qa-local.py --release-checks",
+      "android_tests": 82,
+      "android_failures": 0,
+      "android_skips": 0,
+      "required_real_model_tests_passed": 8,
+      "instrumentation_seconds": 180.543,
+      "runner_elapsed_seconds": 182.041,
+      "core_tests_passed": 36,
+      "debug_lint": "passed",
+      "release_lint": "passed",
+      "debug_build": "passed",
+      "instrumentation_build": "passed",
+      "unsigned_release_build": "passed",
+      "release_r8": "passed",
+      "app_build": "clean_title_and_focus_build"
     }
   ],
   "editor_regression": {
@@ -273,6 +305,28 @@
       "obsolete_notice_removed_after_grant": true
     },
     {
+      "id": "unicode_title_boundary_paste_and_save",
+      "app_source_checkpoint_commit": "6872bb450cb42926823fc11dfa27facbe3af326c",
+      "status": "observed_pass",
+      "real_keyboard_paste": true,
+      "crossing_pair_preserves_valid_prefix": true,
+      "complete_pair_preserved_at_limit": true,
+      "saved_title_equal_expected": true
+    },
+    {
+      "id": "rename_draft_portrait_to_landscape",
+      "app_build": "clean_title_and_focus_build",
+      "status": "observed_pass",
+      "draft_preserved": true,
+      "field_focused_after_rotation": true,
+      "ime_visible_after_rotation": true,
+      "crash_after_rotation": false,
+      "landscape_save_requires_hiding_ime": true,
+      "back_hid_ime_before_save": true,
+      "saved_title_equal_expected": true,
+      "scope": "Save was below the landscape IME; no claim that it was visible while the keyboard remained open"
+    },
+    {
       "id": "force_stop_recovery_low_level_noise",
       "status": "open_failure",
       "observed_builds": [
@@ -301,5 +355,39 @@
     "Calls, real TalkBack traversal and selection",
     "Seven-language speech-quality acceptance and stable distribution signing"
   ],
-  "privacy": "Aggregate measurements only; no recordings, transcripts, screenshots, raw logs, local paths or device identifiers"
+  "privacy": "Aggregate measurements only; no recordings, transcripts, screenshots, raw logs, local paths or device identifiers",
+  "separate_host_tool_check": {
+    "tests_passed": 146,
+    "numpy_version": "2.4.6",
+    "method": "Earlier separate clean virtual environment with hash-pinned scripts/requirements-host.txt",
+    "included_in_qa_local_runner": false,
+    "rerun_for_latest_android_checkpoint": false
+  },
+  "unicode_title_regression": {
+    "fix_commit": "6872bb450cb42926823fc11dfa27facbe3af326c",
+    "baseline_input": "119 ASCII characters followed by one supplementary-plane emoji",
+    "baseline_observation": "Replacement glyph in the rename field and lone high surrogate saved in SQLite",
+    "baseline_invalid_suffix_hex": "EDA0BD",
+    "manual_title_limit_utf16_units": 120,
+    "automatic_title_limit_utf16_units": 72,
+    "fixed_crossing_pair_result_ascii_characters": 119,
+    "fixed_complete_pair_title_utf16_units": 120,
+    "fixed_emoji_utf8_hex": "F09F9982",
+    "core_regressions_added": 2,
+    "storage_regression": "NoteStoreTest.renamedTitlesPersistWholeEmojiAtTheUtf16Limit",
+    "scope": "Preserves complete surrogate pairs at truncation boundaries; does not repair previously malformed stored titles"
+  },
+  "rename_focus_regression": {
+    "test": "InterfaceTest.renamedTitleDraftAndKeyboardSurviveRecreation",
+    "baseline_app_source_checkpoint_commit": "6872bb450cb42926823fc11dfa27facbe3af326c",
+    "baseline_manual_trigger": "Actual portrait-to-landscape rotation with rename dialog and keyboard open",
+    "baseline_failure": "FocusRequester was not initialized because its effect ran outside the dialog composition",
+    "baseline_focused_result": "failed as expected",
+    "baseline_focused_run_seconds": 2.017,
+    "fix_commit": "129ee02d0630447cb296c587cfc6df18dee74025",
+    "fixed_focused_result": "passed",
+    "fixed_focused_run_seconds": 2.905,
+    "fixed_app_build": "clean_title_and_focus_build",
+    "scope": "Recreation regression checks dialog focus, visible IME, draft and saving; actual orientation change checked separately by hand"
+  }
 }

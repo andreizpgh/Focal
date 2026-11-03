@@ -98,7 +98,8 @@ To repeat the **full** instrumentation suite, use `--repeat 3` (allowed range
 5–120 if needed. On a timeout or interruption the runner force-stops the two
 Focal packages to end test work; it does not clear their data. It stops on the
 first failure. Use `--release-checks` to add release lint and the unsigned
-release build. Builds and host tests run once, before all repetitions.
+release build. Builds and core unit tests run once, before all repetitions.
+The separate Python host-tool suite is not run by this command.
 
 The runner executes core unit tests, debug lint, the debug and instrumentation APK
 builds, then verifies the actual APK's embedded model against the committed
@@ -110,7 +111,7 @@ AVD or explicitly replace that model. The installed-model digest is in the manif
 It runs all instrumentation tests directly with `adb -s SERIAL`, independently
 of Gradle's device discovery. A run fails for a test failure, skipped test,
 crash, missing completion or count, any missing source-discovered test, or any
-of the five missing real-model checks. Source changes during build or testing
+of the eight missing real-model checks. Source changes during build or testing
 also fail the run; avoid editing the checkout while it runs. The test discovery
 check deliberately fails closed if new test source syntax is unsupported.
 
@@ -130,21 +131,24 @@ are restored, reconnect it and restore each value from the manifest with
 
 ## Verified local checkpoint · 2026-11-03
 
-Two complete `qa-local.py --release-checks` runs passed:
+Three complete `qa-local.py --release-checks` runs passed:
 
 | App source checkpoint | Android tests | Failures / skips | Mandatory real-model tests | Instrumentation time |
 | --- | ---: | ---: | ---: | ---: |
 | `12e958c`, editor fix and subsequent long-session manual checks | 77 | 0 / 0 | 5 | 116.109 s |
 | `ff8ea8d`, exact-constant PCM and microphone-notice fixes | 80 | 0 / 0 | 8 | 178.355 s |
+| Clean HEAD `129ee02`, Unicode title and rename-focus fixes | 82 | 0 / 0 | 8 | 180.543 s |
 
-The latest run also passed all **34 core tests**, **146 host-tool tests**, debug
-and release lint, and debug, instrumentation and unsigned release/R8 builds.
-The runner recorded dirty working trees at HEAD `388aee0` and `c21ae20`,
-respectively; their tested app changes were subsequently committed through the
-checkpoints above. These are source mappings, not claims of clean-HEAD runs.
-The [public aggregate](benchmarks/2026-11-03-local/emulator-qa.json) retains both
-runner source fingerprints and APK identities. Raw logs and device identifiers
-are not published.
+The latest run verified **36 core tests**, debug and release lint, and debug,
+instrumentation and unsigned release/R8 builds at clean HEAD `129ee02`. The
+**146 Python host-tool tests** passed separately in an earlier clean virtual
+environment; they are not part of this runner's build or its new test count.
+The first two runs recorded dirty working trees at HEAD `388aee0` and `c21ae20`,
+respectively, with 34 core tests; their tested app changes were subsequently
+committed through the checkpoints above. These earlier source mappings are not
+claims of clean-HEAD runs. The [public aggregate](benchmarks/2026-11-03-local/emulator-qa.json)
+retains all three runner source fingerprints and APK identities. Raw logs and
+device identifiers are not published.
 
 The previously failing
 `InterfaceTest.oversizedEditorInputKeepsTheValidDraftThroughRotation` was
@@ -155,6 +159,22 @@ showed no warning; scrolling was not the cause. Commit `12e958c` ignores unchang
 text callbacks, preserving rejection feedback until a real edit. The original
 strict test passed twice after the fix, and an additional regression checks both
 unchanged callbacks and a genuine text change.
+
+Commit `6872bb4` preserves surrogate pairs at the existing manual/automatic title
+limits. Before it, pasting 119 ASCII characters plus an emoji cut the emoji in
+half; SQLite retained the invalid high-surrogate bytes `ED A0 BD`. Afterward,
+the same paste kept 119 valid characters, and 118 characters plus an emoji saved
+as 120 UTF-16 units with intact emoji bytes `F0 9F 99 82`. Core boundary cases and
+a SQLite round-trip regression cover the truncation paths.
+
+Actual rotation with Rename and its keyboard open exposed a separate
+`FocusRequester` initialization crash on `6872bb4`. Commit `129ee02` places the
+focus effect inside the dialog's composition, alongside its field. The new
+`InterfaceTest.renamedTitleDraftAndKeyboardSurviveRecreation` failed on the
+previous implementation in 2.017 s and passed after the fix in 2.905 s. It checks
+focus, visible IME, preserved draft and saving; both new Android regressions are
+included in the clean 82-test run. These durations describe focused tests, not
+performance benchmarks.
 
 Commit `a5e460d` also prevents **exactly constant** zero/DC PCM from reaching
 Whisper during recovery. A new native regression failed on the previous APK:
@@ -190,6 +210,8 @@ transcripts, screenshots or device identifiers.
 | Notification Pause, Resume and Finish | Pause showed 00:29 and persisted `PAUSED`; Resume showed recording at 00:43; Finish produced a completed 00:44 Russian-language session. |
 | Speech-language picker | All seven supported language labels were visible. The automated suite separately checks selection and persistence. |
 | Microphone denial, retry and grant on `ff8ea8d` | Denial showed the Settings notice without starting capture. Retrying showed Android's permission dialog without the stale notice; granting permission started recording and removed obsolete feedback. |
+| Unicode title paste/save on `6872bb4` | Real paste at the 120-unit boundary kept complete Unicode characters; saving preserved the exact expected title in SQLite. |
+| Rename rotation on `129ee02` | Actual portrait-to-landscape rotation retained the draft, focused field and visible IME without crashing. Save was below the landscape keyboard; Back hid the IME, after which Save persisted the exact draft. Visibility of Save with the landscape IME open was not established. |
 
 The screen-off interval lasted roughly 2.5 hours, but service/memory samples
 were collected only for the first 30 minutes. This was capture without host audio;
@@ -210,6 +232,9 @@ The measured PCM varied from **−8 to 7** (PCM16), with normalized RMS approxim
 did not apply. The passing constant-input regressions do not close this manual
 failure. A solution still needs paired quiet-speech and noise evidence; this report
 does not claim that silence/noise hallucinations or whole-app acceptance are solved.
+The optional [SOT research overlay](whisper-sot-research.md) in `9a27635` supports
+separate host experiments only. The shipped Android engine and recorded submodule
+remain unchanged.
 
 ## Focused editor regression
 

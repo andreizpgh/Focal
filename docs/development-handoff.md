@@ -61,19 +61,29 @@ evidence supports a replacement.
 
 ## Verified state and evidence
 
-Production source is `ff8ea8d` (including `a5e460d` constant-PCM protection and
+Production source is `129ee02` (including `6872bb4` Unicode title limits,
+`ff8ea8d` permission feedback, `a5e460d` constant-PCM protection and
 `12e958c` editor feedback); host dependency setup is `e0a9c78`.
-The owner's dedicated KVM-accelerated API 35 x86_64 AVD passed **80 Android tests,
-zero failures/skips**, all eight mandatory real-model checks, 34 core tests,
+The owner's dedicated KVM-accelerated API 35 x86_64 AVD passed **82 Android tests,
+zero failures/skips**, all eight mandatory real-model checks, 36 core tests,
 debug/release lint and debug/test/unsigned release builds. The Python suite passes
 146 tests, also in a clean environment with pinned NumPy. See the
 [quality report](quality-report.md) and exact [emulator evidence](benchmarks/2026-11-03-local/emulator-qa.json)
-for hashes and the dirty-source fingerprints recorded before commits.
+for hashes. The latest full run used clean HEAD `129ee02`; earlier dirty-source
+runs retain their original fingerprints and mappings.
 
 The editor failure is fixed: input-connection replay of the accepted draft cleared
 rejection feedback during recreation. It was not an offscreen warning. The original
 assertions remain; real keyboard paste/rotation and Save & next passed. Manual QA
 also fixed a stale microphone permission notice after a successful grant.
+
+Further manual QA found two rename defects. Truncation could split an emoji's
+surrogate pair; title limits now retain whole characters within the same UTF-16
+caps. Rotation with the rename keyboard open also crashed because an Activity
+effect requested focus before the dialog field was attached. The effect now lives
+inside the dialog composition. Its strict regression failed on the previous APK
+and passed after the fix; actual landscape rotation retained the draft and focus,
+and Save persisted it after hiding the keyboard.
 
 A 2:32:37 capture survived task swipe and roughly 149 minutes screen off. The first
 30-minute memory series stayed bounded; pause/resume, Finish, playback position,
@@ -89,9 +99,10 @@ all manual QA as passing.
 
 The current engine's `noSpeech` is nearly uniform for speech and noise. Source
 inspection identifies an unrequested/wrong initial logits row. A minimal SOT-row
-fix is being researched in an ignored source snapshot, with independent review;
-no submodule or shipped engine change has been made. Validate it on paired speech
-and noise before any threshold or engine adoption.
+fix is being researched in an ignored source snapshot, with independent review.
+An optional [hash-verified build overlay](whisper-sot-research.md) is now available;
+it is not wired into Android. No submodule or shipped engine change has been made.
+Validate it on paired speech and noise before any threshold or engine adoption.
 
 Focused independent reviews covered capture/recovery, storage/privacy, JNI,
 playback/state, UX and evidence tooling. Source reviews are separate from runtime

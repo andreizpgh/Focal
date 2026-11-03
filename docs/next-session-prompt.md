@@ -24,10 +24,17 @@ https://github.com/andreizpgh/Focal/pull/1.
 в `12e958c`: повтор accepted value от input connection стирал предупреждение.
 Гипотеза «предупреждение было вне экрана» опровергнута наблюдением UI. Проверки
 не ослаблены; реальная вставка с клавиатурой, поворот и Save & next прошли.
-Приложение с `a5e460d` и `ff8ea8d` прошло **80 Android-тестов без ошибок/пропусков**,
-все восемь обязательных real-model checks, 34 core tests, debug/release lint и R8.
-146 host tests также прошли в чистом окружении. Точные APK/hash/fingerprint и
-ограничения QA приведены в отчётах; не выдавай dirty-source run за clean HEAD.
+Последний полный прогон чистого HEAD `129ee02` прошёл **82 Android-теста без
+ошибок/пропусков**, все восемь обязательных real-model checks, 36 core tests,
+debug/release lint и R8. Отдельно 146 Python host tests прошли в чистом окружении.
+Точные APK/hash/fingerprint и ограничения QA приведены в отчётах; прежние
+dirty-source runs не стали проверками чистого HEAD задним числом.
+
+`6872bb4` исправляет разрезание emoji лимитами названий 120/72 UTF-16.
+`129ee02` исправляет обнаруженное ручным поворотом падение Rename:
+FocusRequester вызывался до готовности поля в отдельной композиции Dialog.
+Строгая регрессия сначала упала на старом APK, затем прошла; реальный landscape
+сохранил черновик и фокус, Save после закрытия клавиатуры записал точное название.
 
 Ручная запись сохранила 2:32:37 аудио после удаления карточки и примерно
 149 минут screen-off. Память измерялась отдельно первые 30 минут, не весь сеанс.
@@ -46,7 +53,9 @@ https://github.com/andreizpgh/Focal/pull/1.
 Показатель `noSpeech` закреплённого whisper.cpp почти одинаков для речи и шума.
 Код запрашивает только последнюю строку logits начального prompt, а no-speech
 читает первую. Исследуется минимальный fix SOT-строки в отдельной ignored-копии,
-с учётом preceding text context. Submodule `4979e04f5dcaccb36057e059bbaed8a2f5288315`
+с учётом preceding text context. В `docs/whisper-sot-research.md` описан
+опциональный hash-verified build overlay; в Android он не включён.
+Submodule `4979e04f5dcaccb36057e059bbaed8a2f5288315`
 и shipped engine пока не изменены. Сначала проверь итог исследовательского отчёта,
 затем парную речь/шум; любой намеренный engine update требует явной provenance,
 повторного QA и сохранённого baseline. Не используй текущие noSpeech значения
