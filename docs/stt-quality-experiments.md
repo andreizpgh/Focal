@@ -39,7 +39,76 @@ against both omissions and false activation, with fresh held-out phone speech.
 Do not tune another model/policy on the already consumed test split. Keep E5
 and automatic correction off while this capture-to-decoder quality gap is open.
 
-## Compare bounded alternatives
+## Practical direction after primary-source review
+
+Checked **2026-11-04**. The product remains record → review/edit → copy, with
+recording continuing after Home or screen lock until an explicit Finish or a
+reported interruption. Keep Sessions / Focus wave, explicit speech language,
+original audio and one bounded transcription worker. Background capture is a
+core acceptance requirement. Do not add live partial hypotheses, diarization,
+word alignment, LLM correction, cloud services or a model catalogue to complete
+this note-taking workflow.
+
+The following are maintainer documentation and a published research paper.
+Shipped applications demonstrate product patterns; their troubleshooting advice
+is not a controlled seven-language Android result.
+
+| Primary source | Evidence and limit | Decision for Focal |
+| --- | --- | --- |
+| [FUTO Voice Input: context fine-tuning](https://github.com/futo-org/whisper-acft#results) | Used in Android Voice Input v1.3.2+. On the first 128 VoxPopuli DE examples, stock base WER was 22.47 with full context and 318.15 with dynamic context; the specially fine-tuned dynamic-context model scored 22.31. This is not a seven-language phone benchmark. | Keep full encoder context for the current stock base Q5_1. Do not copy a speed setting without its trained model and paired evaluation. |
+| [FUTO Keyboard voice input](https://docs.keyboard.futo.tech/settings/voiceinput) | Long-form mode removes a default 30-second dictation limit, with a repetition warning. Silence auto-stop is optional and may need manual intervention in noise. | Keep explicit Finish. A model window length is not a recording-duration limit; pauses must not end a note. |
+| [Aiko maintainer FAQ](https://sindresorhus.com/aiko) | Local Whisper, explicit audio language, recording before transcription and retained recordings for retry. Optional silence skipping addresses invented tails/repetition. The supported-language list includes Focal's seven, but quality varies. Its iOS background restriction does not describe Android. | Preserve source audio and manual language selection. A usable note-taking product does not require streaming partial text. Keep the existing worker; this is not a reason to rewrite scheduling. |
+| [VoiceInk hallucination guidance](https://tryvoiceink.com/docs/repeated-text-or-hallucinations) | Recommends VAD and checking microphone input. Retry uses the saved audio and creates another history entry. No paired WER or safe VAD threshold is supplied. | Treat VAD as a hypothesis, preserve edits/source and make uncertain output reviewable. Do not import phrase blacklists or treat low speech probability as proof of silence. |
+| [WhisperX, Interspeech 2023, Tables 1/3 and §3.3](https://www.isca-archive.org/interspeech_2023/bain23_interspeech.pdf) | VAD Cut & Merge combines speech into windows up to 30 seconds. TED-LIUM WER 10.52→9.70 and 2.7× speed at batch size 1 used large-v2/greedy on NVIDIA A40. This is English long-form GPU evidence, not base/Silero/Android evidence. | Avoid cutting every short detected speech island into a separate ASR call. Test preserved phrase boundaries on the real note pipeline; do not promise the paper's speedup. |
+
+The [upstream whisper.cpp Android sample](https://github.com/ggml-org/whisper.cpp/blob/master/examples/whisper.android/README.md)
+recommends tiny/base and a release build. It supports retaining the existing
+base model as a practical baseline, not an accuracy or phone-performance claim.
+Newer alternatives do not justify an immediate engine migration:
+[sherpa-onnx Qwen3-ASR 0.6B INT8](https://k2-fsa.github.io/sherpa/onnx/qwen3-asr/pretrained.html)
+lists all seven languages, but its three ONNX files are approximately 937 MiB
+combined, beyond the remaining download budget; model-file size is not runtime
+memory. [Moonshine's current language list](https://github.com/moonshine-ai/moonshine/blob/main/docs/index.md)
+does not establish all seven for STT; several required languages appear under
+TTS instead. No alternative model or runtime was downloaded or integrated.
+
+Android explicitly provides the [microphone foreground-service type](https://developer.android.com/develop/background-work/services/fgs/service-types#microphone)
+for continuing capture in the background. Start it from the visible app after
+microphone permission; background creation is restricted. Focal already uses
+this service, notification controls and a partial wake lock while capture or
+decoding needs the CPU. Hold wake locks only while needed, as described in the
+[Android guide](https://developer.android.com/develop/background-work/background-tasks/awake/wakelock).
+The [Android 15+ six-hour processing limits](https://developer.android.com/develop/background-work/services/fgs/timeout)
+apply to dataSync/mediaProcessing, not microphone capture; Focal changes service
+type for finishing transcription and handles timeout as recoverable work.
+User force-stop stops capture; reopening offers recovery of durable audio without
+restarting the microphone. OEM background restrictions still need device checks.
+The earlier 2.5-hour screen-off AVD capture had host audio disabled; real speech
+continuity, calls, battery and thermals remain in the [phone matrix](device-validation.md).
+
+Independent focused Sol/Terra research and an Astra critical review support the
+following scope decision. Defer the terminal-only recovery skip: its narrow
+benefit would require durable skipped-ASR provenance, explicit re-decode and
+manual-edit protection. The private cached audit compared segment-based presence
+with admission on any valid frame at probability ≥0.5. Decisions were identical
+for 70 requests (28 synthetic positives, 28 noise/context cases and
+14 DEV terminal ranges); it adds no fresh inference or timing evidence. Do not
+build that feature or run its proposed 56 paired controls simply to extend the
+benchmark history. No such run or production change was made.
+
+The next quality comparison must concern ordinary notes: whole quiet words,
+phrase boundaries, pauses and noise, with one frozen candidate and early rejection
+on a critical omission. Do not resume rejected SOT/beam/context variants or tune
+on the unopened 42-clip local test cohort. For speed, inspect avoidable loading
+and copies while preserving decoder inputs and outputs; accept a change only
+with matched measurements. General seven-language quality/speed and physical
+phone acceptance remain open. This review changes priorities, not acceptance gates.
+
+## Historical bounded alternatives
+
+The table below records the original comparison plan and completed research
+context. It is not a queue to execute before shipping; use the practical scope
+above and the measured rejection reasons to choose any further experiment.
 
 Keep the same immutable audio, explicit language, pinned engine, chunk ranges,
 and test split for each paired run. Change one variable at a time.
@@ -53,10 +122,11 @@ and test split for each paired run. Change one variable at a time.
 | E4 | Context on/off and gate ablations using the same original recording | Separate prompt contamination, missed speech and ASR errors | A quieter threshold can create noise-only work and hallucinations |
 | E5 | E0/E3 plus Qwen3-0.6B constrained choice between acoustic alternatives | Language context can reject an implausible alternative | Fluent but wrong replacements; extra runtime and model residency |
 
-The first useful comparison is E0/E1/E2, followed by E3 if small is accurate but
-too costly as the default. Run E5 against the strongest ASR-only alternative, not
-only against a weaker baseline. Count extra loading and background contention.
-Two Whisper passes are not independent evidence merely because they agree.
+The original plan ordered E0/E1/E2 before E3 and any E5 comparison. Further work
+on these alternatives is deferred unless new evidence justifies it. Any future
+comparison must count extra loading and background contention and use the
+strongest accepted ASR-only baseline. Two Whisper passes are not independent
+evidence merely because they agree.
 
 OpenAI lists base at 74M parameters and small at 244M, and explicitly documents
 uneven language performance, hallucinations and repetition. Larger capacity is a

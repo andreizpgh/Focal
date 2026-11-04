@@ -7,6 +7,13 @@ changes only the search test setup. The public alpha APK is unchanged. Paired
 speech accuracy and speed across all seven languages, physical-phone validation
 and stable signing remain open.
 
+A [primary-source review](stt-quality-experiments.md#practical-direction-after-primary-source-review)
+on 2026-11-04 keeps the scope on ordinary voice notes and background capture.
+Independent Sol/Terra research and Astra review rejected further investment in
+the narrow terminal-only recovery filter for now. This documentation checkpoint
+adds no production STT change, fresh inference, APK build or phone measurement;
+the verified artifacts and unresolved quality gates below are unchanged.
+
 ## Current local evidence
 
 | Area | Evidence and scope |

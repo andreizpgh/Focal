@@ -57,6 +57,16 @@ GPT-6.1 Sol xhigh and Terra reviewers, with root retaining integration and accep
 
 ## Product direction
 
+The owner's 2026-11-04 clarification keeps this a practical note-taking tool.
+Recording after Home and with the screen off is core UX; it is implemented but
+still needs real-phone audio-continuity/OEM checks. The
+[primary-source STT review](stt-quality-experiments.md#practical-direction-after-primary-source-review)
+supports retaining the existing model/full context and workflow. Defer the narrow
+terminal-only recovery filter and its proposed 56-pair run: the storage/retry UI
+cost is disproportionate to its scope. No new model/runtime, LLM correction or
+streaming UI is needed. Focus further measurements on ordinary quiet/noisy notes
+and avoidable runtime cost; the seven-language gates remain open.
+
 Keep the selected **D / Sessions** layout: a dated recording library, white/light
 canvas, black primary actions, compact speech-language selection, timed passages
 and persistent original-audio controls. No app name in the main header or filler
@@ -430,38 +440,30 @@ exact local test artifacts and raw logs private. Paired speech accuracy and
 speed across all seven languages remain open. The owner will connect a phone
 later for physical-device validation.
 
-1. Resolve the observed recovery hallucinations on weak varying noise. Investigate
-   the no-speech logits defect with the pinned source plus an explicit, reviewed
-   research patch; retain the original engine for paired comparison. Do not hide
-   the failure behind a broad amplitude cutoff. Repeat the actual manual recovery
-   path and complete local suite after any production fix.
-2. Address the measured quiet-speech/gate quality gap before another broad model
-   search: matched quiet full intervals have 84/490 errors versus current gated
-   172/490; bypassing the gate hallucinated 87 Russian words on a 30-second seeded
-   noise control. Validate any candidate against omissions and false activation
-   with fresh held-out evidence. Extend paired WER/CER on all seven languages. Cover names, numbers, negation,
-   quiet/noisy speech, silence hallucinations and actual gate boundaries. Distinguish
-   host isolated-clip results from continuous Android dictation and phone latency.
-3. Use the benchmark results to choose the next comparison, without retuning on
-   the consumed test split. Evaluate a
-   selective acoustic second pass and context/gate ablations before adding an LLM.
-   Use `scripts/evaluate-stt.py` and the staged experiment plan; retain reproducible
-   manifests and aggregate results without committing speech or transcripts.
-4. If acoustic results warrant it, evaluate constrained local correction with
-   `scripts/score-stt-corrections.py`. A lower WER is insufficient if corrections
-   introduce wrong names, amounts or negations. Require held-out improvement,
-   adjudicated accepted-span precision and acceptable phone cost. Model confidence
-   is not evidence that a replacement was spoken. Keep inconclusive variants off.
-5. Any shipped correction must preserve immutable original ASR/audio, manual edits
-   and a consistent visible/copy revision. Show a restrained changed-span underline;
-   tapping reveals original → correction and Undo. Avoid extra steps in normal use.
-   The current mutable passage text is insufficient provenance: migrate the data
-   model before enabling automatic corrections, as specified in the experiment doc.
-6. Validate on midrange and older ARM64 phones, including a 4 GB device and current
+1. Address weak-noise hallucinations and quiet-word loss in ordinary notes with
+   one justified, frozen candidate. Complete quiet intervals scored 84/490 errors
+   versus gated 172/490; bypassing the gate inserted 87 Russian words on 30 seconds
+   of seeded noise. These findings do not justify a broad amplitude cutoff or
+   unguarded bypass. Use existing DEV evidence for early rejection on names,
+   numbers, negation and phrase omissions; open fresh held-out only after a
+   candidate passes development gates. Do not repeat rejected SOT/beam/context
+   variants or the deferred terminal-only screen. Keep the actual recovery
+   failure and seven-language WER/CER improvement open until verified.
+2. Inspect avoidable runtime cost without changing decoder inputs or call history.
+   A proposed lazy model load could avoid work for sessions with no chunks, but
+   moves cold-load latency and model errors to the first passage. It is not an
+   accepted optimization. Require matched measurements, including first-text
+   latency, before changing scheduling; host results are not phone results.
+3. With the owner present, validate midrange and older ARM64 phones, including a
+   4 GB device and current
    Android foreground rules: screen-off recording, calls, recovery, TalkBack,
    cold/warm latency, memory, battery and thermals. Emulator timing cannot establish
-   any of these phone-performance claims.
-7. Re-review changed layers, run required build/tests and applicable regressions,
+   these phone claims. While waiting for the phone, continue justified local work;
+   do not repeat completed QA or expand the product to fill the waiting time.
+4. Keep automatic correction, additional models and LLM integration deferred.
+   If future evidence warrants correction, the existing immutable original
+   ASR/audio, manual-edit protection, provenance and Undo requirements still apply.
+5. Re-review changed layers, run required build/tests and applicable regressions,
    then verify the exact bundled, stably signed release artifact before publication.
    Do not replace existing release assets or call the product finished while these
    gates remain unresolved.
