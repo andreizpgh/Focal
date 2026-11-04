@@ -8,8 +8,20 @@ Spanish worsened 15 → 44 / 177, including one output mixing Spanish and Englis
 six other languages improved in both aggregate measures. Thirty-five fresh cold
 pairs supplied matched host timings, while seven earlier pairs were reused for
 quality only. Independent review verified all raw-result hashes and reproduced
-the scores; the separate held-out
-cohort, real-phone gates and one planned 129-chunk pipeline replay remain open.
+the scores. A subsequent completed Kotlin pipeline replay used 129 speech and
+two noise chunks; normal word errors were 223 → 102 / 864, attenuated 256 → 181
+/ 864, with quiet German WER and Portuguese CER regressions. Two normal and four
+quiet English clips received no gate audio overlapping their speech. Independent
+Astra review covered all 131 raw outputs and replay; no speech-overlap boundary
+occurred. The isolated Android prototype then passed one test with three inputs
+in 25.844s: public English speech and two blank-output noise controls. Core
+(cached), debug lint and both APK builds passed in 2m46s; the release guard
+rejected the research flag. Exact runtime/model identities and test-only native
+dependencies were verified; see [the probe guide](parakeet-android-probe.md).
+A later 43-case gate-only replay rejected lowering the global threshold: one
+normal omission recovered at 0.001, four extra noise controls activated. No ASR
+was run for this audit and production thresholds stayed unchanged.
+The separate held-out cohort and real-phone gates remain open.
 See [the research report](benchmarks/2026-11-05-stt/report.md) for limits and
 earlier synthetic controls. The application backend is unchanged; no new APK was
 released.
@@ -248,7 +260,8 @@ regression prevents promotion; no remaining language sessions ran. Its 369.27 s
 host cost is not comparable to the cached baseline or phone performance.
 
 The [ledger](benchmarks/2026-11-03-stt/download-budget.json) retains all prior
-reservations under the owner's revised 5 GB ceiling. Current reservation:
+reservations under the owner's revised 5 GB ceiling. At this historical checkpoint,
+the reservation was:
 **2,749,583,598 bytes**, remaining **2,250,416,402 bytes**. Both Qwen files and
 Whisper small are verified local caches; no base STT model was downloaded again. The 42 fresh
 held-out clips remain unopened. Alpha 3 was published and merged through

@@ -187,8 +187,93 @@ The Python configuration requests 80 feature bins, but native initialization
 uses the model metadata: 128 bins and per-feature normalization. The wrapper's
 configuration string describes the request, not the effective native frontend.
 
-One bounded pipeline replay of 129 speech chunks and two activated-noise chunks
-is the next planned comparison; it has not
-been launched. No application backend was changed and no new APK was released.
-Physical-phone quality, latency, memory, battery, thermals and background
-behavior remain open.
+## Parakeet: gated development pipeline replay
+
+The completed host replay used the existing Kotlin gate and transcript
+reconciliation on the same frozen ranges: 129 speech chunks and two activated
+noise chunks across normal and attenuated versions of the 42 DEV clips. The
+Whisper results are the earlier four-thread baseline with trusted context;
+Parakeet uses automatic language selection. These are paired quality results,
+not matched timing or an Android run. [Aggregate data](parakeet-pipeline.json).
+Independent Astra review verified all 131 raw outputs and the Kotlin replay.
+
+| Condition | Reference words | Word errors: Whisper → Parakeet | Reference lexical characters | Character errors: Whisper → Parakeet |
+| --- | ---: | ---: | ---: | ---: |
+| Normal | 864 | 223 → 102 | 4,349 | 598 → 321 |
+| Attenuated | 864 | 256 → 181 | 4,349 | 822 → 730 |
+
+Normal word errors improved in all seven languages; Portuguese character errors
+rose 25 → 26. For attenuated input, German worsened 42 → 44 word errors and
+Portuguese character errors rose 33 → 46. The gate provided no speech-overlap
+audio for two English clips at normal gain and four at attenuated gain; those
+reference words remain in the scores. Neither backend can recover audio omitted
+before decoding. Quiet full-WAV results at the same gain were not measured.
+The earlier Spanish full-WAV translation was not reproduced on these frozen
+ranges; this does not establish that the failure is fixed. No speech-overlap
+boundaries occurred, so this run does not validate overlap reconciliation.
+
+Candidate-only constrained-host medians were 2.660 s for 15 note loads,
+1.168 s for 15 first decodes, and 0.874 s for 116 resident decodes. Peak
+process RSS was 1,279,733,760 bytes. These timings have no matched historical
+Whisper comparison and do not establish phone performance.
+
+## Parakeet: isolated Android deployment check
+
+The opt-in instrumentation prototype passed one test with three inputs in
+25.844 seconds on the dedicated API 35 x86_64 KVM emulator. It loaded the pinned
+Sherpa 2.0.1 / ONNX Runtime 1.28.2 runtime and verified all four cached model
+files. The public 11-second English fixture produced substantive speech; both
+30-second controls (exact zero and seeded varying noise) produced empty output.
+[Portable result and exact APK identities](parakeet-android.json);
+[reproduction and limitations](../../parakeet-android-probe.md).
+
+Model loading took 1.874 s; decode times were 3.220 s for speech, 9.285 s for
+zeros and 9.376 s for varying noise. Decode excludes stream setup and input
+acceptance. The process-lifetime peak RSS reached 1,299,664 KiB; PSS after model
+release was 143,406 KiB. These values describe this emulator process, not
+incremental model memory or phone performance. Long controls intentionally
+bypass the application gate and exact-constant shortcut.
+
+Core tests (cached), debug lint and app/test builds passed in 2m46s. A release
+task with the research flag was rejected as intended. Independent APK inspection
+confirmed that Sherpa/ORT occur only in the test APK, neither manifest requests
+Internet, native libraries have 16 KiB-compatible alignment and production native
+fault hooks are absent. This is not a test on a 16 KiB-page physical device.
+Native ownership is serial; the suite does not test capture, cancellation,
+recovery, overlap or edits. The emulator was stopped after the run.
+
+The application backend remains unchanged and no new APK was released. The unused
+held-out cohort and physical-phone quality, latency, memory, battery, thermal and
+background gates remain open.
+
+## Gate omission diagnosis: do not lower the global threshold
+
+A read-only waveform replay reproduced all 43 saved Kotlin range receipts:
+14 existing speech streams and 29 synthetic controls. The current absolute
+threshold is 65.54 PCM16 RMS units. The two completely omitted normal English
+clips peak at 67.59 and 53.69; the first never supplies the required two
+consecutive voiced frames. Four quiet English clips peak at only 5.34–9.62.
+These are digital levels, not a measurement of audibility on the owner's phone.
+[Bound inputs, threshold sweep and limits](gate-floor-audit.json).
+
+Halving the absolute threshold to 0.001 only reduces normal omitted clips from
+two to one and leaves all four attenuated omissions. Meanwhile, active pure-noise
+controls rise from 2/18 to 6/18 and their queued audio grows from 61.48 to 185.40
+seconds. Reducing it further to 0.0005 recovers both normal clips but activates
+8/18 noise controls. The adaptive floor, debounce and frame boundaries were
+unchanged. This fails the proposed simple fix before expensive ASR; no decoder
+calls or production changes were made. Independent review reproduced the
+aggregates. The broader quiet-speech problem remains open.
+
+## Next functional step
+
+Keep the unused 42 held-out clips closed until a real processing path is frozen.
+The narrow candidate is explicit alternative transcription of a saved recording
+with **Parakeet · Auto**, showing a preview while preserving the original transcript,
+audio and manual edits. This is a development plan, not an implemented feature.
+The standard Whisper/manual-language capture path should remain intact; never
+silently ignore its selected language. Start with the verified local model files,
+a bounded serial worker and no capture changes. Verify cancellation, original-data
+preservation, process recovery and overlap before any public trial. A physical
+Pixel 10 check must then establish memory, latency and background behavior. No
+automatic LLM correction has passed its acceptance gate.

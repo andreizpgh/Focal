@@ -11,6 +11,29 @@ val nativeFaultVariant = providers.gradleProperty("focalNativeFaultTests").orNul
 require(nativeFaultVariant == null || nativeFaultVariant in setOf("baseline", "patched")) {
     "focalNativeFaultTests must be baseline or patched; omit it for a normal build."
 }
+val parakeetTestOption = providers.gradleProperty("focalParakeetTests").orNull
+require(parakeetTestOption == null || parakeetTestOption == "true") {
+    "focalParakeetTests must be true; omit it for a normal build."
+}
+val parakeetTests = parakeetTestOption == "true"
+require(!parakeetTests || nativeFaultVariant == null) { "Choose only one research instrumentation suite." }
+val parakeetRuntime = rootProject.file("build/dependencies/sherpa-onnx-2.0.1.aar")
+if (parakeetTests) {
+    require(parakeetRuntime.isFile) { "Missing verified Parakeet test runtime. See docs/parakeet-android-probe.md." }
+    val digest = MessageDigest.getInstance("SHA-256")
+    parakeetRuntime.inputStream().use { input ->
+        val buffer = ByteArray(65536)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+    }
+    check(digest.digest().joinToString("") { "%02x".format(it) } ==
+        "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7") {
+        "Parakeet test runtime checksum mismatch."
+    }
+}
 
 android {
     namespace = "app.focal"
@@ -54,6 +77,9 @@ android {
             "src/nativeFaultTestSupport/java",
             if (nativeFaultVariant == "baseline") "src/nativeFaultBaselineTest/java" else "src/nativeFaultTest/java"))
     }
+    if (parakeetTests) {
+        sourceSets.getByName("androidTest").java.setSrcDirs(listOf("src/parakeetProbeTest/java"))
+    }
     lint { abortOnError = true }
 }
 
@@ -65,6 +91,9 @@ gradle.taskGraph.whenReady {
     }
     check(nativeFaultVariant == null || releaseTasks.isEmpty()) {
         "Native fault tests are debug-only. Omit focalNativeFaultTests for ${releaseTasks.joinToString { it.path }}."
+    }
+    check(!parakeetTests || releaseTasks.isEmpty()) {
+        "Parakeet research tests are debug-only. Omit focalParakeetTests for ${releaseTasks.joinToString { it.path }}."
     }
 }
 
@@ -85,6 +114,7 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.04.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    if (parakeetTests) androidTestImplementation(files(parakeetRuntime))
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 

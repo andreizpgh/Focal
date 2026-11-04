@@ -1029,8 +1029,20 @@
       "bytes": 670478772,
       "kind": "asr-model",
       "note": "Pinned INT8 transducer comparison, three graphs and tokens; reuse installed runtime."
+    },
+    {
+      "name": "sherpa-android-v201-metadata-20261105",
+      "bytes": 1000000,
+      "kind": "metadata",
+      "note": "Pinned Android runtime release metadata for an isolated local prototype; no model weights."
+    },
+    {
+      "name": "sherpa-onnx-201-android-aar-attempt-1",
+      "bytes": 49441341,
+      "kind": "runtime",
+      "note": "Official pinned Android AAR for isolated prototype; existing Parakeet weights reused."
     }
   ],
-  "reserved_bytes": 4424079423,
+  "reserved_bytes": 4474520764,
   "note": "Conservative upper bounds: prior checkpoint transfers, local baseline model, disjoint FLEURS cohort, research-only Silero VAD, matching host sanitizer runtimes, metadata/retries, and one reserved publication CI. Carry the total forward; never reset it. On 2026-11-04 the owner increased the cumulative local, removable research-download ceiling to 5 GB. Reserve every attempt before transfer; no reset."
 }

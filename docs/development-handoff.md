@@ -55,9 +55,25 @@ critical mixed-term and quiet-speech behavior remains unresolved. The 42-DEV
 comparison is complete: seven cached quality pairs and 35 fresh cold AB/BA pairs.
 Aggregate word errors fell 146 → 98 / 864; Spanish worsened 15 → 44 / 177,
 including one 41-error output mixing Spanish and English. Independent review
-verified all raw-result hashes and reproduced the scores. The next single bounded 129-chunk pipeline replay has not
-launched. The separate 42 held-out clips remain closed. No backend or APK changed;
-see the comparison report for language conditioning, timing and other limits.
+verified all raw-result hashes and reproduced the scores. The completed Kotlin
+pipeline replay compared 129 speech and two noise chunks: normal word errors
+223 → 102 / 864, attenuated 256 → 181 / 864. Quiet German word errors and
+Portuguese character errors worsened; the gate omitted all speech-overlap audio
+for two normal and four quiet English clips. The Spanish full-WAV translation
+did not recur in the frozen ranges, which does not prove it fixed. No overlap
+boundary was exercised. Astra reviewed all 131 raw outputs and replay.
+The isolated Android prototype passed one instrumentation test with three inputs
+in 25.844s: public English speech, exact-zero and varying-noise controls. Runtime,
+model and APK identities were verified; Sherpa/ORT remain test-only dependencies.
+See [the probe guide](parakeet-android-probe.md) and linked aggregate. Model load
+was 1.874s and process-lifetime peak RSS 1,299,664 KiB on the emulator, not a phone
+measurement. The AVD is stopped. A subsequent 43-case gate-only replay rejected the global
+threshold reduction: 0.001 recovers only one normal omitted clip and opens four
+additional noise controls. No production threshold changed. Next plan: an explicit
+Parakeet Auto alternative-transcript preview for saved audio, preserving originals;
+it is not implemented. Keep capture/manual language intact and validate ownership,
+cancellation, recovery and overlap before a public trial. The separate 42 held-out clips remain
+closed. The production backend and published APK remain unchanged.
 
 Run only one heavy job at a time in a systemd unit with `MemoryHigh=3G`,
 `MemoryMax=4G`, `MemorySwapMax=0`, `CPUQuota=150%`, `Nice=10` and CPUs 0–3.
@@ -65,7 +81,9 @@ Check the live job and `build/local-diagnostics/current-android-delivery-work.js
 before starting any further work.
 
 The cumulative [download ledger](benchmarks/2026-11-03-stt/download-budget.json)
-reserves **4,424,079,423 / 5,000,000,000 bytes**, leaving **575,920,577**.
+reserves **4,474,520,764 / 5,000,000,000 bytes**, leaving **525,479,236**.
+This includes 1,000,000 bytes of Android runtime metadata and one verified
+49,441,341-byte official AAR transfer; no model was downloaded again.
 Keep retries and the existing CI reserve counted; reuse verified local artifacts.
 
 ## Previous delivery step · UX Alpha 6
@@ -498,8 +516,8 @@ WER gain into an all-language Android claim.
 
 The current shared ceiling is **5,000,000,000 bytes including retries**, raised
 by the owner on 2026-11-04 for removable local research artifacts. Reservation:
-**4,424,079,423 bytes**, including the existing 61,000,000-byte future CI reserve;
-remaining **575,920,577 bytes**. The old reservation prefix is preserved.
+**4,474,520,764 bytes**, including the existing 61,000,000-byte future CI reserve;
+remaining **525,479,236 bytes**. The old reservation prefix is preserved.
 The ledger includes two Qwen Q4 files, one local Whisper small transfer, the
 Qwen ASR runtime and model, and bounded metadata.
 Do not reset the ledger or repeatedly fetch existing models. The 42 fresh

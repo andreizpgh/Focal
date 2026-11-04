@@ -26,10 +26,20 @@ experiments; earlier failures below are not reclassified as successes.
 Parakeet TDT v3 INT8 completed the 21-case screen and a 42-clip DEV comparison,
 reusing the installed runtime and verified earlier outputs. DEV word errors
 fell 146 → 98 / 864, but Spanish worsened 15 → 44 / 177. Its language selection
-is automatic. A single replay through the application's existing audio ranges
-comes before any backend decision. The 42 unused held-out
-clips remain closed. Heavy work runs serially with an explicit memory/CPU limit
-after an unexpected host reboot of unverified cause.
+is automatic. The Kotlin replay on existing gate ranges has completed: 129
+speech and two noise chunks, normal word errors 223 → 102 / 864 and attenuated
+256 → 181 / 864. Quiet German WER and Portuguese CER worsened, the gate missed
+two normal and four quiet English clips, and no speech-overlap boundary was
+exercised. The earlier Spanish full-WAV translation did not recur on the frozen
+ranges; this does not prove a fix. Astra reviewed all 131 raw outputs and replay.
+The isolated Android prototype passed one test / three inputs in 25.844s; see
+[the probe guide](parakeet-android-probe.md). The app backend is unchanged;
+a 43-case gate-only audit rejected a global floor reduction because it activates
+more noise. The next development plan is an explicit alternative-transcript
+preview preserving originals, with automatic language clearly identified. It is
+not implemented and must not silently replace the manual-language capture path.
+The 42 unused held-out clips remain closed. Heavy work runs serially with an
+explicit memory/CPU limit after an unexpected host reboot of unverified cause.
 
 ## What the earlier measured checkpoint changes
 
@@ -182,13 +192,15 @@ before each request. Reuse verified files; a larger budget does not justify
 fetching whole corpus shards or every model variant.
 
 The [shared ledger](benchmarks/2026-11-03-stt/download-budget.json) now reserves
-**4,424,079,423 bytes**, leaving **575,920,577 bytes**. This retains the earlier
+**4,474,520,764 bytes**, leaving **525,479,236 bytes**. This retains the earlier
 881,742,333 bytes, including the 61,000,000-byte future CI reserve, and adds
 17,858 bytes of initial metadata, 196,608 bytes reserved for runtime/candidate
 metadata, two Qwen weight transfers of 396,705,472 and 1,280,835,840 bytes,
 and 190,085,487 bytes for the locally missing Whisper small research file.
 The November 5 continuation also includes 2,200,000 bytes reserved for metadata,
-1,001,817,053 bytes for Qwen-ASR files/runtime, and 670,478,772 bytes for Parakeet.
+1,001,817,053 bytes for Qwen-ASR files/runtime, 670,478,772 bytes for Parakeet,
+1,000,000 bytes Android runtime metadata and one verified 49,441,341-byte
+official Android AAR transfer. Existing model files were reused.
 The old cloud small transfer remains counted; this local transfer adds to it.
 The original allocation below is historical context, not an instruction to
 repeat downloads. The older corpus figures describe the previous cloud study;

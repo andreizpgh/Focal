@@ -231,7 +231,7 @@
   },
   "held_out_scored": 0,
   "review": "Independent Astra review verified all 42 raw-result hashes and independently reproduced all scores.",
-  "next": "One bounded 129-chunk pipeline replay; not yet launched. No app backend or APK change.",
+  "next": "Android instrumentation passed. Gate-only audit rejected a global threshold reduction. Next plan: explicit Parakeet Auto alternative-transcript preview preserving originals; not implemented. Keep held-out closed until the real processing path is frozen.",
   "spanish_other_five": {
     "whisper_word_errors": 11,
     "parakeet_word_errors": 3
