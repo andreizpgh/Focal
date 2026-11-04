@@ -1,8 +1,9 @@
 # Продолжение Focal · 2026-11-04
 
 Продолжи в существующем checkout, ветка `codex/sessions-stt-handoff`, синхронизированная
-с `main` после публикации. PR #1–4 уже merged. Alpha 4 прошла QA;
-проверь статус нового релиза и PR перед продолжением. Новый worktree не нужен.
+с `main` после публикации. PR #1–4 уже merged; UI Alpha 4 ведётся в
+[PR #5](https://github.com/andreizpgh/Focal/pull/5), перед продолжением проверь его
+статус. Alpha 4 опубликована. Новый worktree не нужен.
 Прочитай `AGENTS.md`, `docs/development-handoff.md`, `docs/quality-report.md`,
 `docs/architecture.md`, `docs/local-emulator-qa.md` и `docs/device-validation.md`.
 Подробные исследования находятся в `docs/benchmarks/2026-11-03-local/report.md`
@@ -22,7 +23,9 @@ Astra приняла фактические снимки, включая уст�
 исходника nonincremental Kotlin rebuild и повторный полный цикл прошли.
 
 Перед продолжением проверь статус публикации в current-android-delivery-work.json
-и GitHub: Alpha 4 должна быть отдельным новым релизом, предыдущие неизменны.
+и GitHub: Alpha 4 опубликована отдельным релизом с проверенными серверными SHA,
+предыдущие релизы неизменны. Выделенный AVD остановлен после восстановления
+320×640, portrait, font1, light; тяжёлых задач нет.
 Приёмка интерфейса владельцем пока открыта. STT/LLM и телефонные требования ниже
 не закрыты этим UI-релизом. Счётчик загрузок не менялся, модели не скачивать заново.
 

@@ -42,6 +42,11 @@ noise suppression, local correction safety or Pixel 10 resource/background resul
 No model was downloaded and no recognition setting changed. Owner acceptance of
 the revised interface remains open.
 
+The [Alpha 4 testing release](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-4)
+is published with verified remote asset sizes and SHA-256 digests.
+[PR #5](https://github.com/andreizpgh/Focal/pull/5) carries the UI and delivery docs;
+full-history secret scanning found no leaks. Prior assets remain unchanged.
+
 ## UX Alpha 3 · 2026-11-04
 
 Clean `ed9d7cb8250eb8f7ad454fad47c5f70bf7b9a8de` passed the full local

@@ -36,8 +36,10 @@ verified APKs are in `verified-apks/`. No new models were fetched. Initial
 incremental release Kotlin compilation failed; a bounded nonincremental Kotlin
 rebuild and then full QA passed without source changes or repository cleaning.
 
-Publish/update the new Alpha 4 link and PR after the artifact audit. Do not replace
-older assets. UI owner acceptance, all-seven-language speech quality/speed,
+The [Alpha 4 testing APK](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-4/Focal.apk)
+is published with remotely verified asset sizes/digests. Delivery is tracked in
+[PR #5](https://github.com/andreizpgh/Focal/pull/5). Older assets are unchanged.
+UI owner acceptance, all-seven-language speech quality/speed,
 noise hallucinations, local correction and physical Pixel 10 validation stay open.
 
 ## Previous delivery step · UX Alpha 3
