@@ -1,9 +1,9 @@
 package app.focal.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -11,47 +11,66 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import app.focal.FocalViewModel
-import app.focal.LibraryState
 import app.focal.core.Transcript
-import app.focal.data.Note
 import app.focal.data.Passage
 import app.focal.data.Preferences
 import app.focal.recording.LiveSession
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private sealed interface Destination {
+    data object Sessions : Destination
+    data object Settings : Destination
+    data class Session(val id: String) : Destination
+}
+private val destinationSaver = androidx.compose.runtime.saveable.Saver<Destination, String>(
+    save = { when (it) { Destination.Sessions -> "sessions"; Destination.Settings -> "settings"; is Destination.Session -> "session:${it.id}" } },
+    restore = { when { it == "settings" -> Destination.Settings; it.startsWith("session:") -> Destination.Session(it.removePrefix("session:")); else -> Destination.Sessions } }
+)
+
+// Leave room for Android's parcel envelope and other in-flight Binder transactions.
+private const val TEXT_TRANSFER_BYTE_BUDGET = 256 * 1024
+internal fun fitsTextTransferBudget(text: String): Boolean =
+    text.length <= TEXT_TRANSFER_BYTE_BUDGET / 2 && text.toByteArray(Charsets.UTF_8).size <= TEXT_TRANSFER_BYTE_BUDGET
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun FocalApp(model: FocalViewModel, openedNote: StateFlow<Pair<String?, Long>>) {
@@ -60,45 +79,152 @@ import java.util.Locale
     val live by model.live.collectAsStateWithLifecycle()
     val ready by model.modelReady.collectAsStateWithLifecycle()
     val preparing by model.preparing.collectAsStateWithLifecycle()
+    val setupError by model.app.startupError.collectAsStateWithLifecycle()
     val playing by model.player.playing.collectAsStateWithLifecycle()
+    val playback by model.player.playback.collectAsStateWithLifecycle()
     val requested by openedNote.collectAsStateWithLifecycle()
-    var selected by rememberSaveable { mutableStateOf<String?>(null) }
-    var settingsOpen by rememberSaveable { mutableStateOf(false) }
-    var modelOpen by rememberSaveable { mutableStateOf(false) }
+    val view = LocalView.current
+    var destination by rememberSaveable(stateSaver = destinationSaver) { mutableStateOf<Destination>(Destination.Sessions) }
+    val selected = (destination as? Destination.Session)?.id
+    var dialog by rememberSaveable { mutableStateOf<String?>(null) }
+    var modelRetryId by rememberSaveable { mutableStateOf<String?>(null) }
+    var searchValue by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
+    val searchQuery = searchValue.text
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var searchImeSeen by rememberSaveable { mutableStateOf(false) }
+    var searchInputActive by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<Boolean, Boolean>(
+        // Preserve never-shown hardware input; a dismissed software IME must stay dismissed.
+        save = { active -> active && (!searchImeSeen || ViewCompat.getRootWindowInsets(view)
+            ?.isVisible(WindowInsetsCompat.Type.ime()) != false) },
+        restore = { it },
+    )) { mutableStateOf(false) }
+    var searchHasFocus by remember { mutableStateOf(false) }
+    var searchFieldHeight by remember { mutableIntStateOf(0) }
+    var windowHeight by remember { mutableIntStateOf(0) }
+    var sessionsHeaderHeight by remember { mutableIntStateOf(0) }
+    var attentionOnly by rememberSaveable { mutableStateOf(false) }
+    val libraryListState = rememberLazyListState()
     var reviewOnly by rememberSaveable(selected) { mutableStateOf(false) }
-    var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editingId by rememberSaveable(selected) { mutableStateOf<Long?>(null) }
     val editing = library.passages.firstOrNull { it.id == editingId }
-    var confirm by rememberSaveable { mutableStateOf<String?>(null) }
-    var renaming by rememberSaveable { mutableStateOf(false) }
+    var editorDirty by rememberSaveable(selected, editingId) { mutableStateOf(false) }
+    var renameDirty by rememberSaveable(selected) { mutableStateOf(false) }
+    var formSaving by remember { mutableStateOf(false) }
+    var pendingOpenTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    var observedLiveId by rememberSaveable { mutableStateOf<String?>(null) }
+    var handledRequest by rememberSaveable { mutableStateOf<Long?>(null) }
+    var handledRequestId by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val notifications = remember(context) { NotificationManagerCompat.from(context) }
+    var notificationsEnabled by remember(notifications) { mutableStateOf(notifications.areNotificationsEnabled()) }
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun setSearchInputActive(active: Boolean) {
+        if (active && !searchInputActive) searchImeSeen = false
+        searchInputActive = active
+    }
+    fun dismissInput() { focus.clearFocus(force = true); keyboard?.hide(); searchInputActive = false }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var permissionNotice by remember { mutableStateOf<Job?>(null) }
     val lifecycle = LocalLifecycleOwner.current
+    fun dismissPermissionNotice() { permissionNotice?.cancel(); permissionNotice = null }
+    DisposableEffect(view, searchInputActive, searchImeSeen) {
+        if (searchInputActive && !searchImeSeen) {
+            val observer = view.viewTreeObserver
+            // Record only the first visible IME; lifecycle hides do not cancel input intent.
+            val listener = android.view.ViewTreeObserver.OnPreDrawListener {
+                if (searchInputActive && ViewCompat.getRootWindowInsets(view)
+                    ?.isVisible(WindowInsetsCompat.Type.ime()) == true) searchImeSeen = true
+                true
+            }
+            observer.addOnPreDrawListener(listener)
+            onDispose { if (observer.isAlive) observer.removeOnPreDrawListener(listener) }
+        } else onDispose { }
+    }
 
-    fun open(id: String?) { selected = id; model.select(id); settingsOpen = false }
+    fun performOpen(id: String?) {
+        dismissInput(); editingId = null; dialog = null; pendingOpenTarget = null
+        editorDirty = false; renameDirty = false; formSaving = false
+        model.select(id)
+        destination = id?.let { Destination.Session(it) } ?: Destination.Sessions
+    }
+    fun open(id: String?) {
+        if ((id != null && (destination as? Destination.Session)?.id == id) || (id == null && destination == Destination.Sessions)) return
+        if (editorDirty || renameDirty || formSaving) {
+            pendingOpenTarget = id?.let { "session:$it" } ?: "sessions"
+        } else performOpen(id)
+    }
     fun notify(message: String) { scope.launch { snackbar.showSnackbar(message) } }
     LaunchedEffect(selected) { model.select(selected) }
-    LaunchedEffect(requested) { requested.first?.let { open(it) } }
-    LaunchedEffect(live.noteId) { live.noteId?.let { open(it) } }
+    LaunchedEffect(searchQuery) { model.search(searchQuery) }
+    LaunchedEffect(requested) {
+        if (handledRequest != requested.second || handledRequestId != requested.first) {
+            handledRequest = requested.second
+            handledRequestId = requested.first
+            requested.first?.let { open(it) }
+        }
+    }
+    LaunchedEffect(live.noteId) {
+        if (live.noteId != observedLiveId) {
+            observedLiveId = live.noteId
+            live.noteId?.let { open(it) }
+        }
+    }
+    LaunchedEffect(pendingOpenTarget, editorDirty, renameDirty, formSaving) {
+        val target = pendingOpenTarget
+        if (target != null && !editorDirty && !renameDirty && !formSaving) {
+            performOpen(target.takeIf { it.startsWith("session:") }?.removePrefix("session:"))
+        }
+    }
     LaunchedEffect(live.message) { if (live.noteId == null && live.message.isNotBlank()) notify(live.message) }
     LaunchedEffect(Unit) { model.errors.collect { snackbar.showSnackbar(it) } }
-    DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) model.player.stop() }
+    DisposableEffect(lifecycle, notifications) {
+        val observer = LifecycleEventObserver { _, event ->
+            // Commit an already hidden search IME before Android can restore its focused editor.
+            if (event == Lifecycle.Event.ON_PAUSE && destination == Destination.Sessions && searchInputActive && searchImeSeen &&
+                ViewCompat.getRootWindowInsets(view)?.isVisible(WindowInsetsCompat.Type.ime()) == false) dismissInput()
+            if (event == Lifecycle.Event.ON_STOP) model.player.pause()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationsEnabled = notifications.areNotificationsEnabled()
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                    dismissPermissionNotice()
+            }
+        }
         lifecycle.lifecycle.addObserver(observer)
-        onDispose { lifecycle.lifecycle.removeObserver(observer); model.player.stop() }
+        onDispose { lifecycle.lifecycle.removeObserver(observer); model.player.pause() }
     }
-    BackHandler(selected != null || settingsOpen) { if (settingsOpen) settingsOpen = false else open(null) }
+    BackHandler(destination != Destination.Sessions) { open(null) }
+    BackHandler(destination == Destination.Sessions && searchOpen) {
+        searchOpen = false; searchValue = TextFieldValue(""); dismissInput()
+    }
+    LaunchedEffect(selected, library.selectedId, library.note, library.loaded, library.error) {
+        if (selected != null && library.loaded && library.selectedId == selected && library.note == null && library.error == null) {
+            open(null)
+            notify("Session is no longer available.")
+        }
+    }
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        dismissPermissionNotice()
+        notificationsEnabled = notifications.areNotificationsEnabled()
         val granted = result[Manifest.permission.RECORD_AUDIO] == true || ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (granted) model.record()
-        else scope.launch {
-            if (snackbar.showSnackbar("Allow microphone access to record a note.", "Settings") == SnackbarResult.ActionPerformed)
+        else permissionNotice = scope.launch {
+            if (snackbar.showSnackbar("Allow microphone access to record.", "Settings") == SnackbarResult.ActionPerformed)
                 context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri()))
         }
     }
-    val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { model.importModel(it) } }
+    val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { model.importModel(it, retryId = modelRetryId) }
+        modelRetryId = null
+    }
+    fun openModel(retryId: String? = null) { modelRetryId = retryId; dismissInput(); dialog = "model" }
     fun start() {
-        if (!ready) { modelOpen = true; return }
+        if (!library.loaded || library.error != null) return
+        // Cancelling this request removes its displayed or queued notice without
+        // dismissing unrelated save, playback or transcription errors.
+        dismissPermissionNotice()
+        dismissInput()
         val needed = buildList {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) add(Manifest.permission.RECORD_AUDIO)
             if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) add(Manifest.permission.POST_NOTIFICATIONS)
@@ -107,67 +233,142 @@ import java.util.Locale
     }
     val note = library.note?.takeIf { it.id == selected }
     val active = note != null && live.noteId == note.id
-    val transcript = library.passages.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n")
+    val audioAvailable = library.audioBytes > 0 && (live.noteId == null || live.processing)
+    val hasUnprocessedAudio = library.pending > 0 || library.hasUnpublishedTail
+    val canRemoveAudio = !active && !hasUnprocessedAudio && library.audioBytes > 0 && library.error == null
+    val transcript = remember(library.passages) { library.passages.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n") }
+    fun allowTextTransfer(action: String): Boolean {
+        if (fitsTextTransferBudget(transcript)) return true
+        notify("This transcript is too long to $action at once. Copy a smaller selection from the passage editor.")
+        return false
+    }
+    fun copyTranscript() {
+        if (!allowTextTransfer("copy")) return
+        try {
+            val clip = ClipData.newPlainText("Focal transcript", transcript)
+            if (Build.VERSION.SDK_INT >= 33) clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+            context.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
+            if (Build.VERSION.SDK_INT < 33) notify("Text copied")
+        } catch (_: RuntimeException) {
+            notify("Couldn't copy text. Try copying a smaller selection from the passage editor.")
+        }
+    }
+    fun shareTranscript() {
+        if (!allowTextTransfer("share")) return
+        try { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, transcript), "Share transcript")) }
+        catch (_: ActivityNotFoundException) { notify("No app is available to share text.") }
+        catch (_: RuntimeException) { notify("Couldn't share text. Try copying a smaller selection from the passage editor.") }
+    }
 
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    // Keep the field in the same composition; only make room for it in a short IME viewport.
+    val compactSearch = destination == Destination.Sessions && searchOpen && searchInputActive && searchHasFocus && imeBottom > 0 &&
+        windowHeight - imeBottom - sessionsHeaderHeight < searchFieldHeight
     FocalTheme(settings.theme) {
         Scaffold(
+            modifier = Modifier.onSizeChanged { windowHeight = it.height },
             containerColor = MaterialTheme.colorScheme.background,
             snackbarHost = { SnackbarHost(snackbar) },
             topBar = {
-                Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (selected != null || settingsOpen) {
-                        IconAction(Symbol.Back, "Back to notes") { if (settingsOpen) settingsOpen = false else open(null) }
-                        Text(if (settingsOpen) "Settings" else "Notes", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                    } else {
-                        Glyph(Symbol.Logo, Modifier.padding(start = 8.dp).size(28.dp))
-                        Text("focal", fontSize = 27.sp, letterSpacing = (-1).sp, modifier = Modifier.padding(start = 12.dp).weight(1f))
-                    }
-                    if (!settingsOpen && note == null) IconAction(Symbol.Settings, "Settings") { settingsOpen = true }
-                    if (!settingsOpen && note != null) {
-                        var menu by remember { mutableStateOf(false) }
-                        Box {
-                            IconAction(Symbol.More, "Note options") { menu = true }
-                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
-                                DropdownMenuItem(text = { Text(if (playing == -1L) "Stop playback" else "Listen to recording") }, enabled = (live.noteId == null || live.processing) && library.audioBytes > 0,
-                                    onClick = { menu = false; model.playNote(note) })
-                                DropdownMenuItem(text = { Text("Share text") }, enabled = transcript.isNotBlank(), onClick = {
-                                    menu = false
-                                    context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, transcript), "Share note"))
-                                })
-                                DropdownMenuItem(text = { Text("Remove audio") }, enabled = !active && library.pending == 0 && library.audioBytes > 0, onClick = { menu = false; confirm = "audio" })
-                                DropdownMenuItem(text = { Text("Delete note", color = MaterialTheme.colorScheme.error) }, enabled = !active, onClick = { menu = false; confirm = "delete" })
+                if (!compactSearch) Row(Modifier.fillMaxWidth()
+                    .onSizeChanged { if (destination == Destination.Sessions) sessionsHeaderHeight = it.height }
+                    .statusBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    when (destination) {
+                        Destination.Sessions -> {
+                            Text("Sessions", style = MaterialTheme.typography.headlineLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 4.dp).semantics { heading() })
+                            if (library.notes.isNotEmpty() || searchOpen || searchQuery.isNotBlank()) {
+                                val searchActionFocus = remember { FocusRequester() }
+                                IconAction(Symbol.Search, if (searchOpen) "Close search" else "Search sessions",
+                                    Modifier.focusRequester(searchActionFocus)) {
+                                    searchOpen = !searchOpen
+                                    setSearchInputActive(searchOpen)
+                                    if (searchOpen) libraryListState.requestScrollToItem(0)
+                                    if (!searchOpen) { searchValue = TextFieldValue(""); dismissInput() }
+                                }
+                                LaunchedEffect(searchInputActive, searchHasFocus) {
+                                    // Keyboard navigation can immediately refocus the field after clearFocus.
+                                    if (!searchInputActive && searchHasFocus) searchActionFocus.requestFocus()
+                                }
+                            }
+                            IconAction(Symbol.Settings, "Settings") { dismissInput(); destination = Destination.Settings }
+                        }
+                        Destination.Settings -> {
+                            IconAction(Symbol.Back, "Back to sessions") { open(null) }
+                            Text("Settings", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).padding(start = 8.dp).semantics { heading() })
+                        }
+                        is Destination.Session -> {
+                            IconAction(Symbol.Back, "Back to sessions") { open(null) }
+                            Spacer(Modifier.weight(1f))
+                            if (note != null) {
+                                var menu by remember(selected) { mutableStateOf(false) }
+                                Box {
+                                    IconAction(Symbol.More, "Session options") { menu = true }
+                                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                        DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; dialog = "rename" })
+                                        DropdownMenuItem(text = { Text("Share text") }, enabled = transcript.isNotBlank() && library.error == null, onClick = {
+                                            menu = false
+                                            shareTranscript()
+                                        })
+                                        DropdownMenuItem(text = {
+                                            Column {
+                                                Text("Remove audio")
+                                                val reason = when {
+                                                    active -> if (live.processing) "Transcription is running" else "Recording is active"
+                                                    hasUnprocessedAudio -> "Transcription is unfinished"
+                                                    library.audioBytes == 0L -> "No original audio"
+                                                    else -> null
+                                                }
+                                                if (reason != null) Text(reason, style = MaterialTheme.typography.labelMedium)
+                                            }
+                                        }, enabled = canRemoveAudio,
+                                            onClick = { menu = false; dialog = "audio" })
+                                        DropdownMenuItem(text = {
+                                            Column {
+                                                Text("Delete session", color = MaterialTheme.colorScheme.error)
+                                                if (active) Text(if (live.processing) "Transcription is running" else "Recording is active", style = MaterialTheme.typography.labelMedium)
+                                            }
+                                        }, enabled = !active, onClick = { menu = false; dialog = "delete" })
+                                    }
+                                }
                             }
                         }
                     }
                 }
             },
             bottomBar = {
-                if (!settingsOpen) {
+                if (destination != Destination.Settings) {
                     Surface(color = MaterialTheme.colorScheme.background) {
-                        Column(Modifier.navigationBarsPadding().padding(horizontal = 24.dp).padding(top = 12.dp, bottom = 18.dp)) {
+                        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 12.dp)) {
                             when {
                                 active && !live.processing -> RecordingControls(live, model::pause, model::finish)
-                                active -> {
-                                    LinearProgressIndicator(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceVariant)
-                                    Text("${live.message.ifBlank { "Finishing transcript…" }}\nYou can leave Focal open in the background.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
-                                }
                                 note != null -> {
-                                    if (playing == -1L) Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Text("Playing recording", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                                        IconAction(Symbol.Stop, "Stop playback", model.player::stop)
+                                    if (active && live.processing) Row(
+                                        Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        FocusProcessingIndicator()
+                                        Text(
+                                            live.message.ifBlank { "Transcribing" },
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
+                                        )
                                     }
-                                    PrimaryButton("Copy text", Symbol.Copy, transcript.isNotBlank()) {
-                                    val clip = ClipData.newPlainText("Focal note", transcript)
-                                    if (Build.VERSION.SDK_INT >= 33) clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
-                                    context.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
-                                    if (Build.VERSION.SDK_INT < 33) notify("Text copied")
-                                    }
+                                    if (audioAvailable) SessionAudioDock(
+                                        note.id, playback, library.audioBytes / 32,
+                                        { model.playNote(note) }, { model.seekNote(note, it) }
+                                    )
+                                    PrimaryButton("Copy text", Symbol.Copy, transcript.isNotBlank() && library.error == null, ::copyTranscript)
                                 }
-                                live.noteId != null -> PrimaryButton(if (live.processing) "Back to transcript" else "Back to recording", Symbol.Arrow) { open(live.noteId) }
-                                else -> {
-                                    PrimaryButton(if (preparing) "Preparing…" else "Record a note", Symbol.Mic, !preparing, ::start)
-                                    Text("${Preferences.languages[settings.language]}  ·  On this device", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 12.dp))
+                                live.noteId != null -> PrimaryButton(
+                                    if (live.processing) "Open transcript" else "Open recording", Symbol.Audio
+                                ) { open(live.noteId) }
+                                destination == Destination.Sessions -> {
+                                    LibraryCaptureDock(
+                                        Preferences.languages[settings.language].orEmpty(), library.loaded && library.error == null,
+                                        chooseLanguage = { dismissInput(); dialog = "language" }, record = ::start,
+                                    )
                                 }
                             }
                         }
@@ -175,241 +376,199 @@ import java.util.Locale
                 }
             }
         ) { padding ->
-            AnimatedContent(targetState = when { settingsOpen -> "settings"; selected != null -> "note"; else -> "library" }, label = "screen", modifier = Modifier.padding(padding)) { screen ->
-                when (screen) {
-                    "settings" -> SettingsScreen(settings.language, settings.theme, model.app.preferences::language, model.app.preferences::theme)
-                    "note" -> if (note != null) NoteScreen(note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { editingId = it.id }, { model.retry(note.id) })
-                        else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) }
-                    else -> LibraryScreen(library.notes, library.loaded, live, ::open)
+            Box(Modifier.fillMaxSize().padding(padding)
+                .then(if (destination == Destination.Sessions) Modifier.consumeWindowInsets(padding).imePadding() else Modifier),
+                contentAlignment = Alignment.TopCenter) {
+                Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) {
+                    when (destination) {
+                        Destination.Settings -> SettingsScreen(
+                            settings.language, settings.theme, model.app.preferences::language, model.app.preferences::theme,
+                            ready, preparing, setupError, { openModel() }, ::notify,
+                        )
+                        Destination.Sessions -> LibraryScreen(
+                            library.notes, library.loaded, live, ::open, searchValue, {
+                                searchValue = it.copy(text = Transcript.truncateUtf16(it.text, SEARCH_QUERY_MAX_CHARS))
+                            },
+                            searchOpen, { searchOpen = it; if (!it) searchInputActive = false }, library.error, model::retryLibrary,
+                            attentionOnly = attentionOnly, setAttentionOnly = { attentionOnly = it }, listState = libraryListState,
+                            inputActive = searchInputActive, setInputActive = ::setSearchInputActive,
+                            searchFocusChanged = { searchHasFocus = it }, searchFieldMeasured = { searchFieldHeight = it },
+                        )
+                        is Destination.Session -> if (note != null) NoteScreen(
+                            note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { if (library.error == null) editingId = it.id else notify("Reload this session before editing.") }, { if (ready) model.retry(note.id) else openModel(note.id) },
+                            playback.isPlaying && playback.noteId == note.id, audioAvailable, { model.playNote(note) }, { dialog = "rename" },
+                            seek = { model.seekNote(note, it) }, playbackPosition = playback.takeIf { it.noteId == note.id }?.positionMs,
+                            retryLoad = model::retryLibrary, notificationsEnabled = notificationsEnabled,
+                        ) else if (library.error != null) DataReadError("Couldn't load this session", library.error.orEmpty(), model::retryLibrary,
+                            Modifier.padding(horizontal = 24.dp).verticalScroll(rememberScrollState())) else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                FocusProcessingIndicator(contentDescription = "Loading session")
+                            }
+                    }
                 }
             }
         }
-        if (modelOpen) AlertDialog(
-            onDismissRequest = { modelOpen = false }, title = { Text(if (ready) "Speech model ready" else "Add the speech model") },
-            text = { Text(if (ready) "You’re ready to record offline." else "This build does not include the speech model. Import ggml-base-q5_1.bin (multilingual Whisper base). The model stays on this device.") },
-            confirmButton = { TextButton(onClick = { modelOpen = false; if (!ready) import.launch(arrayOf("*/*")) }) { Text(if (ready) "Done" else "Import model") } },
-            dismissButton = { if (!ready) TextButton(onClick = { modelOpen = false }) { Text("Cancel") } }
+        if (dialog == "language") LanguageDialog(settings.language, model.app.preferences::language) { dialog = null }
+        if (dialog == "model") AlertDialog(
+            onDismissRequest = { dialog = null; modelRetryId = null }, title = { Text("Speech model") },
+            text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                Text(when {
+                    preparing -> "Preparing the speech model…"
+                    ready -> "The multilingual speech model is installed. You can choose a replacement file."
+                    else -> "Import ggml-base-q5_1.bin to transcribe saved and new recordings. You can record audio without it."
+                })
+                if (setupError != null) Text(setupError.orEmpty(), style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
+            } },
+            confirmButton = { TextButton(onClick = { dialog = null; import.launch(arrayOf("*/*")) }, enabled = !preparing) { Text("Choose model") } },
+            dismissButton = { TextButton(onClick = { dialog = null; modelRetryId = null }) { Text("Cancel") } }
         )
         editing?.let { passage ->
-            val available = library.audioBytes > 0 && (live.noteId == null || live.processing)
-            EditSheet(passage, playing == passage.id, available, { model.play(passage) }, {
-                model.player.stop(); editingId = null
-            }) { text, next ->
-                model.edit(passage, text); model.player.stop()
-                editingId = if (next) library.passages.firstOrNull { it.uncertain && !it.reviewed && it.id > passage.id }?.id else null
+            val ordered = library.passages.sortedWith(compareBy<Passage> { it.start }.thenBy { it.id })
+            val index = ordered.indexOfFirst { it.id == passage.id }
+            val nextReview = (ordered.drop(index + 1) + ordered.take(index.coerceAtLeast(0))).firstOrNull { it.uncertain && !it.reviewed && it.id != passage.id }
+            EditSheet(
+                passage, playing == passage.id, audioAvailable, { model.play(passage) }, { model.player.pause(); editingId = null },
+                hasNextReview = nextReview != null,
+                audioUnavailableReason = if (live.noteId != null && !live.processing) "Audio unavailable during recording." else "Original audio is unavailable.",
+                onDirtyChange = { editorDirty = it }, onSavingChange = { formSaving = it },
+            ) { text, next ->
+                val saved = model.edit(passage, text)
+                if (saved) {
+                    // Do not expose Copy/Share until the displayed transcript includes this commit.
+                    val refreshed = model.library.first { refreshed ->
+                        refreshed.error != null || (refreshed.selectedId == passage.noteId && (refreshed.note == null || refreshed.passages.any {
+                            it.id == passage.id && it.text == text.trim() && it.reviewed
+                        }))
+                    }
+                    model.player.pause()
+                    editingId = if (next && refreshed.error == null) nextReview?.id else null
+                    if (refreshed.error != null) notify("Your edits were saved. Reload this session to see them.")
+                }
+                saved
             }
         }
-        if (renaming && note != null) {
-            var title by rememberSaveable(note.id) { mutableStateOf(note.title) }
-            AlertDialog(onDismissRequest = { renaming = false }, title = { Text("Note title") }, text = {
-                OutlinedTextField(title, { title = it.take(120) }, singleLine = true, label = { Text("Title") })
-            }, confirmButton = { TextButton(onClick = { model.rename(note.id, title); renaming = false }) { Text("Save") } }, dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } })
-        }
-        if (confirm != null && note != null) AlertDialog(
-            onDismissRequest = { confirm = null },
-            title = { Text(if (confirm == "delete") "Delete this note?" else "Remove its audio?") },
-            text = { Text(if (confirm == "delete") "The text and recording will be permanently deleted from this device." else "The text will stay. You won’t be able to listen to passages again. Frees ${"%.1f".format(library.audioBytes / 1048576.0)} MB.") },
-            confirmButton = { TextButton(onClick = {
-                if (confirm == "delete") { model.delete(note.id); open(null) } else model.removeAudio(note.id)
-                confirm = null
-            }) { Text(if (confirm == "delete") "Delete" else "Remove audio", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } }
+        if (dialog == "rename" && note != null) RenameSessionDialog(note, { dialog = null },
+            onDirtyChange = { renameDirty = it }, onSavingChange = { formSaving = it },
+        ) { title -> model.renameSession(note.id, title) }
+        if (pendingOpenTarget != null) AlertDialog(
+            onDismissRequest = { pendingOpenTarget = null }, title = { Text("Leave this session?") },
+            text = { Text(if (formSaving) "Finishing your save…" else "Unsaved changes will be discarded.") },
+            confirmButton = { TextButton(enabled = !formSaving, onClick = {
+                val target = pendingOpenTarget
+                performOpen(target?.takeIf { it.startsWith("session:") }?.removePrefix("session:"))
+            }) { Text("Discard & open", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { pendingOpenTarget = null }) { Text("Keep editing") } },
+        )
+        if (dialog in listOf("delete", "audio") && note != null) AlertDialog(
+            onDismissRequest = { dialog = null },
+            title = { Text(if (dialog == "delete") "Delete this session?" else "Remove its audio?") },
+            text = { Text(if (dialog == "delete") "The text and recording will be permanently deleted from this device." else "The text will stay. You won’t be able to listen to passages again. Frees ${"%.1f".format(library.audioBytes / 1048576.0)} MB.") },
+            confirmButton = { TextButton(enabled = dialog == "delete" || canRemoveAudio, onClick = {
+                if (dialog == "delete") { model.delete(note.id); open(null) } else model.removeAudio(note.id)
+                dialog = null
+            }) { Text(if (dialog == "delete") "Delete" else "Remove audio", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } }
         )
     }
 }
 
-@Composable private fun LibraryScreen(notes: List<Note>, loaded: Boolean, live: LiveSession, open: (String?) -> Unit) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp)) {
-        item {
-            Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 18.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-                Text("Notes", style = MaterialTheme.typography.displayLarge)
-                Text(notes.size.toString().padStart(2, '0'), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            HorizontalDivider(Modifier.padding(top = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
+@Composable private fun LibraryCaptureDock(language: String, loaded: Boolean, chooseLanguage: () -> Unit, record: () -> Unit) {
+    val fontScale = LocalDensity.current.fontScale
+    @Composable fun LanguageAction() {
+        TextButton(onClick = chooseLanguage, modifier = Modifier.heightIn(min = 52.dp)
+            .semantics { contentDescription = "Speech language: $language" }) {
+            Text(language, style = MaterialTheme.typography.labelLarge)
+            Glyph(Symbol.Chevron, Modifier.padding(start = 6.dp).size(12.dp).rotate(90f))
         }
-        if (loaded && notes.isEmpty()) item {
-            Column(Modifier.padding(vertical = 56.dp)) {
-                Glyph(Symbol.Logo, Modifier.size(44.dp), MaterialTheme.colorScheme.outline)
-                Text("No notes yet.", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 24.dp))
-                Text("Record at your pace.\nReview and copy when you’re done.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
-            }
+    }
+    @Composable fun RecordAction(modifier: Modifier) {
+        Button(onClick = record, enabled = loaded, shape = androidx.compose.foundation.shape.CircleShape,
+            modifier = modifier.heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)) {
+            Glyph(Symbol.Record, Modifier.size(16.dp), if (loaded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Record", Modifier.padding(start = 10.dp), style = MaterialTheme.typography.labelLarge)
         }
-        items(notes, key = { it.id }) { note ->
-            Column(Modifier.fillMaxWidth().clickable { open(note.id) }.padding(vertical = 22.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(note.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Glyph(Symbol.Arrow, Modifier.padding(start = 16.dp).size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if (note.preview.isNotBlank()) Text(note.preview, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-                val status = when {
-                    live.noteId == note.id -> if (live.processing) "Transcribing" else if (live.paused) "Paused" else "Recording"
-                    note.state in listOf("INTERRUPTED", "ERROR") -> "Needs attention"
-                    note.reviewCount > 0 -> "${note.reviewCount} to review"
-                    else -> ""
-                }
-                Text(listOf(date(note.created), Transcript.time(note.duration), status).filter { it.isNotEmpty() }.joinToString("  ·  "), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp))
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (fontScale >= 1.5f || maxWidth < 280.dp) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LanguageAction()
+            RecordAction(Modifier.fillMaxWidth())
+        } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            LanguageAction()
+            RecordAction(Modifier.weight(1f))
         }
     }
 }
 
-@Composable private fun NoteScreen(note: Note, library: LibraryState, live: LiveSession?, reviewOnly: Boolean,
-                                  toggleReview: () -> Unit, edit: (Passage) -> Unit, retry: () -> Unit) {
-    val review = library.passages.count { it.uncertain && !it.reviewed }
-    val passages = if (reviewOnly) library.passages.filter { it.uncertain && !it.reviewed } else library.passages
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)) {
-        item {
-            Text(if (live != null && !live.processing) "VOICE NOTE" else date(note.created).uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (note.title == "Untitled note" && live != null) "New recording" else note.title, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(top = 16.dp, bottom = 12.dp))
-            Text("${Transcript.time(live?.duration ?: note.duration)}  ·  ${Preferences.languages[note.language] ?: note.language}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (live != null) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Meter(if (live.paused || live.processing) 0f else live.level)
-                    Text(if (live.paused) "Paused" else live.message.ifBlank { "Listening" }, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            } else Spacer(Modifier.height(24.dp))
-            if (note.error.isNotBlank() && live == null) {
-                Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(16.dp), modifier = Modifier.padding(bottom = 20.dp)) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(note.error, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
-                        if (library.pending > 0) TextButton(onClick = retry) { Text("Continue transcription") }
-                    }
-                }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun SessionAudioDock(noteId: String, playback: app.focal.speech.PlaybackState, durationMs: Long, play: () -> Unit, seek: (Long) -> Unit) {
+    val current = playback.takeIf { it.noteId == noteId }
+    val duration = (current?.durationMs?.takeIf { it > 0 } ?: durationMs).coerceAtLeast(1)
+    var scrub by remember(noteId) { mutableStateOf<Float?>(null) }
+    val position = (scrub?.toLong() ?: current?.positionMs ?: 0).coerceIn(0, duration)
+    val fontScale = LocalDensity.current.fontScale
+    val interaction = remember { MutableInteractionSource() }
+    val sliderColors = SliderDefaults.colors(
+        thumbColor = MaterialTheme.colorScheme.onSurface,
+        activeTrackColor = MaterialTheme.colorScheme.onSurface,
+        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant,
+    )
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+        val compact = fontScale >= 1.5f || maxWidth < 280.dp
+        Column {
+            if (compact) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(Transcript.time(position), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(Transcript.time(duration), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (library.passages.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("TRANSCRIPT", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    FilterChip(selected = reviewOnly, onClick = toggleReview, label = { Text(if (reviewOnly) "Show all" else "$review to review") })
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                IconButton(onClick = play, modifier = Modifier.size(48.dp).semantics { contentDescription = if (current?.isPlaying == true) "Pause original audio" else "Play original audio" }) {
+                    Glyph(if (current?.isPlaying == true) Symbol.Pause else Symbol.Play, Modifier.size(18.dp))
                 }
-                if (review > 0) Text("Marked passages may need a closer listen.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 16.dp))
-                else if (live == null) Text("Tap any passage to listen or edit.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 16.dp))
-            }
-        }
-        if (passages.isEmpty()) item {
-            Column(Modifier.fillMaxWidth().padding(vertical = 32.dp)) {
-                Text(when { reviewOnly -> "All checked."; live != null -> "Your words will appear here."; else -> "No speech transcribed." }, style = MaterialTheme.typography.titleLarge)
-                Text(when { reviewOnly -> "You can still edit any passage in the full transcript."; live != null -> "Long pauses are fine. Recording continues with the screen off."; else -> "Try speaking a little closer to the microphone." }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-            }
-        }
-        items(passages, key = { it.id }) { passage ->
-            val flagged = passage.uncertain && !passage.reviewed
-            Surface(color = if (flagged) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clickable { edit(passage) }
-                    .semantics { contentDescription = "${if (flagged) "Review passage" else "Edit passage"} at ${Transcript.time(passage.start)}" }) {
-                Column(Modifier.padding(horizontal = if (flagged) 16.dp else 0.dp, vertical = 14.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(Transcript.time(passage.start), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (flagged) Text("CHECK", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    }
-                    Text(passage.text.ifBlank { "Speech wasn’t clear. Tap to listen and add text." }, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 7.dp))
-                }
+                Slider(value = position.toFloat(),
+                    onValueChange = { scrub = it }, onValueChangeFinished = { scrub?.let { seek(it.toLong()) }; scrub = null },
+                    colors = sliderColors, interactionSource = interaction,
+                    thumb = {
+                        SliderDefaults.Thumb(
+                            interactionSource = interaction, colors = sliderColors,
+                            modifier = Modifier.size(12.dp), thumbSize = DpSize(12.dp, 12.dp),
+                        )
+                    },
+                    track = { state ->
+                        SliderDefaults.Track(
+                            sliderState = state, modifier = Modifier.height(3.dp), colors = sliderColors,
+                            drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 1.5.dp,
+                        )
+                    },
+                    valueRange = 0f..duration.toFloat(), modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics {
+                        contentDescription = "Audio position"
+                        stateDescription = "${Transcript.time(position)} of ${Transcript.time(duration)}"
+                    })
+                if (!compact) Text(Transcript.time(position), style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.widthIn(min = 38.dp))
             }
         }
     }
 }
 
 @Composable private fun RecordingControls(live: LiveSession, pause: () -> Unit, finish: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedButton(onClick = pause, modifier = Modifier.size(60.dp), shape = CircleShape, contentPadding = PaddingValues(0.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
-            Box(Modifier.semantics { contentDescription = if (live.paused) "Resume recording" else "Pause recording" }) { Glyph(if (live.paused) Symbol.Play else Symbol.Pause) }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        FilledTonalIconButton(onClick = pause, modifier = Modifier.size(54.dp).semantics { contentDescription = if (live.paused) "Resume recording" else "Pause recording" }) {
+            Glyph(if (live.paused) Symbol.Play else Symbol.Pause, Modifier.size(18.dp))
         }
-        Button(onClick = finish, shape = RoundedCornerShape(18.dp), modifier = Modifier.weight(1f).heightIn(min = 60.dp)) {
-            Glyph(Symbol.Stop, color = MaterialTheme.colorScheme.onPrimary)
-            Text("Finish recording", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.labelLarge)
-        }
-    }
-}
-
-@Composable private fun Meter(level: Float) {
-    val value by animateFloatAsState(level, label = "sound level")
-    Row(Modifier.height(28.dp).width(38.dp).semantics { contentDescription = "Microphone level" }, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-        listOf(0.5f,0.85f,1f,0.7f,0.4f).forEach { scale ->
-            Box(Modifier.width(4.dp).height((4 + value * 24 * scale).dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+        Button(onClick = finish, shape = androidx.compose.foundation.shape.CircleShape, modifier = Modifier.weight(1f).heightIn(min = 54.dp)
+            .semantics { contentDescription = "Finish recording" }, contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)) {
+            Glyph(Symbol.Stop, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
+            Text("Finish", Modifier.padding(start = 10.dp), style = MaterialTheme.typography.labelLarge)
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun EditSheet(passage: Passage, playing: Boolean, audio: Boolean, play: () -> Unit, dismiss: () -> Unit, save: (String, Boolean) -> Unit) {
-    var text by rememberSaveable(passage.id) { mutableStateOf(passage.text) }
-    ModalBottomSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(if (passage.uncertain && !passage.reviewed) "Review passage" else "Edit passage", style = MaterialTheme.typography.headlineMedium)
-                Text(Transcript.time(passage.start), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            TextButton(onClick = play, enabled = audio, contentPadding = PaddingValues(vertical = 12.dp)) {
-                Glyph(if (playing) Symbol.Pause else Symbol.Play, Modifier.size(18.dp), if (audio) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
-                Text(if (!audio) "Audio unavailable during recording or after removal" else if (playing) "Stop playback" else "Listen to this part", modifier = Modifier.padding(start = 10.dp))
-            }
-            OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp, max = 320.dp), textStyle = MaterialTheme.typography.bodyLarge,
-                shape = RoundedCornerShape(14.dp), label = { Text("Transcript") })
-            Spacer(Modifier.height(20.dp))
-            PrimaryButton(if (passage.uncertain && !passage.reviewed) "Save & next" else "Save changes", Symbol.Check) { save(text, passage.uncertain && !passage.reviewed) }
-            if (passage.uncertain && !passage.reviewed) TextButton(onClick = { save(text, false) }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Save & close") }
-        }
-    }
-}
-
-@Composable private fun SettingsScreen(language: String, theme: String, setLanguage: (String) -> Unit, setTheme: (String) -> Unit) {
-    var choosing by remember { mutableStateOf(false) }
-    var licenses by remember { mutableStateOf<String?>(null) }
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 24.dp)) {
-        Text("RECORDING", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(Modifier.fillMaxWidth().clickable { choosing = true }.padding(vertical = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Speech language", style = MaterialTheme.typography.titleLarge)
-                Text("For your next recording", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(Preferences.languages[language].orEmpty(), style = MaterialTheme.typography.bodyMedium)
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Text("APPEARANCE", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 32.dp, bottom = 12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("light" to "Light", "dark" to "Dark", "system" to "System").forEach { (id, name) ->
-                FilterChip(selected = theme == id, onClick = { setTheme(id) }, label = { Text(name) })
-            }
-        }
-        HorizontalDivider(Modifier.padding(vertical = 28.dp), color = MaterialTheme.colorScheme.outlineVariant)
-        Text("Stored on this device", style = MaterialTheme.typography.titleLarge)
-        Text("Audio and text stay in Focal’s private storage. No accounts, analytics, or cloud backup. Copy or share anything you want to keep before uninstalling.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
-        Text("Record with the screen off or while using another app. Force-stopping Focal or restarting the phone ends recording. Some phones also restrict background apps.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp))
-        Text("Review cues are suggestions. Speech recognition can miss errors even in unmarked text.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp))
-        Spacer(Modifier.height(36.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Glyph(Symbol.Logo, Modifier.size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Focal 0.1  ·  Free & open source", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
-        }
-        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/andreizpgh/Focal".toUri())) }) { Text("Source code") }
-            TextButton(onClick = { scope.launch { licenses = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { context.assets.open("licenses.txt").bufferedReader().use { it.readText() } } } }) { Text("Licenses") }
-        }
-    }
-    if (choosing) AlertDialog(onDismissRequest = { choosing = false }, title = { Text("Speech language") }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState())) {
-            Preferences.languages.forEach { (id, name) ->
-                Row(Modifier.fillMaxWidth().clickable { setLanguage(id); choosing = false }.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                    if (id == language) Glyph(Symbol.Check, Modifier.size(20.dp))
-                }
-            }
-        }
-    }, confirmButton = { TextButton(onClick = { choosing = false }) { Text("Cancel") } })
-    licenses?.let { text -> AlertDialog(onDismissRequest = { licenses = null }, title = { Text("Open-source licenses") },
-        text = { Text(text, modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) },
-        confirmButton = { TextButton(onClick = { licenses = null }) { Text("Done") } }) }
-}
-
-@Composable private fun PrimaryButton(label: String, symbol: Symbol, enabled: Boolean = true, onClick: () -> Unit) {
-    Button(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(18.dp), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)) {
-        Glyph(symbol, color = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+@Composable internal fun PrimaryButton(label: String, symbol: Symbol, enabled: Boolean = true, onClick: () -> Unit) {
+    Button(onClick = onClick, enabled = enabled, shape = androidx.compose.foundation.shape.CircleShape, contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
+        Glyph(symbol, Modifier.size(20.dp), color = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
         Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 12.dp))
     }
 }
-@Composable private fun IconAction(symbol: Symbol, label: String, click: () -> Unit) {
-    IconButton(onClick = click, modifier = Modifier.semantics { contentDescription = label }) { Glyph(symbol) }
+@Composable internal fun IconAction(symbol: Symbol, label: String, modifier: Modifier = Modifier, click: () -> Unit) {
+    IconButton(onClick = click, modifier = modifier.semantics { contentDescription = label }) { Glyph(symbol) }
 }
-private fun date(millis: Long) = SimpleDateFormat("MMM d", Locale.ENGLISH).format(Date(millis))
+internal fun date(millis: Long) = SimpleDateFormat("MMM d", Locale.ENGLISH).format(Date(millis))

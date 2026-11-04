@@ -1,0 +1,34 @@
+{
+  "canonical_source": "design/brand/source/focal-icon-render.svg",
+  "source_sha256": "51231106f6e0bfbd8f21beafbb519acc54545ba77e76cdbd28d25a0cb66013e7",
+  "inter_sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+  "inter_version": "Version 4.001;git-66647c0bb",
+  "renderer": {
+    "chromium": "154.0.8037.57"
+  },
+  "notification_components_at_24px": 9,
+  "outputs_sha256": {
+    "app/src/main/res/drawable-xxxhdpi/focal_launcher_background.png": "f26f2f5e5f12529a74179b2182f87fc32c0e686c526012788a4840bd7bac574a",
+    "app/src/main/res/drawable-xxxhdpi/focal_launcher_foreground.png": "b1619ff64ff0f81659a9304212e3a944bc5c5328f45b93b0f3f92eae6cd1cabb",
+    "app/src/main/res/drawable/ic_focal.xml": "4f8243de85e964e09c6b0ea70a64b134e23fb7e44b6df836b8299623a2e426b8",
+    "app/src/main/res/drawable/ic_focal_background.xml": "cfad50967e4ebba9e3293359751cbe53b8ddd8fa8440d4bee849904771fd9a18",
+    "app/src/main/res/drawable/ic_focal_mono.xml": "999362e60f815e3370ef01084dd5d18777ede6d8980720452e53e8405b774bd1",
+    "app/src/main/res/drawable/ic_notification.xml": "227ee0dd0b3a2714313b8e913229bb060fbd79e31534e0147b61b4156b8948e6",
+    "app/src/main/res/mipmap-anydpi/ic_launcher.xml": "6576061f484c83bdcff46521de5ba94dfc459bc28a445d1b135f85de8b7d0641",
+    "design/brand/Inter-LICENSE.txt": "3b0a5fca3d17942cde889069889dedbbbd075e9b599968c82a95f4d944e9b345",
+    "design/brand/generated/focal-lockup-dark-outlined.png": "1fe30c0db785e2e4c17e9f2564d8ea6fd8ceb453ee9950100bbde8fd72e18750",
+    "design/brand/generated/focal-lockup-dark-outlined.svg": "47c47ff386422745953c409beae239ae1694c2be27ac3f3a2c34aff6b1a6ecf0",
+    "design/brand/generated/focal-lockup-light-outlined.png": "5205e5046f4c8c8cbea9924e57af3e48d701bf4a8115ef7877744ac704dc7446",
+    "design/brand/generated/focal-lockup-light-outlined.svg": "b13a680f264d553e6fe0ba3625f57f28385a8698d8dcbc4dc0d35982c14f4bf1",
+    "design/brand/generated/focal-mono.svg": "c760eabff8300ea2b9f801a74e3423e44114b50b28f047fbeeffa1f53db5ed86",
+    "design/brand/generated/focal-notification.svg": "a1769665194a0478207b091ff4d4d298a03959b6ecdb0b9bea6a7feeb1ef01eb",
+    "design/brand/generated/launcher-background.svg": "cf79ea7707b3b165f95738f46b80aca6947aa3ea5219c454d5e2d0e71f049970",
+    "design/brand/generated/launcher-foreground.svg": "0129e853bebd7a28280677bd1d5a3a3502f7475dfa76ca072b3b3f08f3a02584",
+    "design/brand/generated/launcher-preview.png": "5b02fe3eacb9f7c3d10218e5915fd22b18d7e87d394eab17465a9c4510bede45",
+    "design/brand/generated/launcher-preview.svg": "29d054d4a59df7aafbc83288a7559619e9b91207f9d30e8d8c6f6e570e44df70",
+    "design/brand/generated/monochrome-48.png": "34de943ca397dda5411ec7e3173b84e0c2dc95dbd3ae4dede54794be02969a9b",
+    "design/brand/generated/notification-24.png": "1df92d9da9e569cf74cddd560d9db30f8c4191d2ca835eeb8e9cd20066e743d5",
+    "docs/mark-preview.png": "0497e40d6fe6f42306b8ddd545f57b8fd6fdafd72b8d64de5adba8e7a58fd857",
+    "docs/mark.svg": "51231106f6e0bfbd8f21beafbb519acc54545ba77e76cdbd28d25a0cb66013e7"
+  }
+}

@@ -25,6 +25,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
       - name: Install Android tooling
         run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.0.13004108' 'cmake;3.22.1'"
+      - name: Test host evaluation tooling
+        run: |
+          python3 -m venv build/host-tools
+          build/host-tools/bin/python -m pip install --require-hashes --only-binary=:all: -r scripts/requirements-host.txt
+          build/host-tools/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
       - name: Fetch and verify offline model
         run: python3 scripts/fetch-model.py
       - name: Recognize a real speech fixture
@@ -32,10 +37,11 @@ jobs:
       - name: Test, lint, and build
         run: ./gradlew :core:test :app:lintDebug :app:assembleDebug --console=plain
       - name: Android device tests
+        timeout-minutes: 25
         run: bash scripts/test-android-ci.sh
       - name: Summarize checks
         if: always()
-        run: python3 scripts/test-summary.py
+        run: python3 scripts/test-summary.py --require-model-tests
       - name: Prepare APK download
         run: |
           mkdir -p build/download

@@ -43,4 +43,8 @@ if [[ $booted != true ]]; then report_boot_error; exit 1; fi
 "$ANDROID_HOME/platform-tools/adb" shell settings put global window_animation_scale 0
 "$ANDROID_HOME/platform-tools/adb" shell settings put global transition_animation_scale 0
 "$ANDROID_HOME/platform-tools/adb" shell settings put global animator_duration_scale 0
-./gradlew :app:connectedDebugAndroidTest --console=plain
+# Bound individual test methods as well as the suite. A method timeout cannot
+# guarantee interruption of a stuck main-thread teardown, so retain the outer
+# limit and leave time to publish diagnostics. Either timeout fails the job.
+timeout --signal=TERM --kill-after=30s 19m ./gradlew :app:connectedDebugAndroidTest \
+    -Pandroid.testInstrumentationRunnerArguments.timeout_msec=180000 --console=plain

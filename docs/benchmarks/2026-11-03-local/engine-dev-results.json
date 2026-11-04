@@ -1,0 +1,904 @@
+{
+  "schema": 1,
+  "scope": "DEV-only research; no production adoption, held-out verification or phone performance claim.",
+  "verified_repeat": {
+    "frozen_plan_sha256": "745f73d4021f6dd5eac6bd3b6169bb66ddb1b3e7cdeb643d06f00511afa841bd",
+    "result_binding_sha256": "677c95e6c5891bb181a11f79609a6e2d1f732dbe624f37921dd65a4785f0940b",
+    "assessment_sha256": "ae4c510912374fe0f13a8809f592cda6b8788bbb5af1997165b3ae4623a0fa21",
+    "report_sha256": "1dec2043a75448c0c67dd0bcdbd92f543cf00466819bca41239376e824c01c53",
+    "records_sha256": "4232d2eed0096d86f0278bd404caf94372b83fa9289dede7ee5b4401da471842",
+    "status": {
+      "phase": "complete",
+      "outcome": "requires-speech-drop-review",
+      "regressions": [],
+      "elapsed_seconds": 641.9634609222412,
+      "frozen_plan_sha256": "745f73d4021f6dd5eac6bd3b6169bb66ddb1b3e7cdeb643d06f00511afa841bd",
+      "comparison_sha256": "e133c0647604bf223eca87c83420e28025366df83266fc4e743b0bf541b45982"
+    }
+  },
+  "policy": {
+    "no_speech_threshold": 0.8,
+    "logprob_threshold": 0.0,
+    "temperature": 0.0,
+    "temperature_increment": 0.0,
+    "beam_size": 3,
+    "threads": 4,
+    "audio_context": 0,
+    "text_context": 64,
+    "context": "current Kotlin trusted context on",
+    "languages": [
+      "en",
+      "ru",
+      "de",
+      "fr",
+      "es",
+      "it",
+      "pt"
+    ],
+    "conditions": [
+      "normal",
+      "quiet"
+    ],
+    "selected_split": "dev"
+  },
+  "source_binding": {
+    "original_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+    "sot_patch_sha256": "c7fa8bde0daf3b4fd818d5b87e3833c8ea7a691357c607f5ff0379bc345786f7",
+    "source_provenance_sha256": "f3d1c73b864fb00f101d1acaafcbe93fa707656fc9ffe1bb90921e4b81a7add7",
+    "probe_original_sha256": "0a5bf84a8e9cd98ac0e5d62146b225c1e7ffba38ce07558529c80e94fcf1f26f",
+    "probe_candidate_sha256": "e47dd9261c00ef734cceac17b94781c3659ea3b80a0bf78b2158c7e3cf79736e",
+    "probe_patch_sha256": "4e64801022f41fb882b0a578c94629019d666e22e298c69d16e41c63766a7e19",
+    "note": "The informational source_checkout_commit does not identify these patched binaries; these explicit patch/source/library digests do."
+  },
+  "engine": {
+    "decoder_sha256": "dcb529ee3a0c25ad912cf32920e9469c9d23c02bfb98b8dc0b26150b321eef22",
+    "shared_libraries": [
+      {
+        "name": "libggml-base.so",
+        "sha256": "3b20a3ab25fa2746b8feaa53c0a9736522c3cfa94fb3aeda11f8e6d72ecb76a3",
+        "bytes": 720928
+      },
+      {
+        "name": "libggml-cpu.so",
+        "sha256": "1ed66c0921aeff773ebbc5dabaaaebfcedf2d4c6cea7ce6cd0bc3be29986a1c8",
+        "bytes": 767736
+      },
+      {
+        "name": "libggml.so",
+        "sha256": "966407d3cf8830d8266f9e3e379f2f183d71faf14b9646c303d9e3d9d0bc653d",
+        "bytes": 51632
+      },
+      {
+        "name": "libwhisper.so.1",
+        "sha256": "aa9d783a5e663ca121edee85fa541c12036da5cf0c2262a5458b15a4c7f896bf",
+        "bytes": 617736
+      },
+      {
+        "name": "ld-linux-x86-64.so.2",
+        "sha256": "4e5d39355699e90fa29313d3100e82af4a23290028c58c364d6a249ef6a78e5e",
+        "bytes": 1002600
+      },
+      {
+        "name": "libc.so.6",
+        "sha256": "a5c5ad9d59d3c69eda93aa8f82930ba06cc4e893a113e66c85ad6e96243d53c8",
+        "bytes": 2482096
+      },
+      {
+        "name": "libcrypto.so.3",
+        "sha256": "695648ac8dc5e6a2b70e5e72399940de0f84bf24fddb7dd18949ba40bc575c72",
+        "bytes": 5783496
+      },
+      {
+        "name": "libgcc_s.so.1",
+        "sha256": "5a52ae4a6f1b119aa092aa1483c967e19d9ba036b1b0c2133236a8a2ce826ebf",
+        "bytes": 186520
+      },
+      {
+        "name": "libm.so.6",
+        "sha256": "16a03ce6d24c8a46742206d4a9c1d35bb6577ae2384f153dc6ef4a4b62b5357f",
+        "bytes": 1153848
+      },
+      {
+        "name": "libstdc++.so.6",
+        "sha256": "49811507d8fc0283d8f8023546613774c673f876fe823b1b99d0c8d46039deda",
+        "bytes": 2884552
+      },
+      {
+        "name": "libz.so.1",
+        "sha256": "bbde8faec092a7c67b8bd76bbba4a826e61b05c171b97004ce6b308c5a090351",
+        "bytes": 169544
+      }
+    ],
+    "dependency_hash_status": "hashed",
+    "cmake_cache_sha256": "f2315d3c1da91dc76311668548415428de4dd931f2f2dbcad6162b9b3533e922",
+    "build_options": {
+      "BUILD_SHARED_LIBS": "ON",
+      "CMAKE_BUILD_TYPE": "Release",
+      "GGML_ACCELERATE": "ON",
+      "GGML_ALL_WARNINGS_3RD_PARTY": "OFF",
+      "GGML_AMX_BF16": "OFF",
+      "GGML_AMX_INT8": "OFF",
+      "GGML_AMX_TILE": "OFF",
+      "GGML_AVX": "ON",
+      "GGML_AVX2": "ON",
+      "GGML_AVX512": "OFF",
+      "GGML_AVX512_BF16": "OFF",
+      "GGML_AVX512_VBMI": "OFF",
+      "GGML_AVX512_VNNI": "OFF",
+      "GGML_AVX_VNNI": "OFF",
+      "GGML_BACKEND_DL": "OFF",
+      "GGML_BLAS": "OFF",
+      "GGML_BMI2": "ON",
+      "GGML_BUILD_EXAMPLES": "OFF",
+      "GGML_BUILD_TESTS": "OFF",
+      "GGML_CCACHE": "ON",
+      "GGML_CPU": "ON",
+      "GGML_CPU_ALL_VARIANTS": "OFF",
+      "GGML_CPU_HBM": "OFF",
+      "GGML_CPU_KLEIDIAI": "OFF",
+      "GGML_CPU_REPACK": "ON",
+      "GGML_CUDA": "OFF",
+      "GGML_CUDA_FA": "ON",
+      "GGML_CUDA_FA_ALL_QUANTS": "OFF",
+      "GGML_CUDA_FORCE_CUBLAS": "OFF",
+      "GGML_CUDA_FORCE_MMQ": "OFF",
+      "GGML_CUDA_GRAPHS": "OFF",
+      "GGML_CUDA_NO_PEER_COPY": "OFF",
+      "GGML_CUDA_NO_VMM": "OFF",
+      "GGML_F16C": "ON",
+      "GGML_FMA": "ON",
+      "GGML_GPROF": "OFF",
+      "GGML_HIP": "OFF",
+      "GGML_HIP_EXPORT_METRICS": "OFF",
+      "GGML_HIP_GRAPHS": "OFF",
+      "GGML_HIP_MMQ_MFMA": "ON",
+      "GGML_HIP_NO_VMM": "ON",
+      "GGML_HIP_ROCWMMA_FATTN": "OFF",
+      "GGML_LASX": "ON",
+      "GGML_LLAMAFILE": "OFF",
+      "GGML_LSX": "ON",
+      "GGML_LTO": "OFF",
+      "GGML_METAL": "OFF",
+      "GGML_METAL_EMBED_LIBRARY": "OFF",
+      "GGML_METAL_NDEBUG": "OFF",
+      "GGML_METAL_SHADER_DEBUG": "OFF",
+      "GGML_MUSA": "OFF",
+      "GGML_MUSA_GRAPHS": "OFF",
+      "GGML_MUSA_MUDNN_COPY": "OFF",
+      "GGML_NATIVE": "OFF",
+      "GGML_OPENCL": "OFF",
+      "GGML_OPENCL_EMBED_KERNELS": "ON",
+      "GGML_OPENCL_PROFILING": "OFF",
+      "GGML_OPENCL_USE_ADRENO_KERNELS": "ON",
+      "GGML_OPENMP": "OFF",
+      "GGML_RPC": "OFF",
+      "GGML_RVV": "ON",
+      "GGML_RV_ZFH": "ON",
+      "GGML_RV_ZICBOP": "ON",
+      "GGML_RV_ZVFH": "ON",
+      "GGML_SSE42": "ON",
+      "GGML_STATIC": "OFF",
+      "GGML_SYCL": "OFF",
+      "GGML_SYCL_DNN": "ON",
+      "GGML_SYCL_F16": "OFF",
+      "GGML_SYCL_GRAPH": "ON",
+      "GGML_VULKAN": "OFF",
+      "GGML_VULKAN_CHECK_RESULTS": "OFF",
+      "GGML_VULKAN_DEBUG": "OFF",
+      "GGML_VULKAN_MEMORY_DEBUG": "OFF",
+      "GGML_VULKAN_RUN_TESTS": "OFF",
+      "GGML_VULKAN_SHADER_DEBUG_INFO": "OFF",
+      "GGML_VULKAN_VALIDATE": "OFF",
+      "GGML_VXE": "ON",
+      "GGML_WEBGPU": "OFF",
+      "GGML_WEBGPU_CPU_PROFILE": "OFF",
+      "GGML_WEBGPU_DEBUG": "OFF",
+      "GGML_WEBGPU_GPU_PROFILE": "OFF",
+      "GGML_XTHEADVECTOR": "OFF",
+      "GGML_ZDNN": "OFF",
+      "WHISPER_ALL_WARNINGS": "ON",
+      "WHISPER_ALL_WARNINGS_3RD_PARTY": "OFF",
+      "WHISPER_BUILD_EXAMPLES": "ON",
+      "WHISPER_BUILD_SERVER": "OFF",
+      "WHISPER_BUILD_TESTS": "OFF",
+      "WHISPER_COREML": "OFF",
+      "WHISPER_COREML_ALLOW_FALLBACK": "OFF",
+      "WHISPER_CURL": "OFF",
+      "WHISPER_FATAL_WARNINGS": "OFF",
+      "WHISPER_FFMPEG": "OFF",
+      "WHISPER_OPENVINO": "OFF",
+      "WHISPER_SANITIZE_ADDRESS": "OFF",
+      "WHISPER_SANITIZE_THREAD": "OFF",
+      "WHISPER_SANITIZE_UNDEFINED": "OFF",
+      "WHISPER_SDL2": "OFF",
+      "WHISPER_USE_SYSTEM_GGML": "OFF"
+    },
+    "source_checkout_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+    "source_checkout_note": "Informational checkout only; binary/library hashes identify the measured engine, not proof it was built from this checkout."
+  },
+  "projection": {
+    "original_manifest_sha256": "c7979abf21650be500a54690a2ca38bef1ffea0a077c47c29fdcd4a283509d53",
+    "projected_manifest_sha256": "7d200d5d8f0904d48aceb923e023fa4fad935d9cbc42861f9ee9d62e0ba39412",
+    "original_prepared_sha256": "fd4e47d0e27214bba22129500a78d95cf99f86d7efcf9de99db2821a3471fc23",
+    "projected_prepared_sha256": "ba35de95bb64dd6399c32c83993a6a8156b8de3ed696e8608104f768a832f832",
+    "dev_clips": 42,
+    "cases_unchanged": true,
+    "replay_unchanged": true,
+    "method": "Hardlinks only to dev WAVs and original prepared PCM/ranges/classes; no test audio links or reads."
+  },
+  "aggregate": [
+    {
+      "condition": "normal",
+      "baseline": {
+        "words": 864,
+        "word_errors": 207,
+        "characters": 4349,
+        "character_errors": 545
+      },
+      "candidate": {
+        "words": 864,
+        "word_errors": 179,
+        "characters": 4349,
+        "character_errors": 438
+      }
+    },
+    {
+      "condition": "quiet",
+      "baseline": {
+        "words": 864,
+        "word_errors": 303,
+        "characters": 4349,
+        "character_errors": 962
+      },
+      "candidate": {
+        "words": 864,
+        "word_errors": 294,
+        "characters": 4349,
+        "character_errors": 946
+      }
+    }
+  ],
+  "languages": [
+    {
+      "language": "en",
+      "condition": "normal",
+      "baseline": {
+        "words": 88,
+        "word_errors": 54,
+        "wer": 0.6136363636363636,
+        "characters": 428,
+        "character_errors": 207,
+        "cer": 0.48364485981308414
+      },
+      "candidate": {
+        "words": 88,
+        "word_errors": 54,
+        "wer": 0.6136363636363636,
+        "characters": 428,
+        "character_errors": 207,
+        "cer": 0.48364485981308414
+      },
+      "word_error_delta": 0,
+      "character_error_delta": 0
+    },
+    {
+      "language": "ru",
+      "condition": "normal",
+      "baseline": {
+        "words": 105,
+        "word_errors": 28,
+        "wer": 0.26666666666666666,
+        "characters": 587,
+        "character_errors": 51,
+        "cer": 0.0868824531516184
+      },
+      "candidate": {
+        "words": 105,
+        "word_errors": 28,
+        "wer": 0.26666666666666666,
+        "characters": 587,
+        "character_errors": 51,
+        "cer": 0.0868824531516184
+      },
+      "word_error_delta": 0,
+      "character_error_delta": 0
+    },
+    {
+      "language": "de",
+      "condition": "normal",
+      "baseline": {
+        "words": 122,
+        "word_errors": 12,
+        "wer": 0.09836065573770492,
+        "characters": 736,
+        "character_errors": 15,
+        "cer": 0.020380434782608696
+      },
+      "candidate": {
+        "words": 122,
+        "word_errors": 12,
+        "wer": 0.09836065573770492,
+        "characters": 736,
+        "character_errors": 15,
+        "cer": 0.020380434782608696
+      },
+      "word_error_delta": 0,
+      "character_error_delta": 0
+    },
+    {
+      "language": "fr",
+      "condition": "normal",
+      "baseline": {
+        "words": 128,
+        "word_errors": 30,
+        "wer": 0.234375,
+        "characters": 575,
+        "character_errors": 74,
+        "cer": 0.12869565217391304
+      },
+      "candidate": {
+        "words": 128,
+        "word_errors": 30,
+        "wer": 0.234375,
+        "characters": 575,
+        "character_errors": 74,
+        "cer": 0.12869565217391304
+      },
+      "word_error_delta": 0,
+      "character_error_delta": 0
+    },
+    {
+      "language": "es",
+      "condition": "normal",
+      "baseline": {
+        "words": 177,
+        "word_errors": 32,
+        "wer": 0.1807909604519774,
+        "characters": 853,
+        "character_errors": 73,
+        "cer": 0.08558030480656506
+      },
+      "candidate": {
+        "words": 177,
+        "word_errors": 17,
+        "wer": 0.096045197740113,
+        "characters": 853,
+        "character_errors": 15,
+        "cer": 0.017584994138335287
+      },
+      "word_error_delta": -15,
+      "character_error_delta": -58
+    },
+    {
+      "language": "it",
+      "condition": "normal",
+      "baseline": {
+        "words": 126,
+        "word_errors": 40,
+        "wer": 0.31746031746031744,
+        "characters": 616,
+        "character_errors": 93,
+        "cer": 0.15097402597402598
+      },
+      "candidate": {
+        "words": 126,
+        "word_errors": 27,
+        "wer": 0.21428571428571427,
+        "characters": 616,
+        "character_errors": 44,
+        "cer": 0.07142857142857142
+      },
+      "word_error_delta": -13,
+      "character_error_delta": -49
+    },
+    {
+      "language": "pt",
+      "condition": "normal",
+      "baseline": {
+        "words": 118,
+        "word_errors": 11,
+        "wer": 0.09322033898305085,
+        "characters": 554,
+        "character_errors": 32,
+        "cer": 0.05776173285198556
+      },
+      "candidate": {
+        "words": 118,
+        "word_errors": 11,
+        "wer": 0.09322033898305085,
+        "characters": 554,
+        "character_errors": 32,
+        "cer": 0.05776173285198556
+      },
+      "word_error_delta": 0,
+      "character_error_delta": 0
+    },
+    {
+      "language": "en",
+      "condition": "quiet",
+      "baseline": {
+        "words": 88,
+        "word_errors": 70,
+        "wer": 0.7954545454545454,
+        "characters": 428,
+        "character_errors": 290,
+        "cer": 0.677570093457944
+      },
+      "candidate": {
+        "words": 88,
+        "word_errors": 61,
+        "wer": 0.6931818181818182,
+        "characters": 428,
+        "character_errors": 274,
+        "cer": 0.6401869158878505
+      },
+      "word_error_delta": -9,
+      "character_error_delta": -16
+    },
+    {
+      "language": "ru",
+      "condition": "quiet",
+      "baseline": {
+        "words": 105,
+        "word_errors": 50,
+        "wer": 0.47619047619047616,
+        "characters": 587,
+        "character_errors": 147,
+        "cer": 0.2504258943781942
+      },
+      "candidate": {
+        "words": 105,
+        "word_errors": 50,
+        "wer": 0.47619047619047616,
+        "characters": 587,
+        "character_errors": 147,
+        "cer": 0.2504258943781942
+      },
+      "word_error_delta": 0,
+      "character_error_delta": 0
+    },
+    {
+      "language": "de",
+      "condition": "quiet",
+      "baseline": {
+        "words": 122,
+        "word_errors": 45,
+        "wer": 0.36885245901639346,
+        "characters": 736,
+        "character_errors": 199,
+        "cer": 0.2703804347826087
+      },
+      "candidate": {
+        "words": 122,
+        "word_errors": 45,
+        "wer": 0.36885245901639346,
+        "characters": 736,
+        "character_errors": 199,
+        "cer": 0.2703804347826087
+      },
+      "word_error_delta": 0,
+      "character_error_delta": 0
+    },
+    {
+      "language": "fr",
+      "condition": "quiet",
+      "baseline": {
+        "words": 128,
+        "word_errors": 43,
+        "wer": 0.3359375,
+        "characters": 575,
+        "character_errors": 113,
+        "cer": 0.19652173913043477
+      },
+      "candidate": {
+        "words": 128,
+        "word_errors": 43,
+        "wer": 0.3359375,
+        "characters": 575,
+        "character_errors": 113,
+        "cer": 0.19652173913043477
+      },
+      "word_error_delta": 0,
+      "character_error_delta": 0
+    },
+    {
+      "language": "es",
+      "condition": "quiet",
+      "baseline": {
+        "words": 177,
+        "word_errors": 48,
+        "wer": 0.2711864406779661,
+        "characters": 853,
+        "character_errors": 115,
+        "cer": 0.13481828839390386
+      },
+      "candidate": {
+        "words": 177,
+        "word_errors": 48,
+        "wer": 0.2711864406779661,
+        "characters": 853,
+        "character_errors": 115,
+        "cer": 0.13481828839390386
+      },
+      "word_error_delta": 0,
+      "character_error_delta": 0
+    },
+    {
+      "language": "it",
+      "condition": "quiet",
+      "baseline": {
+        "words": 126,
+        "word_errors": 30,
+        "wer": 0.23809523809523808,
+        "characters": 616,
+        "character_errors": 50,
+        "cer": 0.08116883116883117
+      },
+      "candidate": {
+        "words": 126,
+        "word_errors": 30,
+        "wer": 0.23809523809523808,
+        "characters": 616,
+        "character_errors": 50,
+        "cer": 0.08116883116883117
+      },
+      "word_error_delta": 0,
+      "character_error_delta": 0
+    },
+    {
+      "language": "pt",
+      "condition": "quiet",
+      "baseline": {
+        "words": 118,
+        "word_errors": 17,
+        "wer": 0.1440677966101695,
+        "characters": 554,
+        "character_errors": 48,
+        "cer": 0.08664259927797834
+      },
+      "candidate": {
+        "words": 118,
+        "word_errors": 17,
+        "wer": 0.1440677966101695,
+        "characters": 554,
+        "character_errors": 48,
+        "cer": 0.08664259927797834
+      },
+      "word_error_delta": 0,
+      "character_error_delta": 0
+    }
+  ],
+  "newly_empty_chunks": [
+    {
+      "case": "en-quiet-gated-context-on",
+      "chunk": 2,
+      "start_ms": 47180,
+      "end_ms": 48180,
+      "wav_sha256": "37cff9116d77615b39945f9a4a9a81ca96891db42a362c10662ea4f03ae74637",
+      "baseline_json_sha256": "9d5c93e084c42ffbe0a3b05a68361ed878daca290d3ea641b7a41eb02d4015bf",
+      "candidate_json_sha256": "e8e0cd7beafdf114747d7770b344f34d9dddf497b0b81aec2cd00c02e01db46c",
+      "prompt_changed": false
+    },
+    {
+      "case": "fr-normal-gated-context-on",
+      "chunk": 6,
+      "start_ms": 50740,
+      "end_ms": 51860,
+      "wav_sha256": "29987a0bf3baeffaa3c68ba21edc1a7954a6266ef0b64ad817997cbaa76cd7db",
+      "baseline_json_sha256": "44d43050b7e45e8a9c84c25d8b80d8a4b074116dcf31d80b04b5a7a236d8d225",
+      "candidate_json_sha256": "b51bf46e01a95e0ef03913b0b81399c98bec164efc827722dd50efb71b43166f",
+      "prompt_changed": false
+    },
+    {
+      "case": "es-normal-gated-context-on",
+      "chunk": 4,
+      "start_ms": 53140,
+      "end_ms": 54260,
+      "wav_sha256": "9d38c1c03cf21f218803c1c56ae571d5b55deeaecb767029839fce63c444c438",
+      "baseline_json_sha256": "f86af3a1c9d1c6d3de02d88b64d1f09a652525e21918e2c7a1e7a4803fbfec6b",
+      "candidate_json_sha256": "a02d415daafd16f97872cbd1a4a11648faa23720c344a1bf144365267759e301",
+      "prompt_changed": false
+    },
+    {
+      "case": "it-normal-gated-context-on",
+      "chunk": 4,
+      "start_ms": 32600,
+      "end_ms": 33740,
+      "wav_sha256": "d4af62844c8e9f31cc79f24a94efa00369b10c806588050ec30b0aab258a7b82",
+      "baseline_json_sha256": "9eb1de450400eb059e3d7680fd2dc1d55bbe03d21c08f998943830a1da1599d2",
+      "candidate_json_sha256": "9db6c2aed9ebfe60df2650062bcf07e6a79ca7612053ecf558bd6baa0a4b50f8",
+      "prompt_changed": false
+    },
+    {
+      "case": "it-normal-gated-context-on",
+      "chunk": 9,
+      "start_ms": 73180,
+      "end_ms": 74300,
+      "wav_sha256": "519f5f5e13742f487ca6d0a512736f9c40da18a97f7c5b05c4c147b5119061a0",
+      "baseline_json_sha256": "3227ae99073186f334c20c7c9e9012cbd08d1579261aef869d2e817fc72492f7",
+      "candidate_json_sha256": "9570878bc31f8c617e35dd74979d1e0eef3e6ca2475dc282a0c7f03647e9804f",
+      "prompt_changed": false
+    }
+  ],
+  "speech_drop_review": {
+    "automatic_outcome": "reject",
+    "would_reject_for_speech_loss": true,
+    "aggregates": {
+      "speech_cases": 14,
+      "changed_chunks": 5,
+      "newly_empty_chunks": 5,
+      "definite_lost_reference_words": 1,
+      "lost_reference_match_support": 1,
+      "gained_reference_match_support": 12
+    },
+    "clean_and_failed_run_changes_identical": true,
+    "original_private_review_sha256": "8f5e7a9640fe04eb46bb11c56fa341457ddf2f3fe75d4603240c74a9000cb948",
+    "root_adjudication_sha256": "e31b48c01da8204993b2eda9dd43f3fcf4cf3ffb82709d936a077ebca63bb8fc",
+    "acoustic_stats_sha256": "64ef9b041d3c4978b56ea1125c4c4f440b60fc2d02c6769cba6029ce30c40ca0",
+    "manual_interpretation": "Five removals support hallucination/overlap removal. The one lexical-match loss belongs to another source clip in global edit alignment. The automatic flag is retained; reference/time review is not acoustic proof of zero missed phonemes. Varying-input empty output must remain an uncertain review cue with original audio."
+  },
+  "noise": {
+    "cases": 14,
+    "all_candidates_empty": true,
+    "report_sha256": "2c02b566ad0fc7fdbfba9a94b5a4a88edc01d03275e217fe1688c0a5775318cc",
+    "rows": [
+      {
+        "capture": "baseline",
+        "language": "en",
+        "baseline": {
+          "json_sha256": "daa8f95b5d4303f7567d876940da4b9f73bb3078329b4146e10db5c2a93dd3fe",
+          "words": 1,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "919355fddac407b54ac849d891dcf2a73c45359bf30fcd59fccb40d14f38c79e",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "baseline",
+        "language": "ru",
+        "baseline": {
+          "json_sha256": "3301cde39649a88c778563c1979beeea6a6b57178d8eec4e8e663f733300cb0e",
+          "words": 4,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "d0fd1790ec39a47be8600eed08400fc57f31cbcde20f299390646a6990cffe22",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "baseline",
+        "language": "de",
+        "baseline": {
+          "json_sha256": "e577774a1d384fc9520e26bfb83ff1ea23fce1e173f3b627d922f21bcf079494",
+          "words": 3,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "8427461991685c7d177ed32db0b8ac0a39c40dd7f41e4fdd424d385b7da63ede",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "baseline",
+        "language": "fr",
+        "baseline": {
+          "json_sha256": "c81072a5f09b99ddc5ee5ea42e1decd8d24af13eeb2f8490d080d2aa77a2a11e",
+          "words": 22,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "cb4f9116eb7cec4c8e6d24d8461a81cc25c7dcf00aca53c6d8ac118f481de15e",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "baseline",
+        "language": "es",
+        "baseline": {
+          "json_sha256": "25d677e8eeb03bf10d2dda13ebf2d6ba55ae265e922afb9683d30c73103d8516",
+          "words": 11,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "962cf47ba38ba6e18a28d08ef263da384c7f7f4d9d9e603955d324dc50d2a562",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "baseline",
+        "language": "it",
+        "baseline": {
+          "json_sha256": "2685a93af2d0d9394579f9fb19b547ebfd1d2edf083759b579243c5e9193a082",
+          "words": 0,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "0153ab798c69329a8364b467eab4ef7fa1d0d381ae98b6cdcadb6ab6bcbe5743",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "baseline",
+        "language": "pt",
+        "baseline": {
+          "json_sha256": "128a5f2fb4d7b2aa80763edc89a1c71411737f65f581f2752acf380452453e90",
+          "words": 1,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "97314a08835433a46da003d82be742e49d26d2a207300e89eb2e2c580b8e9c25",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "fixed",
+        "language": "en",
+        "baseline": {
+          "json_sha256": "ac01dcafdefc7887615c7d0e5da28ee6eb20582800ff3c70f1d44d10f5c38385",
+          "words": 1,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "bd69909c02876ba33ced598cf884b47016ca25cfb98d49dafe554496c1050fc5",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "fixed",
+        "language": "ru",
+        "baseline": {
+          "json_sha256": "8125c73c8eb3b5781303147d77b60ddf807d9f6b53f23de70ae97444968181ad",
+          "words": 4,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "a757c61092172f46d033793d3a62f897114fee38febcb86ff0c432610af42dc2",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "fixed",
+        "language": "de",
+        "baseline": {
+          "json_sha256": "3a20a5e19e8a2be120aa587abad7d5100862b500ef2ff1064e66a10aa415f18f",
+          "words": 1,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "5883677f11fd2580bb486889e7c4f14951b333671e18ea134a827a7045a62349",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "fixed",
+        "language": "fr",
+        "baseline": {
+          "json_sha256": "2cff221f6741e01c1b3fdac69aa8d930405d4e0b1b8163565782243a5aeb806e",
+          "words": 0,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "6dc55bc32238efd992dba2d4393940dc608b724221fcb1ba26041cc810160c73",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "fixed",
+        "language": "es",
+        "baseline": {
+          "json_sha256": "cc5b75d10c0f7cc6a5a3869d32f5dc85305759db9b327853a6745edd9fd7b0aa",
+          "words": 17,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "2cecc83f62d19e023b18227d3bbd91726db9fcbb435ec316a365180ff085e158",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "fixed",
+        "language": "it",
+        "baseline": {
+          "json_sha256": "4514b68884e6fee68aed020e961082e858c72887c96fb60ad089a5d39748205f",
+          "words": 2,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "1f333d86424bc5de113922581d2c1a3e3abf6cf6f2405a8cc70783c03ad1701e",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      },
+      {
+        "capture": "fixed",
+        "language": "pt",
+        "baseline": {
+          "json_sha256": "29fd2235582185e5cc3d8462037c2300e58fd6fcc46822d10b58fcd246a9e406",
+          "words": 0,
+          "nonempty_text": true,
+          "segments": 1
+        },
+        "candidate": {
+          "json_sha256": "16e088efe5abae4b510a3bc2d740e59b3378aa29393e9005e88d40bf22a5fd7d",
+          "words": 0,
+          "nonempty_text": false,
+          "segments": 0
+        }
+      }
+    ],
+    "text_context": "empty prompt only",
+    "independent_capture_count": 2
+  },
+  "timing": {
+    "values": {
+      "baseline": {
+        "cold_calls": 129,
+        "load_seconds": 12.487773668,
+        "decode_seconds": 412.11031235,
+        "decoded_source_seconds": 712.0,
+        "peak_rss_bytes": 217427968,
+        "probe_wall_seconds": 433.65049343489227,
+        "orchestration_wall_seconds": 486.03603049097
+      },
+      "candidate": {
+        "cold_calls": 129,
+        "load_seconds": 12.945418329,
+        "decode_seconds": 450.41990787,
+        "decoded_source_seconds": 712.0,
+        "peak_rss_bytes": 217030656,
+        "probe_wall_seconds": 472.5694919908128,
+        "orchestration_wall_seconds": 529.2146512629988
+      }
+    },
+    "scope": "Host cold process/model per chunk; different background contention. These totals cannot establish phone performance or a causal speed improvement."
+  },
+  "earlier_failed_run": {
+    "classification": "Diagnostic only; failed outer freeze, never accepted as validated evidence.",
+    "frozen_plan_sha256": "c600d4829f61a19701d8cbd395fe0d9632fe722ff7807ea47b11b8c2b15fbba9",
+    "status_sha256": "db94021cddcdbcda5217ab6b416472132221fa8a05362a2541fb33251b4d56d1",
+    "phase": "failed",
+    "elapsed_seconds": 616.9223692417145,
+    "deviation": "Unexecuted ROOT Transcript.kt changed during inference; actual baseline snapshot consumed by replay stayed unchanged. Preserved failed freeze and outputs; clean rerun freezes only consumed inputs."
+  }
+}

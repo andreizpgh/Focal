@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "tag": "ux-alpha-2",
+  "title": "Focal 0.1.0 · UX Alpha 2",
+  "provenance": "local-emulator-qa",
+  "source_commit": "fe70758350a114d5e66775ee114cd48778217594",
+  "source_clean": true,
+  "application_id": "app.focal",
+  "version_name": "0.1.0-alpha.2",
+  "version_code": 2,
+  "build_variant": "debug",
+  "apk_sha256": "955c7bb599ce4236013545ba50901cee5403146ecedf4f47e527193e5d91b315",
+  "apk_bytes": 76319020,
+  "test_apk_sha256": "68153fa7ee70c80b8434d4d8bc4f2ae24e2d1f915cbba4473cfe53c2ac483376",
+  "signing": {
+    "type": "development",
+    "certificate_sha256": "3e407a18880c9277982d6ad6222b39738484a3b768e4d268415eb795709aa3bc",
+    "alpha_1_update_compatibility": "not verified"
+  },
+  "model": {
+    "repository": "ggerganov/whisper.cpp",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "filename": "ggml-base-q5_1.bin",
+    "sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "bytes": 59707625,
+    "license": "MIT"
+  },
+  "engine_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+  "qa": {
+    "runner": "scripts/qa-local.py --release-checks",
+    "run": "20261104T102008.204711Z",
+    "android_api": 35,
+    "android_abi": "x86_64",
+    "hardware_acceleration": "KVM",
+    "virtual_cpus": 2,
+    "android_tests": 89,
+    "failures": 0,
+    "skips": 0,
+    "required_real_model_tests": 8,
+    "instrumentation_seconds": 154.329,
+    "build_seconds": 254,
+    "core_tests": 36,
+    "core_execution": "cached results for unchanged core source",
+    "debug_lint": "passed",
+    "release_lint": "passed",
+    "unsigned_release_build": "passed; not the instrumented or published APK",
+    "zip_and_elf_alignment_bytes": 16384
+  },
+  "targeted_regressions": {
+    "same_test_apk": true,
+    "previous_app_sha256": "b68946e904ed69b8c5123316f64611f5e3cc8334049191c91e5395255f6ae647",
+    "expected_baseline_assertion_failures": 2,
+    "candidate_passes": 5,
+    "candidate_instrumentation_seconds": 6.201
+  },
+  "manual": {
+    "scope": "System notification denial, Home, short screen lock, return, pause/resume and Finish on the exact candidate APK; emulator host audio disabled. Permission grants and flags restored.",
+    "final_state": "READY",
+    "duration_ms": 110704,
+    "pcm_bytes": 3542528,
+    "chunks": 0
+  },
+  "independent_review": [
+    "Focused UI/storage review and regression implementation",
+    "Critical Astra source review",
+    "Terra artifact and full-QA audit"
+  ],
+  "not_established": [
+    "Physical-phone microphone and audible playback",
+    "Phone background reliability, battery, thermals and ARM latency",
+    "Seven-language speech quality or speed improvement",
+    "Resolution of weak varying-noise hallucinations or quiet-word omissions",
+    "Stable distribution signing"
+  ]
+}

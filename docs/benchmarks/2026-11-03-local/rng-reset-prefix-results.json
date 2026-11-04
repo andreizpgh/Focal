@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "scope": "Four fresh-context ES DEV prefix sessions with one RNG0 reset statement on the corrected-SOT parent. Fourteen ASR calls, no VAD, held-out access, top-k change or threshold tuning.",
+  "outcome": "The single reset removed the reproducible target history difference for this fixed prefix; this supports RNG0 carry as the bounded mechanism.",
+  "result": {
+    "scope": "One RNG0 reset factor on corrected-SOT parent, fixed ES DEV prefix, no VAD, no threshold change.",
+    "sessions": 4,
+    "asr_calls": 14,
+    "repeat_checks": [
+      {
+        "history": "include-empty",
+        "all_prefix_transcriptions_equal": true
+      },
+      {
+        "history": "skip-empty",
+        "all_prefix_transcriptions_equal": true
+      }
+    ],
+    "history_checks": [
+      {
+        "repeat": 1,
+        "target_transcription_equal": true,
+        "target_text_equal": true,
+        "common_prefix_transcriptions_equal": true,
+        "include_transcription_sha256": "25763c59cea8a24258616f98d2ac4ec3bc24cb4774b0c4119b2800e2c8634e7f",
+        "skip_transcription_sha256": "25763c59cea8a24258616f98d2ac4ec3bc24cb4774b0c4119b2800e2c8634e7f",
+        "original_chunk2_segment_count": 0
+      },
+      {
+        "repeat": 2,
+        "target_transcription_equal": true,
+        "target_text_equal": true,
+        "common_prefix_transcriptions_equal": true,
+        "include_transcription_sha256": "25763c59cea8a24258616f98d2ac4ec3bc24cb4774b0c4119b2800e2c8634e7f",
+        "skip_transcription_sha256": "25763c59cea8a24258616f98d2ac4ec3bc24cb4774b0c4119b2800e2c8634e7f",
+        "original_chunk2_segment_count": 0
+      }
+    ],
+    "completed_parent_history_checks": [
+      {
+        "repeat": 1,
+        "parent_target_differs": true
+      },
+      {
+        "repeat": 2,
+        "parent_target_differs": true
+      }
+    ],
+    "outcome": "supports-RNG0-carry-mechanism-for-this-prefix",
+    "automatic_adoption": false,
+    "limitations": "No all-language quality/runtime safety claim. True deterministic top-k remains a distinct unmeasured policy factor."
+  },
+  "independent_raw_checks": {
+    "calls": 14,
+    "all_exact_target_text_offsets_probabilities_no_speech": true,
+    "all_prefix_repeats_equal": true,
+    "all_original_float_and_prompt_identities": true,
+    "original_chunk2_empty_in_both_include_sessions": true,
+    "target_no_speech": [
+      0.0152495,
+      0.0152495
+    ]
+  },
+  "policy": {
+    "no_speech_threshold": 0.6,
+    "logprob_threshold": -1,
+    "audio_context": 0,
+    "effective_audio_context": 1500,
+    "threads": 4,
+    "beam": 3,
+    "no_context": true,
+    "temperature": 0,
+    "temperature_increment": 0,
+    "live_vad": false,
+    "prompts": "Exact recorded warm production prompts, fixed independently of new outputs; identical between histories for all common chunks."
+  },
+  "factor": "Exactly one statement: state->decoders[0].rng = std::mt19937(0); immediately before the existing per-full loop starting at decoder1. No top-k or threshold changes.",
+  "elapsed_seconds": 66.14370059967041,
+  "timing_scope": "Contended host diagnostic only; no speed or phone claim.",
+  "automatic_adoption": false,
+  "original_persistent_candidate_outcome": "reject",
+  "provenance": {
+    "launch_plan_sha256": "583430eead1b5846f249d2d158818c8aeca8660066958bc2fe61f1a018b37ec1",
+    "result_binding_sha256": "ec7eb8db51c7ccda59dca7256b6a8af9c18def0bd5529706eb6e82064735e1d3",
+    "report_sha256": "a937ae5445fd685275f6a2e5e5f6e129ca223dc19e50b45807d8c6a681c808ff",
+    "comparator_launch_sha256": "dcbd770da08ad08498a0b374185c018f0f8da1986f15a5affe659e293e5ba332",
+    "comparator_binding_sha256": "97745bad5b29bbd66bcc10d198d366b0159f7670fefb3b05d8a1978f6d3bc7dd",
+    "comparator_library_sha256": "66462f4cd2a22d5eeef87a19da0126b7952f583fa3b4a852cb6f59e239b53f8c",
+    "reset_library_sha256": "c71e729e4dbd1ccb44bfe22787d962481bcf0085fccdfc63b726a10523eb412e",
+    "probe_sha256": "d163fa07620385ee22299b22616da2158f7527559221d43b9444a83d1a4f6167",
+    "engine_build_provenance_sha256": "30365dacd04321371d32a1719a3f998d7c2d54811fe6469d665f1c661f28a550",
+    "engine_source_proof_sha256": "9b09b84d524f33b967dd6504dd99d88694e9a705f7957dbe8e166c1de7c9a944",
+    "engine_patch_sha256": "f16d851b9c1f15bae2ed51cb1b285f8555bc01ea9633342e856bdf8c40e20bf6",
+    "exporter_sha256": "0b3dca2624523a07630a56ccbaf00016d6c3404665850c2636afd0bdb9ab2e12"
+  }
+}

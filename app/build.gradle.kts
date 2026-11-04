@@ -7,6 +7,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val nativeFaultVariant = providers.gradleProperty("focalNativeFaultTests").orNull
+require(nativeFaultVariant == null || nativeFaultVariant in setOf("baseline", "patched")) {
+    "focalNativeFaultTests must be baseline or patched; omit it for a normal build."
+}
+
 android {
     namespace = "app.focal"
     compileSdk = 35
@@ -15,11 +20,15 @@ android {
         applicationId = "app.focal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.0-alpha.2"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         externalNativeBuild {
-            cmake { arguments += listOf("-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Release") }
+            cmake {
+                arguments += listOf("-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Release",
+                    "-DFOCAL_NATIVE_FAULT_TESTS=${if (nativeFaultVariant == null) "OFF" else "ON"}",
+                    "-DFOCAL_NATIVE_FAULT_VARIANT=${nativeFaultVariant.orEmpty()}")
+            }
         }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -29,13 +38,34 @@ android {
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
     androidResources { noCompress += "bin" }
     buildTypes {
+        debug {
+            externalNativeBuild { cmake { arguments += "-DFOCAL_ANDROID_DEBUG_BUILD=ON" } }
+        }
         release {
+            externalNativeBuild { cmake { arguments += "-DFOCAL_ANDROID_DEBUG_BUILD=OFF" } }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
+    if (nativeFaultVariant != null) {
+        sourceSets.getByName("debug").java.srcDir("src/nativeFault/java")
+        sourceSets.getByName("androidTest").java.setSrcDirs(listOf(
+            "src/nativeFaultTestSupport/java",
+            if (nativeFaultVariant == "baseline") "src/nativeFaultBaselineTest/java" else "src/nativeFaultTest/java"))
+    }
     lint { abortOnError = true }
+}
+
+gradle.taskGraph.whenReady {
+    // Native optimization is Release for both Android variants in this project.
+    val releaseTasks = allTasks.filter {
+        it.project.path == project.path && it.name.contains("release", ignoreCase = true) &&
+            !it.name.startsWith("configureCMakeRelease[") && !it.name.startsWith("buildCMakeRelease[")
+    }
+    check(nativeFaultVariant == null || releaseTasks.isEmpty()) {
+        "Native fault tests are debug-only. Omit focalNativeFaultTests for ${releaseTasks.joinToString { it.path }}."
+    }
 }
 
 dependencies {

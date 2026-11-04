@@ -1,0 +1,982 @@
+{
+  "limit": 1000000000,
+  "reservations": [
+    {
+      "name": "base-q5_1-attempt-1",
+      "bytes": 59707625,
+      "kind": "model"
+    },
+    {
+      "name": "ru-test-prefix-probe",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-dev.tsv",
+      "bytes": 213066,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test.tsv",
+      "bytes": 367865,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-dev.tsv",
+      "bytes": 316329,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test.tsv",
+      "bytes": 735259,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-dev.tsv",
+      "bytes": 221692,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test.tsv",
+      "bytes": 559543,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-dev.tsv",
+      "bytes": 180519,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test.tsv",
+      "bytes": 456973,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev.tsv",
+      "bytes": 261639,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test.tsv",
+      "bytes": 599883,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev.tsv",
+      "bytes": 242067,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test.tsv",
+      "bytes": 561610,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-dev.tsv",
+      "bytes": 225325,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test.tsv",
+      "bytes": 563258,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "initial-and-upcoming-model-metadata-allowance",
+      "bytes": 10000000,
+      "kind": "metadata"
+    },
+    {
+      "name": "base-q8_0-attempt-1",
+      "bytes": 81768585,
+      "kind": "model"
+    },
+    {
+      "name": "small-q5_1-attempt-1",
+      "bytes": 190085487,
+      "kind": "model"
+    },
+    {
+      "name": "CI run for e6c15e5: baseline model and repository speech fixtures",
+      "bytes": 61000000,
+      "kind": "ci-model-and-fixtures"
+    },
+    {
+      "name": "Final research and QA checkpoint CI: baseline model and repository fixtures",
+      "bytes": 61000000,
+      "kind": "ci-model-and-fixtures-reserved"
+    },
+    {
+      "name": "Focused UI regression checkpoint CI: baseline model and repository fixtures",
+      "bytes": 61000000,
+      "kind": "ci-model-and-fixtures-reserved"
+    },
+    {
+      "name": "Bounded UI restoration test checkpoint CI: baseline model and fixtures",
+      "bytes": 61000000,
+      "kind": "ci-model-and-fixtures-reserved"
+    },
+    {
+      "name": "Local laptop baseline model fetch for emulator QA, attempt 1",
+      "bytes": 59707625,
+      "kind": "model"
+    },
+    {
+      "name": "Local hardening and gate research publication CI: baseline model and fixtures",
+      "bytes": 61000000,
+      "kind": "ci-model-and-fixtures-reserved"
+    },
+    {
+      "name": "en_us-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "en_us-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "en_us-dev.tsv",
+      "bytes": 213066,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-dev-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-dev-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test.tsv",
+      "bytes": 367865,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "en_us-test-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "ru_ru-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "ru_ru-dev.tsv",
+      "bytes": 316329,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-dev-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-dev-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-dev-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test.tsv",
+      "bytes": 735259,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-05.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "ru_ru-test-06.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "de_de-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "de_de-dev.tsv",
+      "bytes": 221692,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-dev-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-dev-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-dev-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test.tsv",
+      "bytes": 559543,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-05.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-06.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-07.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "de_de-test-08.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "fr_fr-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "fr_fr-dev.tsv",
+      "bytes": 180519,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-dev-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-dev-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-dev-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test.tsv",
+      "bytes": 456973,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "fr_fr-test-05.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "es_419-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "es_419-dev.tsv",
+      "bytes": 261639,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-05.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-dev-06.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test.tsv",
+      "bytes": 599883,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-05.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "es_419-test-06.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "it_it-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "it_it-dev.tsv",
+      "bytes": 242067,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-dev-05.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test.tsv",
+      "bytes": 561610,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-05.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "it_it-test-06.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "pt_br-audio-tree.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "pt_br-dev.tsv",
+      "bytes": 225325,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-dev-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-dev-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-dev-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-dev-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-dev-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test.tsv",
+      "bytes": 563258,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-00.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-01.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-02.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-03.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-04.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-05.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-06.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "pt_br-test-07.gzpart",
+      "bytes": 1048576,
+      "kind": "corpus"
+    },
+    {
+      "name": "model-metadata.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "tree-metadata.json",
+      "bytes": 1048576,
+      "kind": "metadata"
+    },
+    {
+      "name": "ggml-silero-v5.1.2.bin",
+      "bytes": 885099,
+      "kind": "vad-model"
+    },
+    {
+      "name": "libasan-16.2.1-3.fc44.x86_64.rpm",
+      "bytes": 1048576,
+      "kind": "host-sanitizer-runtime"
+    },
+    {
+      "name": "libubsan-16.2.1-3.fc44.x86_64.rpm",
+      "bytes": 1048576,
+      "kind": "host-sanitizer-runtime"
+    }
+  ],
+  "reserved_bytes": 881742333,
+  "note": "Conservative upper bounds: prior checkpoint transfers, local baseline model, disjoint FLEURS cohort, research-only Silero VAD, matching host sanitizer runtimes, metadata/retries, and one reserved publication CI. Carry the total forward; never reset it."
+}

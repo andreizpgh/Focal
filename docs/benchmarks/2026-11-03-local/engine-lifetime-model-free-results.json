@@ -1,0 +1,731 @@
+{
+  "schema": 1,
+  "status": "PASS for the frozen model-free ownership contract; production adoption remains open",
+  "scope": "Complete actual baseline/patched Whisper translation units and real CPU GGML, synthetic descriptors, local allocation-refusal/exception hooks. Initial graph construction and encoder execution are bypassed; full stops after real KV growth/clear before decoding. No model, audio, ASR/VAD or real host OOM.",
+  "variants": {
+    "baseline": {
+      "green": 4,
+      "expected_red": 20
+    },
+    "patched": {
+      "green": 24,
+      "red": 0
+    }
+  },
+  "baseline_failure_classes": {
+    "actual_asan_heap_use_after_free": 2,
+    "early_batch_cleanup_asan_segv": 3,
+    "ownership_counter_assertions": 15
+  },
+  "interpretation": [
+    "The two ASan use-after-free paths are owned/external state allocation failure followed by actual caller cleanup.",
+    "Early state storage is filled with 0xa5 before the actual constructor, making missing batch initialization reproducible.",
+    "LeakSanitizer also reports after 11 assertion failures; fail-stop skips normal cleanup, so these are not 11 independently proved engine leaks.",
+    "All patched green cases reach zero owned state/KV context/buffer/byte counters and clean sanitizers.",
+    "Synthetic KV counters measure backend-reported buffer sizes, not host RSS, phone memory, battery or thermals.",
+    "Partial allocator control uses separate two-allocation/one-free counters; zero general KV peak does not mean no allocations."
+  ],
+  "timing": {
+    "build_seconds": 98.62473651900655,
+    "case_runner_seconds": 21.057502759998897,
+    "timeouts": 0,
+    "speed_claim": false
+  },
+  "resources": {
+    "cpus": 4,
+    "build_jobs": 2,
+    "nice_at_least": 10,
+    "build_wall_seconds_limit": 300,
+    "build_per_process_address_space_gib": 3,
+    "runtime_total_wall_seconds_limit": 120,
+    "runtime_case_wall_seconds_limit": 10,
+    "runtime_soft_rss_mib": 512,
+    "runtime_hard_rss_mib": 768,
+    "synthetic_healthy_kv_peak_baseline_bytes": 57344,
+    "synthetic_healthy_kv_peak_patched_bytes": 65536,
+    "derived_base_model_transient_extra_kv_bytes": 6291456,
+    "derived_is_not_measured": true
+  },
+  "instrumentation": {
+    "translation_units": 25,
+    "ggml_translation_units": 23,
+    "harness_with_actual_whisper_translation_units": 2,
+    "address_undefined_sanitizers_all_units": true,
+    "leak_detection": true,
+    "frame_pointers": true,
+    "native_cpu_tuning": false,
+    "cpu_only": true
+  },
+  "provenance": {
+    "pinned_submodule_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+    "source_freeze_sha256": "93a52a4eaeccea734787edd2a1644fb2bb757feec4f1873c7ac959eee0aaee9c",
+    "source_input_count": 664,
+    "tool_and_link_input_count": 94,
+    "prebuild_environment_sha256": "823b371fe725623f2ec78611e747b4e13a759d0e23b142ec8a0ea66f1185fe94",
+    "build_summary_sha256": "c41023c547d0db162adb1b6ea843bca40e23ee47beff62aa7e743e6a5377f9b1",
+    "run_summary_sha256": "36bdf88a58b03a327caec62fa751831286d6aa0f5141f600ef1ae9e8efc7f84c",
+    "ownership_patch_sha256": "6d3d566521378f6a51fcd0e141ec19bad30ed2ce533b1952db7ff20e8622fb47",
+    "patched_engine_source_sha256": "8cc010e36be180b2843287562cd69104a2b1f11e4d7a95827fffce7db70ed64b",
+    "case_specification_sha256": "11832676b24e9d7f5d0fa47fa5cee686e4f28bd8bf85192e9cd7e6d5af574902",
+    "harness_sha256": "7c023c64fee077ac93e8f08858e21e263a4c61d7a239ca7d8b2e05c9b9c861ce",
+    "binary_sha256": {
+      "baseline": "3d7b760b3689cace59b5011a42c2c92c0326b74d1db7e9ebfe7dd39fcfbeef52",
+      "patched": "c6d071db8eb8ed177a46837a5086812b0f6ed838c295787e68f81e37fd0371f2"
+    },
+    "loaded_dependency_count_per_case": 7,
+    "dependencies": [
+      {
+        "name": "libasan.so.8.0.0",
+        "sha256": "0e9878f315009d4a3b3f1d8c44467de841f9ff2ca404f996937bf89d1d966c37"
+      },
+      {
+        "name": "libubsan.so.1.0.0",
+        "sha256": "d4322305e0b1492398b7c5dabf56e1cdfe67548211b0149769c14f234cf3bb9d"
+      },
+      {
+        "name": "ld-linux-x86-64.so.2",
+        "sha256": "4e5d39355699e90fa29313d3100e82af4a23290028c58c364d6a249ef6a78e5e"
+      },
+      {
+        "name": "libc.so.6",
+        "sha256": "a5c5ad9d59d3c69eda93aa8f82930ba06cc4e893a113e66c85ad6e96243d53c8"
+      },
+      {
+        "name": "libgcc_s-16-20261029.so.1",
+        "sha256": "5a52ae4a6f1b119aa092aa1483c967e19d9ba036b1b0c2133236a8a2ce826ebf"
+      },
+      {
+        "name": "libm.so.6",
+        "sha256": "16a03ce6d24c8a46742206d4a9c1d35bb6577ae2384f153dc6ef4a4b62b5357f"
+      },
+      {
+        "name": "libstdc++.so.6.0.36",
+        "sha256": "49811507d8fc0283d8f8023546613774c673f876fe823b1b99d0c8d46039deda"
+      }
+    ],
+    "exporter_sha256": "a773f959ff7613278665179403353c1e412e68638f8a231a6543a005c855e514"
+  },
+  "prior_attempt": {
+    "source_freeze_sha256": "790e5eafcdd6e0d2d757c928fa61d5519ac03ab42ad6c6d954ede98b919ec5c2",
+    "configure_passed": true,
+    "build_passed": false,
+    "cases_executed": 0,
+    "reason": "Missing installed GCC ASan runtime behind linker script; not a regression RED. V4 retains identical ownership patch, harness and case oracles and uses signed matching runtimes extracted locally."
+  },
+  "remaining": [
+    "Actual model/decoder graphs after injected failure, same-state beam/greedy retry, owned/external close.",
+    "The three public loader wrappers after model load with state-initialization exceptions.",
+    "Android JNI/service error-close-pending-audio/manual-edit preservation, new-engine recovery and cancellation/close overlap.",
+    "Production integration, full app QA and physical-phone resource checks."
+  ],
+  "cases": [
+    {
+      "case": "control_owned",
+      "variant": "baseline",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 57344,
+      "log_sha256": "e018c55d39a757f57f25009589db5dd30067512482412f2a143064464ba950c5"
+    },
+    {
+      "case": "control_owned",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 65536,
+      "log_sha256": "ad7da532969a552290a6bae698614d0cba2eb7cf32ac014bd0bad943a524d06c"
+    },
+    {
+      "case": "control_external",
+      "variant": "baseline",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 57344,
+      "log_sha256": "cae1b479e572f1710068d2564ee70f9e38abb6e09b2d4f17a6e6d55e09b7da53"
+    },
+    {
+      "case": "control_external",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 65536,
+      "log_sha256": "5640f7fb2eb3fa4e36239bc417794a6607ee745de081cad71c63a08c5f6467e5"
+    },
+    {
+      "case": "partial_backend_control",
+      "variant": "baseline",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 0,
+      "log_sha256": "3055e4fa40e3f94a8c0b383a2aac7635a5a5d903cb71d63640c51816d57a00d7"
+    },
+    {
+      "case": "partial_backend_control",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 0,
+      "log_sha256": "3055e4fa40e3f94a8c0b383a2aac7635a5a5d903cb71d63640c51816d57a00d7"
+    },
+    {
+      "case": "owned_fail_close",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [
+        "AddressSanitizer: heap-use-after-free"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "c9b5438422d317eae321f74b22bebc337c82d979381f9ae5506f158523742927"
+    },
+    {
+      "case": "owned_fail_close",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 24576,
+      "log_sha256": "89bfbe15070d10e9ecb58195881eb72c2906664f375fbcd70a146190548bd081"
+    },
+    {
+      "case": "external_fail_close",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [
+        "AddressSanitizer: heap-use-after-free"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "a505b9be91162ecdda97920c61e1f52ecbf4f1e8a131e6a9305b54fbdb731153"
+    },
+    {
+      "case": "external_fail_close",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 24576,
+      "log_sha256": "faa3799a41529fecdbb3879ae3395b9f283a9dfaaea2da2ac1e6a96d123ad71a"
+    },
+    {
+      "case": "owned_fail_retry_beam",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": "borrowed state remains alive after failure",
+      "sanitizer_classes": [
+        "LeakSanitizer: detected memory leaks"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "2e5fe2015db3e56a489074c1f041e0b5454bb52194d2dde9ba12d10ff7409023"
+    },
+    {
+      "case": "owned_fail_retry_beam",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 65536,
+      "log_sha256": "ade48c524a7a31aed24b660b5c87ed2bb68944bdb6ac961932f97706a74927ab"
+    },
+    {
+      "case": "external_fail_retry_beam",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": "borrowed state remains alive after failure",
+      "sanitizer_classes": [
+        "LeakSanitizer: detected memory leaks"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "19a6104a0fc54a17b8bbd117e1782762f71c200ba6b4697f9ab62d3857359509"
+    },
+    {
+      "case": "external_fail_retry_beam",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 65536,
+      "log_sha256": "daa22622398cb638bb4e584f66d37547be7ccce05ca920982eb498350d8fe9c0"
+    },
+    {
+      "case": "owned_fail_retry_greedy",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": "borrowed state remains alive after failure",
+      "sanitizer_classes": [
+        "LeakSanitizer: detected memory leaks"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "52618d60478a76e365f5e02ab5356b7e8066a98f22aff64d47a370a2a8aac3ad"
+    },
+    {
+      "case": "owned_fail_retry_greedy",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 24576,
+      "log_sha256": "fb50d4a0dcfd8e6afcdf8d401c3cdbee31ebbfbf9e00e5edb53b7d4100fe3ce7"
+    },
+    {
+      "case": "external_fail_retry_greedy",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": "borrowed state remains alive after failure",
+      "sanitizer_classes": [
+        "LeakSanitizer: detected memory leaks"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "4ede113ebfbfa6fcdd673c9f8a83fef52a53e33d000aacce35b26ef194ee36d1"
+    },
+    {
+      "case": "external_fail_retry_greedy",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 24576,
+      "log_sha256": "6dcdc53c002602915c8583c3423d7b5500683a1a9da64b594c76c4102d85fd01"
+    },
+    {
+      "case": "owned_throw_metadata",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 86,
+      "timeout": false,
+      "assertion": "buffer freed once",
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "18f19ceb1ad334bc928277a1a874f6220e363ca80e3f122bf764b5ecc4022b54"
+    },
+    {
+      "case": "owned_throw_metadata",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 65536,
+      "log_sha256": "d33796723f1b0dba54efd5fbf55ad2a94ca2e193f291090f15a2777798782d3e"
+    },
+    {
+      "case": "external_throw_metadata",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 86,
+      "timeout": false,
+      "assertion": "buffer freed once",
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "18f19ceb1ad334bc928277a1a874f6220e363ca80e3f122bf764b5ecc4022b54"
+    },
+    {
+      "case": "external_throw_metadata",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 65536,
+      "log_sha256": "b4fad34bca2f7b261c71f7c0d054c3e29eb65ba71076ab34a96db19261fc43ad"
+    },
+    {
+      "case": "owned_throw_buffer",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": "old KV capacity preserved after failure",
+      "sanitizer_classes": [
+        "LeakSanitizer: detected memory leaks"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "3039357fede9521ce1fd7b23e20440a2e457cf9a795adb4b46a01933e5cea40a"
+    },
+    {
+      "case": "owned_throw_buffer",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 65536,
+      "log_sha256": "2754b60bc6231a688ef3b1a94ebfd90c4dcacb69c5146efaf4a827ea7cc81b8b"
+    },
+    {
+      "case": "external_throw_buffer",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": "old KV capacity preserved after failure",
+      "sanitizer_classes": [
+        "LeakSanitizer: detected memory leaks"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "9ee0894b268f18885a3fff8853e78f3c1f3a92d33d13f94e2d85b90a4f46cf32"
+    },
+    {
+      "case": "external_throw_buffer",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 65536,
+      "log_sha256": "197e10680a212cd6600275de05e8da3ccee34873fed8361465380a05950ea8a8"
+    },
+    {
+      "case": "init_fail_self",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [
+        "AddressSanitizer: SEGV"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "9a39948ef8d704c65fa7b7c4563c6cec79f2cf20682e8ec0d79137f288ac5288"
+    },
+    {
+      "case": "init_fail_self",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 0,
+      "log_sha256": "596ed5d56c7cb2f944f3706d7d04bae99149b0ce53da256742b5b3408e3867d8"
+    },
+    {
+      "case": "init_fail_cross",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [
+        "AddressSanitizer: SEGV"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "5e0f70e9905a5bc3ed3b0981bf310e8b960f4560f6c25547dbe5510c0e5a5e78"
+    },
+    {
+      "case": "init_fail_cross",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 8192,
+      "log_sha256": "be9b771b498b24a30c0708ecddb9ffc781d9fe69a8c2fd8e778ce75fabc39119"
+    },
+    {
+      "case": "init_fail_pad",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [
+        "AddressSanitizer: SEGV"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "442acbfab8d8b40f731d375dc12c3e7a61fcd310355f66525ca902f4b4ed0bf9"
+    },
+    {
+      "case": "init_fail_pad",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 16384,
+      "log_sha256": "fc67cd90d5da9ac56dd9e9ac91c17fd92700e3fb381f7e8ef8d345e7ffc28210"
+    },
+    {
+      "case": "init_throw_metadata",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": "all states released",
+      "sanitizer_classes": [
+        "LeakSanitizer: detected memory leaks"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "1febf87c9559b461aef4afc9e5c36d4238ffe114263c1412101718c4cb272cf6"
+    },
+    {
+      "case": "init_throw_metadata",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 0,
+      "log_sha256": "b6b917d39b05b7e4a1f91b5f3579253895704e0fa0c4bd9b58dc0a4f494b2156"
+    },
+    {
+      "case": "init_throw_after_batch",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": "all states released",
+      "sanitizer_classes": [
+        "LeakSanitizer: detected memory leaks"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "0994bcfa60e6b6d9256ee73591652613d7534eceaab330c675569ee7b54202b8"
+    },
+    {
+      "case": "init_throw_after_batch",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 24576,
+      "log_sha256": "fa2d79d3d802bff26f5b264f6a99fe476bb3552a0e384a1e2dcde7b6dcf53c8d"
+    },
+    {
+      "case": "cache_fail_no_leak",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": "all KV contexts released",
+      "sanitizer_classes": [
+        "LeakSanitizer: detected memory leaks"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "5c98ff770f6bf5d2b9bcf62f4e197de129c91c07aa060ddb7b5e1c379989ea66"
+    },
+    {
+      "case": "cache_fail_no_leak",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 0,
+      "log_sha256": "e8729ccaa03dc33e1a120806ff403475b902a2fde64b0dc9faaabe203c7591a2"
+    },
+    {
+      "case": "cache_fail_existing",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": "existing KV remains owned",
+      "sanitizer_classes": [
+        "LeakSanitizer: detected memory leaks"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "8ac8eb0d61cda66d93565f0d563310c028796fe3d8cef34fb11b801680dda49b"
+    },
+    {
+      "case": "cache_fail_existing",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 512,
+      "log_sha256": "4fc4af051a07c80b4147dfdee4be0a16b33ff226732e84574c2ba6578f48ab89"
+    },
+    {
+      "case": "cache_throw_after_buffer",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 98,
+      "timeout": false,
+      "assertion": "all KV contexts released",
+      "sanitizer_classes": [
+        "LeakSanitizer: detected memory leaks"
+      ],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "e583c5027c5f1491a39c5f71137a87b742606ebb3bcf3c2fcb1ea701dca3e307"
+    },
+    {
+      "case": "cache_throw_after_buffer",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 2560,
+      "log_sha256": "42fe103cb56e5fb6af017f3be1829bf3eadf37a4db741229d1637503fe24f045"
+    },
+    {
+      "case": "cache_throw_metadata",
+      "variant": "baseline",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 512,
+      "log_sha256": "8f4ee786451cf7726ef55dc2d570444dd502093b9e215a3be62cbf98f7a27071"
+    },
+    {
+      "case": "cache_throw_metadata",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 512,
+      "log_sha256": "8f4ee786451cf7726ef55dc2d570444dd502093b9e215a3be62cbf98f7a27071"
+    },
+    {
+      "case": "cache_context_null",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 86,
+      "timeout": false,
+      "assertion": "existing KV capacity preserved",
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "430011e18edde4ac8be5e552cce2ee3b3f9534356ab5c60975b2c4f5cb89542d"
+    },
+    {
+      "case": "cache_context_null",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 512,
+      "log_sha256": "31127b2faa711d4b01f4261833ef3c3bfc17c99963ec901d9bf498e851beaea7"
+    },
+    {
+      "case": "cache_free_twice",
+      "variant": "baseline",
+      "expected": "red",
+      "matched": true,
+      "returncode": 86,
+      "timeout": false,
+      "assertion": "buffer freed once",
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": null,
+      "log_sha256": "f1d3df18f8ce843da78e85248809dd2f851f2c97c9a720ea23151bebb1e94725"
+    },
+    {
+      "case": "cache_free_twice",
+      "variant": "patched",
+      "expected": "green",
+      "matched": true,
+      "returncode": 0,
+      "timeout": false,
+      "assertion": null,
+      "sanitizer_classes": [],
+      "peak_test_kv_bytes": 512,
+      "log_sha256": "768f7f2efb52ca9c56b1ba00b55505e1edf5b0b5d4d336b03c05a1475445433e"
+    }
+  ]
+}

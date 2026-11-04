@@ -1,0 +1,280 @@
+{
+  "schema": 1,
+  "status": "SCOPED COMPOSITE PASS: all 30 original case/variant pairs have matched outcomes across preserved attempts; no production acceptance",
+  "scope": "Ownership-only source and real model/CPU graphs, ASan/UBSan with leak detection. Existing synthetic EN control and cached base-q5_1 model; no fresh held-out audio, download or production change.",
+  "build": {
+    "complete": true,
+    "sequential_translation_units": 2,
+    "reused_sanitized_ggml_translation_units": 23,
+    "configure_calls": 0,
+    "compiler_failures": 0,
+    "timeouts": 0,
+    "elapsed_seconds": 91.9261241449858
+  },
+  "attempt": {
+    "planned_processes": 30,
+    "processes_started": 1,
+    "processes_matched": 0,
+    "variant": "baseline",
+    "case": "healthy_owned_beam",
+    "expected": "green",
+    "return_code": -9,
+    "timeout": true,
+    "elapsed_seconds": 60.535233540984336,
+    "model_load_completed": true,
+    "state_graph_initialization_completed": true,
+    "observed_full_returns": 0,
+    "canonical_created": false,
+    "corrected_variant_executed": false,
+    "interpretation": "The runner killed the child after its frozen 60-second wall limit. The missing canonical is a secondary validation error. Logs do not locate the remaining work within encoder or decoder. This is neither an expected regression RED nor evidence of a patch failure or success."
+  },
+  "resources": {
+    "cpu_affinity_count": 4,
+    "inference_threads": 1,
+    "nice_at_least": 10,
+    "build_wall_seconds_limit": 300,
+    "build_per_process_address_space_gib": 3,
+    "runtime_case_wall_seconds_limit": 60,
+    "runtime_total_wall_seconds_limit": 600,
+    "runtime_soft_rss_mib": 1536,
+    "runtime_hard_rss_mib": 2048,
+    "real_host_memory_pressure_induced": false,
+    "phone_or_speed_claim": false
+  },
+  "provenance": {
+    "source_freeze_sha256": "86d55e199ca49267e07077953405e7451ec11aa27c76444027b369de7097209e",
+    "source_input_count": 682,
+    "tool_and_link_input_count": 96,
+    "build_summary_sha256": "10784342ea8feac161b4adb1b69a1aeca16de20844b92d993fe952e855e1e46e",
+    "run_summary_sha256": "ce3fdb10ba4c11cb2d1bae9b359bd5fd83bbbc234f9aada7c79a3e1f0457db8b",
+    "case_specification_sha256": "f5321ac280d117436295c02fed4b8388b00b878ee5ac9b8b45c34df0394bf22b",
+    "harness_sha256": "be213ddbc88412411d581fb7375680820dd839eff896e5c854bf02f0847dd6ec",
+    "binary_sha256": {
+      "baseline": "7192b921046aff9ff7d913c67588e35198b1109b2012abd098c15f6cd589776c",
+      "patched": "e6307b45657790f5cefcfb528db3941e5707ff52f6e015a77a59bfe2da219a2d"
+    },
+    "loaded_dependency_count": 7,
+    "runtime_log_sha256": "152c0b20e4cd6f7f29cdd0ea474d4e72daf8872f4cdc44d98d03686e6cff0842",
+    "dependencies": [
+      {
+        "name": "libasan.so.8.0.0",
+        "sha256": "0e9878f315009d4a3b3f1d8c44467de841f9ff2ca404f996937bf89d1d966c37"
+      },
+      {
+        "name": "libubsan.so.1.0.0",
+        "sha256": "d4322305e0b1492398b7c5dabf56e1cdfe67548211b0149769c14f234cf3bb9d"
+      },
+      {
+        "name": "ld-linux-x86-64.so.2",
+        "sha256": "4e5d39355699e90fa29313d3100e82af4a23290028c58c364d6a249ef6a78e5e"
+      },
+      {
+        "name": "libc.so.6",
+        "sha256": "a5c5ad9d59d3c69eda93aa8f82930ba06cc4e893a113e66c85ad6e96243d53c8"
+      },
+      {
+        "name": "libgcc_s-16-20261029.so.1",
+        "sha256": "5a52ae4a6f1b119aa092aa1483c967e19d9ba036b1b0c2133236a8a2ce826ebf"
+      },
+      {
+        "name": "libm.so.6",
+        "sha256": "16a03ce6d24c8a46742206d4a9c1d35bb6577ae2384f153dc6ef4a4b62b5357f"
+      },
+      {
+        "name": "libstdc++.so.6.0.36",
+        "sha256": "49811507d8fc0283d8f8023546613774c673f876fe823b1b99d0c8d46039deda"
+      }
+    ]
+  },
+  "preparation": {
+    "independent_prebuild_review": "PASS",
+    "independent_postbuild_review": "PASS",
+    "evaluator_tests": 16,
+    "evaluator_failures": 0,
+    "prior_unexecuted_prebuild_revision_preserved": true,
+    "interrupted_draft_preserved": true
+  },
+  "remaining": [
+    "Android actual native failure, original audio/manual-edit preservation, normal-engine recovery and in-flight cancellation/close.",
+    "Production integration review, complete app QA and physical-phone resource checks.",
+    "Speech accuracy and speed across all seven supported languages remain separate requirements; this ownership experiment does not establish them."
+  ],
+  "healthy_diagnostic": {
+    "status": "PASS for one unchanged healthy baseline case; full matrix remains unverified",
+    "source_and_binary_unchanged": true,
+    "processes": 1,
+    "return_code": 0,
+    "timeout": false,
+    "recorded_elapsed_seconds": 79.90271422601654,
+    "full_calls": 1,
+    "successful_full_calls": 1,
+    "model_returns": 1,
+    "graph_states": 1,
+    "injected_faults": 0,
+    "autodetect": 0,
+    "peak_test_kv_bytes": 53477376,
+    "observation_count": 41,
+    "last_sampled_cpu_seconds": 78.06,
+    "last_cpu_sample_elapsed_seconds": 78.02988878401811,
+    "max_sampled_vm_hwm_kib": 249576,
+    "first_graph_ready_observed_seconds": 2.0046115730074234,
+    "full_return_observed_by_seconds": 79.89961129400763,
+    "wall_limit_seconds": 180,
+    "cpu_soft_hard_seconds": [
+      150,
+      155
+    ],
+    "inference_threads": 1,
+    "nice_at_least": 10,
+    "freeze_sha256": "022953faed8205a9ca1eb758ee92599138bf61913692167ba89caaf560e01b65",
+    "summary_sha256": "a62dfe93aa95709a998bae8006a9f50f238e97adcd237b9af7a0ca95ca8084ce",
+    "output_sha256": {
+      "baseline.log": "6078e43a33513b2f4f3feeb32d3cca81722c83dcb066d2602561a74e260412aa",
+      "observations.jsonl": "1c77cbd58a3099d2f89d2181840fd56db0f93304f7a3b4ac52706fa399c53afa",
+      "baseline.json": "e6624d6ce52fd7ebd50aa3c40e74e05370aa6fee40bdd958fd06442c4a024b4a"
+    },
+    "interpretation": "The unchanged healthy baseline completed after the original 60-second allowance, supporting insufficient time for this instrumented workload. No stage attribution or sanitizer overhead factor is established. This is not a patched-case, auto-language, retry, speech-quality or phone-performance result. The prior timeout remains failed."
+  },
+  "attempt_history_note": "The attempt and healthy_diagnostic sections retain their recorded status at the time. The later composite_coverage section states the current scoped conclusion; neither resource-limit failure is reclassified as a pass.",
+  "matrix_partial_attempt": {
+    "status": "INCOMPLETE: 23 matched processes; patched auto retry stopped at the CPU soft limit; six wrappers unrun",
+    "processes_started": 24,
+    "processes_matched": 23,
+    "green_processes": 16,
+    "expected_red_processes": 7,
+    "canonical_outputs": 14,
+    "observed_full_returns": 28,
+    "observed_successful_full_returns": 14,
+    "elapsed_seconds": 2801.4178171209933,
+    "stopped_case": {
+      "case": "owned_fail_retry_auto",
+      "variant": "patched",
+      "return_code": -24,
+      "signal": "SIGXCPU",
+      "wall_timeout": false,
+      "matched": false,
+      "canonical_created": false,
+      "observed_full_returns": 1,
+      "observed_full_return_code": -7,
+      "observed_autodetect_completions": 2,
+      "interpretation": "The first targeted allocation failure returned -7. The second language detection completed, but the second full call did not return before the CPU limit. The log does not identify the remaining encoder versus decoder stage."
+    },
+    "wall_limit_seconds_per_case": 360,
+    "cpu_soft_hard_seconds_per_case": [
+      330,
+      335
+    ],
+    "global_wall_limit_seconds": 3600,
+    "launcher_freeze_sha256": "2ea5ce8d397e5b97a42e4b9993f16ba53fd40e48a23a2d3113f7216c58239d07",
+    "summary_sha256": "037a76cd05bcbbcc869b10351a76d12d8d593047f2241a1809c28b42220ab70b",
+    "stopped_log_sha256": "e15ebf7bd831bb9fccdf609b29130803777ee20d0c4113a43eb6f003de89f990",
+    "verified_output_count": 38,
+    "loaded_dependency_count_per_process": 7,
+    "independent_postrun_review": "PASS for evidence integrity and the 23 matched outcomes; attempt remains incomplete"
+  },
+  "remaining_cases_attempt": {
+    "status": "COMPLETE: seven remaining processes matched their unchanged frozen expectations",
+    "previously_matched_processes_repeated": 0,
+    "processes_started": 7,
+    "processes_matched": 7,
+    "green_processes": 4,
+    "expected_red_processes": 3,
+    "wall_timeouts": 0,
+    "unexpected_outcomes": 0,
+    "elapsed_seconds": 326.00961477297824,
+    "full_calls": 2,
+    "successful_full_calls": 1,
+    "targeted_kv_allocation_failures": 1,
+    "autodetect_completions": 2,
+    "wrapper_processes": 6,
+    "injected_init_tail_exceptions": 6,
+    "canonical_outputs": 1,
+    "auto_retry": {
+      "variant": "patched",
+      "return_code": 0,
+      "full_calls": 2,
+      "successful_full_calls": 1,
+      "autodetect_completions": 2,
+      "targeted_kv_allocation_failures": 1,
+      "peak_test_kv_bytes": 59768832,
+      "canonical_equals_prior_healthy_auto": true,
+      "canonical_sha256": "6d535086f99fe18054652ef8ec56098d8f172b38bfa8531d04fb85de4f33efae"
+    },
+    "wrappers": {
+      "kinds": [
+        "file",
+        "buffer",
+        "custom_loader"
+      ],
+      "baseline_expected_red": 3,
+      "patched_green": 3,
+      "scope": "Exceptions after successful model loading and all four actual state schedulers, before context publication; no neural decode in wrapper cases."
+    },
+    "resources": {
+      "auto_wall_limit_seconds": 540,
+      "auto_cpu_soft_hard_seconds": [
+        480,
+        485
+      ],
+      "wrapper_wall_limit_seconds": 60,
+      "wrapper_cpu_soft_hard_seconds": [
+        60,
+        65
+      ],
+      "global_wall_limit_seconds": 900,
+      "inference_threads": 1,
+      "nice_at_least": 10,
+      "rss_and_sanitizer_settings_unchanged": true
+    },
+    "launcher_freeze_sha256": "606f7f88b2535d8752662cff221bab3d357d4668d5d2e5190821c9833c81aa95",
+    "summary_sha256": "7e3d7e034e2550386c67f283be127dc550259e2a3074b724bcf3655597ddcdc7",
+    "verified_output_count": 8,
+    "loaded_dependency_count_per_process": 7,
+    "independent_postrun_review": "PASS; eight new outputs, source/runtime identities and exact canonical comparator verified; prior output audit reused through its unchanged summary identity"
+  },
+  "composite_coverage": {
+    "status": "PASS for the original 30-case ownership matrix assembled from 23 matched partial-run cases and seven matched continuation cases",
+    "single_clean_run": false,
+    "unique_case_variant_pairs": 30,
+    "expected_case_variant_pairs": 30,
+    "unverified_case_variant_pairs": 0,
+    "baseline": {
+      "cases": 15,
+      "green_controls": 5,
+      "expected_red": 10,
+      "actual_asan_use_after_free_reports": 2,
+      "ownership_assertion_failures": 8,
+      "secondary_lsan_reports_after_assertion_exit": 8
+    },
+    "patched": {
+      "cases": 15,
+      "green": 15,
+      "unexpected_errors": 0,
+      "sanitizer_reports": 0
+    },
+    "canonical_outputs": 15,
+    "all_required_canonical_comparisons_exact": true,
+    "full_calls_in_matched_unique_cases": 29,
+    "successful_full_calls_in_matched_unique_cases": 15,
+    "targeted_full_failures_in_matched_unique_cases": 14,
+    "autodetect_completions_in_matched_unique_cases": 5,
+    "wrapper_processes_in_matched_unique_cases": 6,
+    "matrix_and_continuation_actual_processes_including_failed_auto_attempt": 31,
+    "matrix_and_continuation_observed_full_returns_including_failed_auto_attempt": 30,
+    "matrix_and_continuation_observed_successful_full_returns": 15,
+    "preserved_resource_limit_failures": 2,
+    "maximum_observed_test_kv_bytes": {
+      "baseline": 53477376,
+      "patched": 59768832,
+      "meaning": "Tracked native KV allocation peaks in this harness, not RSS or a phone memory budget."
+    },
+    "source_and_binaries_unchanged": true,
+    "functional_oracles_unchanged": true,
+    "scope": "Actual base-model CPU graphs on one previously consumed synthetic English fixture, targeted KV allocation refusal, same-state beam/greedy/auto retry, close and three init-tail wrapper exceptions. No encoder/decoder/init bypasses; instrumentation and deliberate faults remain test-only.",
+    "limitations": [
+      "The 60-second timeout and later SIGXCPU remain failed attempts. Expected regression REDs are separate from those resource-limit failures.",
+      "Secondary LeakSanitizer reports after ownership assertions do not establish eight independent engine leak bugs.",
+      "This is not arbitrary allocation-failure coverage, Android JNI/service recovery proof, release acceptance, seven-language speech quality or speed evidence, or a physical-phone resource result."
+    ]
+  }
+}

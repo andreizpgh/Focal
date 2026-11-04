@@ -1,0 +1,2633 @@
+{
+  "schema": 1,
+  "scope": "Completed cold host DEV comparison of whole-chunk presence plus a shorter encoder-context rule; rejected, not a product or phone-performance result.",
+  "status": {
+    "phase": "complete",
+    "outcome": "reject",
+    "automatic_adoption": false,
+    "heldout_opened": false
+  },
+  "provenance": {
+    "freeze_sha256": "bc892805b40701db0fe6ad60563137ae18a373518f1c5e92450504ea09ff109e",
+    "design_plan_sha256": "fbf056d825c8448379b4413472c54b1d8e43a1859f1f87a1484b69ee4475d34f",
+    "result_binding_sha256": "d039ba4808377e534676eb9e4118e249aac80b570c2149dfb7c7d83b5ab914c7",
+    "report_sha256": "99e08a7139d1ca179550033a7036391168b3a9b47373a12c4dfe2d54b4287c58",
+    "comparison_sha256": "3082b190cd1825337f20e6e512ce2b033243994ccd41ace13c97d432b4044a4a",
+    "records_sha256": "24de5ec742dcd9bba58d7952488420888b558c28ac15fb22b29c43a0c8b339e7",
+    "control_results_sha256": "66eeb85eaacefda978399a54d519fbb229ae08aa8e78efbbe711d92c5d1e0987",
+    "verified_inputs": 1445,
+    "verified_nonlog_outputs": 1238,
+    "presence_recovery_binding_sha256": "4597ab824f90dbdf0d3dbd307a48b8d75939dd5be94ec18105bb092f303edc55"
+  },
+  "models": {
+    "asr_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "vad_sha256": "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf"
+  },
+  "asr_engine": {
+    "probe_sha256": "2c17f90bb6d322c413a914df1d5f7b193aa7b65926591c8d120724b0632fbf2b",
+    "shared_libraries": [
+      {
+        "name": "libggml-base.so",
+        "sha256": "f21b8d12687048f1b932f09039897b736b504520d53a08cb900f432844879920",
+        "bytes": 720928
+      },
+      {
+        "name": "libggml-cpu.so",
+        "sha256": "d2081def136b854cacbb2166b83aef7aedae44c442a8d7c3d3c84d361efae2e4",
+        "bytes": 767736
+      },
+      {
+        "name": "libggml.so",
+        "sha256": "a95c9d39c44047bf65bcaf56be8aeb53028ecd2e27edeac90aa268e8af4385a2",
+        "bytes": 51632
+      },
+      {
+        "name": "libwhisper.so.1",
+        "sha256": "a24f12490e3de59f099772947ad6c2fad82c92414a22176a0dda470401b89d70",
+        "bytes": 617680
+      },
+      {
+        "name": "ld-linux-x86-64.so.2",
+        "sha256": "4e5d39355699e90fa29313d3100e82af4a23290028c58c364d6a249ef6a78e5e",
+        "bytes": 1002600
+      },
+      {
+        "name": "libc.so.6",
+        "sha256": "a5c5ad9d59d3c69eda93aa8f82930ba06cc4e893a113e66c85ad6e96243d53c8",
+        "bytes": 2482096
+      },
+      {
+        "name": "libcrypto.so.3",
+        "sha256": "695648ac8dc5e6a2b70e5e72399940de0f84bf24fddb7dd18949ba40bc575c72",
+        "bytes": 5783496
+      },
+      {
+        "name": "libgcc_s.so.1",
+        "sha256": "5a52ae4a6f1b119aa092aa1483c967e19d9ba036b1b0c2133236a8a2ce826ebf",
+        "bytes": 186520
+      },
+      {
+        "name": "libm.so.6",
+        "sha256": "16a03ce6d24c8a46742206d4a9c1d35bb6577ae2384f153dc6ef4a4b62b5357f",
+        "bytes": 1153848
+      },
+      {
+        "name": "libstdc++.so.6",
+        "sha256": "49811507d8fc0283d8f8023546613774c673f876fe823b1b99d0c8d46039deda",
+        "bytes": 2884552
+      },
+      {
+        "name": "libz.so.1",
+        "sha256": "bbde8faec092a7c67b8bd76bbba4a826e61b05c171b97004ce6b308c5a090351",
+        "bytes": 169544
+      }
+    ],
+    "dependency_hash_status": "hashed",
+    "cmake_cache_sha256": "be68ea7b4cb004d0b6f3c0ca0dfe7007f9eb3099061182c83cfa32bc96d58c34"
+  },
+  "cached_vad_engine": {
+    "probe_sha256": "6bebd1811af35e5da39f5609b7f779bb44d35112f108d976e763080434e2791b",
+    "shared_libraries": [
+      {
+        "name": "libggml-base.so",
+        "sha256": "f21b8d12687048f1b932f09039897b736b504520d53a08cb900f432844879920",
+        "bytes": 720928
+      },
+      {
+        "name": "libggml-cpu.so",
+        "sha256": "d2081def136b854cacbb2166b83aef7aedae44c442a8d7c3d3c84d361efae2e4",
+        "bytes": 767736
+      },
+      {
+        "name": "libggml.so",
+        "sha256": "a95c9d39c44047bf65bcaf56be8aeb53028ecd2e27edeac90aa268e8af4385a2",
+        "bytes": 51632
+      },
+      {
+        "name": "libwhisper.so.1",
+        "sha256": "a24f12490e3de59f099772947ad6c2fad82c92414a22176a0dda470401b89d70",
+        "bytes": 617680
+      },
+      {
+        "name": "ld-linux-x86-64.so.2",
+        "sha256": "4e5d39355699e90fa29313d3100e82af4a23290028c58c364d6a249ef6a78e5e",
+        "bytes": 1002600
+      },
+      {
+        "name": "libc.so.6",
+        "sha256": "a5c5ad9d59d3c69eda93aa8f82930ba06cc4e893a113e66c85ad6e96243d53c8",
+        "bytes": 2482096
+      },
+      {
+        "name": "libcrypto.so.3",
+        "sha256": "695648ac8dc5e6a2b70e5e72399940de0f84bf24fddb7dd18949ba40bc575c72",
+        "bytes": 5783496
+      },
+      {
+        "name": "libgcc_s.so.1",
+        "sha256": "5a52ae4a6f1b119aa092aa1483c967e19d9ba036b1b0c2133236a8a2ce826ebf",
+        "bytes": 186520
+      },
+      {
+        "name": "libm.so.6",
+        "sha256": "16a03ce6d24c8a46742206d4a9c1d35bb6577ae2384f153dc6ef4a4b62b5357f",
+        "bytes": 1153848
+      },
+      {
+        "name": "libstdc++.so.6",
+        "sha256": "49811507d8fc0283d8f8023546613774c673f876fe823b1b99d0c8d46039deda",
+        "bytes": 2884552
+      },
+      {
+        "name": "libz.so.1",
+        "sha256": "bbde8faec092a7c67b8bd76bbba4a826e61b05c171b97004ce6b308c5a090351",
+        "bytes": 169544
+      }
+    ],
+    "dependency_hash_status": "hashed",
+    "cmake_cache_sha256": "be68ea7b4cb004d0b6f3c0ca0dfe7007f9eb3099061182c83cfa32bc96d58c34"
+  },
+  "comparators": {
+    "production": "Historical completed cold full-context ASR on identical framing and references.",
+    "presence": "Historical cold whole-chunk presence/full-context ASR. Its original run failed at report assembly; independently reviewed deterministic report recovery supplies this comparator.",
+    "candidate": "Fresh cold ASR processes using the same cached whole-chunk presence decisions and original PCM, with only encoder context shortened."
+  },
+  "policy": {
+    "vad": {
+      "use_gpu": false,
+      "threads": 1,
+      "threshold": 0.5,
+      "min_speech_ms": 250,
+      "min_silence_ms": 600,
+      "max_speech_seconds": 15,
+      "pad_ms": 500,
+      "samples_overlap_seconds": 0
+    },
+    "conditioning": {
+      "mode": "causal-rms-cap30",
+      "sample_rate": 16000,
+      "frame_samples": 512,
+      "target_rms": 0.03,
+      "min_gain": 1.0,
+      "max_gain": 30.0,
+      "release_seconds": 0.5,
+      "initial_envelope": 0.0,
+      "rms": "float64 sqrt(mean(square(PCM16 / 32768))); DC included",
+      "envelope": "max(current_frame_rms, previous_envelope * exp(-frame_samples / 16000 / 0.5))",
+      "gain": "min(30, max(1, 0.03 / max(envelope, 1e-12)))",
+      "partial_tail": "Use actual remaining samples for RMS and release; no added samples",
+      "pcm": "Signed little-endian PCM16; float64 numpy.rint ties-to-even; reject clipping",
+      "state": "Reset once per source stream; no lookahead beyond the current 512-sample frame",
+      "numpy_version": "2.4.6",
+      "asr_input": "Original prepared PCM, unchanged"
+    },
+    "presence": "ASR iff native VAD ranges are nonempty; never crop, split, extend, amplify or pad the ASR input.",
+    "state": "Reset VAD recurrent state and causal conditioner once per original production chunk or direct control WAV.",
+    "asr": {
+      "engine": "Original pinned unpatched engine",
+      "no_speech_threshold": 0.6,
+      "logprob_threshold": -1.0,
+      "beam_size": 3,
+      "threads": 4,
+      "audio_context": "auto",
+      "effective_audio_context": "Derived per original WAV frame count by the frozen formula.",
+      "text_context_tokens": 64,
+      "temperature": 0,
+      "temperature_increment": 0
+    },
+    "skip": "Do not invoke ASR, store profile=null and no native ASR JSON. Feed empty decoded list through actual frozen Kotlin reconcile to preserve the ordinary uncertain review cue.",
+    "errors": "Malformed, truncated, mismatched or failed VAD rejects the run; it must never be treated as absence."
+  },
+  "encoder_context": {
+    "formula": "min(1500, max(768, ceil((original_frames / 16000 + 2) * 50 / 256) * 256))",
+    "integer_formula": "min(1500, max(768, ((original_frames + 32000 + 81920 - 1) // 81920) * 256))",
+    "executed_context_histogram": {
+      "768": 149,
+      "1024": 1
+    },
+    "full_context_comparators": 1500
+  },
+  "coverage": {
+    "unique_dev_source_clips": 42,
+    "clips_per_language": 6,
+    "languages": 7,
+    "correlated_conditions": [
+      "normal",
+      "quiet"
+    ],
+    "speech_cells": 14,
+    "dev_chunks": 129,
+    "positive_controls": 28,
+    "noise_controls": 28,
+    "cached_vad_decisions": 185,
+    "candidate_asr_calls": 150,
+    "new_vad_calls": 0,
+    "noise_asr_calls": 0,
+    "noise_independent_signals": 2,
+    "noise_contexts": [
+      "empty",
+      "trusted"
+    ],
+    "whole_original_asr_input_preserved": true
+  },
+  "groups": {
+    "production": {
+      "normal": {
+        "micro": {
+          "words": 864,
+          "word_errors": 207,
+          "wer": 0.23958333333333334,
+          "characters": 4349,
+          "character_errors": 545,
+          "cer": 0.1253161646355484
+        },
+        "languages": {
+          "de": {
+            "words": 122,
+            "word_errors": 12,
+            "wer": 0.09836065573770492,
+            "characters": 736,
+            "character_errors": 15,
+            "cer": 0.020380434782608696
+          },
+          "en": {
+            "words": 88,
+            "word_errors": 54,
+            "wer": 0.6136363636363636,
+            "characters": 428,
+            "character_errors": 207,
+            "cer": 0.48364485981308414
+          },
+          "es": {
+            "words": 177,
+            "word_errors": 32,
+            "wer": 0.1807909604519774,
+            "characters": 853,
+            "character_errors": 73,
+            "cer": 0.08558030480656506
+          },
+          "fr": {
+            "words": 128,
+            "word_errors": 30,
+            "wer": 0.234375,
+            "characters": 575,
+            "character_errors": 74,
+            "cer": 0.12869565217391304
+          },
+          "it": {
+            "words": 126,
+            "word_errors": 40,
+            "wer": 0.31746031746031744,
+            "characters": 616,
+            "character_errors": 93,
+            "cer": 0.15097402597402598
+          },
+          "pt": {
+            "words": 118,
+            "word_errors": 11,
+            "wer": 0.09322033898305085,
+            "characters": 554,
+            "character_errors": 32,
+            "cer": 0.05776173285198556
+          },
+          "ru": {
+            "words": 105,
+            "word_errors": 28,
+            "wer": 0.26666666666666666,
+            "characters": 587,
+            "character_errors": 51,
+            "cer": 0.0868824531516184
+          }
+        }
+      },
+      "quiet": {
+        "micro": {
+          "words": 864,
+          "word_errors": 303,
+          "wer": 0.3506944444444444,
+          "characters": 4349,
+          "character_errors": 962,
+          "cer": 0.22120027592550012
+        },
+        "languages": {
+          "de": {
+            "words": 122,
+            "word_errors": 45,
+            "wer": 0.36885245901639346,
+            "characters": 736,
+            "character_errors": 199,
+            "cer": 0.2703804347826087
+          },
+          "en": {
+            "words": 88,
+            "word_errors": 70,
+            "wer": 0.7954545454545454,
+            "characters": 428,
+            "character_errors": 290,
+            "cer": 0.677570093457944
+          },
+          "es": {
+            "words": 177,
+            "word_errors": 48,
+            "wer": 0.2711864406779661,
+            "characters": 853,
+            "character_errors": 115,
+            "cer": 0.13481828839390386
+          },
+          "fr": {
+            "words": 128,
+            "word_errors": 43,
+            "wer": 0.3359375,
+            "characters": 575,
+            "character_errors": 113,
+            "cer": 0.19652173913043477
+          },
+          "it": {
+            "words": 126,
+            "word_errors": 30,
+            "wer": 0.23809523809523808,
+            "characters": 616,
+            "character_errors": 50,
+            "cer": 0.08116883116883117
+          },
+          "pt": {
+            "words": 118,
+            "word_errors": 17,
+            "wer": 0.1440677966101695,
+            "characters": 554,
+            "character_errors": 48,
+            "cer": 0.08664259927797834
+          },
+          "ru": {
+            "words": 105,
+            "word_errors": 50,
+            "wer": 0.47619047619047616,
+            "characters": 587,
+            "character_errors": 147,
+            "cer": 0.2504258943781942
+          }
+        }
+      }
+    },
+    "presence": {
+      "normal": {
+        "micro": {
+          "words": 864,
+          "word_errors": 179,
+          "wer": 0.20717592592592593,
+          "characters": 4349,
+          "character_errors": 438,
+          "cer": 0.10071280754196367
+        },
+        "languages": {
+          "de": {
+            "words": 122,
+            "word_errors": 12,
+            "wer": 0.09836065573770492,
+            "characters": 736,
+            "character_errors": 15,
+            "cer": 0.020380434782608696
+          },
+          "en": {
+            "words": 88,
+            "word_errors": 54,
+            "wer": 0.6136363636363636,
+            "characters": 428,
+            "character_errors": 207,
+            "cer": 0.48364485981308414
+          },
+          "es": {
+            "words": 177,
+            "word_errors": 17,
+            "wer": 0.096045197740113,
+            "characters": 853,
+            "character_errors": 15,
+            "cer": 0.017584994138335287
+          },
+          "fr": {
+            "words": 128,
+            "word_errors": 30,
+            "wer": 0.234375,
+            "characters": 575,
+            "character_errors": 74,
+            "cer": 0.12869565217391304
+          },
+          "it": {
+            "words": 126,
+            "word_errors": 27,
+            "wer": 0.21428571428571427,
+            "characters": 616,
+            "character_errors": 44,
+            "cer": 0.07142857142857142
+          },
+          "pt": {
+            "words": 118,
+            "word_errors": 11,
+            "wer": 0.09322033898305085,
+            "characters": 554,
+            "character_errors": 32,
+            "cer": 0.05776173285198556
+          },
+          "ru": {
+            "words": 105,
+            "word_errors": 28,
+            "wer": 0.26666666666666666,
+            "characters": 587,
+            "character_errors": 51,
+            "cer": 0.0868824531516184
+          }
+        }
+      },
+      "quiet": {
+        "micro": {
+          "words": 864,
+          "word_errors": 266,
+          "wer": 0.30787037037037035,
+          "characters": 4349,
+          "character_errors": 850,
+          "cer": 0.195447229248103
+        },
+        "languages": {
+          "de": {
+            "words": 122,
+            "word_errors": 45,
+            "wer": 0.36885245901639346,
+            "characters": 736,
+            "character_errors": 199,
+            "cer": 0.2703804347826087
+          },
+          "en": {
+            "words": 88,
+            "word_errors": 61,
+            "wer": 0.6931818181818182,
+            "characters": 428,
+            "character_errors": 274,
+            "cer": 0.6401869158878505
+          },
+          "es": {
+            "words": 177,
+            "word_errors": 20,
+            "wer": 0.11299435028248588,
+            "characters": 853,
+            "character_errors": 19,
+            "cer": 0.022274325908558032
+          },
+          "fr": {
+            "words": 128,
+            "word_errors": 43,
+            "wer": 0.3359375,
+            "characters": 575,
+            "character_errors": 113,
+            "cer": 0.19652173913043477
+          },
+          "it": {
+            "words": 126,
+            "word_errors": 30,
+            "wer": 0.23809523809523808,
+            "characters": 616,
+            "character_errors": 50,
+            "cer": 0.08116883116883117
+          },
+          "pt": {
+            "words": 118,
+            "word_errors": 17,
+            "wer": 0.1440677966101695,
+            "characters": 554,
+            "character_errors": 48,
+            "cer": 0.08664259927797834
+          },
+          "ru": {
+            "words": 105,
+            "word_errors": 50,
+            "wer": 0.47619047619047616,
+            "characters": 587,
+            "character_errors": 147,
+            "cer": 0.2504258943781942
+          }
+        }
+      }
+    },
+    "candidate": {
+      "normal": {
+        "micro": {
+          "words": 864,
+          "word_errors": 183,
+          "wer": 0.21180555555555555,
+          "characters": 4349,
+          "character_errors": 457,
+          "cer": 0.10508162796045067
+        },
+        "languages": {
+          "de": {
+            "words": 122,
+            "word_errors": 12,
+            "wer": 0.09836065573770492,
+            "characters": 736,
+            "character_errors": 22,
+            "cer": 0.029891304347826088
+          },
+          "en": {
+            "words": 88,
+            "word_errors": 52,
+            "wer": 0.5909090909090909,
+            "characters": 428,
+            "character_errors": 208,
+            "cer": 0.48598130841121495
+          },
+          "es": {
+            "words": 177,
+            "word_errors": 19,
+            "wer": 0.10734463276836158,
+            "characters": 853,
+            "character_errors": 18,
+            "cer": 0.021101992966002344
+          },
+          "fr": {
+            "words": 128,
+            "word_errors": 31,
+            "wer": 0.2421875,
+            "characters": 575,
+            "character_errors": 77,
+            "cer": 0.13391304347826086
+          },
+          "it": {
+            "words": 126,
+            "word_errors": 34,
+            "wer": 0.2698412698412698,
+            "characters": 616,
+            "character_errors": 50,
+            "cer": 0.08116883116883117
+          },
+          "pt": {
+            "words": 118,
+            "word_errors": 11,
+            "wer": 0.09322033898305085,
+            "characters": 554,
+            "character_errors": 35,
+            "cer": 0.0631768953068592
+          },
+          "ru": {
+            "words": 105,
+            "word_errors": 24,
+            "wer": 0.22857142857142856,
+            "characters": 587,
+            "character_errors": 47,
+            "cer": 0.08006814310051108
+          }
+        }
+      },
+      "quiet": {
+        "micro": {
+          "words": 864,
+          "word_errors": 249,
+          "wer": 0.2881944444444444,
+          "characters": 4349,
+          "character_errors": 826,
+          "cer": 0.18992871924580362
+        },
+        "languages": {
+          "de": {
+            "words": 122,
+            "word_errors": 46,
+            "wer": 0.3770491803278688,
+            "characters": 736,
+            "character_errors": 201,
+            "cer": 0.27309782608695654
+          },
+          "en": {
+            "words": 88,
+            "word_errors": 62,
+            "wer": 0.7045454545454546,
+            "characters": 428,
+            "character_errors": 277,
+            "cer": 0.647196261682243
+          },
+          "es": {
+            "words": 177,
+            "word_errors": 18,
+            "wer": 0.1016949152542373,
+            "characters": 853,
+            "character_errors": 19,
+            "cer": 0.022274325908558032
+          },
+          "fr": {
+            "words": 128,
+            "word_errors": 40,
+            "wer": 0.3125,
+            "characters": 575,
+            "character_errors": 103,
+            "cer": 0.1791304347826087
+          },
+          "it": {
+            "words": 126,
+            "word_errors": 28,
+            "wer": 0.2222222222222222,
+            "characters": 616,
+            "character_errors": 45,
+            "cer": 0.07305194805194805
+          },
+          "pt": {
+            "words": 118,
+            "word_errors": 10,
+            "wer": 0.0847457627118644,
+            "characters": 554,
+            "character_errors": 33,
+            "cer": 0.05956678700361011
+          },
+          "ru": {
+            "words": 105,
+            "word_errors": 45,
+            "wer": 0.42857142857142855,
+            "characters": 587,
+            "character_errors": 148,
+            "cer": 0.252129471890971
+          }
+        }
+      }
+    }
+  },
+  "comparison": {
+    "outcome": "reject",
+    "regressed_cells_against": {
+      "production": 6,
+      "presence": 9
+    },
+    "cells": [
+      {
+        "language": "en",
+        "condition": "normal",
+        "candidate": {
+          "words": 88,
+          "word_errors": 52,
+          "wer": 0.5909090909090909,
+          "characters": 428,
+          "character_errors": 208,
+          "cer": 0.48598130841121495
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 88,
+              "word_errors": 54,
+              "wer": 0.6136363636363636,
+              "characters": 428,
+              "character_errors": 207,
+              "cer": 0.48364485981308414
+            },
+            "word_error_delta": -2,
+            "character_error_delta": 1
+          },
+          "presence": {
+            "metrics": {
+              "words": 88,
+              "word_errors": 54,
+              "wer": 0.6136363636363636,
+              "characters": 428,
+              "character_errors": 207,
+              "cer": 0.48364485981308414
+            },
+            "word_error_delta": -2,
+            "character_error_delta": 1
+          }
+        }
+      },
+      {
+        "language": "en",
+        "condition": "quiet",
+        "candidate": {
+          "words": 88,
+          "word_errors": 62,
+          "wer": 0.7045454545454546,
+          "characters": 428,
+          "character_errors": 277,
+          "cer": 0.647196261682243
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 88,
+              "word_errors": 70,
+              "wer": 0.7954545454545454,
+              "characters": 428,
+              "character_errors": 290,
+              "cer": 0.677570093457944
+            },
+            "word_error_delta": -8,
+            "character_error_delta": -13
+          },
+          "presence": {
+            "metrics": {
+              "words": 88,
+              "word_errors": 61,
+              "wer": 0.6931818181818182,
+              "characters": 428,
+              "character_errors": 274,
+              "cer": 0.6401869158878505
+            },
+            "word_error_delta": 1,
+            "character_error_delta": 3
+          }
+        }
+      },
+      {
+        "language": "ru",
+        "condition": "normal",
+        "candidate": {
+          "words": 105,
+          "word_errors": 24,
+          "wer": 0.22857142857142856,
+          "characters": 587,
+          "character_errors": 47,
+          "cer": 0.08006814310051108
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 105,
+              "word_errors": 28,
+              "wer": 0.26666666666666666,
+              "characters": 587,
+              "character_errors": 51,
+              "cer": 0.0868824531516184
+            },
+            "word_error_delta": -4,
+            "character_error_delta": -4
+          },
+          "presence": {
+            "metrics": {
+              "words": 105,
+              "word_errors": 28,
+              "wer": 0.26666666666666666,
+              "characters": 587,
+              "character_errors": 51,
+              "cer": 0.0868824531516184
+            },
+            "word_error_delta": -4,
+            "character_error_delta": -4
+          }
+        }
+      },
+      {
+        "language": "ru",
+        "condition": "quiet",
+        "candidate": {
+          "words": 105,
+          "word_errors": 45,
+          "wer": 0.42857142857142855,
+          "characters": 587,
+          "character_errors": 148,
+          "cer": 0.252129471890971
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 105,
+              "word_errors": 50,
+              "wer": 0.47619047619047616,
+              "characters": 587,
+              "character_errors": 147,
+              "cer": 0.2504258943781942
+            },
+            "word_error_delta": -5,
+            "character_error_delta": 1
+          },
+          "presence": {
+            "metrics": {
+              "words": 105,
+              "word_errors": 50,
+              "wer": 0.47619047619047616,
+              "characters": 587,
+              "character_errors": 147,
+              "cer": 0.2504258943781942
+            },
+            "word_error_delta": -5,
+            "character_error_delta": 1
+          }
+        }
+      },
+      {
+        "language": "de",
+        "condition": "normal",
+        "candidate": {
+          "words": 122,
+          "word_errors": 12,
+          "wer": 0.09836065573770492,
+          "characters": 736,
+          "character_errors": 22,
+          "cer": 0.029891304347826088
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 122,
+              "word_errors": 12,
+              "wer": 0.09836065573770492,
+              "characters": 736,
+              "character_errors": 15,
+              "cer": 0.020380434782608696
+            },
+            "word_error_delta": 0,
+            "character_error_delta": 7
+          },
+          "presence": {
+            "metrics": {
+              "words": 122,
+              "word_errors": 12,
+              "wer": 0.09836065573770492,
+              "characters": 736,
+              "character_errors": 15,
+              "cer": 0.020380434782608696
+            },
+            "word_error_delta": 0,
+            "character_error_delta": 7
+          }
+        }
+      },
+      {
+        "language": "de",
+        "condition": "quiet",
+        "candidate": {
+          "words": 122,
+          "word_errors": 46,
+          "wer": 0.3770491803278688,
+          "characters": 736,
+          "character_errors": 201,
+          "cer": 0.27309782608695654
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 122,
+              "word_errors": 45,
+              "wer": 0.36885245901639346,
+              "characters": 736,
+              "character_errors": 199,
+              "cer": 0.2703804347826087
+            },
+            "word_error_delta": 1,
+            "character_error_delta": 2
+          },
+          "presence": {
+            "metrics": {
+              "words": 122,
+              "word_errors": 45,
+              "wer": 0.36885245901639346,
+              "characters": 736,
+              "character_errors": 199,
+              "cer": 0.2703804347826087
+            },
+            "word_error_delta": 1,
+            "character_error_delta": 2
+          }
+        }
+      },
+      {
+        "language": "fr",
+        "condition": "normal",
+        "candidate": {
+          "words": 128,
+          "word_errors": 31,
+          "wer": 0.2421875,
+          "characters": 575,
+          "character_errors": 77,
+          "cer": 0.13391304347826086
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 128,
+              "word_errors": 30,
+              "wer": 0.234375,
+              "characters": 575,
+              "character_errors": 74,
+              "cer": 0.12869565217391304
+            },
+            "word_error_delta": 1,
+            "character_error_delta": 3
+          },
+          "presence": {
+            "metrics": {
+              "words": 128,
+              "word_errors": 30,
+              "wer": 0.234375,
+              "characters": 575,
+              "character_errors": 74,
+              "cer": 0.12869565217391304
+            },
+            "word_error_delta": 1,
+            "character_error_delta": 3
+          }
+        }
+      },
+      {
+        "language": "fr",
+        "condition": "quiet",
+        "candidate": {
+          "words": 128,
+          "word_errors": 40,
+          "wer": 0.3125,
+          "characters": 575,
+          "character_errors": 103,
+          "cer": 0.1791304347826087
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 128,
+              "word_errors": 43,
+              "wer": 0.3359375,
+              "characters": 575,
+              "character_errors": 113,
+              "cer": 0.19652173913043477
+            },
+            "word_error_delta": -3,
+            "character_error_delta": -10
+          },
+          "presence": {
+            "metrics": {
+              "words": 128,
+              "word_errors": 43,
+              "wer": 0.3359375,
+              "characters": 575,
+              "character_errors": 113,
+              "cer": 0.19652173913043477
+            },
+            "word_error_delta": -3,
+            "character_error_delta": -10
+          }
+        }
+      },
+      {
+        "language": "es",
+        "condition": "normal",
+        "candidate": {
+          "words": 177,
+          "word_errors": 19,
+          "wer": 0.10734463276836158,
+          "characters": 853,
+          "character_errors": 18,
+          "cer": 0.021101992966002344
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 177,
+              "word_errors": 32,
+              "wer": 0.1807909604519774,
+              "characters": 853,
+              "character_errors": 73,
+              "cer": 0.08558030480656506
+            },
+            "word_error_delta": -13,
+            "character_error_delta": -55
+          },
+          "presence": {
+            "metrics": {
+              "words": 177,
+              "word_errors": 17,
+              "wer": 0.096045197740113,
+              "characters": 853,
+              "character_errors": 15,
+              "cer": 0.017584994138335287
+            },
+            "word_error_delta": 2,
+            "character_error_delta": 3
+          }
+        }
+      },
+      {
+        "language": "es",
+        "condition": "quiet",
+        "candidate": {
+          "words": 177,
+          "word_errors": 18,
+          "wer": 0.1016949152542373,
+          "characters": 853,
+          "character_errors": 19,
+          "cer": 0.022274325908558032
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 177,
+              "word_errors": 48,
+              "wer": 0.2711864406779661,
+              "characters": 853,
+              "character_errors": 115,
+              "cer": 0.13481828839390386
+            },
+            "word_error_delta": -30,
+            "character_error_delta": -96
+          },
+          "presence": {
+            "metrics": {
+              "words": 177,
+              "word_errors": 20,
+              "wer": 0.11299435028248588,
+              "characters": 853,
+              "character_errors": 19,
+              "cer": 0.022274325908558032
+            },
+            "word_error_delta": -2,
+            "character_error_delta": 0
+          }
+        }
+      },
+      {
+        "language": "it",
+        "condition": "normal",
+        "candidate": {
+          "words": 126,
+          "word_errors": 34,
+          "wer": 0.2698412698412698,
+          "characters": 616,
+          "character_errors": 50,
+          "cer": 0.08116883116883117
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 126,
+              "word_errors": 40,
+              "wer": 0.31746031746031744,
+              "characters": 616,
+              "character_errors": 93,
+              "cer": 0.15097402597402598
+            },
+            "word_error_delta": -6,
+            "character_error_delta": -43
+          },
+          "presence": {
+            "metrics": {
+              "words": 126,
+              "word_errors": 27,
+              "wer": 0.21428571428571427,
+              "characters": 616,
+              "character_errors": 44,
+              "cer": 0.07142857142857142
+            },
+            "word_error_delta": 7,
+            "character_error_delta": 6
+          }
+        }
+      },
+      {
+        "language": "it",
+        "condition": "quiet",
+        "candidate": {
+          "words": 126,
+          "word_errors": 28,
+          "wer": 0.2222222222222222,
+          "characters": 616,
+          "character_errors": 45,
+          "cer": 0.07305194805194805
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 126,
+              "word_errors": 30,
+              "wer": 0.23809523809523808,
+              "characters": 616,
+              "character_errors": 50,
+              "cer": 0.08116883116883117
+            },
+            "word_error_delta": -2,
+            "character_error_delta": -5
+          },
+          "presence": {
+            "metrics": {
+              "words": 126,
+              "word_errors": 30,
+              "wer": 0.23809523809523808,
+              "characters": 616,
+              "character_errors": 50,
+              "cer": 0.08116883116883117
+            },
+            "word_error_delta": -2,
+            "character_error_delta": -5
+          }
+        }
+      },
+      {
+        "language": "pt",
+        "condition": "normal",
+        "candidate": {
+          "words": 118,
+          "word_errors": 11,
+          "wer": 0.09322033898305085,
+          "characters": 554,
+          "character_errors": 35,
+          "cer": 0.0631768953068592
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 118,
+              "word_errors": 11,
+              "wer": 0.09322033898305085,
+              "characters": 554,
+              "character_errors": 32,
+              "cer": 0.05776173285198556
+            },
+            "word_error_delta": 0,
+            "character_error_delta": 3
+          },
+          "presence": {
+            "metrics": {
+              "words": 118,
+              "word_errors": 11,
+              "wer": 0.09322033898305085,
+              "characters": 554,
+              "character_errors": 32,
+              "cer": 0.05776173285198556
+            },
+            "word_error_delta": 0,
+            "character_error_delta": 3
+          }
+        }
+      },
+      {
+        "language": "pt",
+        "condition": "quiet",
+        "candidate": {
+          "words": 118,
+          "word_errors": 10,
+          "wer": 0.0847457627118644,
+          "characters": 554,
+          "character_errors": 33,
+          "cer": 0.05956678700361011
+        },
+        "comparators": {
+          "production": {
+            "metrics": {
+              "words": 118,
+              "word_errors": 17,
+              "wer": 0.1440677966101695,
+              "characters": 554,
+              "character_errors": 48,
+              "cer": 0.08664259927797834
+            },
+            "word_error_delta": -7,
+            "character_error_delta": -15
+          },
+          "presence": {
+            "metrics": {
+              "words": 118,
+              "word_errors": 17,
+              "wer": 0.1440677966101695,
+              "characters": 554,
+              "character_errors": 48,
+              "cer": 0.08664259927797834
+            },
+            "word_error_delta": -7,
+            "character_error_delta": -15
+          }
+        }
+      }
+    ],
+    "positive_gate_failures": 15,
+    "noise_gate_failures": 0,
+    "speech_drop_review_required": true
+  },
+  "positive_canaries": {
+    "cases": 28,
+    "summary": {
+      "production": {
+        "zero_word_error_cases": 8,
+        "zero_character_error_cases": 8,
+        "literal_reference_equal_cases": 1,
+        "lexically_empty_cases": 1
+      },
+      "presence": {
+        "zero_word_error_cases": 8,
+        "zero_character_error_cases": 8,
+        "literal_reference_equal_cases": 1,
+        "lexically_empty_cases": 1
+      },
+      "candidate": {
+        "zero_word_error_cases": 9,
+        "zero_character_error_cases": 9,
+        "literal_reference_equal_cases": 4,
+        "lexically_empty_cases": 0
+      }
+    },
+    "deltas_against": {
+      "production": {
+        "exact_text_unchanged": 5,
+        "word_error_increases": 6,
+        "character_error_increases": 7,
+        "changed_text_tied_on_both_error_counts": 7,
+        "newly_empty": 0
+      },
+      "presence": {
+        "exact_text_unchanged": 5,
+        "word_error_increases": 6,
+        "character_error_increases": 7,
+        "changed_text_tied_on_both_error_counts": 7,
+        "newly_empty": 0
+      }
+    },
+    "delta_counts_overlap": true,
+    "rows": [
+      {
+        "id": "en-short-negation-gain-1",
+        "language": "en",
+        "condition": "normal",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "en-short-negation-gain-0p1",
+        "language": "en",
+        "condition": "quiet",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "en-meeting-negation-gain-1",
+        "language": "en",
+        "condition": "normal",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 13,
+            "word_errors": 3,
+            "wer": 0.23076923076923078,
+            "characters": 56,
+            "character_errors": 16,
+            "cer": 0.2857142857142857
+          },
+          "presence": {
+            "words": 13,
+            "word_errors": 3,
+            "wer": 0.23076923076923078,
+            "characters": 56,
+            "character_errors": 16,
+            "cer": 0.2857142857142857
+          },
+          "candidate": {
+            "words": 13,
+            "word_errors": 3,
+            "wer": 0.23076923076923078,
+            "characters": 56,
+            "character_errors": 16,
+            "cer": 0.2857142857142857
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": true,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": true,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "en-meeting-negation-gain-0p1",
+        "language": "en",
+        "condition": "quiet",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 13,
+            "word_errors": 5,
+            "wer": 0.38461538461538464,
+            "characters": 56,
+            "character_errors": 21,
+            "cer": 0.375
+          },
+          "presence": {
+            "words": 13,
+            "word_errors": 5,
+            "wer": 0.38461538461538464,
+            "characters": 56,
+            "character_errors": 21,
+            "cer": 0.375
+          },
+          "candidate": {
+            "words": 13,
+            "word_errors": 2,
+            "wer": 0.15384615384615385,
+            "characters": 56,
+            "character_errors": 13,
+            "cer": 0.23214285714285715
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -3,
+            "character_error_delta": -8
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -3,
+            "character_error_delta": -8
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "ru-short-negation-gain-1",
+        "language": "ru",
+        "condition": "normal",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 3,
+            "character_errors": 2,
+            "cer": 0.6666666666666666
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 3,
+            "character_errors": 2,
+            "cer": 0.6666666666666666
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 3,
+            "character_errors": 3,
+            "cer": 1.0
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 1
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 1
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "ru-short-negation-gain-0p1",
+        "language": "ru",
+        "condition": "quiet",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 3,
+            "character_errors": 3,
+            "cer": 1.0
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 3,
+            "character_errors": 3,
+            "cer": 1.0
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 3,
+            "character_errors": 3,
+            "cer": 1.0
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "ru-meeting-negation-gain-1",
+        "language": "ru",
+        "condition": "normal",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 8,
+            "word_errors": 8,
+            "wer": 1.0,
+            "characters": 49,
+            "character_errors": 28,
+            "cer": 0.5714285714285714
+          },
+          "presence": {
+            "words": 8,
+            "word_errors": 8,
+            "wer": 1.0,
+            "characters": 49,
+            "character_errors": 28,
+            "cer": 0.5714285714285714
+          },
+          "candidate": {
+            "words": 8,
+            "word_errors": 109,
+            "wer": 13.625,
+            "characters": 49,
+            "character_errors": 209,
+            "cer": 4.26530612244898
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 101,
+            "character_error_delta": 181
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 101,
+            "character_error_delta": 181
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "ru-meeting-negation-gain-0p1",
+        "language": "ru",
+        "condition": "quiet",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 8,
+            "word_errors": 9,
+            "wer": 1.125,
+            "characters": 49,
+            "character_errors": 44,
+            "cer": 0.8979591836734694
+          },
+          "presence": {
+            "words": 8,
+            "word_errors": 9,
+            "wer": 1.125,
+            "characters": 49,
+            "character_errors": 44,
+            "cer": 0.8979591836734694
+          },
+          "candidate": {
+            "words": 8,
+            "word_errors": 12,
+            "wer": 1.5,
+            "characters": 49,
+            "character_errors": 35,
+            "cer": 0.7142857142857143
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 3,
+            "character_error_delta": -9
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 3,
+            "character_error_delta": -9
+          }
+        },
+        "candidate_native_segments": 2,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "de-short-negation-gain-1",
+        "language": "de",
+        "condition": "normal",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 4,
+            "character_errors": 1,
+            "cer": 0.25
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 4,
+            "character_errors": 1,
+            "cer": 0.25
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 4,
+            "character_errors": 1,
+            "cer": 0.25
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": true,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": true,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "de-short-negation-gain-0p1",
+        "language": "de",
+        "condition": "quiet",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 4,
+            "character_errors": 3,
+            "cer": 0.75
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 4,
+            "character_errors": 3,
+            "cer": 0.75
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 6,
+            "wer": 6.0,
+            "characters": 4,
+            "character_errors": 27,
+            "cer": 6.75
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 5,
+            "character_error_delta": 24
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 5,
+            "character_error_delta": 24
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "de-meeting-negation-gain-1",
+        "language": "de",
+        "condition": "normal",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 12,
+            "word_errors": 8,
+            "wer": 0.6666666666666666,
+            "characters": 58,
+            "character_errors": 30,
+            "cer": 0.5172413793103449
+          },
+          "presence": {
+            "words": 12,
+            "word_errors": 8,
+            "wer": 0.6666666666666666,
+            "characters": 58,
+            "character_errors": 30,
+            "cer": 0.5172413793103449
+          },
+          "candidate": {
+            "words": 12,
+            "word_errors": 7,
+            "wer": 0.5833333333333334,
+            "characters": 58,
+            "character_errors": 33,
+            "cer": 0.5689655172413793
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -1,
+            "character_error_delta": 3
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -1,
+            "character_error_delta": 3
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "de-meeting-negation-gain-0p1",
+        "language": "de",
+        "condition": "quiet",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 12,
+            "word_errors": 8,
+            "wer": 0.6666666666666666,
+            "characters": 58,
+            "character_errors": 35,
+            "cer": 0.603448275862069
+          },
+          "presence": {
+            "words": 12,
+            "word_errors": 8,
+            "wer": 0.6666666666666666,
+            "characters": 58,
+            "character_errors": 35,
+            "cer": 0.603448275862069
+          },
+          "candidate": {
+            "words": 12,
+            "word_errors": 7,
+            "wer": 0.5833333333333334,
+            "characters": 58,
+            "character_errors": 32,
+            "cer": 0.5517241379310345
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -1,
+            "character_error_delta": -3
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -1,
+            "character_error_delta": -3
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "fr-short-negation-gain-1",
+        "language": "fr",
+        "condition": "normal",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 2,
+            "wer": 2.0,
+            "characters": 3,
+            "character_errors": 4,
+            "cer": 1.3333333333333333
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 2,
+            "wer": 2.0,
+            "characters": 3,
+            "character_errors": 4,
+            "cer": 1.3333333333333333
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 3,
+            "character_errors": 2,
+            "cer": 0.6666666666666666
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -1,
+            "character_error_delta": -2
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -1,
+            "character_error_delta": -2
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "fr-short-negation-gain-0p1",
+        "language": "fr",
+        "condition": "quiet",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 3,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 3,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 3,
+            "character_errors": 0,
+            "cer": 0.0
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": true,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": true,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "fr-meeting-negation-gain-1",
+        "language": "fr",
+        "condition": "normal",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 12,
+            "word_errors": 10,
+            "wer": 0.8333333333333334,
+            "characters": 53,
+            "character_errors": 24,
+            "cer": 0.4528301886792453
+          },
+          "presence": {
+            "words": 12,
+            "word_errors": 10,
+            "wer": 0.8333333333333334,
+            "characters": 53,
+            "character_errors": 24,
+            "cer": 0.4528301886792453
+          },
+          "candidate": {
+            "words": 12,
+            "word_errors": 11,
+            "wer": 0.9166666666666666,
+            "characters": 53,
+            "character_errors": 35,
+            "cer": 0.660377358490566
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 1,
+            "character_error_delta": 11
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 1,
+            "character_error_delta": 11
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "fr-meeting-negation-gain-0p1",
+        "language": "fr",
+        "condition": "quiet",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 12,
+            "word_errors": 11,
+            "wer": 0.9166666666666666,
+            "characters": 53,
+            "character_errors": 37,
+            "cer": 0.6981132075471698
+          },
+          "presence": {
+            "words": 12,
+            "word_errors": 11,
+            "wer": 0.9166666666666666,
+            "characters": 53,
+            "character_errors": 37,
+            "cer": 0.6981132075471698
+          },
+          "candidate": {
+            "words": 12,
+            "word_errors": 11,
+            "wer": 0.9166666666666666,
+            "characters": 53,
+            "character_errors": 37,
+            "cer": 0.6981132075471698
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "es-short-negation-gain-1",
+        "language": "es",
+        "condition": "normal",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "es-short-negation-gain-0p1",
+        "language": "es",
+        "condition": "quiet",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": true,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": true,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "es-meeting-negation-gain-1",
+        "language": "es",
+        "condition": "normal",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 12,
+            "word_errors": 7,
+            "wer": 0.5833333333333334,
+            "characters": 54,
+            "character_errors": 20,
+            "cer": 0.37037037037037035
+          },
+          "presence": {
+            "words": 12,
+            "word_errors": 7,
+            "wer": 0.5833333333333334,
+            "characters": 54,
+            "character_errors": 20,
+            "cer": 0.37037037037037035
+          },
+          "candidate": {
+            "words": 12,
+            "word_errors": 5,
+            "wer": 0.4166666666666667,
+            "characters": 54,
+            "character_errors": 7,
+            "cer": 0.12962962962962962
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -2,
+            "character_error_delta": -13
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -2,
+            "character_error_delta": -13
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "es-meeting-negation-gain-0p1",
+        "language": "es",
+        "condition": "quiet",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 12,
+            "word_errors": 6,
+            "wer": 0.5,
+            "characters": 54,
+            "character_errors": 8,
+            "cer": 0.14814814814814814
+          },
+          "presence": {
+            "words": 12,
+            "word_errors": 6,
+            "wer": 0.5,
+            "characters": 54,
+            "character_errors": 8,
+            "cer": 0.14814814814814814
+          },
+          "candidate": {
+            "words": 12,
+            "word_errors": 4,
+            "wer": 0.3333333333333333,
+            "characters": 54,
+            "character_errors": 4,
+            "cer": 0.07407407407407407
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -2,
+            "character_error_delta": -4
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -2,
+            "character_error_delta": -4
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "it-short-negation-gain-1",
+        "language": "it",
+        "condition": "normal",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "it-short-negation-gain-0p1",
+        "language": "it",
+        "condition": "quiet",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 2,
+            "character_errors": 0,
+            "cer": 0.0
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": true,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": true,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "it-meeting-negation-gain-1",
+        "language": "it",
+        "condition": "normal",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 11,
+            "word_errors": 5,
+            "wer": 0.45454545454545453,
+            "characters": 55,
+            "character_errors": 5,
+            "cer": 0.09090909090909091
+          },
+          "presence": {
+            "words": 11,
+            "word_errors": 5,
+            "wer": 0.45454545454545453,
+            "characters": 55,
+            "character_errors": 5,
+            "cer": 0.09090909090909091
+          },
+          "candidate": {
+            "words": 11,
+            "word_errors": 3,
+            "wer": 0.2727272727272727,
+            "characters": 55,
+            "character_errors": 2,
+            "cer": 0.03636363636363636
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -2,
+            "character_error_delta": -3
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -2,
+            "character_error_delta": -3
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "it-meeting-negation-gain-0p1",
+        "language": "it",
+        "condition": "quiet",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 11,
+            "word_errors": 5,
+            "wer": 0.45454545454545453,
+            "characters": 55,
+            "character_errors": 17,
+            "cer": 0.3090909090909091
+          },
+          "presence": {
+            "words": 11,
+            "word_errors": 5,
+            "wer": 0.45454545454545453,
+            "characters": 55,
+            "character_errors": 17,
+            "cer": 0.3090909090909091
+          },
+          "candidate": {
+            "words": 11,
+            "word_errors": 6,
+            "wer": 0.5454545454545454,
+            "characters": 55,
+            "character_errors": 19,
+            "cer": 0.34545454545454546
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 1,
+            "character_error_delta": 2
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 1,
+            "character_error_delta": 2
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "pt-short-negation-gain-1",
+        "language": "pt",
+        "condition": "normal",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 3,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 3,
+            "character_errors": 0,
+            "cer": 0.0
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 3,
+            "character_errors": 0,
+            "cer": 0.0
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 0,
+            "character_error_delta": 0
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "pt-short-negation-gain-0p1",
+        "language": "pt",
+        "condition": "quiet",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 3,
+            "character_errors": 3,
+            "cer": 1.0
+          },
+          "presence": {
+            "words": 1,
+            "word_errors": 1,
+            "wer": 1.0,
+            "characters": 3,
+            "character_errors": 3,
+            "cer": 1.0
+          },
+          "candidate": {
+            "words": 1,
+            "word_errors": 0,
+            "wer": 0.0,
+            "characters": 3,
+            "character_errors": 0,
+            "cer": 0.0
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -1,
+            "character_error_delta": -3
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -1,
+            "character_error_delta": -3
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "pt-meeting-negation-gain-1",
+        "language": "pt",
+        "condition": "normal",
+        "failed_gate": true,
+        "metrics": {
+          "production": {
+            "words": 13,
+            "word_errors": 9,
+            "wer": 0.6923076923076923,
+            "characters": 53,
+            "character_errors": 24,
+            "cer": 0.4528301886792453
+          },
+          "presence": {
+            "words": 13,
+            "word_errors": 9,
+            "wer": 0.6923076923076923,
+            "characters": 53,
+            "character_errors": 24,
+            "cer": 0.4528301886792453
+          },
+          "candidate": {
+            "words": 13,
+            "word_errors": 11,
+            "wer": 0.8461538461538461,
+            "characters": 53,
+            "character_errors": 25,
+            "cer": 0.4716981132075472
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 2,
+            "character_error_delta": 1
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": 2,
+            "character_error_delta": 1
+          }
+        },
+        "candidate_native_segments": 1,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      },
+      {
+        "id": "pt-meeting-negation-gain-0p1",
+        "language": "pt",
+        "condition": "quiet",
+        "failed_gate": false,
+        "metrics": {
+          "production": {
+            "words": 13,
+            "word_errors": 12,
+            "wer": 0.9230769230769231,
+            "characters": 53,
+            "character_errors": 28,
+            "cer": 0.5283018867924528
+          },
+          "presence": {
+            "words": 13,
+            "word_errors": 12,
+            "wer": 0.9230769230769231,
+            "characters": 53,
+            "character_errors": 28,
+            "cer": 0.5283018867924528
+          },
+          "candidate": {
+            "words": 13,
+            "word_errors": 9,
+            "wer": 0.6923076923076923,
+            "characters": 53,
+            "character_errors": 25,
+            "cer": 0.4716981132075472
+          }
+        },
+        "comparisons": {
+          "production": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -3,
+            "character_error_delta": -3
+          },
+          "presence": {
+            "text_unchanged": false,
+            "newly_empty": false,
+            "word_error_delta": -3,
+            "character_error_delta": -3
+          }
+        },
+        "candidate_native_segments": 2,
+        "candidate_asr_executed": true,
+        "candidate_has_lexical_text": true
+      }
+    ]
+  },
+  "noise": {
+    "cases": 28,
+    "cached_presence_negative": 28,
+    "candidate_asr_skipped": 28,
+    "native_outputs_created": 0,
+    "ordinary_uncertain_cues_preserved": true,
+    "scope": "Reused verified VAD decisions; no new noise ASR or VAD inference. This checks skip/cue preservation, not a new native noise-decoding result."
+  },
+  "speech_drop_review": {
+    "status": "not_adjudicated",
+    "newly_empty_committed_chunk_comparisons": {
+      "production": 5,
+      "presence": 0
+    },
+    "all_five_production_newly_empty_comparisons_already_skipped_by_presence": true,
+    "acoustic_review_needed_to_establish_rejection": false,
+    "limits": "These five omissions are inherited from the presence comparator. They are not new empty chunks caused by shortening encoder context. New candidate speech-loss adjudication remains unperformed; numerical/control failures already reject the candidate."
+  },
+  "limitations": [
+    "The same 42 DEV clips recur across gains; normal and quiet variants are correlated, not independent added speech.",
+    "Synthetic TTS controls are canaries, not human-speech acceptance.",
+    "Cold ASR diagnostics and cached VAD cannot establish persistent-context behavior or speed rankings.",
+    "No controlled latency, memory, power, thermal, background-reliability or phone-performance result is claimed.",
+    "The candidate is rejected and cannot open held-out; no threshold or formula tuning is performed on this result.",
+    "Raw native outputs, references, hypotheses, prompts, paths and logs remain private."
+  ]
+}

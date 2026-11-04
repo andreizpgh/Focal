@@ -1,0 +1,482 @@
+{
+  "schema": 1,
+  "scope": "Six already-consumed English normal DEV source clips. Cached persistent production/presence and historical global cap30 cold results; no new inference, audio playback, held-out access, downloads or policy acceptance.",
+  "status": "Source-framing diagnosis only; all prior rejection outcomes and speech-loss flags remain unchanged.",
+  "source": {
+    "language": "en",
+    "condition": "normal",
+    "clips": 6,
+    "reference_words": 88,
+    "source_samples": 634880,
+    "source_seconds": 39.68,
+    "stream_samples": 794880,
+    "stream_pcm_sha256": "48f3e6e17677f91f17c5ed2e96203393d4b2860250da2309ae2d8afa64b8f51d"
+  },
+  "metric_definitions": {
+    "source_sample_coverage": "Fraction of whole original clip samples submitted to ASR, including silence. Not word or phoneme recall.",
+    "local_errors": "Frozen normalized WER/CER applied separately to each source reference and the committed passages overlapping that source interval. Each submitted chunk overlaps only one source clip; local totals equal official stream totals here. This is temporal source assignment, not word-level acoustic alignment.",
+    "energy": "DC-removed RMS on aligned 320-sample (20 ms) frames of the unchanged PCM. Counts above 0.002 are an upper bound on voiced frames because the adaptive production threshold can be higher. No threshold was changed and the adaptive gate was not rerun."
+  },
+  "production_onset_rule": {
+    "minimum_rms": 0.002,
+    "comparison": "strictly greater than",
+    "consecutive_voiced_frames_to_begin": 2,
+    "wholly_unsubmitted_clip_ordinals": [
+      0,
+      2
+    ],
+    "observation": "The two wholly unsubmitted clips have at most one and zero consecutive frames above even the minimum threshold. They cannot initiate a new two-frame attack; recorded ranges independently confirm neither clip was submitted."
+  },
+  "variants": {
+    "production-full": {
+      "metrics": {
+        "words": 88,
+        "word_errors": 54,
+        "characters": 428,
+        "character_errors": 212
+      },
+      "source_samples": 634880,
+      "covered_source_samples": 333120,
+      "source_sample_coverage": 0.5246975806451613,
+      "clips_without_submitted_audio": 2,
+      "submitted_chunks": 4,
+      "asr_skips": 0,
+      "native_segments": 4,
+      "nonempty_native_chunks": 4,
+      "local_error_totals_equal_official_stream_totals": true
+    },
+    "presence-full": {
+      "metrics": {
+        "words": 88,
+        "word_errors": 54,
+        "characters": 428,
+        "character_errors": 212
+      },
+      "source_samples": 634880,
+      "covered_source_samples": 333120,
+      "source_sample_coverage": 0.5246975806451613,
+      "clips_without_submitted_audio": 2,
+      "submitted_chunks": 4,
+      "asr_skips": 0,
+      "native_segments": 4,
+      "nonempty_native_chunks": 4,
+      "local_error_totals_equal_official_stream_totals": true
+    },
+    "global-cap30-cold": {
+      "metrics": {
+        "words": 88,
+        "word_errors": 10,
+        "characters": 428,
+        "character_errors": 27
+      },
+      "source_samples": 634880,
+      "covered_source_samples": 579520,
+      "source_sample_coverage": 0.9128024193548387,
+      "clips_without_submitted_audio": 0,
+      "submitted_chunks": 6,
+      "asr_skips": 0,
+      "native_segments": 7,
+      "nonempty_native_chunks": 6,
+      "local_error_totals_equal_official_stream_totals": true
+    }
+  },
+  "rows": [
+    {
+      "ordinal": 0,
+      "source_wav_sha256": "1032cc5b9044d88288e96da7fddc42336c9f66f2d0e75fe1d8efd8c439572c41",
+      "source_samples": 66240,
+      "source_seconds": 4.14,
+      "reference_words": 10,
+      "energy": {
+        "frame_samples": 320,
+        "frame_count": 207,
+        "max_dc_removed_rms": 0.0020626860388723513,
+        "frames_above_minimum_rms_0p002": 1,
+        "maximum_consecutive_frames_above_minimum": 1
+      },
+      "variants": {
+        "production-full": {
+          "covered_samples": 0,
+          "covered_seconds": 0.0,
+          "source_sample_coverage": 0.0,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              4140.0
+            ]
+          ],
+          "submitted_chunk_count": 0,
+          "hypothesis_words": 0,
+          "local_word_errors": 10,
+          "local_character_errors": 45
+        },
+        "presence-full": {
+          "covered_samples": 0,
+          "covered_seconds": 0.0,
+          "source_sample_coverage": 0.0,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              4140.0
+            ]
+          ],
+          "submitted_chunk_count": 0,
+          "hypothesis_words": 0,
+          "local_word_errors": 10,
+          "local_character_errors": 45
+        },
+        "global-cap30-cold": {
+          "covered_samples": 66240,
+          "covered_seconds": 4.14,
+          "source_sample_coverage": 1.0,
+          "unselected_source_intervals_ms": [],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 11,
+          "local_word_errors": 8,
+          "local_character_errors": 23
+        }
+      }
+    },
+    {
+      "ordinal": 1,
+      "source_wav_sha256": "ae4e1218f6cb2e9530ae7ae67a40e774a724f1ee474d5771a48a54597a275258",
+      "source_samples": 78720,
+      "source_seconds": 4.92,
+      "reference_words": 8,
+      "energy": {
+        "frame_samples": 320,
+        "frame_count": 246,
+        "max_dc_removed_rms": 0.0029240277813105744,
+        "frames_above_minimum_rms_0p002": 27,
+        "maximum_consecutive_frames_above_minimum": 6
+      },
+      "variants": {
+        "production-full": {
+          "covered_samples": 44800,
+          "covered_seconds": 2.8,
+          "source_sample_coverage": 0.5691056910569106,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              620.0
+            ],
+            [
+              3420.0,
+              4920.0
+            ]
+          ],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 8,
+          "local_word_errors": 0,
+          "local_character_errors": 0
+        },
+        "presence-full": {
+          "covered_samples": 44800,
+          "covered_seconds": 2.8,
+          "source_sample_coverage": 0.5691056910569106,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              620.0
+            ],
+            [
+              3420.0,
+              4920.0
+            ]
+          ],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 8,
+          "local_word_errors": 0,
+          "local_character_errors": 0
+        },
+        "global-cap30-cold": {
+          "covered_samples": 62080,
+          "covered_seconds": 3.88,
+          "source_sample_coverage": 0.7886178861788617,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              260.0
+            ],
+            [
+              4140.0,
+              4920.0
+            ]
+          ],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 8,
+          "local_word_errors": 0,
+          "local_character_errors": 0
+        }
+      }
+    },
+    {
+      "ordinal": 2,
+      "source_wav_sha256": "41361f15b00640bb0c775be2e0fd037732a43124063136e93b02691596cf8b91",
+      "source_samples": 71040,
+      "source_seconds": 4.44,
+      "reference_words": 15,
+      "energy": {
+        "frame_samples": 320,
+        "frame_count": 222,
+        "max_dc_removed_rms": 0.001638603640607232,
+        "frames_above_minimum_rms_0p002": 0,
+        "maximum_consecutive_frames_above_minimum": 0
+      },
+      "variants": {
+        "production-full": {
+          "covered_samples": 0,
+          "covered_seconds": 0.0,
+          "source_sample_coverage": 0.0,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              4440.0
+            ]
+          ],
+          "submitted_chunk_count": 0,
+          "hypothesis_words": 0,
+          "local_word_errors": 15,
+          "local_character_errors": 66
+        },
+        "presence-full": {
+          "covered_samples": 0,
+          "covered_seconds": 0.0,
+          "source_sample_coverage": 0.0,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              4440.0
+            ]
+          ],
+          "submitted_chunk_count": 0,
+          "hypothesis_words": 0,
+          "local_word_errors": 15,
+          "local_character_errors": 66
+        },
+        "global-cap30-cold": {
+          "covered_samples": 71040,
+          "covered_seconds": 4.44,
+          "source_sample_coverage": 1.0,
+          "unselected_source_intervals_ms": [],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 15,
+          "local_word_errors": 0,
+          "local_character_errors": 0
+        }
+      }
+    },
+    {
+      "ordinal": 3,
+      "source_wav_sha256": "8f716a74c949b5c256236bf39e2fd428c75fef6ef3d08b345711a032ced556e0",
+      "source_samples": 109440,
+      "source_seconds": 6.84,
+      "reference_words": 11,
+      "energy": {
+        "frame_samples": 320,
+        "frame_count": 342,
+        "max_dc_removed_rms": 0.2754933015126929,
+        "frames_above_minimum_rms_0p002": 305,
+        "maximum_consecutive_frames_above_minimum": 116
+      },
+      "variants": {
+        "production-full": {
+          "covered_samples": 109440,
+          "covered_seconds": 6.84,
+          "source_sample_coverage": 1.0,
+          "unselected_source_intervals_ms": [],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 11,
+          "local_word_errors": 0,
+          "local_character_errors": 0
+        },
+        "presence-full": {
+          "covered_samples": 109440,
+          "covered_seconds": 6.84,
+          "source_sample_coverage": 1.0,
+          "unselected_source_intervals_ms": [],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 11,
+          "local_word_errors": 0,
+          "local_character_errors": 0
+        },
+        "global-cap30-cold": {
+          "covered_samples": 95840,
+          "covered_seconds": 5.99,
+          "source_sample_coverage": 0.8757309941520468,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              400.0
+            ],
+            [
+              6390.0,
+              6840.0
+            ]
+          ],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 11,
+          "local_word_errors": 0,
+          "local_character_errors": 0
+        }
+      }
+    },
+    {
+      "ordinal": 4,
+      "source_wav_sha256": "561a278198ede213d2d5d4f560cf13724477af0fa57651822d3b79774552c07c",
+      "source_samples": 160320,
+      "source_seconds": 10.02,
+      "reference_words": 28,
+      "energy": {
+        "frame_samples": 320,
+        "frame_count": 501,
+        "max_dc_removed_rms": 0.002754233557012515,
+        "frames_above_minimum_rms_0p002": 14,
+        "maximum_consecutive_frames_above_minimum": 5
+      },
+      "variants": {
+        "production-full": {
+          "covered_samples": 29760,
+          "covered_seconds": 1.86,
+          "source_sample_coverage": 0.18562874251497005,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              1200.0
+            ],
+            [
+              3060.0,
+              10020.0
+            ]
+          ],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 13,
+          "local_word_errors": 27,
+          "local_character_errors": 97
+        },
+        "presence-full": {
+          "covered_samples": 29760,
+          "covered_seconds": 1.86,
+          "source_sample_coverage": 0.18562874251497005,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              1200.0
+            ],
+            [
+              3060.0,
+              10020.0
+            ]
+          ],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 13,
+          "local_word_errors": 27,
+          "local_character_errors": 97
+        },
+        "global-cap30-cold": {
+          "covered_samples": 150560,
+          "covered_seconds": 9.41,
+          "source_sample_coverage": 0.9391217564870259,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              140.0
+            ],
+            [
+              9550.0,
+              10020.0
+            ]
+          ],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 28,
+          "local_word_errors": 1,
+          "local_character_errors": 2
+        }
+      }
+    },
+    {
+      "ordinal": 5,
+      "source_wav_sha256": "3509f5c6f640262e232614da0d6679a612a9dabd7c1b5c1b999ab9e98cab1dc2",
+      "source_samples": 149120,
+      "source_seconds": 9.32,
+      "reference_words": 16,
+      "energy": {
+        "frame_samples": 320,
+        "frame_count": 466,
+        "max_dc_removed_rms": 0.24574014222343574,
+        "frames_above_minimum_rms_0p002": 429,
+        "maximum_consecutive_frames_above_minimum": 170
+      },
+      "variants": {
+        "production-full": {
+          "covered_samples": 149120,
+          "covered_seconds": 9.32,
+          "source_sample_coverage": 1.0,
+          "unselected_source_intervals_ms": [],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 16,
+          "local_word_errors": 2,
+          "local_character_errors": 4
+        },
+        "presence-full": {
+          "covered_samples": 149120,
+          "covered_seconds": 9.32,
+          "source_sample_coverage": 1.0,
+          "unselected_source_intervals_ms": [],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 16,
+          "local_word_errors": 2,
+          "local_character_errors": 4
+        },
+        "global-cap30-cold": {
+          "covered_samples": 133760,
+          "covered_seconds": 8.36,
+          "source_sample_coverage": 0.8969957081545065,
+          "unselected_source_intervals_ms": [
+            [
+              0.0,
+              530.0
+            ],
+            [
+              8890.0,
+              9320.0
+            ]
+          ],
+          "submitted_chunk_count": 1,
+          "hypothesis_words": 16,
+          "local_word_errors": 1,
+          "local_character_errors": 2
+        }
+      }
+    }
+  ],
+  "accounting": {
+    "fully_omitted_clips": 2,
+    "reference_words_in_fully_omitted_clips": 25,
+    "production_word_errors_on_fully_omitted_clips": 25,
+    "production_word_errors_on_partial_clips": 27,
+    "production_word_errors_on_fully_covered_clips": 2,
+    "caveat": "Clip-local temporal assignment happens to sum to the official 54 errors. It is not word/phoneme alignment or an exact gate-versus-decoder causal decomposition of partial clips."
+  },
+  "interpretation": [
+    "Twenty-five reference words belong to two complete clips never submitted to ASR. Downstream presence checks or decoder-only changes cannot restore that missing input audio.",
+    "Clip ordinal 4 supplies 1.86 of 10.02 seconds and accounts for 27 local word errors. This does not prove all 27 errors were caused by framing; gate-versus-decoder attribution requires a controlled paired framing study and acoustic review.",
+    "Clip ordinal 1 supplies only 56.9% of its source samples yet recognizes all eight reference words correctly. Whole-sample coverage is not speech recall.",
+    "All four persistent production/presence chunks have nonempty native results and none is skipped; the two fully covered sources account for two word errors.",
+    "Historical global cap30 cold submits audio from all six sources and scores 10/88. Framing, prompts/context history and execution history differ; this is a diagnostic comparison, not an isolated causal or paired decoder-quality claim.",
+    "No new unfinished full-run outputs were inspected. This evidence does not accept a new capture policy, demonstrate all-language improvement, or establish phone performance."
+  ],
+  "provenance": {
+    "private_diagnosis_sha256": "77d5735210c3c212feeb69c5aae2f655f13b86ee592a0884da50a7f47e1301fe",
+    "original_analysis_sha256": "1499fac76e716138ee2f9651b0e5ddbd996910ac82eb36634113c30bbe0af086",
+    "exporter_sha256": "cd78e5589a32c376da6d88e69fd382679910ca632c6379f983f54619551d3374",
+    "verified_original_input_count": 62,
+    "production_gate_source_sha256": "a76ddb7a8ee398a94086fd47092ee2cd7b0a12b7f2a483c47fe2dc15acb2f515",
+    "frozen_scorer_sha256": "dfde50ec467c30bfddabd19593ee00ba187caca0b1d202b557fa2b67a2946abb",
+    "warm_launch_sha256": "d60947de3e043b8c52c83f81285ba15648f1fbe8662a5052cc2c0571cb5684a2",
+    "warm_result_binding_sha256": "0b2009f2e312cd82765fd300a3a5f47dfc79c984f2d51b6b01af616acd6fb3a2",
+    "cold_global_plan_sha256": "600fc4f8ec49ecfcd3a8e72964509a18fd5e02329cade9354e7b976e0629d0dd",
+    "cold_global_report_sha256": "128f01975b8b7626220686c366ffbfa2a453a0e3eb05482b8eb74b7de243f424",
+    "cold_global_selection_sha256": "8da03129154cfd873e846f2b3bfa62dcf265807042ad0cfcc14f8814e08b0d03"
+  }
+}

@@ -1,15 +1,15 @@
 <div align="center">
   <img src="docs/mark.svg" width="80" height="80" alt="Focal">
   <h1>Focal</h1>
-  <p>Offline voice notes for Android.</p>
+  <p>Offline voice notes for Android. Record, review, and copy.</p>
   <p>
-    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/v0.1.0-alpha.1/Focal.apk">Download APK</a></strong>
+    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/ux-alpha-2/Focal.apk">Download UX Alpha 2</a></strong>
     &nbsp; · &nbsp;
     <a href="docs/install.md">Install guide</a>
     &nbsp; · &nbsp;
     <a href="https://github.com/andreizpgh/Focal/releases">Releases</a>
   </p>
-  <sub>Android 8.0+ · ARM64 · Early alpha</sub>
+  <sub>Android 8.0+ · ARM64 · Version 0.1.0-alpha.2</sub>
 </div>
 
 <br>
@@ -27,6 +27,9 @@ No account, cloud service, tracking, or Internet permission.
 
 English · **Русский** · Deutsch · Français · Español · Italiano · Português
 
+This is a testing release. Review important transcripts; speech quality and
+background recording still need validation on real phones.
+
 ---
 
-[Build & contribute](CONTRIBUTING.md) · [Architecture](docs/architecture.md) · [Testing](docs/device-validation.md) · [MIT license](LICENSE)
+[Build & contribute](CONTRIBUTING.md) · [Interface preview](docs/interface-preview.md) · [Architecture](docs/architecture.md) · [Testing](docs/device-validation.md) · [MIT license](LICENSE)
