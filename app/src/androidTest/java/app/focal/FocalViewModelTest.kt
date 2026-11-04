@@ -16,12 +16,14 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.focal.data.Passage
 import app.focal.data.PassageSizeException
 import app.focal.recording.RecordingService
+import app.focal.recording.RecordingState
 import app.focal.recording.SessionOperations
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -150,6 +152,38 @@ class FocalViewModelTest {
         val available = SessionOperations.reserveSession(capture = false, noteId = id)
         assertNotNull(available)
         available?.release()
+    }
+
+    @Test fun retryWhileRecoveryClaimIsStillHeldShowsBusyMessage() {
+        val id = app.store.create("en").also { created += it }
+        val pcm = ByteArray(32_000) { (it % 97).toByte() }
+        app.store.audioFile(id).writeBytes(pcm)
+        app.store.duration(id, 1000)
+        app.store.finishChunk(app.store.beginChunk(id, 0, false), 1000)
+        app.store.state(id, "INTERRUPTED", "Synthetic transcription error")
+        val savedNote = app.store.note(id)
+        val savedChunks = app.store.chunks(id)
+        val recovering = model()
+        val claim = checkNotNull(SessionOperations.reserveSession(capture = false, noteId = id))
+        try {
+            assertSame(claim, SessionOperations.acceptSession(claim.token, capture = false, noteId = id))
+            assertNull(RecordingState.live.value.noteId)
+            runBlocking {
+                val feedback = async(start = CoroutineStart.UNDISPATCHED) { recovering.errors.first() }
+                recovering.retry(id)
+                // Let the subscribed collector process retry's synchronous emission.
+                yield()
+                assertTrue("Retry during teardown must report that recovery is busy", feedback.isCompleted)
+                assertEquals("Finish the current recording or transcription first.", feedback.await())
+            }
+            assertEquals(savedNote, app.store.note(id))
+            assertEquals(savedChunks, app.store.chunks(id))
+            assertArrayEquals(pcm, app.store.audioFile(id).readBytes())
+            assertTrue(SessionOperations.matchesSession(capture = false, noteId = id))
+        } finally { claim.release() }
+
+        // A subsequent recovery can reserve ownership once the prior claim is released.
+        checkNotNull(SessionOperations.reserveSession(capture = false, noteId = id)).release()
     }
 
     @Test fun passageSizeLimitsExplainRecoveryAndKeepTheEditedDraftUnsaved() {

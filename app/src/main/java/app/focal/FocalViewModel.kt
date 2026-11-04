@@ -80,7 +80,7 @@ class FocalViewModel internal constructor(
     fun pause() { RecordingService.command(app, if (live.value.paused) RecordingService.RESUME else RecordingService.PAUSE) }
     fun finish() { RecordingService.command(app, RecordingService.STOP) }
     fun retry(id: String) {
-        if (live.value.noteId != null) {
+        if (live.value.noteId != null || SessionOperations.matchesSession(capture = false, noteId = id)) {
             errors.tryEmit("Finish the current recording or transcription first.")
             return
         }
