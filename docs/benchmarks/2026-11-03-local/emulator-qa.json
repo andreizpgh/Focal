@@ -83,6 +83,48 @@
         "debug": false,
         "release": false
       }
+    },
+    "clean_ownership_build": {
+      "app_source_checkpoint_commit": "7760ff24d04dc0dcb839bc02403c0ce3777c4e06",
+      "debug_apk_sha256": "555406612320011d2fbae159214d46850dfc6d4809d8cf3a746187177ec2cd58",
+      "test_apk_sha256": "2586786327713a9ea911175313a5c26eca2f19706a1d487525ba6e8ea3e0729f",
+      "unsigned_release_apk_sha256": "3b81ac93c7b851304b99b529010bcd52bc6f56894a8af0575f0a0021a754bff3",
+      "runner_source": {
+        "head": "7760ff24d04dc0dcb839bc02403c0ce3777c4e06",
+        "dirty": false,
+        "source_change_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "submodule_commits": [
+          "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+        ]
+      },
+      "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "installed_model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "internet_permission": {
+        "debug": false,
+        "release": false
+      },
+      "source_mapping": "Clean-HEAD full normal QA; exact artifacts archived privately; ordinary ownership overlay, no fault helper or Silero assets."
+    },
+    "clean_recovery_feedback_build": {
+      "app_source_checkpoint_commit": "036d7160f754cf93f2b2d349a6d1c358b6989add",
+      "debug_apk_sha256": "b68946e904ed69b8c5123316f64611f5e3cc8334049191c91e5395255f6ae647",
+      "test_apk_sha256": "b25ff568c8bab05ade9049619257f0f81b047e67e020a5fb98242d0c480ebd76",
+      "unsigned_release_apk_sha256": "5c929cca2e5fbbc094fec932e2cc3db044cd923a01ec542db4b1a28b3e34f181",
+      "runner_source": {
+        "head": "036d7160f754cf93f2b2d349a6d1c358b6989add",
+        "dirty": false,
+        "source_change_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "submodule_commits": [
+          "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+        ]
+      },
+      "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "installed_model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "internet_permission": {
+        "debug": false,
+        "release": false
+      },
+      "source_mapping": "Clean-HEAD full normal QA; exact artifacts archived privately; ordinary ownership overlay, no fault helper or Silero assets."
     }
   },
   "environment": {
@@ -208,6 +250,56 @@
       "timing_scope": "Test-run durations only; not a controlled performance comparison or phone result",
       "instrumentation_runner_elapsed_seconds": 152.727,
       "full_qa_wrapper_elapsed_seconds": 491.066
+    },
+    {
+      "date": "2026-11-04",
+      "runner": "qa-local.py --release-checks",
+      "android_tests": 85,
+      "android_failures": 0,
+      "android_skips": 0,
+      "required_real_model_tests_passed": 8,
+      "instrumentation_seconds": 155.054,
+      "core_tests_passed": 36,
+      "debug_lint": "passed",
+      "release_lint": "passed",
+      "debug_build": "passed",
+      "instrumentation_build": "passed",
+      "unsigned_release_build": "passed",
+      "release_r8": "passed",
+      "app_build": "clean_ownership_build",
+      "host_compute_limits": {
+        "allowed_logical_cpus": 4,
+        "gradle_workers": 2,
+        "parallel_gradle_projects": false,
+        "nice_level": 10
+      },
+      "timing_scope": "Test-run durations only; not a controlled performance comparison or phone result",
+      "instrumentation_runner_elapsed_seconds": 156.081
+    },
+    {
+      "date": "2026-11-04",
+      "runner": "qa-local.py --release-checks",
+      "android_tests": 87,
+      "android_failures": 0,
+      "android_skips": 0,
+      "required_real_model_tests_passed": 8,
+      "instrumentation_seconds": 149.98,
+      "core_tests_passed": 36,
+      "debug_lint": "passed",
+      "release_lint": "passed",
+      "debug_build": "passed",
+      "instrumentation_build": "passed",
+      "unsigned_release_build": "passed",
+      "release_r8": "passed",
+      "app_build": "clean_recovery_feedback_build",
+      "host_compute_limits": {
+        "allowed_logical_cpus": 4,
+        "gradle_workers": 2,
+        "parallel_gradle_projects": false,
+        "nice_level": 10
+      },
+      "timing_scope": "Test-run durations only; not a controlled performance comparison or phone result",
+      "instrumentation_runner_elapsed_seconds": 150.907
     }
   ],
   "editor_regression": {
@@ -453,6 +545,43 @@
       "query_preserved": true,
       "settings_restored": true,
       "scope": "Software keyboard on the dedicated AVD; no physical/mixed hardware keyboard or TalkBack claim"
+    },
+    {
+      "id": "final_capture_pause_home_resume_finish",
+      "date": "2026-11-04",
+      "app_build": "clean_recovery_feedback_build",
+      "status": "observed_pass",
+      "paused_timer_before_home": "00:21",
+      "paused_timer_after_return": "00:21",
+      "saved_state": "READY",
+      "duration_ms": 32896,
+      "pcm_bytes": 1052672,
+      "duration_matches_pcm_bytes": true,
+      "chunks": 0,
+      "passages": 0,
+      "scope": "Short emulator-input capture with host audio disabled; not speech quality, real microphone or sustained inference."
+    },
+    {
+      "id": "final_original_playback_and_seek",
+      "date": "2026-11-04",
+      "app_build": "clean_recovery_feedback_build",
+      "status": "observed_pass",
+      "playback_position_advanced": true,
+      "position_after_seek_seconds": 19,
+      "scope": "Playback controls and position only; no audible-output claim with host audio disabled."
+    },
+    {
+      "id": "final_rename_large_font_rotation_save",
+      "date": "2026-11-04",
+      "app_build": "clean_recovery_feedback_build",
+      "status": "observed_pass",
+      "font_scale": 2.0,
+      "portrait_to_landscape": true,
+      "draft_preserved": true,
+      "fully_visible_save_after_scrolling_with_ime_open": true,
+      "saved_title_verified_in_database": true,
+      "settings_restored": true,
+      "scope": "Dedicated software-keyboard AVD; initial settings-based rotation did not persist, so actual landscape was set through WindowManager and visually verified."
     }
   ],
   "remaining_validation": [
@@ -461,20 +590,23 @@
     "Real microphone and audible output, including route changes",
     "Physical ARM64 phone latency, memory, battery, thermals and OEM background behavior",
     "Calls, real TalkBack traversal and selection",
-    "Seven-language speech-quality acceptance and stable distribution signing",
-    "Native allocation-failure ownership and cleanup: static review found invalid frees; bounded dynamic regression and production fix remain pending"
+    "Seven-language speech-quality acceptance and stable distribution signing"
   ],
   "privacy": "Aggregate measurements only; no recordings, transcripts, screenshots, raw logs, local paths or device identifiers",
   "separate_host_tool_check": {
     "date": "2026-11-04",
-    "tests_passed": 146,
-    "elapsed_seconds": 4.704,
+    "tests_passed": 157,
+    "elapsed_seconds": 9.844,
     "numpy_version": "2.4.6",
-    "method": "Existing hash-pinned virtual environment, complete host suite repeated at clean app checkpoint",
+    "method": "Existing hash-pinned virtual environment; complete host suite after the incremental CMake input dependency fix.",
+    "source_mapping": "Tested working-tree host changes committed as 9ffa3d1; host sources unchanged by subsequent Android fixes. Not a clean-HEAD host run.",
     "included_in_qa_local_runner": false,
-    "rerun_for_latest_android_checkpoint": false,
-    "source_checkpoint": "b59c6eea16ef627d3ef524bfe6cc6f4e70b174a4",
-    "unchanged_host_sources_since_recorded_run": true
+    "incremental_regression": {
+      "test_methods": 2,
+      "input_mutation_subcases": 6,
+      "old_inputs_expected_failures": 6,
+      "old_source_commit": "7760ff2"
+    }
   },
   "unicode_title_regression": {
     "fix_commit": "6872bb450cb42926823fc11dfa27facbe3af326c",
@@ -560,5 +692,122 @@
     "returned_ime_hidden": true,
     "rejected_draft_expectation": "Compose deliberately collapses a highlighted range to its end when focus is cleared. That failed draft expectation was retained privately and replaced by a separately frozen caret test, with fresh baseline RED and unchanged-test GREEN. No focus callback was suppressed.",
     "full_suite_app_build": "clean_search_return_build"
+  },
+  "preserved_failed_runs": [
+    {
+      "source": {
+        "head": "057daca14077d3a22b1d7a5ce6541823ba7c79b5",
+        "dirty": false,
+        "source_change_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "submodule_commits": [
+          "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+        ]
+      },
+      "artifacts": {
+        "debug_apk_sha256": "8d1bd1946cd54a61f834319994cc76ccbdf29f263a49e64858d33e83aca0f523",
+        "test_apk_sha256": "9ab9d41f55a2e572de6877c4ab030a4f026d24529bc2c88118b7053c92e09e0c"
+      },
+      "android_tests": 86,
+      "android_passed": 85,
+      "android_failures": 1,
+      "android_skips": 0,
+      "instrumentation_seconds": 163.099,
+      "failure": "sameProcessRecoverySealsWritingRangesBeforeDecodingAndCanRetryAFailedSeal timed out on its second READY wait after a synthetic SQLite failure.",
+      "interpretation": "The fixture had not waited for ownership release. A later targeted run observed a held claim after visible teardown; the original failed run did not log the silent duplicate-command branch."
+    },
+    {
+      "source": {
+        "head": "f359fd56ab43fa619269237bde632dae4587dc10",
+        "dirty": false,
+        "source_change_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "submodule_commits": [
+          "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+        ]
+      },
+      "artifacts": {
+        "debug_apk_sha256": "b68946e904ed69b8c5123316f64611f5e3cc8334049191c91e5395255f6ae647",
+        "test_apk_sha256": "b4bcd237cccd0ca0d7a20fc2d0a254e4b3bb78cc3b42f84eab30427753ca3a67"
+      },
+      "android_tests": 87,
+      "android_passed": 86,
+      "android_failures": 1,
+      "android_skips": 0,
+      "instrumentation_seconds": 154.225,
+      "failure": "activeSearchKeepsSelectionAndKeyboardThroughRecreation observed cursor 14 instead of 22 after Back, with the query intact.",
+      "interpretation": "A separate observed pass showed position 14 after tapping, then 22 after selection, IME visibility and Back. The exact late event in the failed run remains unknown. Test preparation now awaits the IME before setting the cursor and asserts that precondition before Back; all later checks remain."
+    }
+  ],
+  "search_ime_precondition": {
+    "source_commit": "036d716",
+    "focused_tests_passed": 3,
+    "instrumentation_seconds": 12.177,
+    "test_apk_sha256": "b25ff568c8bab05ade9049619257f0f81b047e67e020a5fb98242d0c480ebd76",
+    "app_apk_sha256": "b68946e904ed69b8c5123316f64611f5e3cc8334049191c91e5395255f6ae647",
+    "production_code_changed": false,
+    "original_oversized_editor_assertions_unchanged": true,
+    "scope": "Stronger preparation and an added cursor precondition; this does not establish the cause of the earlier intermittent selection change."
+  },
+  "previous_host_tool_check_before_incremental_fix": {
+    "date": "2026-11-04",
+    "tests_passed": 146,
+    "elapsed_seconds": 4.704,
+    "numpy_version": "2.4.6",
+    "method": "Existing hash-pinned virtual environment, complete host suite repeated at clean app checkpoint",
+    "included_in_qa_local_runner": false,
+    "rerun_for_latest_android_checkpoint": false,
+    "source_checkpoint": "b59c6eea16ef627d3ef524bfe6cc6f4e70b174a4",
+    "unchanged_host_sources_since_recorded_run": false,
+    "superseded_by": "157-test host result recorded separately after the incremental CMake dependency fix"
+  },
+  "service_cancellation_regression": {
+    "status": "EXPECTED_RED_THEN_GREEN",
+    "test_id": "app.focal.RecordingServiceTest#stoppingRecoveryKeepsInFlightResultPending",
+    "baseline_app_sha256": "555406612320011d2fbae159214d46850dfc6d4809d8cf3a746187177ec2cd58",
+    "fixed_app_sha256": "8d1bd1946cd54a61f834319994cc76ccbdf29f263a49e64858d33e83aca0f523",
+    "unchanged_test_apk_sha256": "9ab9d41f55a2e572de6877c4ab030a4f026d24529bc2c88118b7053c92e09e0c",
+    "red_seconds": 1.768,
+    "green_seconds": 1.614,
+    "red_reason": "An in-flight chunk was committed DONE during service cancellation instead of staying PENDING",
+    "green_checks": "Pending chunks, original PCM and reviewed passage preserved; exactly one close; claim released; bounded cancellation handoff completed",
+    "scope": "Deterministic fake synchronous decoder tests the real service cancellation/commit boundary; it does not dynamically reproduce the separate engine-publication race or benchmark STT",
+    "red_log_sha256": "231da3fe7f2f385175819c5acb389e8e65cdc600e87d3b04d933ebd0bafe4b93",
+    "green_log_sha256": "b6c8a59eeb339c6f3b2fdc90df34847b481b040ebbf5a7928eac9e891f8a83d6"
+  },
+  "recovery_fixture_completion": {
+    "status": "PASS",
+    "tests": 2,
+    "failures": 0,
+    "skips": 0,
+    "instrumentation_seconds": 2.915,
+    "cases": [
+      "app.focal.RecordingServiceTest#sameProcessRecoverySealsWritingRangesBeforeDecodingAndCanRetryAFailedSeal",
+      "app.focal.RecordingServiceTest#stoppingRecoveryKeepsInFlightResultPending"
+    ],
+    "evidence": "Pretty instrumentation output plus exact TestRunner started/finished identities and zero-failure/ignore summary; raw-status parser does not apply to output without -r.",
+    "claim_after_visible_teardown_observed": true,
+    "previous_failure_cause_scope": "Actual teardown gap observed; old failure did not log silent duplicate command branch.",
+    "sha256": {
+      "targeted.log": "dc6168084b0ed4f72db1cb17dbc1ac36275716795ad4a018a36ee8c8ccd78fe2",
+      "targeted-logcat-corrected.log": "6950c2e72e9447f811be0f57aa91bb4452c2d055300e718e332836090cdaf461",
+      "artifacts.json": "484956234f8eb6fa3a5968ab0bb183195da9c66e045d3d0c1fdec8c8512ba7b2"
+    }
+  },
+  "retry_feedback_regression": {
+    "status": "EXPECTED_RED_THEN_GREEN",
+    "source_commit": "f359fd5",
+    "test_id": "app.focal.FocalViewModelTest#retryWhileRecoveryClaimIsStillHeldShowsBusyMessage",
+    "baseline_app_sha256": "8d1bd1946cd54a61f834319994cc76ccbdf29f263a49e64858d33e83aca0f523",
+    "fixed_app_sha256": "b68946e904ed69b8c5123316f64611f5e3cc8334049191c91e5395255f6ae647",
+    "unchanged_test_apk_sha256": "b4bcd237cccd0ca0d7a20fc2d0a254e4b3bb78cc3b42f84eab30427753ca3a67",
+    "scope": "Deterministically held recovery claim with idle live state; checks emitted busy feedback, unchanged note/chunks/PCM and reservation after release. No physical tap during the teardown interval or real service retry is claimed by this isolated test.",
+    "red_log_sha256": "a21ab4f512bf7a22745cb6650a6b7aa215b76ba8059b255c97f8493baa199b5d",
+    "green_log_sha256": "e407511cd4eb9cf86fd45728849f24493dc266b034b572c17fd56a57e454d128"
+  },
+  "final_artifact_review": {
+    "status": "independent_review_pass",
+    "debug_and_test_match_executed_apks": true,
+    "release_runtime_tested": false,
+    "release_signing": "unsigned",
+    "native_libraries_match_prior_verified_ownership_build": true
   }
 }

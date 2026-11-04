@@ -76,7 +76,7 @@ either value, with an independent CMake debug-build guard.
 Build and run these variants sequentially on a dedicated test emulator. Archive
 each exact app/test APK pair before rebuilding; do not distribute fault artifacts.
 The selected variant replaces the instrumentation source set, so it is not the
-normal 85-test suite and must not be reported as a full `qa-local.py` pass.
+normal 87-test suite and must not be reported as a full `qa-local.py` pass.
 
 The helper instruments build copies of the engine and JNI, leaving their tracked
 sources unchanged. It refuses one self-KV allocation only after the real encoder
@@ -134,5 +134,14 @@ the engine until return, discards partial output and destroys it once. The first
 attempt retained a failed 30 s arrival wait. A reviewed 120 s arrival allowance
 then observed the actual checkpoint after 34.520 s; the 30 s barrier hold and
 45 s completion/cleanup bounds were unchanged. These are test workload timings,
-not phone latency measurements. Full normal-artifact QA and phone resource
-checks are separate gates recorded in the [handoff](development-handoff.md).
+not phone latency measurements. The later clean `036d716` ordinary suite passed
+87 tests, including eight real-model checks; debug/release lint and unsigned
+release/R8 builds also passed. Both ordinary ABI libraries and DEX were checked
+for absence of fault helpers. Release runtime and phone resources remain separate
+gates recorded in the [handoff](development-handoff.md).
+
+Incremental builds now track each checked original source with
+`CMAKE_CONFIGURE_DEPENDS`. Two host tests exercise six input mutations: the old
+configuration fails to reject them, while the fixed full host suite passes all
+157 tests. This prevents stale generated overlays from bypassing preimage checks
+after an upstream or JNI input changes; it does not change the engine postimage.

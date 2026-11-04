@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "PASS for two targeted patched Android fault tests; normal full QA and release verification pending",
+  "status": "PASS for two targeted patched Android fault tests and full ordinary 87-test QA; physical-phone and distribution acceptance remain open",
   "scope": "Explicit opt-in debug fault artifacts on an accelerated API 35 x86_64 emulator, using the bundled multilingual base model and documented public speech fixture. Actual targeted native KV allocation refusal and deterministic in-flight decode barrier; no real host memory exhaustion.",
   "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
   "public_fixture_sha256": "d7d4e74b8a333ed02186008bc109a1b1a19d16da668bd56e785d80d69a16a72f",
@@ -104,16 +104,38 @@
     "independent_review": "Exact test IDs and status transitions, zero skips, archived APKs, both native ABI hashes, embedded model/fixture hashes and eleven selected source bindings verified. Ten sources remain byte-identical; the recorded pre-activation CMake source was reconstructed exactly from the later one-condition wiring change."
   },
   "normal_build_integration": {
-    "status": "Ownership overlay enabled in source; full normal QA pending",
+    "status": "PASS: ordinary debug/test/release artifacts inspected and clean 036d716 full QA passed",
     "cmake_source_sha256": "85e08b5e330943828b12ccb8cbebe5108211f08e63eb6b485fdeb55eed90af05",
     "tested_fault_artifact_cmake_source_sha256": "aad0026ae05b67d41c0c562b8a832b0bb5e31e0587332ac0afa001e67593dc46",
     "activation": "Normal builds select the ownership overlay. Only an explicitly selected fault baseline retains the original engine; fault hooks and Kotlin helper sources require the debug opt-in.",
-    "ordinary_instrumentation_suite_tests": 85,
-    "normal_and_release_hook_absence_verified": false,
-    "full_normal_qa_verified": false
+    "ordinary_instrumentation_suite_tests": 87,
+    "normal_and_release_hook_absence_verified": true,
+    "full_normal_qa_verified": true,
+    "source_commit": "036d7160f754cf93f2b2d349a6d1c358b6989add",
+    "ordinary_artifacts": {
+      "app_source_checkpoint_commit": "036d7160f754cf93f2b2d349a6d1c358b6989add",
+      "debug_apk_sha256": "b68946e904ed69b8c5123316f64611f5e3cc8334049191c91e5395255f6ae647",
+      "test_apk_sha256": "b25ff568c8bab05ade9049619257f0f81b047e67e020a5fb98242d0c480ebd76",
+      "unsigned_release_apk_sha256": "5c929cca2e5fbbc094fec932e2cc3db044cd923a01ec542db4b1a28b3e34f181",
+      "runner_source": {
+        "head": "036d7160f754cf93f2b2d349a6d1c358b6989add",
+        "dirty": false,
+        "source_change_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "submodule_commits": [
+          "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+        ]
+      },
+      "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "installed_model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "internet_permission": {
+        "debug": false,
+        "release": false
+      },
+      "source_mapping": "Clean-HEAD full normal QA; exact artifacts archived privately; ordinary ownership overlay, no fault helper or Silero assets."
+    }
   },
   "limitations": [
-    "The two patched tests ran in the dedicated fault artifact before normal-build activation; they do not replace the complete normal debug/release QA cycle.",
+    "The two patched fault tests ran before normal-build activation and the later service cancellation ordering fix. Their exact artifacts retain that scope; ordinary final-source QA is recorded separately.",
     "The baseline native failure and first patched arrival failure remain separate preserved outcomes.",
     "Both native ABIs were archived and hashed, but runtime testing here exercised only x86_64.",
     "The emulator timings and checkpoint wait are validation observations, not phone latency, thermal, battery, background reliability or seven-language recognition measurements.",

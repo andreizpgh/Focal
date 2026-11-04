@@ -136,7 +136,7 @@ are restored, reconnect it and restore each value from the manifest with
 
 ## Verified local checkpoints · 2026-11-03–04
 
-Five complete `qa-local.py --release-checks` runs passed:
+Seven complete `qa-local.py --release-checks` runs passed:
 
 | App source checkpoint | Android tests | Failures / skips | Mandatory real-model tests | Instrumentation time |
 | --- | ---: | ---: | ---: | ---: |
@@ -145,22 +145,26 @@ Five complete `qa-local.py --release-checks` runs passed:
 | Clean HEAD `129ee02`, Unicode title and rename-focus fixes | 82 | 0 / 0 | 8 | 180.543 s |
 | Clean HEAD `b59c6ee`, scrollable Rename and search lifecycle/layout fixes | 84 | 0 / 0 | 8 | 144.224 s |
 | Clean HEAD `101a153`, search caret preserved on result navigation | 85 | 0 / 0 | 8 | 151.721 s |
+| Clean HEAD `7760ff2`, ownership-only native fix | 85 | 0 / 0 | 8 | 155.054 s |
+| Clean HEAD `036d716`, service cancellation, retry feedback and test synchronization | 87 | 0 / 0 | 8 | 149.980 s |
 
-The latest run verified **36 core tests**, debug and release lint, and debug,
-instrumentation and unsigned release/R8 builds at clean HEAD `101a153`. The
-**146 Python host-tool tests** passed separately at `b59c6ee` in the existing
-hash-pinned virtual environment; host sources are unchanged and were not retested
-for the later UI-only change. They are not part of this runner's test count.
+The latest run verified **36 core tests** (cached unchanged outputs), debug and
+release lint, and debug, instrumentation and unsigned release/R8 builds at clean
+HEAD `036d716`. **157 Python host-tool tests** passed separately in 9.844 s with
+the existing hash-pinned environment. Those tested host changes were committed in
+`9ffa3d1`; subsequent Android changes did not alter host sources. The host suite
+is not part of this runner's test count.
 The first two runs recorded dirty working trees at HEAD `388aee0` and `c21ae20`,
 respectively, with 34 core tests; their tested app changes were subsequently
 committed through the checkpoints above. These earlier source mappings are not
 claims of clean-HEAD runs. The [public aggregate](benchmarks/2026-11-03-local/emulator-qa.json)
-retains all five runner source fingerprints and APK identities. Raw logs and
+retains all seven passing runner source fingerprints and APK identities, plus
+two later failed attempts separately. Raw logs and
 device identifiers are not published.
 
 The latest 2026-11-04 run limited host work to four logical CPUs, two Gradle workers and
 sequential project execution, with reduced CPU priority. Its debug APK is
-`6e0d0c9490748aadce443cdf0d7c64d6b16d178253459441c06ebf7a021dcf2d`.
+`b68946e904ed69b8c5123316f64611f5e3cc8334049191c91e5395255f6ae647`.
 Both debug and unsigned release APKs contain the verified base model without
 Silero assets; neither merged manifest requests Internet permission. Durations
 above are verification workload timings, not comparative app or phone performance.
@@ -170,6 +174,16 @@ verified debug/test APKs privately before rebuilding when the next regression
 requires those same binaries. A source-matched rebuild has its own artifact hash;
 do not label it as the original APK. The latest verified artifacts were archived
 locally after QA, and the dedicated AVD was stopped without wiping its data.
+
+The `057daca` full run failed one of 86 tests: its recovery fixture did not wait
+for ownership release before retrying. A later stronger completion wait observed
+that release lag and passed both focused cases; the old command branch was not logged. The `f359fd5` full run failed one of 87 tests at a search cursor
+assertion. An observed diagnostic pass found position 14 after tapping and 22 after
+setting the cursor, opening the IME and Back; the exact late event in the failed
+attempt remains unknown. `036d716` waits for IME visibility before setting the
+cursor and adds a pre-Back assertion. All later assertions and the original
+oversized-editor checks remain. Three focused tests passed before the fresh full
+87-test run. Neither failed full run has been relabeled as passing.
 
 The previously failing
 `InterfaceTest.oversizedEditorInputKeepsTheValidDraftThroughRotation` was
@@ -235,6 +249,15 @@ transcripts, screenshots or device identifiers.
 | Rename rotation on `129ee02` | Actual portrait-to-landscape rotation retained the draft, focused field and visible IME without crashing. Save was below the landscape keyboard; Back hid the IME, after which Save persisted the exact draft. Visibility of Save with the landscape IME open was not established. |
 | Rename at 200% font in landscape on the same APK | The focused field remained usable. The keyboard Done action dismissed the dialog and saved the exact synthetic title, confirmed in SQLite. The dialog heading was clipped at the top; this does not establish visibility of every dialog element while the IME is open. Font and rotation settings were restored afterward. |
 
+The final ordinary APK (`036d716` QA, app hash `b68946e9…ae647`) also passed a
+short record → pause → Home → return → resume → Finish check. The paused timer
+stayed at 00:21; final `READY` duration 32,896 ms matched 1,052,672 PCM bytes exactly.
+Playback position advanced and seeking reached 00:19. Rename kept its draft at
+200% font through actual landscape rotation; scrolling exposed the full Save
+button above the IME and the saved title matched SQLite. Settings were restored
+and the dedicated AVD stopped. This does not repeat the earlier long-session,
+editor, audible playback or physical-device checks.
+
 The screen-off interval lasted roughly 2.5 hours, but service/memory samples
 were collected only for the first 30 minutes. This was capture without host audio;
 it does not exercise sustained speech inference, host microphone input, audible
@@ -255,8 +278,8 @@ did not apply. The passing constant-input regressions do not close this manual
 failure. A solution still needs paired quiet-speech and noise evidence; this report
 does not claim that silence/noise hallucinations or whole-app acceptance are solved.
 The optional [SOT research overlay](whisper-sot-research.md) in `9a27635` supports
-separate host experiments only. The shipped Android engine and recorded submodule
-remain unchanged.
+separate host experiments only. The SOT speech-policy candidate remains unshipped. The later ownership-only
+fix changes cleanup behavior while preserving the recorded submodule.
 
 ## Focused editor regression
 

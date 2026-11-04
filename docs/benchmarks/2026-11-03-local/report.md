@@ -1033,6 +1033,18 @@ hashed; runtime evidence here is x86_64 only. These fault artifacts precede the
 normal-build activation and do not replace full ordinary-artifact QA. No model,
 audio or raw logs are published.
 
+The ordinary ownership build passed 85 tests at clean `7760ff2`. Focused review
+then fixed incremental source revalidation, service cancellation order and retry
+feedback during teardown. The final clean `036d716` suite passed **87 tests,
+zero failures/skips**, including eight real-model checks, in 149.980 s; 36 cached
+core tests, both lint variants and unsigned release/R8 also passed. All native
+libraries remain byte-identical to the inspected ordinary ownership build.
+The [emulator aggregate](emulator-qa.json) separately retains the failed 86-test
+recovery-fixture attempt and 87-test search-cursor attempt, their narrower follow-up
+observations and the stronger test preconditions. The original cursor event's
+cause remains unknown. These checks close the scoped normal-build gate, not
+all-seven speech improvement, physical-phone performance or release acceptance.
+
 ## Android seven-language integration smoke
 
 The unpublished VAD candidate was exercised through its actual Android JNI on

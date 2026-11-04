@@ -6,7 +6,7 @@ The rejected Android VAD candidate has now been archived and removed from the
 working build; independent search fixes passed six focused tests and manual
 200% font rotation/Home checks, followed by a clean 84-test full run at `b59c6ee`.
 A later caret-return fix passed fresh RED/GREEN and a clean **85-test** full run at
-`101a153`; the AVD is stopped and exact verified APKs are archived privately. Heavy
+`101a153`. Exact verified APKs from that checkpoint are archived privately. Heavy
 local checks run sequentially to reduce laptop load.
 
 Branch: `codex/sessions-stt-handoff`. Baseline before the redesign:
@@ -19,13 +19,41 @@ ARM phone performance and full application acceptance remain open.
 
 ## Current delivery step
 
-The ownership-only native fix now has complete scoped actual-model coverage and
-passing Android recovery/cancellation tests. It is enabled in ordinary Android
-builds; normal artifact inspection and a fresh full-suite run are next. The most
-recent complete ordinary suite remains `101a153` until that run finishes.
-Keep the next delivery focused on a verified APK; do not expand speech research
-before it. The owner explicitly permits focused GPT-6.1 Sol xhigh subagents,
-with root retaining integration and acceptance. Heavy local jobs remain sequential.
+The Whisper ownership fix is enabled in ordinary Android builds. Clean `036d716`
+passed all 87 Android tests, including the eight required model checks, in 149.980
+instrumentation seconds with zero failures or skips. The build phase passed in
+56 seconds, with both lint variants, unsigned release/R8 and 36 cached core tests.
+The exact debug, test and unsigned release APKs are archived locally under
+`build/local-diagnostics/post-ime-qa-20261104/verified-apks/`. The final manual pass covered short capture/pause/Home/resume/Finish,
+playback/seek and 200% font Rename rotation/save. Settings were restored and the
+dedicated AVD was stopped. [Full QA evidence and APK hashes](quality-report.md)
+
+Follow-up review verified incremental native input checks (`9ffa3d1`, six
+expected CMake regression failures and 157 passing host tests) and service
+cancellation before the native abort (`057daca`, matched RED/GREEN on the
+pending-chunk commit boundary). The clean 86-test run at `057daca` retained one
+failure in the recovery fixture. Waiting for the actual claim release in
+`f3e05f4` passed the two focused service tests in 2.915 seconds. Its marker
+observed a claim after visible teardown. The original run did not record the
+second command's branch.
+
+The `f359fd5` ViewModel fix reports busy when the same recovery claim is still
+held. The same test APK failed against the earlier app and passed against the
+fixed app. The fixture confirms feedback, PCM and chunk preservation and fresh
+claim admission after release. The physical tap window was not exercised.
+
+The `f359fd5` full run passed 86 of 87 tests, including all eight model checks,
+in 154.225 instrumentation seconds. Active search retained the query but showed
+caret 14 instead of 22 after Back. A separate diagnostic passed while observing
+14 after tap and 22 after explicit selection, at the keyboard check and after
+Back. Its extra reads and logs leave the failed run's event ordering unknown.
+`036d716` waits for the keyboard before setting the caret and verifies the caret
+before Back. Later assertions are unchanged. Three focused UI tests passed in
+12.177 seconds on unchanged app APK `b68946e9…ae647` with test APK `b25ff568…bd76`.
+
+The exact verified debug APK is ready for local delivery; it is not a finished
+release. Continue with focused local STT work after publishing this checkpoint. The owner permits focused
+GPT-6.1 Sol xhigh and Terra reviewers, with root retaining integration and acceptance.
 
 ## Product direction
 
@@ -80,25 +108,24 @@ evidence supports a replacement.
 
 ## Verified state and evidence
 
-The latest clean full-suite app source is `101a153` (search caret return and prior state/layout, scrollable
-Rename in `d8df58e`, and the prior `129ee02`/`6872bb4` title fixes,
+The pre-ownership checkpoint `101a153` includes search caret return and prior
+state/layout work, scrollable Rename in `d8df58e`, the prior `129ee02`/`6872bb4` title fixes,
 `ff8ea8d` permission feedback, `a5e460d` constant-PCM protection and
-`12e958c` editor feedback); host dependency setup is `e0a9c78`.
+`12e958c` editor feedback. Host dependency setup was `e0a9c78`.
 The owner's dedicated KVM-accelerated API 35 x86_64 AVD passed **85 Android tests,
 zero failures/skips**, all eight mandatory real-model checks, 36 core tests,
-debug/release lint and debug/test/unsigned release builds. The Python suite passes
-146 tests, repeated separately at `b59c6ee` in the existing hash-pinned NumPy environment;
-host sources are unchanged and that suite was not rerun for the later UI-only fix. See the
-[quality report](quality-report.md) and exact [emulator evidence](benchmarks/2026-11-03-local/emulator-qa.json)
-for hashes. The latest full run used clean HEAD `101a153`; earlier dirty-source
-runs retain their original fingerprints and mappings.
+debug/release lint and debug/test/unsigned release builds at that checkpoint.
+The historical Python result at `b59c6ee` was 146 tests in the hash-pinned NumPy
+environment. The [quality report](quality-report.md) tracks later verification.
+The [emulator evidence](benchmarks/2026-11-03-local/emulator-qa.json) retains
+the exact early hashes and dirty-source fingerprints.
 
 The new caret test uses one unchanged test APK for fresh RED on a source-matched
 `b59c6ee` rebuild and GREEN on the fix: caret 6 previously became 13 after opening
 a result and returning. Exact query, hidden IME and unfocused state also pass.
-All 23 previous InterfaceTest bodies remain unchanged. Do not preserve highlighted
-selection by suppressing Compose deselect callbacks: that earlier draft expectation
-was invalid and is retained separately. The controlled saveable `TextFieldValue`
+At `101a153`, all 23 earlier InterfaceTest bodies were unchanged. The earlier
+draft expectation that highlighted selection survives Compose deselection was
+invalid and is retained separately. The controlled saveable `TextFieldValue`
 now belongs to `FocalApp`, preserving the actual caret through navigation.
 
 The editor failure is fixed: input-connection replay of the accepted draft cleared
@@ -252,7 +279,8 @@ Current conservative reservation: **881,742,333 bytes**, including a
 61,000,000-byte reserve for one future publication CI run; **118,257,667 bytes**
 remain. The old 645,592,677-byte reservation prefix is preserved. Carry the public budget snapshot forward if the private
 ledger is unavailable; never reset the budget to zero in a fresh environment.
-The 639 MB Qwen artifact no longer fits the remainder. No LLM was downloaded.
+The 639 MB Qwen artifact no longer fits the remainder. This delivery used no new
+downloads and left all 42 fresh held-out clips closed.
 CI model downloads also count; use Actions for bounded checkpoints, and the
 owner's local accelerated emulator for long/repeated app QA.
 
@@ -325,31 +353,28 @@ real-model checks, fails on skips, restores animation settings and saves private
 reports. It never uninstalls or wipes app data. Its host tests/source review are
 not substitutes for running it on the owner's accelerated emulator.
 
-## Remaining sequence
+## Ownership evidence and remaining gates
 
-Before accepting another engine build, resolve the newly reviewed allocation-error
-ownership defects. Pinned `whisper_full_with_state` can free its borrowed state on
+The ownership fix covers the allocation-error defects found in the pinned engine.
+Pinned `whisper_full_with_state` can free its borrowed state on
 self-KV growth failure (`-7`); normal JNI/service cleanup then frees it again.
 Uninitialized early `batch` cleanup and partial KV allocation are related defects.
 An isolated ownership-only patch now passed all 24 frozen model-free cases;
 baseline four controls passed and 20 expected errors were reproduced, including
 two ASan use-after-free reports on owned/external failure → close. Independent
 review checked 664 source inputs, 94 tool/link inputs and all 48 execution logs.
-The actual engine and CPU GGML run with synthetic descriptors and graph bypasses;
-this is not an actual-model recovery or arbitrary OOM proof. Preserve the v4
-freeze and the failed v3 link attempt separately. Next verify real graphs and
-same-state beam/greedy retries, the three loader wrappers, then Android error →
-close → pending-audio/manual-edit preservation → new-engine recovery/cancellation.
-That model-free evidence alone did not establish a production fix; the later
-actual-model and Android checks below supply the next evidence. Do not infer
-phone resource behavior from host tests or induce real host memory pressure. The diagnostic probe's fatal-process handling
-is not a production Android fix. See the local benchmark report for scope/hashes.
+These model-free checks use the actual engine and CPU GGML with synthetic
+descriptors and graph bypasses. Preserve the v4 freeze and the failed
+v3 link attempt separately. The later real-graph and Android checks extend the
+evidence. See the local benchmark report for scope and hashes.
 
 The [ownership-only CMake overlay](whisper-lifetime-research.md) reproduces the
 exact reviewed `8cc010e3…ed64b` postimage. It was initially inactive; after the
 checks below, ordinary Android builds now include it without the fault helper.
-Nine tests cover 19 configuration cases; the full host suite now passes 155 tests
-without skips (7.478 s). No extra Android run was needed for this inactive hook.
+At the earlier inactive-overlay checkpoint, nine tests covered 19 configuration
+cases and the full host suite passed 155 tests without skips (7.478 s). No extra
+Android run was performed for that inactive hook. The later incremental-input
+checks raise the current host total to 157, as recorded above.
 Real-graph preparation in `build/stt/engine-lifetime-realgraph-research/` is now
 frozen as `86d55e199ca49267e07077953405e7451ec11aa27c76444027b369de7097209e`:
 682 inputs, 96 tool/link identities and 16 passing pure Python evaluator tests.
@@ -399,11 +424,11 @@ holds no extra owner. A first cancellation test failed its 30 s arrival wait;
 a reviewed 120 s wait reached the checkpoint after 34.520 s, while the barrier
 hold remains 30 s and completion/cleanup remain 45 s. The failed attempt is retained.
 
-Ordinary builds include only the ownership fix. Before delivery, verify no fault
-helper, JNI exports or markers in both APK ABIs/DEX; run the unchanged strict
-85-test/eight-model-check `qa-local.py --release-checks` suite and manual UI QA.
-Phone resources and speech-policy accuracy are separate open gates. Exact test
-artifacts and source identities remain private; publish only the safe aggregate.
+Ordinary builds include the ownership fix without changing STT policy. Use the
+final normal QA and artifact records for delivery. Keep the opt-in fault APKs,
+exact local test artifacts and raw logs private. Paired speech accuracy and
+speed across all seven languages remain open. The owner will connect a phone
+later for physical-device validation.
 
 1. Resolve the observed recovery hallucinations on weak varying noise. Investigate
    the no-speech logits defect with the pinned source plus an explicit, reviewed

@@ -1,39 +1,79 @@
 # Product verification · 2026-11-04
 
-The Sessions / Focus wave direction is preserved. The latest production source
-checkpoint is `101a153`, including retained search caret, lifecycle/layout fixes and the Rename
-form fix in `d8df58e`, following the earlier Unicode/title corrections; host
-dependency setup is `e0a9c78`. This is a development checkpoint, not a finished
-product or verified distribution release. The public
-alpha APK is unchanged. Quiet/noisy speech, physical-phone resources and stable
-signing remain open gates.
+The Sessions / Focus wave direction is preserved. App source `f359fd5` includes
+the Whisper ownership fix, incremental native input checks, service cancellation
+ordering and recovery retry feedback. The current test checkpoint `036d716`
+changes only the search test setup. The public alpha APK is unchanged. Paired
+speech accuracy and speed across all seven languages, physical-phone validation
+and stable signing remain open.
 
 ## Current local evidence
 
 | Area | Evidence and scope |
 | --- | --- |
-| Core logic | 36 JVM tests verified; cached outputs for unchanged core sources |
-| Host tooling | 146 tests passed at `b59c6ee` in the existing hash-pinned NumPy 2.4.6 environment; unchanged host sources, not rerun for the later UI-only change |
-| Build | Debug/test APKs, debug/release lint and unsigned release R8 build pass |
-| Whole Android suite | Clean HEAD `101a153`, dedicated API 35 x86_64 AVD with KVM: **85 tests passed, zero failures/skips**, 151.721 seconds |
-| Real-model checks | All eight mandatory JNI/workflow checks pass, including quiet public speech and constant-audio recovery |
-| Manual UI | Earlier paste/rotation, Save & next, Russian edit/copy/share, 200% text, dark mode and legacy paging; later Rename, search caret/rotation and Back → Home → Focal checked separately |
+| Core logic | 36 JVM tests verified from cached outputs for unchanged core sources |
+| Host tooling | **157 tests passed** in 9.844 seconds after incremental native input validation was added. Six expected regression failures reproduced against the prior CMake inputs. |
+| Build | Clean `036d716` passed the 56-second build phase, including debug/test APKs, both lint variants and unsigned release/R8. |
+| Whole Android suite | Clean `036d716` passed **87 tests** with zero failures or skips in 149.980 instrumentation seconds on the dedicated KVM API 35 x86_64 AVD. |
+| Real-model checks | All eight required JNI/workflow checks passed, including quiet public speech and constant-audio recovery. |
+| Manual UI | Earlier checks cover paste/rotation, Save & next, Russian edit/copy/share, 200% text, dark mode, legacy paging, Rename, search caret/rotation and Back → Home → Focal. The final APK also passed short capture/pause/Home/resume/Finish, playback/seek and 200% font Rename rotation/save checks. |
 | Long capture | 2:32:37 retained audio; task swipe and about 149 minutes screen off survived; a separate 30-minute memory series stayed 177,118–179,802 KiB PSS |
 | Speech research | Fresh development comparisons cover all seven languages; [results and limitations](benchmarks/2026-11-03-local/report.md) retain negative variants and an unconsumed held-out cohort |
 
-The [local QA report](benchmarks/2026-11-03-local/emulator-qa.json) records exact
-APK/model hashes and all five full-suite checkpoints. The latest runner recorded
-clean HEAD `101a153`; earlier clean 82- and 84-test checkpoints remain in the record.
-The earlier 77- and 80-test runs retain their dirty-source
-fingerprints and later commit mappings; they are not relabeled as clean-HEAD runs.
-Debug APK SHA-256:
-`6e0d0c9490748aadce443cdf0d7c64d6b16d178253459441c06ebf7a021dcf2d`.
-No APK has been published as a replacement release.
+Full QA report `20261104T083156.095960Z` binds the exact `036d716` artifacts to
+the clean source. The local archive is in
+`build/local-diagnostics/post-ime-qa-20261104/verified-apks/`. The debug and
+unsigned release native libraries for both ABIs are byte-identical to their
+verified `7760ff2` counterparts. The APKs passed 16 KiB ZIP alignment checks.
+Release was built and inspected separately; instrumentation ran the debug APK.
+Both app artifacts contain the ownership overlay and exclude fault helpers,
+Silero assets and `INTERNET` permission. The aggregate also retains earlier
+checkpoints, hashes and failed attempts. [Local QA evidence](benchmarks/2026-11-03-local/emulator-qa.json)
 
-Local verification has not triggered another Actions run while the separate
-engine investigation continues. One final publication CI model/fixture download
-remains reserved in the shared budget. Full-history Gitleaks passed before the
-earlier published checkpoint; the secret-scanning workflow remains enabled.
+| APK | SHA-256 |
+| --- | --- |
+| Debug | `b68946e904ed69b8c5123316f64611f5e3cc8334049191c91e5395255f6ae647` |
+| Instrumentation | `b25ff568c8bab05ade9049619257f0f81b047e67e020a5fb98242d0c480ebd76` |
+| Unsigned release | `5c929cca2e5fbbc094fec932e2cc3db044cd923a01ec542db4b1a28b3e34f181` |
+
+The earlier clean ownership build at `7760ff2` passed 85 tests with zero
+failures or skips in 155.054 instrumentation seconds.
+
+The clean `057daca` run passed 85 of 86 tests in 163.099 instrumentation
+seconds. The recovery fixture timed out waiting for its second attempt to reach
+`READY` after a synthetic SQLite failure. The failed result is retained.
+`f3e05f4` made the test wait for claim release and passed both targeted service
+tests in 2.915 seconds. The test log observed a claim still held after visible
+teardown. The earlier run did not log the duplicate-command branch.
+
+The service cancellation regression changed from a committed `DONE` chunk to a
+preserved `PENDING` chunk using the same test APK against `7760ff2` and `057daca`.
+It exercises the cancellation/commit boundary with a synchronous fake decoder.
+Source review covers the separate engine-publication ordering. The ViewModel
+retry regression also failed and passed on one unchanged test APK. It verifies
+visible busy feedback for an already-held recovery claim, data preservation and
+new admission after release. A physical tap during the teardown window remains
+unverified.
+
+The clean `f359fd5` run passed 86 of 87 tests in 154.225 instrumentation seconds.
+`activeSearchKeepsSelectionAndKeyboardThroughRecreation` failed after Back with
+the correct query and caret at 14 instead of 22. A diagnostic with additional
+reads and logging passed in 8.179 seconds. It observed caret 14 after the tap and
+22 after explicit selection, with 22 retained at the keyboard check and
+after Back. The original event ordering remains unknown.
+
+`036d716` waits for the keyboard before setting the caret and asserts the caret
+before Back. All subsequent assertions remain. The focused oversized-editor,
+active-search and caret-return tests passed in 12.177 instrumentation seconds
+using unchanged app APK `b68946e9…ae647` and test APK `b25ff568…bd76`. This
+verifies the strengthened test setup. The app source remains `f359fd5`.
+
+Local verification used no additional Actions or downloads. The shared ledger
+has 881,742,333 bytes reserved, including 61,000,000 for one publication CI
+download. The remaining allowance is 118,257,667 bytes.
+All 42 fresh held-out clips remain closed. Full-history Gitleaks passed for
+78 commits through code checkpoint `036d716`; final publication also requires
+scanning the documentation commit. The secret-scanning workflow remains enabled.
 
 The emulator uses **KVM with `-accel on`** and host GLES; only Vulkan is disabled.
 Other projects' AVDs and data were preserved. The `-no-audio` setup does not verify
@@ -41,6 +81,17 @@ host microphone input or audible playback. Its captured signal is weak, varying
 synthetic PCM, not necessarily exact zeros. The long-session memory series covers
 30 minutes of quiet capture, not sustained speech/inference or the entire 2.5-hour
 session. Emulator results do not establish phone battery, heat or background behavior.
+
+The final manual capture remained paused at 00:21 through Home and return, then
+resumed and saved `READY` with 32,896 ms and 1,052,672 PCM bytes (exactly duration
+× 32). It produced no chunks or passages with host audio disabled. Original-audio
+position advanced and seeking moved it to 00:19. At 200% font, Rename preserved
+the synthetic draft through actual landscape rotation; scrolling exposed the
+whole Save button above the IME and the saved title matched SQLite exactly.
+The initial rotation settings write did not persist, so WindowManager supplied
+the visually verified rotation. Font/rotation settings were restored and only
+the dedicated AVD was stopped. These are scoped current-build observations;
+the earlier broad and long-session checks retain their original build identities.
 
 ## Confirmed fixes and an open manual failure
 
@@ -50,11 +101,11 @@ middle caret to the query's end. Moving `TextFieldValue` to the retained app sta
 preserves that caret without reactivating the keyboard. The frozen new test failed
 at caret 13 instead of 6 on a source-matched `b59c6ee` rebuild (3.497 s), then
 passed unchanged on the fix (3.395 s); six prior UI cases passed in 21.063 s.
-All 23 earlier InterfaceTest bodies, including the strict oversized-editor test,
-remain unchanged. An earlier draft wrongly expected highlighted selection to
-survive explicit focus clearing; cached Compose code and runtime observation
-showed its deliberate collapse to the selection end. That failed expectation is
-retained separately; the fix does not suppress the framework's callback.
+At `101a153`, all 23 earlier InterfaceTest bodies, including the strict
+oversized-editor test, were unchanged. An earlier draft wrongly expected
+highlighted selection to survive explicit focus clearing. Cached Compose code and
+runtime observation showed its deliberate collapse to the selection end. The
+failed expectation is retained separately and the fix allows the framework callback.
 The focused APK and later clean full-suite APK have separate recorded hashes.
 
 The original editor failure was reproduced twice without weakening assertions.
@@ -330,9 +381,8 @@ inactive option generating the exact independently reviewed prototype without
 changing the pinned submodule. Nine tests cover 19 configuration scenarios, including rejection of
 unknown inputs and speech-policy overlay composition. The full host suite passed
 **155 tests with no skips in 7.478 s**, using the existing pinned NumPy 2.4.6
-environment. This is new host evidence; the latest full Android checkpoint remains
-the separately verified 85-test `101a153` build. No new real-model or app run was
-performed for the optional overlay.
+environment. This historical checkpoint covered the optional overlay before
+ordinary Android integration.
 
 The separately frozen real-graph harness subsequently compiled both sanitized
 variants in 91.926 s; independent prebuild/postbuild reviews verified 682 inputs,
@@ -358,27 +408,29 @@ CPU-limit failure remain failed attempts. These checks reused the cached model
 and consumed no new held-out speech. They establish scoped ownership behavior,
 not speech accuracy, speed, arbitrary OOM resilience or phone resource budgets.
 
-## Remaining release gates
+## Verified Whisper ownership fix
 
-Independent source review also found a native allocation-failure ownership defect:
-self-KV growth can free a state still owned by the context, then JNI close frees
-it again. Early initialization and partial-allocation cleanup need related fixes.
-The production JNI/service close path reaches this defect. Isolated model-free
-regressions now reproduce two ASan use-after-free paths and related cleanup errors:
-baseline four controls pass/20 expected errors; the ownership-only prototype passes
-all 24 cases with clean sanitizers. Independent review verified source/tool hashes,
-all binaries/dependencies and 48 execution logs. These use real engine/GGML source
+Independent source review found that self-KV growth could free a state still
+owned by the context, then JNI close could free it again. The ownership fix
+also covers related early initialization and partial-allocation cleanup defects.
+Isolated model-free regressions reproduce two ASan use-after-free paths and
+related cleanup errors. The baseline passed four controls and reproduced 20
+expected errors. The ownership-only prototype passed all 24 cases with clean
+sanitizers. Independent review verified source and tool hashes, binaries,
+dependencies and 48 execution logs. These checks use real engine/GGML source
 with synthetic descriptors and graph bypasses. The later actual-model retry and
-loader-wrapper checks above close that host gate. The isolated Android patched build then passed both strict tests in 173.937 s:
-audio/manual edits/pending work survive the error and ordinary recovery succeeds;
-in-flight cancel/close keeps its owner until return and destroys it once.
-A first run failed only its 30 s arrival wait; the separately reviewed 120 s
+loader-wrapper checks close that host gate. The isolated Android patched build
+passed both strict tests in 173.937 s. Audio, manual edits and pending work survive
+the error and ordinary recovery succeeds. In-flight cancel/close keeps its owner
+until return and destroys it once. A first run failed only its 30 s arrival wait.
+The separately reviewed 120 s
 arrival bound observed the checkpoint after 34.520 s without changing functional
 assertions or the 30 s barrier/45 s completion bounds. The failed run is preserved.
-No real host OOM was induced. Ordinary builds now include the ownership-only fix;
-core checks, both lint variants, debug/test and unsigned release/R8 builds pass.
 The [Android evidence](benchmarks/2026-11-03-local/engine-lifetime-android-results.json)
-keeps the fault artifacts separate. Full ordinary-artifact QA remains pending.
+keeps the fault artifacts separate and records the targeted scope. The scoped
+ownership verification is complete.
+
+## Remaining release gates
 
 1. Resolve recovery hallucinations on varying weak noise without suppressing quiet
    speech. Verify any engine/VAD change with paired development data, frozen fresh
