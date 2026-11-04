@@ -1,7 +1,10 @@
 package app.focal.speech
 
+import java.io.EOFException
 import java.io.File
 import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /** Validates the on-disk legacy ggml structure before native code reads untrusted files. */
 internal object BaseModelValidator {
@@ -31,15 +34,27 @@ internal object BaseModelValidator {
                 skip(80L * 201 * 4)
                 val vocab = integer()
                 require(vocab in 50257..51865) { MESSAGE }
+                // Token metadata is small and sequential. Bound the read to the
+                // maximum legal vocabulary and resume tensor parsing at its end.
+                checkCancelled()
+                val vocabularyStart = f.filePointer
+                val vocabularyLimit = minOf((f.length() - vocabularyStart).coerceAtLeast(0),
+                    2_000_000L + 4L * vocab).toInt()
+                val vocabulary = ByteArray(vocabularyLimit)
+                f.readFully(vocabulary)
+                val tokens = ByteBuffer.wrap(vocabulary).order(ByteOrder.LITTLE_ENDIAN)
                 var vocabularyBytes = 0L
                 repeat(vocab) {
-                    if (it % 1024 == 0) checkCancelled()
-                    val length = integer()
+                    if (it > 0 && it % 1024 == 0) checkCancelled()
+                    if (tokens.remaining() < Int.SIZE_BYTES) throw EOFException()
+                    val length = tokens.int
                     require(length in 0..512) { MESSAGE }
                     vocabularyBytes += length
                     require(vocabularyBytes <= 2_000_000) { MESSAGE }
-                    skip(length.toLong())
+                    require(length <= tokens.remaining()) { MESSAGE }
+                    tokens.position(tokens.position() + length)
                 }
+                f.seek(vocabularyStart + tokens.position())
                 val remaining = tensors().toMutableMap()
                 while (f.filePointer < f.length()) {
                     checkCancelled()
