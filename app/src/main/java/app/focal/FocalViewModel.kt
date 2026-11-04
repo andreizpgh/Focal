@@ -43,21 +43,23 @@ class FocalViewModel internal constructor(
         finally { preparing.value = false }
     }
     init {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             combine(app.store.changes, selected, search.debounce(150), libraryRefresh) { _, id, query, _ -> id to query }
                 .collect { (id, query) ->
-                    try {
-                        app.storageReady.await()
-                        beforeLibraryReadForTests?.invoke()
-                        val note = id?.let(app.store::note)
-                        libraryState.value = LibraryState(app.store.notes(query), note, id?.let(app.store::passages).orEmpty(),
-                            id?.let(app.store::audioBytes) ?: 0, id?.let(app.store::pendingCount) ?: 0, true, id,
-                            hasUnpublishedTail = note?.let(app.store::hasUnpublishedTail) == true)
+                    val next = try {
+                        withContext(Dispatchers.IO) {
+                            app.storageReady.await()
+                            beforeLibraryReadForTests?.invoke()
+                            val note = id?.let(app.store::note)
+                            LibraryState(app.store.notes(query), note, id?.let(app.store::passages).orEmpty(),
+                                id?.let(app.store::audioBytes) ?: 0, id?.let(app.store::pendingCount) ?: 0, true, id,
+                                hasUnpublishedTail = note?.let(app.store::hasUnpublishedTail) == true)
+                        }
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
                         val previous = libraryState.value
                         val sameSelection = previous.selectedId == id
-                        libraryState.value = previous.copy(
+                        previous.copy(
                             note = previous.note.takeIf { sameSelection },
                             passages = if (sameSelection) previous.passages else emptyList(),
                             audioBytes = if (sameSelection) previous.audioBytes else 0,
@@ -66,6 +68,7 @@ class FocalViewModel internal constructor(
                             selectedId = id, error = if (e is PassageSizeException) e.message else "Could not load sessions. Try again when storage is available."
                         )
                     }
+                    libraryState.value = next
                 }
         }
     }

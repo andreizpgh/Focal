@@ -1,6 +1,7 @@
 package app.focal
 
 import android.content.Intent
+import android.os.Looper
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -19,6 +20,7 @@ import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
 import app.focal.recording.SessionOperations
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -63,6 +65,44 @@ class FocalViewModelTest {
 
     private fun await(model: FocalViewModel, condition: (LibraryState) -> Boolean): LibraryState =
         runBlocking { withTimeout(10_000) { model.library.first(condition) } }
+
+    @Test fun libraryReadsOffMainAndPublishesSuccessAndFailureOnMain() = runBlocking {
+        val readStarted = CountDownLatch(1)
+        val finishRead = CountDownLatch(1)
+        val readOnMain = AtomicBoolean(false)
+        val failRead = AtomicBoolean(false)
+        val model = model(read = {
+            if (Looper.myLooper() == Looper.getMainLooper()) readOnMain.set(true)
+            readStarted.countDown()
+            check(finishRead.await(10, TimeUnit.SECONDS)) { "Timed out waiting to release the synthetic read." }
+            if (failRead.get()) throw IOException("Synthetic read failure")
+        })
+        try {
+            assertTrue(readStarted.await(10, TimeUnit.SECONDS))
+            assertFalse("Library reads must stay off Main", readOnMain.get())
+            // Subscribe before the read completes. An unconfined collector resumes at publication.
+            val success = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) {
+                model.library.first { it.loaded && it.error == null }
+                Looper.myLooper() == Looper.getMainLooper()
+            }
+            finishRead.countDown()
+            val successOnMain = withTimeout(10_000) { success.await() }
+
+            val failure = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) {
+                model.library.first { it.error != null }
+                Looper.myLooper() == Looper.getMainLooper()
+            }
+            failRead.set(true)
+            model.retryLibrary()
+            val failureOnMain = withTimeout(10_000) { failure.await() }
+
+            assertFalse("Retry reads must stay off Main", readOnMain.get())
+            assertTrue("Library success must be published on Main", successOnMain)
+            assertTrue("Library failure must be published on Main", failureOnMain)
+        } finally {
+            finishRead.countDown()
+        }
+    }
 
     @Test fun failedReadsKeepKnownDataAndRetryAfterInitialAndLaterErrors() {
         val id = app.store.create("en").also { created += it }
