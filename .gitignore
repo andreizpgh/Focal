@@ -28,6 +28,7 @@ app/src/main/assets/*.bin
 app/src/main/assets/*.partial
 app/src/main/assets/model-provenance.json
 captures/
+.codex-attachments/
 .DS_Store
 __pycache__/
 *.pyc
