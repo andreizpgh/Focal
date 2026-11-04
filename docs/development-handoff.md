@@ -18,35 +18,58 @@ assets are unchanged; the newer UX preview is described below. Seven-language
 read-speech results are measured on the host;
 ARM phone performance and full application acceptance remain open.
 
-## Current delivery step
+## Current delivery step · UX Alpha 3
 
-[PR #1](https://github.com/andreizpgh/Focal/pull/1) integrates the verified UX Alpha 2
-checkpoint into `main`, including the approved Focus wave logo and current APK
-link. Main integration is separate from final application acceptance: the open
-speech and phone requirements below still apply. Continue in the existing checkout
-and branch after synchronizing with `main`; use a new PR for subsequent changes.
+The owner's Alpha 2 screenshots led to a focused UI update: an upward language
+picker beside Record, rounded note actions, wider timestamp gutter, better editor
+padding and a larger playback thumb. Review remains a recognizer hint, not a
+language checker. The filter now says so and no longer calls unflagged text
+“All checked”. Original audio, manual edits, recovery and speech thresholds stay
+unchanged. Explicit Focal dark theme now also applies to editor/rename windows.
 
-Published [UX Alpha 2](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-2)
-for the owner's interface feedback. Version `0.1.0-alpha.2` / code 2 comes from
-clean `fe70758`: 89 Android tests passed without failures/skips, including all
-eight real-model checks, in 154.329 seconds. The 254-second build passed both lints,
-debug/test/unsigned release builds and 36 cached core tests. The published debug
-APK is exactly the one used for focused, manual and full QA; see the
-[release manifest](../releases/ux-alpha-2.json) and [quality report](quality-report.md).
+Clean source `ed9d7cb8250eb8f7ad454fad47c5f70bf7b9a8de`, version
+`0.1.0-alpha.3` / code 3, passed **94 Android tests without failures or skips**,
+including eight real-model checks, in 149.326 seconds. The full runner passed
+both lints and debug/test/unsigned release/R8 builds; 36 core tests were cached.
+Report `20261104T121600.005709Z`; verified APKs are privately archived under
+`build/local-diagnostics/ux-alpha-3-20261104/verified-apks/`. The development
+certificate matches Alpha 2. See [release identity](../releases/ux-alpha-3.json)
+and [quality report](quality-report.md) for exact checks and limitations.
 
-Continue transcription now exposes saved tails in interrupted notes even with
-an empty queue; the store protects those tails against removal. Both regressions
-failed on the prior APK and passed on this candidate. Notification-denial guidance
-passed a real dialog → Home/lock → return → pause/resume → Finish check. Source
-audio was preserved; host audio was disabled, so real phone audio remains untested.
-The dedicated emulator is stopped. Artifacts are in
-`build/local-diagnostics/ux-alpha-2-20261104/verified-apks/`.
+The original editor regression remains fixed. A newly observed light system bar
+inside the dark editor failed its test on the preceding candidate; the same test
+APK passed after the dialog-window fix. Manual screenshots confirmed the color
+change. Light/dark, large font, actual landscape/IME editing and playback controls
+were checked with synthetic notes. The owner's screenshots remain private.
 
-Next, address confirmed UX/UI feedback from the owner, then validate the phone
-when the owner connects it by cable. The owner installed Alpha 1 but reported no
-important notes; explain reinstall only if Android rejects the development
-signature update. Keep the phone and seven-language STT gates open. No new engine,
-model or speech policy is part of this UX release. Alpha 1 was not overwritten.
+The owner uses a **Pixel 10** and will connect it later while present. Deleted
+example notes are not available; do not ask for them again. Ordinary developer
+notes with English terms such as HTML/API/guardrails are a required scenario.
+Phone absence does not block local work. Main already includes Alpha 2 through
+PRs #1 and #2; subsequent verified changes use a new PR and a new testing release.
+Do not overwrite Alpha 1/2 assets or claim final application acceptance.
+
+A bounded vocabulary buffer reduced host model-validation time, with unchanged
+malformed-input/cancellation decisions and real-model acceptance. This is not
+ASR decoding or phone speed. A six-pair synthetic RU/English glossary experiment
+failed its guards; no prompt was shipped or other-language follow-up run.
+The owner authorized a **5 GB cumulative download ceiling**, retaining prior
+reservations. One pinned Qwen3-0.6B Q4 candidate is now local; 21 source-only
+shadow requests are prepared and independently reviewed, with no LLM inference
+or automatic correction enabled at this checkpoint. Prefer bounded comparisons
+and reuse existing audio/model files. The private plan is
+`build/stt/correction-shadow-20261104/DISCOVERY.md`; its frozen pre-download
+metadata is historical, with actual approval/download in
+`authorized-download-state.json`. The next candidate shortlist is `CANDIDATES.md`.
+The 42 fresh held-out clips remain unopened; used test data is not new validation.
+
+### Previous UX Alpha 2 delivery
+
+Alpha 2 source `fe70758350a114d5e66775ee114cd48778217594` passed 89 tests,
+including eight real-model checks, in 154.329 seconds. It added recovery for
+unpublished audio tails and notification-denial guidance. Its exact APK and
+report remain archived and its public assets are unchanged. The owner installed
+and reviewed this version; use Alpha 3 for the next interface feedback cycle.
 
 ### Previous verified checkpoint
 
@@ -82,7 +105,7 @@ Back. Its extra reads and logs leave the failed run's event ordering unknown.
 before Back. Later assertions are unchanged. Three focused UI tests passed in
 12.177 seconds on unchanged app APK `b68946e9…ae647` with test APK `b25ff568…bd76`.
 
-The earlier exact APK remains archived; use UX Alpha 2 above for the owner preview.
+The earlier exact APK remains archived; use UX Alpha 3 above for the owner preview.
 The owner permits focused
 GPT-6.1 Sol xhigh and Terra reviewers, with root retaining integration and acceptance.
 
@@ -94,9 +117,10 @@ still needs real-phone audio-continuity/OEM checks. The
 [primary-source STT review](stt-quality-experiments.md#practical-direction-after-primary-source-review)
 supports retaining the existing model/full context and workflow. Defer the narrow
 terminal-only recovery filter and its proposed 56-pair run: the storage/retry UI
-cost is disproportionate to its scope. No new model/runtime, LLM correction or
-streaming UI is needed. Focus further measurements on ordinary quiet/noisy notes
-and avoidable runtime cost; the seven-language gates remain open.
+cost is disproportionate to its scope. Keep streaming UI out of scope. The later
+owner feedback authorizes bounded local STT-model and language-correction
+comparisons, starting with the prepared source-only shadow screen. Require paired
+benefit before changing the app; the seven-language gates remain open.
 
 Keep the selected **D / Sessions** layout: a dated recording library, white/light
 canvas, black primary actions, compact speech-language selection, timed passages
@@ -315,13 +339,13 @@ critical-error precision or Russian spontaneous-dictation performance. Preserve
 these limitations when comparing models; do not turn a fast host run or aggregate
 WER gain into an all-language Android claim.
 
-The shared ceiling remains **1,000,000,000 downloaded bytes including retries**.
-Current conservative reservation: **881,742,333 bytes**, including a
-61,000,000-byte reserve for one future publication CI run; **118,257,667 bytes**
-remain. The old 645,592,677-byte reservation prefix is preserved. Carry the public budget snapshot forward if the private
-ledger is unavailable; never reset the budget to zero in a fresh environment.
-The 639 MB Qwen artifact no longer fits the remainder. This delivery used no new
-downloads and left all 42 fresh held-out clips closed.
+The current shared ceiling is **5,000,000,000 bytes including retries**, raised
+by the owner on 2026-11-04 for removable local research artifacts. Reservation:
+**1,278,465,663 bytes**, including the existing 61,000,000-byte future CI reserve;
+remaining **3,721,534,337 bytes**. The old reservation prefix is preserved.
+One Qwen3-0.6B Q4 file (396,705,472 bytes) and 17,858 bytes of metadata were added.
+Do not reset the ledger or repeatedly fetch existing models. The 42 fresh
+held-out clips remain closed.
 CI model downloads also count; use Actions for bounded checkpoints, and the
 owner's local accelerated emulator for long/repeated app QA.
 
@@ -492,8 +516,9 @@ later for physical-device validation.
    cold/warm latency, memory, battery and thermals. Emulator timing cannot establish
    these phone claims. While waiting for the phone, continue justified local work;
    do not repeat completed QA or expand the product to fill the waiting time.
-4. Keep automatic correction, additional models and LLM integration deferred.
-   If future evidence warrants correction, the existing immutable original
+4. Run the approved bounded local model comparisons; keep automatic correction
+   and production LLM integration disabled until their gates pass. Any correction
+   still requires the existing immutable original
    ASR/audio, manual-edit protection, provenance and Undo requirements still apply.
 5. Re-review changed layers, run required build/tests and applicable regressions,
    then verify the exact bundled, stably signed release artifact before publication.

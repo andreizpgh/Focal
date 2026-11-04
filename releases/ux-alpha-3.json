@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "tag": "ux-alpha-3",
+  "title": "Focal 0.1.0 \u00b7 UX Alpha 3",
+  "provenance": "local-emulator-qa",
+  "source_commit": "ed9d7cb8250eb8f7ad454fad47c5f70bf7b9a8de",
+  "source_clean": true,
+  "application_id": "app.focal",
+  "version_name": "0.1.0-alpha.3",
+  "version_code": 3,
+  "build_variant": "debug",
+  "apk_sha256": "d2efdb6a0423cd4eef241156a7a921b599cbcb82c9a78698a7b8f8dc8cdeda17",
+  "apk_bytes": 76677075,
+  "test_apk_sha256": "7ad5445496bd541a0221ab1da1e45986f29d656937ea369937a7ab20532d2f8d",
+  "signing": {
+    "type": "development",
+    "certificate_sha256": "3e407a18880c9277982d6ad6222b39738484a3b768e4d268415eb795709aa3bc",
+    "alpha_1_update_compatibility": "not verified",
+    "alpha_2_certificate_matches": true
+  },
+  "model": {
+    "repository": "ggerganov/whisper.cpp",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "filename": "ggml-base-q5_1.bin",
+    "sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "bytes": 59707625,
+    "license": "MIT"
+  },
+  "engine_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+  "qa": {
+    "runner": "scripts/qa-local.py --release-checks",
+    "run": "20261104T121600.005709Z",
+    "android_api": 35,
+    "android_abi": "x86_64",
+    "hardware_acceleration": "KVM",
+    "virtual_cpus": 2,
+    "android_tests": 94,
+    "failures": 0,
+    "skips": 0,
+    "required_real_model_tests": 8,
+    "instrumentation_seconds": 149.326,
+    "build_seconds": 300,
+    "core_tests": 36,
+    "core_execution": "cached results for unchanged core source",
+    "debug_lint": "passed",
+    "release_lint": "passed",
+    "unsigned_release_build": "passed; not the instrumented or published APK",
+    "zip_and_elf_alignment_bytes": 16384,
+    "build_seconds_note": "Gradle reported 5m; rounded wall time, not an app performance measurement."
+  },
+  "targeted_regressions": {
+    "same_test_apk": true,
+    "previous_app_sha256": "abd1828761ec560c10cea53e06726f4ac0a309c52c9fe599216a7c8e56e5c36b",
+    "expected_baseline_assertion_failures": 1,
+    "candidate_passes": 4,
+    "candidate_instrumentation_seconds": 11.455,
+    "scope": "Actual editor window dark/light icon flags and preserved draft, plus existing oversize/recreation/Save-next regressions."
+  },
+  "manual": {
+    "scope": "Synthetic notes, portrait/landscape, 200% font with IME, scroll-to-save and persisted draft, language popup and action menu, light/dark, playback and seeks 20 dp above/below the track. The first UI candidate was checked before the dialog-color fix; the final APK then passed the dark-dialog test and pixel check, followed by a fresh actual 200% landscape/IME edit/save with the persisted marker verified in portrait.",
+    "audio": "Emulator host audio disabled; no audible playback or microphone claim.",
+    "private_owner_screenshots_published": false
+  },
+  "independent_review": [
+    "Sol/Terra cross-review of UI, model validation and tests",
+    "Astra critical source and UI capture review",
+    "Terra independent full-QA, model, APK, certificate and alignment audit"
+  ],
+  "not_established": [
+    "Physical Pixel 10 microphone, audible playback and installation",
+    "Phone background reliability, battery, thermals and ARM latency",
+    "Seven-language accuracy/speed improvement, mixed-language terms and varying-noise hallucination fix",
+    "Local language-model correction accuracy and reversible correction UX",
+    "Stable production signing and release-variant runtime validation"
+  ]
+}

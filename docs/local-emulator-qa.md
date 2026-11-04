@@ -134,6 +134,24 @@ are restored, reconnect it and restore each value from the manifest with
 `adb -s SERIAL shell settings put global KEY VALUE`; use
 `adb -s SERIAL shell settings delete global KEY` for an original `null` value.
 
+## UX Alpha 3 verification · 2026-11-04
+
+Clean `ed9d7cb` passed `qa-local.py --release-checks`: **94 Android tests,
+zero failures/skips**, eight mandatory model checks, 149.326 instrumentation
+seconds. Gradle reported 5m; debug/release lint, debug/test/unsigned R8 release
+and 36 cached core tests passed. The [release manifest](../releases/ux-alpha-3.json)
+binds exact artifacts; the [quality report](quality-report.md) separates focused,
+manual and full-suite evidence. The dedicated AVD uses KVM and two vCPUs. Checks
+ran sequentially with low priority and CPU affinity 0–3.
+
+The new editor-window regression failed against the preceding UI candidate and
+passed with the dialog-color fix using the same test APK. The final candidate
+also passed manual 200% font landscape editing with the keyboard, scrolling to
+Save and retaining the edit after returning to portrait. Light/dark, popup/menu
+geometry and actual seek taps outside the visible track were checked with
+synthetic notes. No owner screenshot or recording was published. These are
+emulator checks, not phone speech, battery, thermal or audible-audio evidence.
+
 ## Verified local checkpoints · 2026-11-03–04
 
 Seven complete `qa-local.py --release-checks` runs passed:
