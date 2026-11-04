@@ -116,7 +116,7 @@ class UiMotionTest {
         val indexBefore = compose.runOnIdle { listState.firstVisibleItemIndex }
         assertTrue("The fixture must be scrolled well below the top", indexBefore >= 15)
         compose.runOnIdle { searchOpen = true }
-        compose.onNodeWithContentDescription("Search sessions").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Search recordings").assertIsDisplayed()
         assertEquals("Opening search must preserve the visible list position", indexBefore,
             compose.runOnIdle { listState.firstVisibleItemIndex })
     }

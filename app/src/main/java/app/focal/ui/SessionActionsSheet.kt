@@ -75,13 +75,13 @@ internal enum class SessionAction { Rename, Share, RemoveAudio, Delete }
             ) {
                 Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).semantics { heading() })
-                if (loading) FocusProcessingIndicator(contentDescription = "Loading session options")
+                if (loading) FocusProcessingIndicator(contentDescription = "Loading recording options")
             }
             SessionActionRow("Rename", Symbol.Edit, loaded && !closing) { choose(SessionAction.Rename) }
             SessionActionRow("Share text", Symbol.Share, loaded && shareReason == null && !closing, shareReason) { choose(SessionAction.Share) }
             SessionActionRow("Remove audio", Symbol.Audio, loaded && audioReason == null && !closing, audioReason) { choose(SessionAction.RemoveAudio) }
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
-            SessionActionRow("Delete session", Symbol.Trash, loaded && deleteReason == null && !closing, deleteReason, destructive = true) {
+            SessionActionRow("Delete recording", Symbol.Trash, loaded && deleteReason == null && !closing, deleteReason, destructive = true) {
                 choose(SessionAction.Delete)
             }
         }

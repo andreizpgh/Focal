@@ -216,12 +216,12 @@ class FocalViewModelTest {
         val intent = Intent(app, MainActivity::class.java).putExtra(RecordingService.NOTE, first)
         ActivityScenario.launch<MainActivity>(intent).use { activity ->
             compose.waitUntil(10_000) { compose.onAllNodesWithText("Notification session A").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            compose.onNodeWithContentDescription("Back to recordings").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithText("Notification session B").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("Notification session B").performClick()
             compose.waitUntil(10_000) {
                 compose.onAllNodesWithText("Notification session B").fetchSemanticsNodes().isNotEmpty() &&
-                    compose.onAllNodesWithContentDescription("Session options").fetchSemanticsNodes().isNotEmpty()
+                    compose.onAllNodesWithContentDescription("Recording options").fetchSemanticsNodes().isNotEmpty()
             }
             activity.recreate()
             compose.waitUntil(10_000) {

@@ -8,6 +8,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import android.animation.ValueAnimator
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.graphics.graphicsLayer
+import java.time.LocalDate
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -137,6 +141,28 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     var sessionsHeaderHeight by remember { mutableIntStateOf(0) }
     var attentionOnly by rememberSaveable { mutableStateOf(false) }
     val libraryListState = rememberLazyListState()
+    var recordingDayEpoch by rememberSaveable { mutableStateOf<Long?>(null) }
+    val recordingDay = recordingDayEpoch?.let(LocalDate::ofEpochDay)
+    val libraryDays = remember(library.notes, attentionOnly) {
+        library.notes.filter { !attentionOnly || sessionNeedsAttention(it) }
+            .sortedByDescending { it.created }.groupBy { sessionDay(it.created) }
+    }
+    val displayedDays = if (recordingDay == null) libraryDays else libraryDays.filterKeys { it == recordingDay }
+    val visibleLibraryDay by remember(libraryListState, displayedDays) {
+        val datesByKey = buildMap<Any, LocalDate> {
+            displayedDays.forEach { (day, notes) ->
+                put("day:$day", day)
+                notes.forEach { put(it.id, day) }
+            }
+        }
+        derivedStateOf {
+            val layout = libraryListState.layoutInfo
+            layout.visibleItemsInfo.firstNotNullOfOrNull { item ->
+                // A trailing sliver inside content padding belongs to the previous day.
+                datesByKey[item.key]?.takeIf { item.index >= libraryListState.firstVisibleItemIndex }
+            } ?: displayedDays.keys.firstOrNull()
+        }
+    }
     var reviewOnly by rememberSaveable(selected) { mutableStateOf(false) }
     var editingId by rememberSaveable(selected) { mutableStateOf<Long?>(null) }
     val editing = library.passages.firstOrNull { it.id == editingId }
@@ -246,7 +272,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     LaunchedEffect(detailId, library.selectedId, library.note, library.loaded, library.error) {
         if (detailId != null && library.loaded && library.selectedId == detailId && library.note == null && library.error == null) {
             if (selected != null) open(null) else closeDialog()
-            notify("Session is no longer available.")
+            notify("Recording is no longer available.")
         }
     }
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -279,6 +305,18 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     val actionNote = library.note?.takeIf { it.id == detailId && library.selectedId == detailId }
     val note = actionNote?.takeIf { it.id == selected }
     val active = note != null && live.noteId == note.id
+    LaunchedEffect(active) { if (active) reviewOnly = false }
+    val pageReady = destination !is Destination.Session || note != null || library.error != null
+    var lastReadyPage by remember { mutableStateOf(destination) }
+    val pageEntrance = remember(destination) {
+        Animatable(if (lastReadyPage != destination && ValueAnimator.areAnimatorsEnabled()) 0f else 1f)
+    }
+    LaunchedEffect(destination, pageReady) {
+        if (pageReady) {
+            lastReadyPage = destination
+            pageEntrance.animateTo(1f, tween(160))
+        }
+    }
     val audioAvailable = library.audioBytes > 0 && (live.noteId == null || live.processing)
     val actionActive = detailId != null && live.noteId == detailId
     val hasUnprocessedAudio = library.pending > 0 || library.hasUnpublishedTail
@@ -336,7 +374,13 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                             when (destination) {
                                 Destination.Sessions -> SessionsHeader(
                                     headerStyle = headerStyle,
-                                    attentionCount = library.notes.count(::sessionNeedsAttention),
+                                    dateLabel = (recordingDay ?: visibleLibraryDay)?.let { dayLabel(it, LocalDate.now()) }
+                                        ?: if (searchQuery.isNotBlank() || attentionOnly) "No matches" else "Today",
+                                    datesAvailable = libraryDays.isNotEmpty() || recordingDay != null,
+                                    dateSelected = recordingDay != null,
+                                    browseDates = { dismissInput(); dialog = "days" },
+                                    attentionCount = library.notes.count { sessionNeedsAttention(it) &&
+                                        (recordingDay == null || sessionDay(it.created) == recordingDay) },
                                     attentionOnly = attentionOnly,
                                     toggleAttention = {
                                         attentionOnly = !attentionOnly
@@ -345,7 +389,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                                 ) {
                                     if (library.notes.isNotEmpty() || searchOpen || searchQuery.isNotBlank()) {
                                         val searchActionFocus = remember { FocusRequester() }
-                                        IconAction(Symbol.Search, if (searchOpen) "Close search" else "Search sessions",
+                                        IconAction(Symbol.Search, if (searchOpen) "Close search" else "Search recordings",
                                             Modifier.focusRequester(searchActionFocus)) {
                                             searchOpen = !searchOpen
                                             setSearchInputActive(searchOpen)
@@ -361,14 +405,20 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                                     }
                                 }
                                 else -> Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    IconAction(Symbol.Back, "Back to sessions") { open(null) }
+                                    IconAction(Symbol.Back, "Back to recordings") { open(null) }
                                     Text(
-                                        if (destination == Destination.Settings) "Settings" else "Session",
-                                        style = headerStyle,
+                                        when {
+                                            destination == Destination.Settings -> "Settings"
+                                            note == null -> ""
+                                            active -> Preferences.languages[note.language] ?: note.language
+                                            else -> "${dayLabel(sessionDay(note.created), LocalDate.now())} at ${sessionTime(note.created)}"
+                                        },
+                                        style = if (destination == Destination.Settings) headerStyle else MaterialTheme.typography.bodyMedium,
+                                        color = if (destination == Destination.Settings) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f).padding(start = 8.dp).semantics { heading() },
+                                        modifier = Modifier.weight(1f).padding(start = 8.dp),
                                     )
-                                    if (note != null) IconAction(Symbol.More, "Session options") { showSessionActions(note.id) }
+                                    if (note != null) IconAction(Symbol.More, "Recording options") { showSessionActions(note.id) }
                                 }
                             }
                         }
@@ -386,19 +436,6 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                             when {
                                 active && !live.processing -> RecordingControls(live, model::pause, model::finish)
                                 note != null -> {
-                                    if (active && live.processing) Row(
-                                        Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    ) {
-                                        FocusProcessingIndicator()
-                                        Text(
-                                            live.message.ifBlank { "Transcribing" },
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
-                                        )
-                                    }
                                     if (audioAvailable) SessionAudioDock(
                                         note.id, playback, library.audioBytes / 32,
                                         { model.playNote(note) }, { model.seekNote(note, it) }
@@ -424,7 +461,10 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             Box(Modifier.fillMaxSize().padding(padding)
                 .then(if (destination == Destination.Sessions) Modifier.consumeWindowInsets(padding).imePadding() else Modifier),
                 contentAlignment = Alignment.TopCenter) {
-                Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) {
+                Box(Modifier.widthIn(max = 760.dp).fillMaxSize().graphicsLayer {
+                    alpha = if (pageReady) pageEntrance.value else 1f
+                    translationY = if (pageReady) (1f - pageEntrance.value) * 8.dp.toPx() else 0f
+                }) {
                     when (destination) {
                         Destination.Settings -> SettingsScreen(
                             settings.theme, model.app.preferences::theme, ready, preparing, setupError, { openModel() }, ::notify,
@@ -438,18 +478,29 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                             inputActive = searchInputActive, setInputActive = ::setSearchInputActive,
                             searchFocusChanged = { searchHasFocus = it }, searchFieldMeasured = { searchFieldHeight = it },
                             onSessionActions = ::showSessionActions,
+                            recordingDay = recordingDay, clearRecordingDay = { recordingDayEpoch = null },
                         )
                         is Destination.Session -> if (note != null) NoteScreen(
-                            note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { if (library.error == null) editingId = it.id else notify("Reload this session before editing.") }, { if (ready) model.retry(note.id) else openModel(note.id) },
+                            note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { if (library.error == null) editingId = it.id else notify("Reload this recording before editing.") }, { if (ready) model.retry(note.id) else openModel(note.id) },
                             playback.isPlaying && playback.noteId == note.id, audioAvailable, { model.playNote(note) }, { dialog = "rename" },
                             seek = { model.seekNote(note, it) }, playbackPosition = playback.takeIf { it.noteId == note.id }?.positionMs,
                             retryLoad = model::retryLibrary, notificationsEnabled = notificationsEnabled,
-                        ) else if (library.error != null) DataReadError("Couldn't load this session", library.error.orEmpty(), model::retryLibrary,
+                            followSuspended = editingId != null || dialog != null || pendingOpenTarget != null,
+                        ) else if (library.error != null) DataReadError("Couldn't load this recording", library.error.orEmpty(), model::retryLibrary,
                             Modifier.padding(horizontal = 24.dp).verticalScroll(rememberScrollState())) else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                FocusProcessingIndicator(contentDescription = "Loading session")
+                                FocusProcessingIndicator(contentDescription = "Loading recording")
                             }
                     }
                 }
+            }
+        }
+        if (dialog == "days" && destination == Destination.Sessions) RecordingDatesSheet(
+            libraryDays, recordingDay, dismiss = ::closeDialog,
+        ) { day ->
+            closeDialog()
+            if (destination == Destination.Sessions && day != recordingDay && (day == null || day in libraryDays)) {
+                recordingDayEpoch = day?.toEpochDay()
+                libraryListState.requestScrollToItem(0)
             }
         }
         if (dialog == "model") AlertDialog(
@@ -486,7 +537,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                     }
                     model.player.pause()
                     editingId = if (next && refreshed.error == null) nextReview?.id else null
-                    if (refreshed.error != null) notify("Your edits were saved. Reload this session to see them.")
+                    if (refreshed.error != null) notify("Your edits were saved. Reload this recording to see them.")
                 }
                 saved
             }
@@ -497,18 +548,18 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 if (live.processing) "Transcription is running" else "Recording is active"
             } else null
             val shareReason = when {
-                library.error != null || actionNote == null -> "Reload this session"
+                library.error != null || actionNote == null -> "Reload this recording"
                 transcript.isBlank() -> "No text to share"
                 else -> null
             }
             val audioReason = activeReason ?: when {
-                library.error != null || actionNote == null -> "Reload this session"
+                library.error != null || actionNote == null -> "Reload this recording"
                 hasUnprocessedAudio -> "Transcription is unfinished"
                 library.audioBytes == 0L -> "No original audio"
                 else -> null
             }
             SessionActionsSheet(
-                title = actionNote?.title ?: library.notes.firstOrNull { it.id == detailId }?.title ?: "Session options",
+                title = actionNote?.title ?: library.notes.firstOrNull { it.id == detailId }?.title ?: "Recording options",
                 loading = loading, loaded = actionNote != null,
                 shareReason = shareReason.takeUnless { loading }, audioReason = audioReason.takeUnless { loading },
                 deleteReason = activeReason.takeUnless { loading },
@@ -526,7 +577,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             onDirtyChange = { renameDirty = it }, onSavingChange = { formSaving = it },
         ) { title -> model.renameSession(actionNote.id, title) }
         if (pendingOpenTarget != null) AlertDialog(
-            onDismissRequest = { pendingOpenTarget = null }, title = { Text("Leave this session?") },
+            onDismissRequest = { pendingOpenTarget = null }, title = { Text("Leave this recording?") },
             text = { Text(if (formSaving) "Finishing your save…" else "Unsaved changes will be discarded.") },
             confirmButton = { TextButton(enabled = !formSaving, onClick = {
                 val target = pendingOpenTarget
@@ -536,7 +587,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         )
         if ((dialog == "delete" || dialog == "audio") && actionNote != null) AlertDialog(
             onDismissRequest = ::closeDialog,
-            title = { Text(if (dialog == "delete") "Delete this session?" else "Remove its audio?") },
+            title = { Text(if (dialog == "delete") "Delete this recording?" else "Remove its audio?") },
             text = { Text(if (dialog == "delete") "The text and recording will be permanently deleted from this device." else "The text will stay. You won’t be able to listen to passages again. Frees ${"%.1f".format(library.audioBytes / 1048576.0)} MB.") },
             confirmButton = { TextButton(enabled = if (dialog == "delete") !actionActive else canRemoveAudio, onClick = {
                 if (dialog == "delete") {
@@ -551,7 +602,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
 }
 
 @Composable private fun SessionsHeader(
-    headerStyle: TextStyle,
+    headerStyle: TextStyle, dateLabel: String, datesAvailable: Boolean, dateSelected: Boolean, browseDates: () -> Unit,
     attentionCount: Int, attentionOnly: Boolean, toggleAttention: () -> Unit,
     actions: @Composable RowScope.() -> Unit,
 ) {
@@ -569,10 +620,21 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         val inlineFilter = fontScale <= 1.15f && maxWidth >= 340.dp
         Column {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Sessions", modifier = Modifier.weight(1f).semantics { heading() },
-                    style = headerStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
+                Row(Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                    .then(if (dateSelected) Modifier.background(MaterialTheme.colorScheme.surfaceContainer) else Modifier)
+                    .clickable(enabled = datesAvailable, role = Role.Button, onClick = browseDates)
+                    .heightIn(min = 48.dp).semantics {
+                        contentDescription = "Browse recording dates"
+                        stateDescription = dateLabel
+                        selected = dateSelected
+                    }.padding(horizontal = if (dateSelected) 8.dp else 0.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Crossfade(dateLabel, animationSpec = tween(140), modifier = Modifier.weight(1f, fill = false), label = "Visible recording day") { label ->
+                        Text(label, style = headerStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (datesAvailable) Glyph(Symbol.Chevron, Modifier.size(14.dp).rotate(90f), MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 if (inlineFilter && showFilter) ReviewFilter()
                 actions()
             }

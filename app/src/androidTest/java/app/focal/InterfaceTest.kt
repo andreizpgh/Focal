@@ -89,7 +89,7 @@ class InterfaceTest {
     private fun waitForSessionReady(title: String, passage: String? = null, audioAvailable: Boolean = true) {
         // Selecting a session loads its audio and passages on IO; Compose idle alone does not await that load.
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithContentDescription("Session options").fetchSemanticsNodes().isNotEmpty() &&
+            compose.onAllNodesWithContentDescription("Recording options").fetchSemanticsNodes().isNotEmpty() &&
                 compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() &&
                 (!audioAvailable || compose.onAllNodesWithContentDescription("Audio position").fetchSemanticsNodes().isNotEmpty()) &&
                 (passage == null || compose.onAllNodesWithText(passage).fetchSemanticsNodes().isNotEmpty())
@@ -206,14 +206,14 @@ class InterfaceTest {
         val id = readySession(app.store, "Clean session layout", listOf("A synthetic note for the library layout."))
         try {
             waitForTitle("Clean session layout")
-            compose.onNodeWithText("Sessions").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Browse recording dates").assertIsDisplayed()
             compose.onNodeWithText("focal", ignoreCase = true).assertDoesNotExist()
             compose.onNodeWithText("Audio and words, kept together.").assertDoesNotExist()
             compose.onNodeWithText("Speech language:", substring = true).assertDoesNotExist()
             compose.onNodeWithText("Record a note").assertDoesNotExist()
             compose.onNodeWithText("All notes ·", substring = true).assertDoesNotExist()
             compose.onNode(hasSetTextAction()).assertDoesNotExist()
-            compose.onNodeWithContentDescription("Search sessions").assertIsDisplayed().performClick()
+            compose.onNodeWithContentDescription("Search recordings").assertIsDisplayed().performClick()
             compose.onNode(hasSetTextAction()).assertIsDisplayed()
             compose.onNodeWithContentDescription("Close search").performClick()
             compose.onNode(hasSetTextAction()).assertDoesNotExist()
@@ -237,7 +237,7 @@ class InterfaceTest {
             ), language = "ru")
             ids += readySession(store, "Other session", listOf("An unrelated recorded idea."))
             waitForTitle("Other session")
-            compose.onNodeWithContentDescription("Search sessions").performClick()
+            compose.onNodeWithContentDescription("Search recordings").performClick()
             compose.onNode(hasSetTextAction()).performTextReplacement("durable marker")
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.waitUntil(10_000) {
@@ -257,7 +257,7 @@ class InterfaceTest {
             compose.onNodeWithText("Other session").assertDoesNotExist()
             compose.onNode(hasSetTextAction()).performTextReplacement("no-such-session-7492")
             compose.onNode(hasSetTextAction()).performImeAction()
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("No matching sessions.").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("No matching recordings.").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithContentDescription("Close search").performClick()
             waitForTitle("Other session")
             compose.onNode(hasSetTextAction()).assertDoesNotExist()
@@ -282,8 +282,8 @@ class InterfaceTest {
             reviewFilter("Show all").assertExists()
             compose.onNodeWithText("A thought worth keeping").performClick()
             waitForSessionReady("A thought worth keeping", "Make more space for the projects that matter.")
-            compose.onNodeWithContentDescription("Back to sessions").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Session options").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Back to recordings").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Recording options").assertIsDisplayed()
             compose.onNodeWithContentDescription("Play original audio").assertIsDisplayed()
             compose.onNodeWithText("Make more space for the projects that matter.").assertExists()
             compose.onNodeWithText("Marked passages may need a closer listen.").assertDoesNotExist()
@@ -321,7 +321,7 @@ class InterfaceTest {
             // The library is absent during recreation; its browsing state must still be saved.
             compose.activityRule.scenario.recreate()
             waitForSessionReady(target.title)
-            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            compose.onNodeWithContentDescription("Back to recordings").performClick()
             waitForTitle(target.title)
             compose.onNodeWithText(target.title).assertIsDisplayed()
             val (restoredPosition, restoredOffset) = browsingPosition()
@@ -344,7 +344,7 @@ class InterfaceTest {
             waitForTitle(sessions.first().title)
             val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
             list.performScrollToNode(hasText(sessions.last().title))
-            compose.onNodeWithContentDescription("Search sessions").performClick()
+            compose.onNodeWithContentDescription("Search recordings").performClick()
             compose.onNode(hasSetTextAction()).assertIsDisplayed().assertIsFocused()
             val target = sessions.first()
             compose.onNode(hasSetTextAction()).performTextReplacement(target.title)
@@ -353,7 +353,7 @@ class InterfaceTest {
             waitForTitle(target.title)
             compose.onNode(hasText(target.title) and hasClickAction() and !hasSetTextAction()).performClick()
             waitForSessionReady(target.title)
-            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            compose.onNodeWithContentDescription("Back to recordings").performClick()
             compose.onNode(hasSetTextAction()).assertIsDisplayed().assertIsNotFocused().assertTextContains(target.title)
         } finally { ids.forEach(app.store::delete) }
     }
@@ -373,13 +373,13 @@ class InterfaceTest {
         }
         try {
             waitForTitle(title)
-            compose.onNodeWithContentDescription("Search sessions").performClick()
+            compose.onNodeWithContentDescription("Search recordings").performClick()
             compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(query)
             compose.onNode(hasSetTextAction()).performTextInputSelection(selection)
             assertQueryAndSelection()
             compose.onNode(hasText(title) and hasClickAction() and !hasSetTextAction()).assertIsDisplayed().performClick()
             waitForSessionReady(title, passage)
-            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            compose.onNodeWithContentDescription("Back to recordings").performClick()
             waitForEditor()
             val fieldView = checkNotNull(compose.onNode(hasSetTextAction()).fetchSemanticsNode().root as? android.view.View)
             compose.waitUntil(5_000) {
@@ -441,7 +441,7 @@ class InterfaceTest {
         }
         try {
             waitForTitle(prefix + suffix)
-            compose.onNodeWithContentDescription("Search sessions").performClick()
+            compose.onNodeWithContentDescription("Search recordings").performClick()
             compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(prefix)
             compose.onNode(hasSetTextAction()).performTextInputSelection(androidx.compose.ui.text.TextRange(prefix.length))
             assertSelectionAtEnd(prefix)
@@ -466,7 +466,7 @@ class InterfaceTest {
             assertSelectionAtEnd(prefix + suffix)
             compose.onNode(hasText(prefix + suffix) and hasClickAction() and !hasSetTextAction()).performClick()
             waitForSessionReady(prefix + suffix)
-            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            compose.onNodeWithContentDescription("Back to recordings").performClick()
             waitForEditor()
             waitForKeyboard(false)
             compose.onNode(hasSetTextAction()).assertIsNotFocused().assertTextEquals(prefix + suffix)
@@ -536,7 +536,7 @@ class InterfaceTest {
             compose.waitUntil(10_000) {
                 model.library.value.loaded && model.library.value.notes.any { it.id == id }
             }
-            compose.onNodeWithContentDescription("Search sessions").performClick()
+            compose.onNodeWithContentDescription("Search recordings").performClick()
             val field = compose.onNode(hasSetTextAction())
             fun wholeFieldAboveKeyboard(): Boolean {
                 val node = field.fetchSemanticsNode()
@@ -571,7 +571,7 @@ class InterfaceTest {
                 }
             }
             field.assertIsNotFocused().assertTextContains("Accessible search")
-            compose.onNodeWithText("Sessions", substring = false).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Browse recording dates").assertIsDisplayed()
             compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
                 .performScrollToNode(hasText("Accessible search target"))
             compose.onNodeWithText("Accessible search target").assertIsDisplayed()
@@ -622,7 +622,7 @@ class InterfaceTest {
             compose.onNodeWithText("Transcription interrupted").assertIsDisplayed()
             capture("interrupted-unpublished-tail")
             compose.onNodeWithText("Continue transcription").assertExists()
-            compose.onNodeWithContentDescription("Session options").performClick()
+            compose.onNodeWithContentDescription("Recording options").performClick()
             compose.onNodeWithText("Remove audio").assertIsNotEnabled()
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
             compose.onNodeWithText("Continue transcription").performScrollTo().performClick()
@@ -633,7 +633,7 @@ class InterfaceTest {
             }
             compose.waitUntil(10_000) { compose.onAllNodesWithText(recoveredText).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("Continue transcription").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Session options").performClick()
+            compose.onNodeWithContentDescription("Recording options").performClick()
             compose.onNodeWithText("Remove audio").assertIsEnabled()
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
             assertEquals(listOf(1000L to 2000L), decoded.map { it.start to it.end })
@@ -704,7 +704,7 @@ class InterfaceTest {
             compose.onNodeWithText("Copy text").assertIsDisplayed()
             compose.onNodeWithText("Tap a passage to listen or edit.").assertDoesNotExist()
             capture("session-audio-dock")
-            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            compose.onNodeWithContentDescription("Back to recordings").performClick()
         } finally { app.store.delete(id) }
     }
 
@@ -720,7 +720,7 @@ class InterfaceTest {
             compose.onNodeWithText("Dark").performClick()
             compose.onNodeWithText("Light").performClick()
             capture("settings-brand")
-            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            compose.onNodeWithContentDescription("Back to recordings").performClick()
             compose.onNodeWithContentDescription("Speech language: Русский").assertIsDisplayed().performClick()
             languageOption("English").performScrollTo().performClick()
             compose.activityRule.scenario.recreate()
@@ -764,7 +764,7 @@ class InterfaceTest {
             compose.waitForIdle()
             assertSame(resumedActivity, compose.activity)
             compose.onNode(hasSetTextAction()).assertTextContains(draft)
-            compose.onNodeWithText("Leave this session?").assertDoesNotExist()
+            compose.onNodeWithText("Leave this recording?").assertDoesNotExist()
 
             compose.onNodeWithContentDescription("Close editor").performScrollTo().performClick()
             compose.onNodeWithText("Discard your changes?").assertIsDisplayed()
@@ -1042,7 +1042,7 @@ class InterfaceTest {
             compose.onNodeWithText("Copy text").performClick()
             compose.onNodeWithText("This transcript is too long to copy at once. Copy a smaller selection from the passage editor.").assertIsDisplayed()
             compose.runOnIdle { assertEquals("Existing clipboard", clipboard.primaryClip!!.getItemAt(0).text.toString()) }
-            compose.onNodeWithContentDescription("Session options").performClick()
+            compose.onNodeWithContentDescription("Recording options").performClick()
             compose.onNodeWithText("Share text").performClick()
             compose.waitUntil(10_000) {
                 compose.onAllNodesWithText("This transcript is too long to share at once. Copy a smaller selection from the passage editor.")
@@ -1073,7 +1073,7 @@ class InterfaceTest {
             waitForTitle(originalTitle)
             compose.onNodeWithText(originalTitle).performClick()
             waitForSessionReady(originalTitle, originalText)
-            compose.onNodeWithContentDescription("Session options").performClick()
+            compose.onNodeWithContentDescription("Recording options").performClick()
             compose.onNodeWithText("Rename").performClick()
             waitForEditor()
             waitForDialogKeyboard()

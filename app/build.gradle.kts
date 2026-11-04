@@ -20,8 +20,8 @@ android {
         applicationId = "app.focal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.1.0-alpha.5"
+        versionCode = 6
+        versionName = "0.1.0-alpha.6"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         externalNativeBuild {
             cmake {
