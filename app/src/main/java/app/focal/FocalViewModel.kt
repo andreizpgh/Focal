@@ -15,7 +15,8 @@ import kotlinx.coroutines.sync.withLock
 data class LibraryState(val notes: List<Note> = emptyList(), val note: Note? = null,
                         val passages: List<Passage> = emptyList(), val audioBytes: Long = 0,
                         val pending: Int = 0, val loaded: Boolean = false,
-                        val selectedId: String? = null, val error: String? = null)
+                        val selectedId: String? = null, val error: String? = null,
+                        val hasUnpublishedTail: Boolean = false)
 
 @OptIn(FlowPreview::class)
 class FocalViewModel internal constructor(
@@ -48,8 +49,10 @@ class FocalViewModel internal constructor(
                     try {
                         app.storageReady.await()
                         beforeLibraryReadForTests?.invoke()
-                        libraryState.value = LibraryState(app.store.notes(query), id?.let(app.store::note), id?.let(app.store::passages).orEmpty(),
-                            id?.let(app.store::audioBytes) ?: 0, id?.let(app.store::pendingCount) ?: 0, true, id)
+                        val note = id?.let(app.store::note)
+                        libraryState.value = LibraryState(app.store.notes(query), note, id?.let(app.store::passages).orEmpty(),
+                            id?.let(app.store::audioBytes) ?: 0, id?.let(app.store::pendingCount) ?: 0, true, id,
+                            hasUnpublishedTail = note?.let(app.store::hasUnpublishedTail) == true)
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
                         val previous = libraryState.value
@@ -59,6 +62,7 @@ class FocalViewModel internal constructor(
                             passages = if (sameSelection) previous.passages else emptyList(),
                             audioBytes = if (sameSelection) previous.audioBytes else 0,
                             pending = if (sameSelection) previous.pending else 0,
+                            hasUnpublishedTail = sameSelection && previous.hasUnpublishedTail,
                             selectedId = id, error = if (e is PassageSizeException) e.message else "Could not load sessions. Try again when storage is available."
                         )
                     }

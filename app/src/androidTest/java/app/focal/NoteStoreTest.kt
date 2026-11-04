@@ -221,6 +221,29 @@ class NoteStoreTest {
         assertEquals(0L, store.audioBytes(id))
     }
 
+    @Test fun unpublishedTailBlocksAudioRemovalUntilRecovered() {
+        val id = note()
+        val original = ByteArray(64_000) { (it % 101).toByte() }
+        store.audioFile(id).writeBytes(original)
+        val first = store.beginChunk(id, 0, false)
+        store.finishChunk(first, 1000)
+        store.complete(store.nextChunk(id)!!, emptyList())
+        store.state(id, "INTERRUPTED")
+        assertEquals(0, store.pendingCount(id))
+
+        try { store.removeAudio(id); fail("The unpublished audio tail was removed") }
+        catch (_: IllegalStateException) { }
+        assertArrayEquals(original, store.audioFile(id).readBytes())
+        assertEquals(0L, pendingDeletion(id))
+
+        store.recover(id)
+        val tail = checkNotNull(store.nextChunk(id))
+        assertEquals(1000L to 2000L, tail.start to tail.end)
+        store.complete(tail, emptyList())
+        store.removeAudio(id)
+        assertEquals(0L, store.audioBytes(id))
+    }
+
     @Test fun previousCompletedChunkLookupIsBoundedAndNeverCrossesNotes() {
         val id = note()
         val other = note()

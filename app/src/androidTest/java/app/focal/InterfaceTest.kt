@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.view.KeyEvent
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
@@ -27,12 +28,15 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.core.Transcript
+import app.focal.data.Chunk
 import app.focal.data.NoteStore
 import app.focal.data.Passage
 import app.focal.data.Preferences
 import app.focal.recording.LiveSession
+import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
+import app.focal.recording.SessionOperations
 import app.focal.ui.FocalApp
 import app.focal.ui.fitsTextTransferBudget
 import app.focal.ui.LARGE_PASSAGE_PART_CHARS
@@ -40,6 +44,9 @@ import app.focal.ui.passageTextPart
 import app.focal.ui.passageTextPartCount
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -572,6 +579,80 @@ class InterfaceTest {
         } finally {
             app.store.delete(id)
             compose.runOnUiThread { compose.activity.requestedOrientation = originalOrientation }
+        }
+    }
+
+    @Test fun continueTranscriptionFindsAnUnpublishedTailAndPreservesManualEdits() {
+        val app = application()
+        val title = "Interrupted session with an unpublished tail"
+        val correction = "Keep this manual correction."
+        val recoveredText = "Recovered the saved tail."
+        val decoded = CopyOnWriteArrayList<Chunk>()
+        val microphoneOpens = AtomicInteger()
+        val previousInputFactory = RecordingService.inputFactoryForTests
+        val previousDecoderFactory = RecordingService.decoderFactoryForTests
+        val id = readySession(app.store, title, listOf("Original text"), uncertain = setOf(0))
+        try {
+            assertTrue("The bundled model must be ready to offer direct recovery", app.models.ready())
+            val original = ByteArray(2000 * 32) { (it % 101).toByte() }
+            app.store.audioFile(id).writeBytes(original)
+            app.store.edit(app.store.passages(id).single(), correction)
+            val saved = app.store.passages(id).single()
+            app.store.state(id, "INTERRUPTED", "Saved audio can still be transcribed.")
+            assertEquals(0, app.store.pendingCount(id))
+
+            RecordingService.inputFactoryForTests = {
+                microphoneOpens.incrementAndGet()
+                error("Recovery must not open the microphone")
+            }
+            RecordingService.decoderFactoryForTests = {
+                object : RecordingDecoder {
+                    override suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int) {
+                        decoded += chunk
+                        store.complete(chunk, listOf(Passage(noteId = chunk.noteId, chunkId = chunk.id,
+                            start = chunk.start, end = chunk.end, text = recoveredText, uncertain = false)))
+                    }
+                    override fun cancel() = Unit
+                    override fun close() = Unit
+                }
+            }
+
+            waitForTitle(title)
+            compose.onNodeWithText(title).performClick()
+            waitForSessionReady(title)
+            compose.onNodeWithText("Transcription interrupted").assertIsDisplayed()
+            capture("interrupted-unpublished-tail")
+            compose.onNodeWithText("Continue transcription").assertExists()
+            compose.onNodeWithContentDescription("Session options").performClick()
+            compose.onNodeWithText("Remove audio").assertIsNotEnabled()
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            compose.onNodeWithText("Continue transcription").performScrollTo().performClick()
+
+            compose.waitUntil(10_000) {
+                app.store.note(id)?.state == "READY" && RecordingState.live.value.noteId != id &&
+                    !SessionOperations.matchesSession(capture = false, noteId = id)
+            }
+            compose.waitUntil(10_000) { compose.onAllNodesWithText(recoveredText).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Continue transcription").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Session options").performClick()
+            compose.onNodeWithText("Remove audio").assertIsEnabled()
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            assertEquals(listOf(1000L to 2000L), decoded.map { it.start to it.end })
+            assertEquals(0, microphoneOpens.get())
+            assertEquals(0, app.store.pendingCount(id))
+            assertEquals(saved, app.store.passages(id).first())
+            assertArrayEquals(original, app.store.audioFile(id).readBytes())
+        } finally {
+            try {
+                if (SessionOperations.matchesSession(capture = false, noteId = id)) {
+                    app.stopService(Intent(app, RecordingService::class.java))
+                    compose.waitUntil(10_000) { !SessionOperations.matchesSession(capture = false, noteId = id) }
+                }
+            } finally {
+                RecordingService.inputFactoryForTests = previousInputFactory
+                RecordingService.decoderFactoryForTests = previousDecoderFactory
+                app.store.delete(id)
+            }
         }
     }
 

@@ -52,6 +52,7 @@ import app.focal.data.Note
 import app.focal.data.Passage
 import app.focal.data.Preferences
 import app.focal.data.fitsPassageDraftBudget
+import app.focal.data.mayNeedRecovery
 import app.focal.recording.LiveSession
 import kotlinx.coroutines.flow.first
 import java.time.Instant
@@ -264,9 +265,10 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
     toggleReview: () -> Unit, edit: (Passage) -> Unit, retry: () -> Unit,
     playing: Boolean, audioAvailable: Boolean, play: () -> Unit, rename: () -> Unit,
     seek: (Long) -> Unit = {}, playbackPosition: Long? = null,
-    retryLoad: () -> Unit = {},
+    retryLoad: () -> Unit = {}, notificationsEnabled: Boolean = true,
 ) {
     val review = library.passages.count { it.uncertain && !it.reviewed }
+    val canRetryTranscription = library.pending > 0 || note.mayNeedRecovery
     val passages = if (reviewOnly) library.passages.filter { it.uncertain && !it.reviewed } else library.passages
     val activePassage = playbackPosition?.let { position ->
         library.passages.lastOrNull { position >= it.start && position < it.end }?.id
@@ -297,8 +299,8 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
             }
         }
         if (library.error != null) item { DataReadError("Couldn't refresh this session", library.error.orEmpty(), retryLoad) }
-        if (live != null && !live.processing) item { RecordingReadout(live) }
-        if (live == null && (note.error.isNotBlank() || library.pending > 0)) item {
+        if (live != null && !live.processing) item { RecordingReadout(live, notificationsEnabled) }
+        if (live == null && (note.error.isNotBlank() || canRetryTranscription)) item {
             Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 18.dp)) {
                 Text(
                     when { note.state == "INTERRUPTED" -> "Transcription interrupted"; note.error.isBlank() -> "Transcription unfinished"; else -> "Transcription error" },
@@ -306,9 +308,9 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
                 )
                 if (note.error.isNotBlank()) Text(note.error, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
-                if (library.pending > 0 && library.audioBytes > 0) TextButton(onClick = retry, contentPadding = PaddingValues(0.dp)) {
+                if (canRetryTranscription && library.audioBytes > 0) TextButton(onClick = retry, contentPadding = PaddingValues(0.dp)) {
                     Text("Continue transcription")
-                } else if (library.pending > 0) Text("Original audio is unavailable.", style = MaterialTheme.typography.bodyMedium,
+                } else if (canRetryTranscription) Text("Original audio is unavailable.", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             }
         }
@@ -336,7 +338,7 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
     }
 }
 
-@Composable private fun RecordingReadout(live: LiveSession) {
+@Composable private fun RecordingReadout(live: LiveSession, notificationsEnabled: Boolean) {
     val fontScale = LocalDensity.current.fontScale
     Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 26.dp)) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -353,6 +355,11 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
         }
         if (exceptionalMessage != null) Text(
             exceptionalMessage, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        if (!notificationsEnabled) Text(
+            "Notifications are off. Return to Focal to pause or finish.",
+            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
         )
     }

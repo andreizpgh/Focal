@@ -25,6 +25,8 @@ class PassageSizeException(message: String) : IllegalStateException(message)
 
 data class Note(val id: String, val title: String, val created: Long, val language: String,
                 val state: String, val duration: Long, val error: String, val preview: String = "", val reviewCount: Int = 0)
+internal val Note.mayNeedRecovery: Boolean get() = state == "INTERRUPTED" || state == "ERROR"
+
 data class Chunk(val id: String, val noteId: String, val start: Long, val end: Long,
                  val overlap: Boolean, val state: String)
 data class Passage(val id: Long = 0, val noteId: String, val chunkId: String, val start: Long,
@@ -33,6 +35,7 @@ data class Passage(val id: Long = 0, val noteId: String, val chunkId: String, va
 class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 2) {
     private companion object {
         const val BYTES_PER_MS = 32L
+        const val MIN_RECOVERABLE_MS = 20L
         const val MAX_CHUNK_MS = 30_000L
         const val RECOVERY_OVERLAP_MS = 500L
         const val MAX_LEGACY_PASSAGE_BYTES = 16 * 1024 * 1024
@@ -147,6 +150,15 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     fun pendingCount(note: String): Int = readableDatabase.rawQuery(
         "SELECT count(*) FROM chunks WHERE note_id=? AND state!='DONE'", arrayOf(note)
     ).use { it.moveToFirst(); it.getInt(0) }
+
+    internal fun hasUnpublishedTail(note: Note): Boolean = note.mayNeedRecovery &&
+        audioBytes(note.id) / BYTES_PER_MS - lastChunkEnd(readableDatabase, note.id) >= MIN_RECOVERABLE_MS
+
+    private fun lastChunkEnd(db: SQLiteDatabase, id: String): Long =
+        db.rawQuery("SELECT COALESCE(MAX(end),0) FROM chunks WHERE note_id=? AND state!='WRITING'", arrayOf(id)).use {
+            it.moveToFirst(); it.getLong(0)
+        }
+
     fun recentPassages(note: String, before: Long): List<Passage> = readPassages(
         "SELECT id,note_id,chunk_id,start,end,uncertain,reviewed,CASE WHEN length(CAST(text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES THEN text END AS safe_text FROM passages WHERE note_id=? AND start<? ORDER BY start DESC,id DESC LIMIT 6",
         arrayOf(note, before.toString())
@@ -277,7 +289,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
             }
             writing.forEach { saved ->
                 val end = audioFile(saved.noteId).length() / BYTES_PER_MS
-                if (saved.start < 0 || end - saved.start < 20) {
+                if (saved.start < 0 || end - saved.start < MIN_RECOVERABLE_MS) {
                     delete("chunks", "id=?", arrayOf(saved.id))
                 } else {
                     // Live recovery can follow a failed capture sync. It must succeed
@@ -290,11 +302,9 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
                 val file = audioFile(id)
                 if (!file.isFile) return@forEach
                 val end = file.length() / BYTES_PER_MS
-                val lastEnd = rawQuery("SELECT COALESCE(MAX(end),0) FROM chunks WHERE note_id=? AND state!='WRITING'", arrayOf(id)).use {
-                    it.moveToFirst(); it.getLong(0)
-                }
+                val lastEnd = lastChunkEnd(this, id)
                 val start = (if (id == noteId) tailFromMs else null)?.coerceAtMost(end) ?: lastEnd
-                val missing = uncoveredRanges(this, id, start, end).filter { it.end - it.start >= 20 }
+                val missing = uncoveredRanges(this, id, start, end).filter { it.end - it.start >= MIN_RECOVERABLE_MS }
                 if (missing.isNotEmpty()) {
                     syncOriginal(id)
                     missing.forEachIndexed { index, range ->
@@ -368,7 +378,9 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     }
     fun removeAudio(id: String) {
         writableDatabase.transaction {
-            check(pendingCount(id) == 0) { "Finish transcription before removing its source audio." }
+            check(pendingCount(id) == 0 && note(id)?.let(::hasUnpublishedTail) != true) {
+                "Finish transcription before removing its source audio."
+            }
             insertWithOnConflict("pending_audio_deletions", null, ContentValues().apply { put("note_id", id) }, SQLiteDatabase.CONFLICT_IGNORE)
         }
         try { deletePendingAudio(id) } finally { changed() }

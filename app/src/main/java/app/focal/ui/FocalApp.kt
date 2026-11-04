@@ -28,6 +28,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
@@ -114,6 +115,8 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     var handledRequest by rememberSaveable { mutableStateOf<Long?>(null) }
     var handledRequestId by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val notifications = remember(context) { NotificationManagerCompat.from(context) }
+    var notificationsEnabled by remember(notifications) { mutableStateOf(notifications.areNotificationsEnabled()) }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     fun setSearchInputActive(active: Boolean) {
@@ -176,15 +179,17 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
     LaunchedEffect(live.message) { if (live.noteId == null && live.message.isNotBlank()) notify(live.message) }
     LaunchedEffect(Unit) { model.errors.collect { snackbar.showSnackbar(it) } }
-    DisposableEffect(lifecycle) {
+    DisposableEffect(lifecycle, notifications) {
         val observer = LifecycleEventObserver { _, event ->
             // Commit an already hidden search IME before Android can restore its focused editor.
             if (event == Lifecycle.Event.ON_PAUSE && destination == Destination.Sessions && searchInputActive && searchImeSeen &&
                 ViewCompat.getRootWindowInsets(view)?.isVisible(WindowInsetsCompat.Type.ime()) == false) dismissInput()
             if (event == Lifecycle.Event.ON_STOP) model.player.pause()
-            if (event == Lifecycle.Event.ON_RESUME &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
-                dismissPermissionNotice()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationsEnabled = notifications.areNotificationsEnabled()
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                    dismissPermissionNotice()
+            }
         }
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer); model.player.pause() }
@@ -201,6 +206,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         dismissPermissionNotice()
+        notificationsEnabled = notifications.areNotificationsEnabled()
         val granted = result[Manifest.permission.RECORD_AUDIO] == true || ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (granted) model.record()
         else permissionNotice = scope.launch {
@@ -228,6 +234,8 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     val note = library.note?.takeIf { it.id == selected }
     val active = note != null && live.noteId == note.id
     val audioAvailable = library.audioBytes > 0 && (live.noteId == null || live.processing)
+    val hasUnprocessedAudio = library.pending > 0 || library.hasUnpublishedTail
+    val canRemoveAudio = !active && !hasUnprocessedAudio && library.audioBytes > 0 && library.error == null
     val transcript = remember(library.passages) { library.passages.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n") }
     fun allowTextTransfer(action: String): Boolean {
         if (fitsTextTransferBudget(transcript)) return true
@@ -306,13 +314,13 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                                                 Text("Remove audio")
                                                 val reason = when {
                                                     active -> if (live.processing) "Transcription is running" else "Recording is active"
-                                                    library.pending > 0 -> "Transcription is unfinished"
+                                                    hasUnprocessedAudio -> "Transcription is unfinished"
                                                     library.audioBytes == 0L -> "No original audio"
                                                     else -> null
                                                 }
                                                 if (reason != null) Text(reason, style = MaterialTheme.typography.labelMedium)
                                             }
-                                        }, enabled = !active && library.pending == 0 && library.audioBytes > 0,
+                                        }, enabled = canRemoveAudio,
                                             onClick = { menu = false; dialog = "audio" })
                                         DropdownMenuItem(text = {
                                             Column {
@@ -390,7 +398,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                             note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { if (library.error == null) editingId = it.id else notify("Reload this session before editing.") }, { if (ready) model.retry(note.id) else openModel(note.id) },
                             playback.isPlaying && playback.noteId == note.id, audioAvailable, { model.playNote(note) }, { dialog = "rename" },
                             seek = { model.seekNote(note, it) }, playbackPosition = playback.takeIf { it.noteId == note.id }?.positionMs,
-                            retryLoad = model::retryLibrary,
+                            retryLoad = model::retryLibrary, notificationsEnabled = notificationsEnabled,
                         ) else if (library.error != null) DataReadError("Couldn't load this session", library.error.orEmpty(), model::retryLibrary,
                             Modifier.padding(horizontal = 24.dp).verticalScroll(rememberScrollState())) else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 FocusProcessingIndicator(contentDescription = "Loading session")
@@ -455,7 +463,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             onDismissRequest = { dialog = null },
             title = { Text(if (dialog == "delete") "Delete this session?" else "Remove its audio?") },
             text = { Text(if (dialog == "delete") "The text and recording will be permanently deleted from this device." else "The text will stay. You won’t be able to listen to passages again. Frees ${"%.1f".format(library.audioBytes / 1048576.0)} MB.") },
-            confirmButton = { TextButton(onClick = {
+            confirmButton = { TextButton(enabled = dialog == "delete" || canRemoveAudio, onClick = {
                 if (dialog == "delete") { model.delete(note.id); open(null) } else model.removeAudio(note.id)
                 dialog = null
             }) { Text(if (dialog == "delete") "Delete" else "Remove audio", color = MaterialTheme.colorScheme.error) } },
