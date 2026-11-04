@@ -3,7 +3,7 @@
   <h1>Focal</h1>
   <p>Offline voice notes for Android. Record, review, and copy.</p>
   <p>
-    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/ux-alpha-5/Focal.apk">Download UX Alpha 5</a></strong>
+    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/ux-alpha-5/Focal-0.1.0-alpha.5.apk">Download UX Alpha 5</a></strong>
     &nbsp; · &nbsp;
     <a href="docs/install.md">Install guide</a>
     &nbsp; · &nbsp;

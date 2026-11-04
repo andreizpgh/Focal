@@ -1,12 +1,12 @@
 # Install Focal
 
-**[Download Focal.apk](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-5/Focal.apk)**
+**[Download Focal-0.1.0-alpha.5.apk](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-5/Focal-0.1.0-alpha.5.apk)**
 
 Android 8.0 or newer and an ARM64 phone. The speech model is included; no account
 or extra download is needed. This is UX Alpha 5, version `0.1.0-alpha.5`, for testing.
 
 1. Open the download link on your phone.
-2. Open **Focal.apk** from your browser’s downloads or the Files app.
+2. Open **Focal-0.1.0-alpha.5.apk** from your browser’s downloads or the Files app.
 3. If Android asks, allow **Install unknown apps** for that browser or file manager,
    then return to the APK and tap **Install**. You can turn that permission off afterward.
 
@@ -17,6 +17,8 @@ The interface and default speech language are English.
 The APK is also available under **Assets** on the
 [release page](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-5).
 You don’t need a GitHub account, Android Studio, or a ZIP archive.
+The versioned filename identifies this download; the original `Focal.apk` asset
+in the same release contains identical bytes and remains available.
 
 ## If you tried the previous download
 
