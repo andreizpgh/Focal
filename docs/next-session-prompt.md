@@ -20,8 +20,9 @@ real-model проверок, 145.206 с JUnit / 146.192 с runner wall. Обе l
 тестов, исходные oversized/draft/storage assertions сохранены. Sol/Terra и Astra
 проверили код и реальные статичные/движущиеся кадры, включая animations off.
 
-Alpha 5 опубликована; серверные размеры и SHA всех трёх файлов совпадают,
-прямая ссылка APK отвечает 200. [PR #6](https://github.com/andreizpgh/Focal/pull/6)
+Alpha 5 опубликована; серверные размеры и SHA файлов релиза совпадают,
+прямая ссылка APK отвечает 200. Добавлено однозначное имя
+`Focal-0.1.0-alpha.5.apk`; прежний `Focal.apk` сохранён, содержимое идентично. [PR #6](https://github.com/andreizpgh/Focal/pull/6)
 содержит изменения: перед действием проверь его статус и
 `build/local-diagnostics/current-android-delivery-work.json`. AVD остановлен,
 portrait/font1/light/320×640 восстановлены, тяжёлых задач нет. Не пересобирай уже

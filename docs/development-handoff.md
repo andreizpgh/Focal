@@ -35,9 +35,10 @@ Sol/Terra source reviews and Astra actual screenshot/motion/reduced-motion revie
 passed. Initial focused test failures and their causes remain documented; the clean
 full run passed on the first attempt. No speech setting or download ledger changed.
 
-The [Alpha 5 APK](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-5/Focal.apk)
-is published: all three remote asset sizes/digests match local verified files and
-the public download returns 200. [PR #6](https://github.com/andreizpgh/Focal/pull/6)
+The [Alpha 5 APK](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-5/Focal-0.1.0-alpha.5.apk)
+is published: all four remote asset sizes/digests match local verified files and
+the public download returns 200. The versioned APK name was added to distinguish
+downloads; it is byte-identical to the preserved `Focal.apk` asset. [PR #6](https://github.com/andreizpgh/Focal/pull/6)
 tracks this delivery; check its status and `build/local-diagnostics/current-android-delivery-work.json`
 before continuing. Earlier release assets are unchanged. The dedicated AVD is
 stopped after restoring portrait, font1, light and 320×640; no heavy job remains.
