@@ -1,40 +1,48 @@
 # Продолжение Focal · 2026-11-04
 
-Продолжи в существующем checkout, ветка `codex/sessions-stt-handoff`.
-Прочитай `AGENTS.md`, `docs/development-handoff.md`, `docs/quality-report.md`,
-`docs/architecture.md`, `docs/local-emulator-qa.md` и `docs/device-validation.md`.
-Не создавай новый worktree. PR #1–5 merged; следующая доставка требует нового PR.
+Существующий checkout, ветка `codex/sessions-stt-handoff`. Прочитай AGENTS.md,
+development-handoff, quality-report, architecture, local-emulator-qa и device-validation.
+Новый worktree не нужен. PR #1–7 merged; фактическую доставку Alpha 6 проверь в GitHub
+и `build/local-diagnostics/current-android-delivery-work.json`.
 
-## Последний UI checkpoint · Alpha 5
+## Последний checkpoint · Alpha 6
 
-Чистый `7b102ae` прошёл полный `qa-local.py --release-checks`: **103/0/0**, восемь
-real-model проверок, 145.206 с JUnit / 146.192 с runner wall. Обе lint и debug/test/R8
-сборки прошли за 3m51s, 36 core tests cached. Отчёт `20261104T163619.353337Z`,
-точные APK и приватные ручные кадры/видео в `build/local-diagnostics/ux-alpha-5-20261104/`.
-Идентичность: `releases/ux-alpha-5.json`, подпись совпадает с Alpha 2–4.
+Чистый `fe1dc9176563233016baeea50a8b7000e3ca163c`: полный локальный QA **108/0/0**, восемь
+real-model проверок, 181.672 с JUnit/182.695 с wall. Сборка, обе lint и R8:
+3m 57s; 36 core tests cached. Отчёт `20261104T185935.116019Z`, точные APK и ручные
+кадры/видео в `build/local-diagnostics/ux-alpha-6-20261104/`.
+Идентичность `releases/ux-alpha-6.json`, сертификат совпадает с Alpha 2–5.
 
-Приведены к одной системе шапки, metadata и Settings. Поиск и фильтрация плавно
-перестраивают layout; исправлено реальное наложение уходящих строк. Copy показывает
-подтверждение; long-press открывает действия записи; Done/Save отделён от Next hint.
-Дублирующий язык из Settings убран, основной picker запоминает выбор. Восемь новых
-тестов, исходные oversized/draft/storage assertions сохранены. Sol/Terra и Astra
-проверили код и реальные статичные/движущиеся кадры, включая animations off.
+Новые реплики автоматически видны, ручная прокрутка отключает follow до Latest.
+Проверены длинная реплика, resize, редактор, восстановление и последний результат.
+Вместо Sessions — день видимых записей и фильтр дня/All dates с сохранением поиска.
+Шапка live компактная; Session больше не показывается. Переходы 160 ms / 8 dp без
+исчезновения содержимого. Settings в тональных группах, тёмные заголовки исправлены.
+Astra проверила реальные кадры/движение; Sol/Terra — код и артефакты. Все исходные
+storage/draft assertions сохранены. Первый full 106/107 ждал удалённый live title;
+после изменения только readiness guard черновик/rotation/notification прошли.
+Следующий full остановлен нами для устранения белых кадров alpha 0; он не PASS.
+Ещё один full оборвался с host exit 143 без summary, причина неизвестна. В нём
+также упало сравнение всего AnnotatedString при совпадающих тексте и каретке;
+исходные диагностические прогоны 1 и 12 тестов прошли, метаданные не воспроизведены.
+Теперь сравниваются точные символы; строгие caret/focus/navigation проверки сохранены.
+После этого full 106/107 выявил CalledFromWrongThread через Compose test clock.
+Чтение библиотеки оставлено на IO, success/error публикация перенесена на Main.
+Thread-contract RED/GREEN подтверждён одним test APK; девять VM/actions — 8.624 с.
+Это не воспроизведение редкого interleaving и не доказанный phone crash.
+Финальный полный результат — только указанный выше. Не повторять старые диагностики.
 
-Alpha 5 опубликована; серверные размеры и SHA файлов релиза совпадают,
-прямая ссылка APK отвечает 200. Добавлено однозначное имя
-`Focal-0.1.0-alpha.5.apk`; прежний `Focal.apk` сохранён, содержимое идентично. [PR #6](https://github.com/andreizpgh/Focal/pull/6)
-содержит изменения: перед действием проверь его статус и
-`build/local-diagnostics/current-android-delivery-work.json`. AVD остановлен,
-portrait/font1/light/320×640 восстановлены, тяжёлых задач нет. Не пересобирай уже
-проверенный APK ради документации. Модели не скачивались; STT-настройки не менялись.
-200% landscape/IME проверялись. После ручного поворота восстанавливай portrait,
-пока Focal foreground, затем Home→app: иначе retained Android rotation override
-может пересоздавать Activity после Home и давать ложный lifecycle failure.
-Финализация, приёмка UI владельцем и телефонные/STT gates остаются открытыми.
+Alpha 6 подготовлена, статус публикации проверь перед действием. Использовать
+`Focal-0.1.0-alpha.6.apk`; старые assets не заменять. Не пересобирать проверенный APK
+ради документов. Перед следующими тестами восстановить portrait/font1/light/320×640;
+после поворота делать это при Focal foreground, затем Home→app. После QA остановить
+только `focal_local_qa`. Модели не скачивались, STT не менялся. Приёмка интерфейса,
+все STT/LLM и физические Pixel 10 gates остаются открытыми.
 
 ## Приоритет и организация
 
-Сохраняй Sessions / Focus wave и уже проверенные lifecycle/storage guards.
+Сохраняй визуальный стиль Focal / Focus wave и проверенные lifecycle/storage guards.
+Надписи Session/Sessions убраны по запросу владельца.
 История Alpha 2–4 и предыдущих Android checkpoints находится в handoff и quality
 report; не пересобирай их ради восстановления контекста. Скриншоты владельца
 приватны, для публичных примеров используй только наши синтетические данные.
@@ -100,7 +108,7 @@ lint-проверки, unsigned release/R8 и 36 cached core tests прошли 
 Исходный oversized-editor сбой исправлен в `12e958c`: input connection повторял
 accepted draft и стирал предупреждение. Причина установлена наблюдением UI,
 проверки не ослаблены. Дополнительно исправлены permission feedback, Unicode
-названия, Rename focus/scrolling и поиск/caret. Сохраняй Sessions / Focus wave,
+названия, Rename focus/scrolling и поиск/caret. Сохраняй визуальный стиль Focal / Focus wave,
 тихий английский интерфейс, явный язык речи, light с чёрными акцентами и dark/system.
 
 `9ffa3d1` проверяет native inputs при инкрементальной сборке. Шесть ожидаемых

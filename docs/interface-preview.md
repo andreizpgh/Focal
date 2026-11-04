@@ -1,6 +1,24 @@
 # Interface preview
 
-## UX Alpha 5 · 2026-11-04
+## UX Alpha 6 · 2026-11-04
+
+Actual, unretouched captures from the verified 0.1.0-alpha.6 APK at 411×890dp on
+the dedicated Android 15 emulator. The note is synthetic, not an accuracy example.
+[Download Alpha 6](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-6) ·
+[Build and QA identity](../releases/ux-alpha-6.json)
+
+| Recording | Settings |
+| --- | --- |
+| ![Date in the toolbar and one note title](screenshots/ux-alpha-6-note.png) | ![Settings grouped on quiet tonal surfaces](screenshots/ux-alpha-6-settings.png) |
+
+The library header follows the visible day and opens a day filter. Live transcripts
+follow the newest words until the user scrolls up; Latest resumes. Page content
+stays opaque during a short 160 ms / 8 dp movement. Four actual page transitions were
+inspected frame by frame without opacity-induced blank frames. One note opening
+briefly shows the normal loading indicator during its asynchronous read.
+Emulator recordings do not establish phone frame rate. Owner screenshots stay private.
+
+## Earlier UX Alpha 5 · 2026-11-04
 
 Actual, unretouched captures of the verified `0.1.0-alpha.5` APK on the dedicated
 Android 15 emulator at 411 × 890 dp. The note is our synthetic UI fixture, not an
