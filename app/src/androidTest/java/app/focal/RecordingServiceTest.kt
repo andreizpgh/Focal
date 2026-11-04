@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.media.AudioRecord
 import android.os.Build
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -456,8 +457,20 @@ class RecordingServiceTest {
     }
     private fun send(action: String) { activity.onActivity { RecordingService.command(it, action) } }
     private fun finish(id: String) {
+        val notifications = app.getSystemService(NotificationManager::class.java)
+        var loggedClaim = false
         await {
-            RecordingState.live.value.noteId == null && !serviceRunning() && app.store.note(id)?.state !in listOf("RECORDING", "PAUSED", "PROCESSING")
+            val visibleTeardownDone = RecordingState.live.value.noteId == null && !serviceRunning() &&
+                app.store.note(id)?.state !in listOf("RECORDING", "PAUSED", "PROCESSING")
+            if (!visibleTeardownDone) return@await false
+            val logClaim = !loggedClaim && notifications.activeNotifications.isEmpty()
+            val claimActive = SessionOperations.matchesSession(capture = true, noteId = null) ||
+                SessionOperations.matchesSession(capture = false, noteId = id)
+            if (claimActive && logClaim) {
+                Log.i("FocalServiceTest", "Session claim still held after visible teardown.")
+                loggedClaim = true
+            }
+            !claimActive
         }
         awaitNoNotifications()
     }
