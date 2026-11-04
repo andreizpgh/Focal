@@ -1,0 +1,178 @@
+{
+  "date": "2026-11-04",
+  "scope": "Local source-only correction screen on consumed DEV excerpts and synthetic controls. Seven languages.",
+  "cases": {
+    "asr_discrepancy": 7,
+    "clean_reference_control": 7,
+    "synthetic": 7
+  },
+  "measurement_review": "Independent review accepted the measurement and rejected promotion of this frozen configuration.",
+  "decision": "Reject this frozen configuration: five invalid replies and zero valid edits.",
+  "transport": {
+    "planned_calls": 21,
+    "completed_calls": 21,
+    "failed_calls": 0,
+    "deadline_seconds_per_call": 45,
+    "retries": 0
+  },
+  "reply_counts": {
+    "transport_completed": 21,
+    "abstentions": 16,
+    "invalid_replies": 5,
+    "valid_edits": 0
+  },
+  "reply_counts_by_language": {
+    "de": {
+      "transport_completed": 3,
+      "abstentions": 3,
+      "invalid_replies": 0,
+      "valid_edits": 0
+    },
+    "en": {
+      "transport_completed": 3,
+      "abstentions": 2,
+      "invalid_replies": 1,
+      "valid_edits": 0
+    },
+    "es": {
+      "transport_completed": 2,
+      "abstentions": 1,
+      "invalid_replies": 1,
+      "valid_edits": 0
+    },
+    "fr": {
+      "transport_completed": 2,
+      "abstentions": 2,
+      "invalid_replies": 0,
+      "valid_edits": 0
+    },
+    "it": {
+      "transport_completed": 2,
+      "abstentions": 2,
+      "invalid_replies": 0,
+      "valid_edits": 0
+    },
+    "pt": {
+      "transport_completed": 3,
+      "abstentions": 3,
+      "invalid_replies": 0,
+      "valid_edits": 0
+    },
+    "ru": {
+      "transport_completed": 6,
+      "abstentions": 3,
+      "invalid_replies": 3,
+      "valid_edits": 0
+    }
+  },
+  "reply_counts_by_case_type": {
+    "asr_discrepancy": {
+      "transport_completed": 7,
+      "abstentions": 6,
+      "invalid_replies": 1,
+      "valid_edits": 0
+    },
+    "clean_reference_control": {
+      "transport_completed": 7,
+      "abstentions": 6,
+      "invalid_replies": 1,
+      "valid_edits": 0
+    },
+    "mixed_clean": {
+      "transport_completed": 1,
+      "abstentions": 1,
+      "invalid_replies": 0,
+      "valid_edits": 0
+    },
+    "mixed_repair": {
+      "transport_completed": 1,
+      "abstentions": 0,
+      "invalid_replies": 1,
+      "valid_edits": 0
+    },
+    "name": {
+      "transport_completed": 1,
+      "abstentions": 1,
+      "invalid_replies": 0,
+      "valid_edits": 0
+    },
+    "negation": {
+      "transport_completed": 2,
+      "abstentions": 1,
+      "invalid_replies": 1,
+      "valid_edits": 0
+    },
+    "number": {
+      "transport_completed": 2,
+      "abstentions": 1,
+      "invalid_replies": 1,
+      "valid_edits": 0
+    }
+  },
+  "invalid_reply_reasons": {
+    "invalid_replacement": 5
+  },
+  "validation_complete": false,
+  "paired_wer_cer_scored": false,
+  "scoring_note": "The frozen complete-validation rule withheld paired aggregate WER/CER. Invalid replies remain separate from abstentions.",
+  "model": {
+    "upstream": "Qwen/Qwen3-0.6B",
+    "repository": "unsloth/Qwen3-0.6B-GGUF",
+    "revision": "50968a4468ef4233ed78cd7c3de230dd1d61a56b",
+    "filename": "Qwen3-0.6B-Q4_K_M.gguf",
+    "quantization": "Q4_K_M",
+    "bytes": 396705472,
+    "sha256": "ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a"
+  },
+  "runtime": {
+    "name": "Ollama",
+    "version": "0.21.2",
+    "architecture": "x86_64",
+    "executable_sha256": "6a49115196a04f1eec851f5f32e84dfa12f406de551e92d22a738e497945ea3a",
+    "inference_backend": "CPU",
+    "cpu_threads": 2,
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "nice": 10,
+    "gpu_layers": 0,
+    "loaded_vram_bytes": 0,
+    "parallel_requests": 1,
+    "context_tokens": 512,
+    "validated_input_token_limit": 256,
+    "output_token_cap": 48,
+    "thinking": false,
+    "temperature": 0,
+    "seed": 0,
+    "sampling_note": "Frozen temperature=0 and seed=0; official sampling/repetition preset not fully imported."
+  },
+  "host_wall_seconds": {
+    "sum_of_calls": 24.621482,
+    "median_call": 0.993069,
+    "first_call_with_model_load": 2.771814,
+    "execution_window": 24.904157,
+    "limits": "One serial host run. The first call loaded the model. Later calls reused the resident runner and shared a prompt prefix eligible for cache reuse. Prefix cache effects were not isolated. This run gives no phone latency or resource measurement."
+  },
+  "provenance": {
+    "plan_sha256": "254a9a2452c8cda841e1971fb99b36fc17b79c1b4487cb96c6aba719d962c83e",
+    "adapter_sha256": "992aad70f111c15e47f28690d3b98763932d1f0230af638a89f6d5034b07cf2d",
+    "runner_sha256": "6800b0ff11c84fdeac4e64a8d1d0a9f151a9c983830195d180dad92040298504",
+    "execution_receipt_sha256": "e913fb051a499008bf877952770bafdb398fe955d4a051f1f221159975966fd0",
+    "reply_audit_sha256": "29f0e6cfa253d9dd8bae7ff5ccd5799c60b85f0761ce3e7a435d03e85f2bbc85",
+    "effective_template_sha256": "ae370d884f108d16e7cc8fd5259ebc5773a0afa6e078b11f4ed7e39a27e0dfc4",
+    "upstream_template_manifest_sha256": "7df6b6e09427a769808717c0a93cadc4ae99ed4eb8bf5ca557c90846becea435",
+    "local_model_manifest_sha256": "3e412b95c59073accd56f9e4a46003c86e154105521fe962c4bff352807c8582",
+    "runtime_model_inspection_sha256": "ab27c541250c90362990f118b96d4dcfee93487ea243cfd7610b37b2180777d3",
+    "runtime_loaded_model_sha256": "bc0d6ac0d7a08074da5417ef8c96c1c19fac767fe3db2da672f5ed5787686b9f",
+    "runtime_server_log_sha256": "b6ca528ab7275a4f010a9d250b7db2d9f38edb40f4819ec1c80799a5996cac63"
+  },
+  "schema_property_order": [
+    "replacement",
+    "source"
+  ],
+  "interface_limit": "The sorted request serializer placed replacement before source. A separate 16-call synthetic order-only diagnostic found zero valid repairs in both arms. Reordering alone did not improve valid repair yield on those eight canaries; these screens do not reject local language correction in general.",
+  "interface_followup": "correction-schema-order-results.json"
+}

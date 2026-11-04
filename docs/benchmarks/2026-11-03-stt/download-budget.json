@@ -985,8 +985,28 @@
       "name": "Qwen3-0.6B-Q4_K_M-50968a44-attempt-1",
       "bytes": 396705472,
       "kind": "correction-model"
+    },
+    {
+      "name": "ollama-qwen3-runtime-template-metadata-attempt-1",
+      "bytes": 65536,
+      "kind": "metadata"
+    },
+    {
+      "name": "qwen35-2b-artifact-runtime-metadata-attempt-1",
+      "bytes": 131072,
+      "kind": "metadata"
+    },
+    {
+      "name": "Qwen3.5-2B-Q4_K_M-f6d5376b-attempt-1",
+      "bytes": 1280835840,
+      "kind": "correction-model"
+    },
+    {
+      "name": "small-q5_1-local-warm-attempt-1",
+      "bytes": 190085487,
+      "kind": "model"
     }
   ],
-  "reserved_bytes": 1278465663,
+  "reserved_bytes": 2749583598,
   "note": "Conservative upper bounds: prior checkpoint transfers, local baseline model, disjoint FLEURS cohort, research-only Silero VAD, matching host sanitizer runtimes, metadata/retries, and one reserved publication CI. Carry the total forward; never reset it. On 2026-11-04 the owner increased the cumulative local, removable research-download ceiling to 5 GB. Reserve every attempt before transfer; no reset."
 }

@@ -45,23 +45,48 @@ were checked with synthetic notes. The owner's screenshots remain private.
 The owner uses a **Pixel 10** and will connect it later while present. Deleted
 example notes are not available; do not ask for them again. Ordinary developer
 notes with English terms such as HTML/API/guardrails are a required scenario.
-Phone absence does not block local work. Main already includes Alpha 2 through
-PRs #1 and #2; subsequent verified changes use a new PR and a new testing release.
-Do not overwrite Alpha 1/2 assets or claim final application acceptance.
+Phone absence does not block local work. Main includes Alpha 3 through merged
+[PR #3](https://github.com/andreizpgh/Focal/pull/3), merge `1b58198`. The
+[published testing APK](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-3/Focal.apk)
+has verified remote size/digest and retains the Alpha 2 certificate. Subsequent
+changes use a new PR; do not overwrite any published assets or claim final acceptance.
 
 A bounded vocabulary buffer reduced host model-validation time, with unchanged
 malformed-input/cancellation decisions and real-model acceptance. This is not
 ASR decoding or phone speed. A six-pair synthetic RU/English glossary experiment
 failed its guards; no prompt was shipped or other-language follow-up run.
 The owner authorized a **5 GB cumulative download ceiling**, retaining prior
-reservations. One pinned Qwen3-0.6B Q4 candidate is now local; 21 source-only
-shadow requests are prepared and independently reviewed, with no LLM inference
-or automatic correction enabled at this checkpoint. Prefer bounded comparisons
-and reuse existing audio/model files. The private plan is
-`build/stt/correction-shadow-20261104/DISCOVERY.md`; its frozen pre-download
-metadata is historical, with actual approval/download in
-`authorized-download-state.json`. The next candidate shortlist is `CANDIDATES.md`.
-The 42 fresh held-out clips remain unopened; used test data is not new validation.
+reservations: **2,749,583,598 / 5,000,000,000 bytes**, leaving **2,250,416,402**.
+Pinned Qwen3-0.6B and Qwen3.5-2B Q4 files are local and verified; do not fetch
+again. Each completed the same 21 source-only DEV/synthetic requests. The first
+returned 16 abstentions and five invalid replies; the second returned 20
+abstentions and one capped reply. Neither produced a valid edit, so neither
+has complete paired WER/CER or qualifies for integration. There was one extra
+2B generation caused by a wrong preflight debug key; it remains separate from
+the matched 21. No outcomes were used to change the frozen requests.
+
+A later audit found that the sorted schema requires `replacement` before
+`source`. The separate 16-call synthetic diagnostic completed: both orders had
+five abstentions and three invalid replies, with zero valid repairs. Three
+parseable edit objects in each arm confirmed the requested order. Reordering
+alone did not improve yield on these eight canaries. Do not repeat the original
+21 or fund another larger LLM from these results. A future full-text reply plus
+bounded minimal-diff adapter would be a new hypothesis, not a reinterpretation
+of these failures; semantic accuracy and phone costs would still need evidence.
+See the [research record](stt-quality-experiments.md#local-correction-shadow-screen--2026-11-04)
+and linked aggregate JSON files. Preserve every completed result and
+reuse the weights. Automatic correction remains off. The 42 fresh held-out clips
+remain unopened; used test data is not new validation.
+
+The private directory `build/stt/correction-shadow-20261104/` retains the original
+`DISCOVERY.md`, the separate `QWEN35-COMPARISON.md`, exact runtime receipts and
+`CANDIDATES.md`. Original pre-download metadata stays immutable. The
+Whisper small warm canary under `build/stt/whisper-small-warm-20261104/` completed
+only eight PT controls and was rejected: noise insertions fell 247→4 but a quiet
+negation changed from correct to wrong. No further sessions ran. The pinned
+190,085,487-byte file is now local; do not fetch again. The run retained four
+decoder threads with CPUs 0–1 affinity (one physical core) and cannot support a
+speed comparison. Private `first-pt-controls/status.json` binds its result.
 
 ### Previous UX Alpha 2 delivery
 
@@ -341,9 +366,10 @@ WER gain into an all-language Android claim.
 
 The current shared ceiling is **5,000,000,000 bytes including retries**, raised
 by the owner on 2026-11-04 for removable local research artifacts. Reservation:
-**1,278,465,663 bytes**, including the existing 61,000,000-byte future CI reserve;
-remaining **3,721,534,337 bytes**. The old reservation prefix is preserved.
-One Qwen3-0.6B Q4 file (396,705,472 bytes) and 17,858 bytes of metadata were added.
+**2,749,583,598 bytes**, including the existing 61,000,000-byte future CI reserve;
+remaining **2,250,416,402 bytes**. The old reservation prefix is preserved.
+The additional reservations include two Qwen Q4 files, one local Whisper small
+transfer and bounded metadata. All three local model files are verified.
 Do not reset the ledger or repeatedly fetch existing models. The 42 fresh
 held-out clips remain closed.
 CI model downloads also count; use Actions for bounded checkpoints, and the
