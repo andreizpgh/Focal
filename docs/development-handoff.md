@@ -18,7 +18,33 @@ assets are unchanged; the newer UX preview is described below. Seven-language
 read-speech results are measured on the host;
 ARM phone performance and full application acceptance remain open.
 
-## Current delivery step · UX Alpha 4
+## Current delivery step · UX Alpha 5
+
+Clean `7b102ae` passes the complete local QA: **103/0/0**, eight required real-model
+checks, 145.206s JUnit / 146.192s runner wall time; both lints and debug/test/R8
+builds passed in 3m51s, with 36 unchanged core tests cached. Exact archived APKs,
+raw results and manual recordings are in `build/local-diagnostics/ux-alpha-5-20261104/`;
+report `20261104T163619.353337Z`. See [release identity](../releases/ux-alpha-5.json)
+and [quality report](quality-report.md). Signing matches Alpha 2–4.
+
+This is the coherence/motion feedback update: shared headers, readable metadata,
+baseline alignment, smooth search/filter/dock transitions, copy confirmation,
+long-press action sheet, simpler editor actions and whitespace-based Settings.
+The redundant language setting is removed; Sessions remembers the chosen language.
+Sol/Terra source reviews and Astra actual screenshot/motion/reduced-motion review
+passed. Initial focused test failures and their causes remain documented; the clean
+full run passed on the first attempt. No speech setting or download ledger changed.
+
+The [Alpha 5 APK](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-5/Focal.apk)
+is published: all three remote asset sizes/digests match local verified files and
+the public download returns 200. [PR #6](https://github.com/andreizpgh/Focal/pull/6)
+tracks this delivery; check its status and `build/local-diagnostics/current-android-delivery-work.json`
+before continuing. Earlier release assets are unchanged. The dedicated AVD is
+stopped after restoring portrait, font1, light and 320×640; no heavy job remains.
+Owner UI acceptance, seven-language STT, noise/mixed terms, correction and physical
+Pixel 10 gates remain open. Keep later heavy checks sequential.
+
+## Previous delivery step · UX Alpha 4
 
 The Alpha 3 feedback required further UI work. Clean `a3038fa` now passes the
 complete local QA: **95 tests, no failures/skips**, eight required real-model
@@ -118,7 +144,7 @@ Alpha 2 source `fe70758350a114d5e66775ee114cd48778217594` passed 89 tests,
 including eight real-model checks, in 154.329 seconds. It added recovery for
 unpublished audio tails and notification-denial guidance. Its exact APK and
 report remain archived and its public assets are unchanged. The owner installed
-and reviewed this version; use Alpha 4 for the next interface feedback cycle.
+and reviewed this version; use Alpha 5 for the next interface feedback cycle.
 
 ### Previous verified checkpoint
 
@@ -154,7 +180,7 @@ Back. Its extra reads and logs leave the failed run's event ordering unknown.
 before Back. Later assertions are unchanged. Three focused UI tests passed in
 12.177 seconds on unchanged app APK `b68946e9…ae647` with test APK `b25ff568…bd76`.
 
-The earlier exact APK remains archived; use UX Alpha 4 above for the owner preview.
+The earlier exact APK remains archived; use UX Alpha 5 above for the owner preview.
 The owner permits focused
 GPT-6.1 Sol xhigh and Terra reviewers, with root retaining integration and acceptance.
 

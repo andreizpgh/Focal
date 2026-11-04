@@ -1,27 +1,29 @@
 package app.focal.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +35,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -82,6 +85,7 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     listState: LazyListState = rememberLazyListState(),
     inputActive: Boolean = false, setInputActive: (Boolean) -> Unit = {},
     searchFocusChanged: (Boolean) -> Unit = {}, searchFieldMeasured: (Int) -> Unit = {},
+    onSessionActions: (String) -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -89,7 +93,7 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     val lifecycleState by lifecycle.currentStateFlow.collectAsState()
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     val inputWindowReady by rememberUpdatedState(lifecycleState == Lifecycle.State.RESUMED && windowFocused)
-    // Keep the request consumed when the lazy search item leaves the viewport.
+    // Keep keyboard intent separate from showing or hiding the search panel.
     var inputRequestIssued by remember(inputActive) { mutableStateOf(false) }
     val query = searchValue.text
     var viewportHeight by remember { mutableIntStateOf(0) }
@@ -108,99 +112,109 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
         dismissSearchInput()
     }
     LaunchedEffect(query) { if (query.isNotBlank()) setSearchOpen(true) }
-    LaunchedEffect(inputActive) {
-        if (inputActive) listState.requestScrollToItem(0)
-    }
-    LazyColumn(
-        Modifier.fillMaxSize().onSizeChanged { viewportHeight = it.height },
-        state = listState,
-        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp),
-    ) {
-        if (searchOpen || query.isNotBlank()) item {
-            Column {
-                AnimatedVisibility(searchOpen) {
-                    val requester = remember { FocusRequester() }
-                    val visibilityRequester = remember { BringIntoViewRequester() }
-                    var focused by remember { mutableStateOf(false) }
-                    LaunchedEffect(inputActive) {
-                        if (inputActive && !inputRequestIssued) {
-                            snapshotFlow { inputWindowReady }.first { it }
-                            requester.requestFocus()
-                            keyboard?.show()
-                            inputRequestIssued = true
-                        }
+    Column(Modifier.fillMaxSize().onSizeChanged { viewportHeight = it.height }) {
+        // This panel stays composed even when the results scroll far away.
+        AnimatedVisibility(
+            searchOpen,
+            enter = expandVertically(tween(220), expandFrom = Alignment.Top) + fadeIn(tween(160)),
+            exit = shrinkVertically(tween(220), shrinkTowards = Alignment.Top) + fadeOut(tween(120)),
+        ) {
+            val requester = remember { FocusRequester() }
+            val visibilityRequester = remember { BringIntoViewRequester() }
+            var focused by remember { mutableStateOf(false) }
+            LaunchedEffect(inputActive) {
+                if (inputActive && !inputRequestIssued) {
+                    snapshotFlow { inputWindowReady }.first { it }
+                    requester.requestFocus()
+                    keyboard?.show()
+                    inputRequestIssued = true
+                }
+            }
+            LaunchedEffect(focused, viewportHeight) {
+                // Follow the measured viewport as the keyboard changes its available height.
+                if (focused && viewportHeight > 0) visibilityRequester.bringIntoView()
+            }
+            TextField(
+                value = searchValue,
+                onValueChange = {
+                    val accepted = it.copy(text = Transcript.truncateUtf16(it.text, SEARCH_QUERY_MAX_CHARS))
+                    setSearchValue(accepted)
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+                    // Measure the field's required height even while the IME compresses its panel.
+                    // The header can then yield space without feeding a clipped zero back into layout.
+                    .wrapContentHeight(align = Alignment.Top, unbounded = true).focusRequester(requester)
+                    .onFocusChanged {
+                        focused = it.isFocused
+                        // Initial focus loss and disposal must not erase saved input intent.
+                        if (it.isFocused) setInputActive(true)
+                        searchFocusChanged(it.isFocused)
                     }
-                    LaunchedEffect(focused, viewportHeight) {
-                        // Follow the measured viewport as the keyboard changes its available height.
-                        if (focused && viewportHeight > 0) visibilityRequester.bringIntoView()
-                    }
-                    TextField(
-                        value = searchValue,
-                        onValueChange = {
-                            val accepted = it.copy(text = Transcript.truncateUtf16(it.text, SEARCH_QUERY_MAX_CHARS))
-                            setSearchValue(accepted)
+                    .onSizeChanged { searchFieldMeasured(it.height) }.bringIntoViewRequester(visibilityRequester)
+                    .semantics { contentDescription = "Search sessions" }.padding(bottom = 12.dp), singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { dismissSearchInput() }),
+                placeholder = { Text("Search sessions", style = MaterialTheme.typography.bodyMedium) },
+                leadingIcon = { Glyph(Symbol.Search, Modifier.size(17.dp), MaterialTheme.colorScheme.onSurfaceVariant) },
+                trailingIcon = { if (query.isNotEmpty()) IconAction(Symbol.Close, "Clear search") { setSearchValue(TextFieldValue("")) } },
+                shape = RoundedCornerShape(10.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+            )
+        }
+        LazyColumn(
+            Modifier.fillMaxWidth().weight(1f), state = listState,
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp),
+        ) {
+            if (error != null) item { DataReadError(if (loaded) "Couldn't refresh sessions" else "Couldn't load sessions", error, retryLoad) }
+            if (!loaded && error == null) item {
+                LinearProgressIndicator(
+                    Modifier.fillMaxWidth().padding(top = 16.dp),
+                    color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+            }
+            if (loaded && visible.isEmpty()) item {
+                Column(Modifier.padding(top = 48.dp, bottom = 32.dp)) {
+                    Text(
+                        when {
+                            query.isNotBlank() -> "No matching sessions."
+                            attentionOnly -> "Nothing to review."
+                            else -> "No sessions yet."
                         },
-                        modifier = Modifier.fillMaxWidth().focusRequester(requester)
-                            .onFocusChanged {
-                                focused = it.isFocused
-                                // Initial focus loss and disposal must not erase saved input intent.
-                                if (it.isFocused) setInputActive(true)
-                                searchFocusChanged(it.isFocused)
-                            }
-                            .onSizeChanged { searchFieldMeasured(it.height) }.bringIntoViewRequester(visibilityRequester)
-                            .semantics { contentDescription = "Search sessions" }.padding(bottom = 12.dp), singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { dismissSearchInput() }),
-                        placeholder = { Text("Search sessions", style = MaterialTheme.typography.bodyMedium) },
-                        leadingIcon = { Glyph(Symbol.Search, Modifier.size(17.dp), MaterialTheme.colorScheme.onSurfaceVariant) },
-                        trailingIcon = { if (query.isNotEmpty()) IconAction(Symbol.Close, "Clear search") { setSearchValue(TextFieldValue("")) } },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    if (query.isNotBlank() || attentionOnly) TextButton(
+                        onClick = { closeSearch(); setAttentionOnly(false) }, contentPadding = PaddingValues(0.dp),
+                    ) { Text("Clear filters") }
+                }
+            }
+            groups.forEach { (day, sessions) ->
+                item(key = "day:$day") { SessionDayHeader(dayLabel(day, today), first = day == groups.keys.first(), modifier = Modifier.animateItem(
+                    fadeInSpec = tween(140, delayMillis = 240), placementSpec = tween(240), fadeOutSpec = tween(80),
+                )) }
+                items(sessions, key = { it.id }) { note ->
+                    SessionRow(note, live,
+                        open = { dismissSearchInput(); open(note.id) },
+                        actions = { dismissSearchInput(); onSessionActions(note.id) },
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = tween(140, delayMillis = 240), placementSpec = tween(240), fadeOutSpec = tween(80),
                         ),
                     )
                 }
             }
         }
-        if (error != null) item { DataReadError(if (loaded) "Couldn't refresh sessions" else "Couldn't load sessions", error, retryLoad) }
-        if (!loaded && error == null) item {
-            LinearProgressIndicator(
-                Modifier.fillMaxWidth().padding(top = 16.dp),
-                color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            )
-        }
-        if (loaded && visible.isEmpty()) item {
-            Column(Modifier.padding(top = 48.dp, bottom = 32.dp)) {
-                Text(
-                    when {
-                        query.isNotBlank() -> "No matching sessions."
-                        attentionOnly -> "Nothing to review."
-                        else -> "No sessions yet."
-                    },
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                if (query.isNotBlank() || attentionOnly) TextButton(
-                    onClick = { closeSearch(); setAttentionOnly(false) }, contentPadding = PaddingValues(0.dp),
-                ) { Text("Clear filters") }
-            }
-        }
-        groups.forEach { (day, sessions) ->
-            item(key = "day:$day") { SessionDayHeader(dayLabel(day, today), first = day == groups.keys.first()) }
-            items(sessions, key = { it.id }) { note ->
-                SessionRow(note, live) { dismissSearchInput(); open(note.id) }
-            }
-        }
     }
 }
 
-@Composable private fun SessionDayHeader(label: String, first: Boolean) {
+@Composable private fun SessionDayHeader(label: String, first: Boolean, modifier: Modifier = Modifier) {
     val line = MaterialTheme.colorScheme.outlineVariant
     val dot = MaterialTheme.colorScheme.onSurface
-    Row(Modifier.fillMaxWidth().padding(top = if (first) 6.dp else 18.dp).heightIn(min = 34.dp).height(IntrinsicSize.Min),
+    Row(modifier.fillMaxWidth().padding(top = if (first) 6.dp else 18.dp).heightIn(min = 34.dp).height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Canvas(Modifier.width(24.dp).fillMaxHeight()) {
@@ -212,7 +226,10 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     }
 }
 
-@Composable private fun SessionRow(note: Note, live: LiveSession, open: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+@Composable private fun SessionRow(
+    note: Note, live: LiveSession, open: () -> Unit, actions: () -> Unit, modifier: Modifier = Modifier,
+) {
     val line = MaterialTheme.colorScheme.outlineVariant
     val status = when {
         live.noteId == note.id -> if (live.processing) "Transcribing" else if (live.paused) "Recording paused" else "Recording now"
@@ -222,7 +239,10 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
         else -> null
     }
     Row(
-        Modifier.fillMaxWidth().height(IntrinsicSize.Min).clickable(role = Role.Button, onClick = open),
+        modifier.fillMaxWidth().height(IntrinsicSize.Min).combinedClickable(
+            role = Role.Button, onClick = open, onLongClickLabel = "Session options",
+            onLongClick = actions,
+        ),
     ) {
         Canvas(Modifier.width(24.dp).fillMaxHeight()) {
             val x = 4.dp.toPx()
@@ -230,11 +250,17 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
         }
         Column(Modifier.weight(1f).padding(top = 13.dp, bottom = 17.dp)) {
             Text(note.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(
-                "${sessionTime(note.created)} · ${Transcript.time(note.duration)} · ${Preferences.languages[note.language] ?: note.language}",
-                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            FlowRow(
                 modifier = Modifier.padding(top = 5.dp),
-            )
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(sessionTime(note.created), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                DurationLabel(note.duration)
+                Text(Preferences.languages[note.language] ?: note.language,
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             if (note.preview.isNotBlank()) Text(
                 note.preview, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -252,6 +278,7 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
 }
 
 @Suppress("UNUSED_PARAMETER")
+@OptIn(ExperimentalFoundationApi::class)
 @Composable internal fun NoteScreen(
     note: Note, library: LibraryState, live: LiveSession?, reviewOnly: Boolean,
     toggleReview: () -> Unit, edit: (Passage) -> Unit, retry: () -> Unit,
@@ -262,21 +289,11 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     val review = library.passages.count { it.uncertain && !it.reviewed }
     val canRetryTranscription = library.pending > 0 || note.mayNeedRecovery
     val passages = if (reviewOnly) library.passages.filter { it.uncertain && !it.reviewed } else library.passages
-    val fontScale = LocalDensity.current.fontScale
     @Composable fun ReviewFilter() {
         FilterChip(
             selected = reviewOnly, onClick = toggleReview, shape = CircleShape, colors = focalChipColors(),
             leadingIcon = { Box(Modifier.size(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant)) },
             label = { Text(if (reviewOnly) "Show all" else "$review to review", style = MaterialTheme.typography.labelMedium) },
-        )
-    }
-    @Composable fun Metadata(modifier: Modifier = Modifier) {
-        Text(
-            "${dayLabel(sessionDay(note.created), LocalDate.now())}, ${sessionTime(note.created)}" +
-                (if (live == null) " · ${Transcript.time(note.duration)}" else "") +
-                " · ${Preferences.languages[note.language] ?: note.language}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = modifier,
         )
     }
     val activePassage = playbackPosition?.let { position ->
@@ -294,16 +311,20 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
                         style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f).semantics { heading() },
                     )
                 }
-                BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                    if ((review > 0 || reviewOnly) && maxWidth >= 330.dp && fontScale < 1.3f) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Metadata(Modifier.weight(1f))
-                            ReviewFilter()
-                        }
-                    } else Column {
-                        Metadata()
-                        if (review > 0 || reviewOnly) ReviewFilter()
-                    }
+                Text(
+                    "${dayLabel(sessionDay(note.created), LocalDate.now())} at ${sessionTime(note.created)}",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
+                )
+                FlowRow(
+                    Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (live == null) DurationLabel(note.duration, Modifier.align(Alignment.CenterVertically))
+                    Text(Preferences.languages[note.language] ?: note.language,
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.align(Alignment.CenterVertically))
+                    if (review > 0 || reviewOnly) ReviewFilter()
                 }
                 if (live == null && library.audioBytes == 0L && library.passages.isNotEmpty()) Text(
                     "Text only", style = MaterialTheme.typography.labelMedium,
@@ -327,13 +348,6 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             }
         }
-        if (reviewOnly) item {
-            Text(
-                "Dots mark recognizer hints. You can check and edit any passage.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
-        }
         if (passages.isEmpty() && (live == null || reviewOnly)) item {
             Text(
                 if (reviewOnly) "No flagged passages." else "No speech transcribed.",
@@ -345,8 +359,20 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
             TimedPassage(
                 passage, active = passage.id == activePassage, audioAvailable = audioAvailable,
                 seek = { seek(passage.start) }, edit = { edit(passage) },
+                modifier = Modifier.animateItem(
+                    fadeInSpec = tween(140, delayMillis = 240), placementSpec = tween(240), fadeOutSpec = tween(80),
+                ),
             )
         }
+    }
+}
+
+@Composable private fun DurationLabel(duration: Long, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Glyph(Symbol.Audio, Modifier.size(14.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(Transcript.time(duration), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.semantics { contentDescription = "Duration ${Transcript.time(duration)}" })
     }
 }
 
@@ -391,11 +417,16 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
 
 @Composable private fun TimedPassage(
     passage: Passage, active: Boolean, audioAvailable: Boolean, seek: () -> Unit, edit: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val flagged = passage.uncertain && !passage.reviewed
     val timestamp = Transcript.time(passage.start)
     val fontScale = LocalDensity.current.fontScale
     val ink = MaterialTheme.colorScheme.onSurface
+    val highlight by animateColorAsState(
+        if (active) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+        tween(180), label = "current passage",
+    )
     @Composable fun TimeLabel(modifier: Modifier) {
         Column(
             modifier.clip(RoundedCornerShape(12.dp))
@@ -416,7 +447,7 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     @Composable fun PassageText(modifier: Modifier) {
         val oversized = !fitsPassageDraftBudget(passage.text)
         Column(modifier.clip(RoundedCornerShape(12.dp))
-            .background(if (active) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+            .background(highlight)
             .clickable(
                 role = Role.Button,
                 onClickLabel = "${if (oversized) "Open full passage" else if (flagged) "Review passage" else "Edit passage"} at $timestamp",
@@ -436,13 +467,13 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
                 modifier = Modifier.padding(top = 8.dp))
         }
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+    BoxWithConstraints(modifier.fillMaxWidth().padding(bottom = 4.dp)) {
         if (fontScale >= 1.4f || maxWidth < 260.dp) Column(Modifier.fillMaxWidth()) {
             TimeLabel(Modifier.heightIn(min = 48.dp).widthIn(min = 56.dp))
             PassageText(Modifier.fillMaxWidth())
         } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TimeLabel(Modifier.width(if (timestamp.length > 5) 76.dp else 56.dp).heightIn(min = 48.dp))
-            PassageText(Modifier.weight(1f))
+            TimeLabel(Modifier.width(if (timestamp.length > 5) 76.dp else 56.dp).heightIn(min = 48.dp).alignBy(FirstBaseline))
+            PassageText(Modifier.weight(1f).alignBy(FirstBaseline))
         }
     }
 }
@@ -459,20 +490,6 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     ) {
         drawFocusWave(ink, level = value, minimumBarHeight = 3.dp.toPx())
     }
-}
-
-@Composable internal fun LanguageDialog(language: String, select: (String) -> Unit, dismiss: () -> Unit) {
-    AlertDialog(onDismissRequest = dismiss, title = { Text("Speech language") }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
-            Preferences.languages.forEach { (id, name) ->
-                Row(Modifier.fillMaxWidth().selectable(id == language, role = Role.RadioButton, onClick = { select(id); dismiss() })
-                    .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = id == language, onClick = null)
-                    Text(name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp))
-                }
-            }
-        }
-    }, confirmButton = { TextButton(onClick = dismiss) { Text("Cancel") } })
 }
 
 @Composable internal fun focalChipColors() = FilterChipDefaults.filterChipColors(

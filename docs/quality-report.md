@@ -1,5 +1,55 @@
 # Product verification · 2026-11-04
 
+## UX Alpha 5 · 2026-11-04
+
+Clean `7b102aee07b418a4e9ff6f01c426f708f2956cef` passed the complete local
+`qa-local.py --release-checks`: **103 Android tests, zero failures/skips**, including
+all eight required real-model checks. JUnit reported **145.206 seconds**; the
+runner measured 146.192 seconds around instrumentation. Both lints and
+debug/test/unsigned release/R8 builds passed in 3m51s; 36 unchanged core tests
+used cached results. [Exact APK identity](../releases/ux-alpha-5.json).
+
+Sessions, Session and Settings share a compact navigation header, typography and
+insets. A long note title stays in the content. Metadata uses separate date and
+language/duration groups; timestamps align with the first transcript baseline.
+Settings uses spacing between sections and removes duplicate language selection:
+the picker beside Record already remembers the last choice.
+
+Search expands and closes without resetting the scrolled list, and the idle
+record dock yields room while searching. Review filtering moves rows without
+inserting explanatory copy or overlapping disappearing text. Copy confirms success
+inside its button. Long-press opens the same action sheet as the session menu;
+loading, cancellation, dirty navigation and the action target are guarded. The
+editor makes Done/Save primary and Next hint secondary, preserving failed-save
+drafts and requiring a successful save before advancing.
+
+The design follows Android guidance for [consistent app bars](https://developer.android.com/develop/ui/compose/components/app-bars),
+[layout animation](https://developer.android.com/develop/ui/compose/animation/composables-modifiers),
+[long-press actions](https://developer.android.com/develop/ui/compose/touch-input/pointer-input/tap-and-press)
+and [text baseline alignment](https://developer.android.com/develop/ui/compose/layouts/alignment-lines).
+Eight focused regressions were added. Original oversized-editor and transactional
+assertions remain; only selectors and deliberately changed UI expectations moved.
+
+Actual synthetic-note screens and recordings covered light/dark, 200% landscape
+with IME, draft retention, playback, Copy and animations disabled. Frame review
+found overlapping filter rows; shorter exit and ordered movement/entry fixed it.
+Earlier focused checks also exposed search clipping at large font; required-height
+measurement and hiding the idle dock fixed it. A retained manual rotation override
+and an interrupted fixture caused separate test failures; restoring the AVD and
+removing only that fixture allowed unchanged assertions to pass. Those failed logs
+remain private. The first Alpha 5 full run passed on clean source.
+
+Sol/Terra reviewed focused code; Astra accepted the actual static and motion
+states. Exact artifact audit checks model and native hashes, certificate continuity,
+16KB alignment and absence of Internet permission or fault helpers. Final captures
+are in [interface preview](interface-preview.md). No model was downloaded and no
+recognition setting changed. Phone performance, seven-language speech quality,
+noise hallucinations, mixed-language terms, local correction and owner UI acceptance
+remain open. The [Alpha 5 release](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-5)
+is published with verified remote asset sizes/digests; the public download returns
+200. [PR #6](https://github.com/andreizpgh/Focal/pull/6) carries this update.
+Full-history Gitleaks found no leaks before publication. Earlier assets are unchanged.
+
 ## UX Alpha 4 · 2026-11-04
 
 Clean `a3038fa104f0178599ac1642fd3c0e471f368742` passed the full local

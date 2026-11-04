@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "tag": "ux-alpha-5",
+  "title": "Focal 0.1.0 · UX Alpha 5",
+  "provenance": "local-emulator-qa",
+  "source_commit": "7b102aee07b418a4e9ff6f01c426f708f2956cef",
+  "source_clean": true,
+  "application_id": "app.focal",
+  "version_name": "0.1.0-alpha.5",
+  "version_code": 5,
+  "build_variant": "debug",
+  "apk_sha256": "3f5cf745e34c9d211d6eaf4ca42ae00b45889cb1d6769411a4779b14e0096f9d",
+  "apk_bytes": 76368172,
+  "test_apk_sha256": "1fa3811e2fdec8b3ba0011dd9d3dd6acf8ad60460e06ec83ffdf8a6c72730a69",
+  "signing": {
+    "type": "development",
+    "certificate_sha256": "3e407a18880c9277982d6ad6222b39738484a3b768e4d268415eb795709aa3bc",
+    "alpha_1_update_compatibility": "not verified",
+    "alpha_2_certificate_matches": true,
+    "alpha_3_certificate_matches": true,
+    "alpha_4_certificate_matches": true
+  },
+  "model": {
+    "repository": "ggerganov/whisper.cpp",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "filename": "ggml-base-q5_1.bin",
+    "sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "bytes": 59707625,
+    "license": "MIT"
+  },
+  "engine_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+  "qa": {
+    "runner": "scripts/qa-local.py --release-checks",
+    "run": "20261104T163619.353337Z",
+    "android_api": 35,
+    "android_abi": "x86_64",
+    "hardware_acceleration": "KVM",
+    "virtual_cpus": 2,
+    "android_tests": 103,
+    "failures": 0,
+    "skips": 0,
+    "required_real_model_tests": 8,
+    "instrumentation_seconds": 145.206,
+    "build_seconds": 231,
+    "core_tests": 36,
+    "core_execution": "cached results for unchanged core source",
+    "debug_lint": "passed",
+    "release_lint": "passed",
+    "unsigned_release_build": "passed; not the instrumented or published APK",
+    "zip_and_elf_alignment_bytes": 16384,
+    "build_seconds_note": "Gradle reported 3m51s; build wall time is not app performance.",
+    "runner_instrumentation_wall_seconds": 146.192
+  },
+  "targeted_regressions": {
+    "new_tests": 8,
+    "scope": "Search/filter movement in both directions, deep-list search availability, actual timestamp/text baselines, copy success/failure/repeat/reset, editor next/save failure, and long-press action loading/cancellation/dirty navigation. Existing oversized draft, rotation and storage assertions are retained."
+  },
+  "manual": {
+    "scope": "Synthetic notes at 411x890dp, light/dark, normal/200% font, actual landscape/IME, draft retention, playback/seek, Copy feedback, shared headers, settings and long-press actions. Search/sheet/filter screen recordings inspected frame by frame. Outgoing/incoming filter rows no longer overlap. Search, editor and actions also checked with system animation scales set to zero and restored afterward. Final public captures are from the exact full-QA APK.",
+    "audio": "Emulator host audio disabled; no audible playback or microphone claim.",
+    "private_owner_screenshots_published": false
+  },
+  "independent_review": [
+    "Sol/Terra focused implementation and source cross-review",
+    "Astra critical source and actual screenshot/motion/reduced-motion review",
+    "Terra independent final raw QA/APK/model/signature audit"
+  ],
+  "not_established": [
+    "Physical Pixel 10 microphone, audible playback and installation",
+    "Phone background reliability, battery, thermals and ARM latency",
+    "Seven-language accuracy/speed improvement, mixed-language terms and varying-noise hallucination fix",
+    "Local language-model correction accuracy and reversible correction UX",
+    "Stable production signing and release-variant runtime validation"
+  ],
+  "iteration_notes": "Earlier focused runs exposed a clipped search field/results at 200% landscape/IME; intrinsic measurement and idle dock visibility were fixed. Retained manual display-rotation override and one interrupted synthetic fixture also caused focused test failures; restoring the emulator and removing only that fixture made the unchanged assertions pass. Full QA passed on its first Alpha 5 attempt."
+}

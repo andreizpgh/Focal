@@ -1,54 +1,42 @@
 # Продолжение Focal · 2026-11-04
 
-Продолжи в существующем checkout, ветка `codex/sessions-stt-handoff`, синхронизированная
-с `main` после публикации. PR #1–4 уже merged; UI Alpha 4 ведётся в
-[PR #5](https://github.com/andreizpgh/Focal/pull/5), перед продолжением проверь его
-статус. Alpha 4 опубликована. Новый worktree не нужен.
+Продолжи в существующем checkout, ветка `codex/sessions-stt-handoff`.
 Прочитай `AGENTS.md`, `docs/development-handoff.md`, `docs/quality-report.md`,
 `docs/architecture.md`, `docs/local-emulator-qa.md` и `docs/device-validation.md`.
-Подробные исследования находятся в `docs/benchmarks/2026-11-03-local/report.md`
-и `docs/benchmarks/2026-11-03-stt/report.md`; не повторяй их ради восстановления контекста.
+Не создавай новый worktree. PR #1–5 merged; следующая доставка требует нового PR.
 
-## Последний UI checkpoint · Alpha 4
+## Последний UI checkpoint · Alpha 5
 
-`a3038fa` прошёл полный `qa-local.py --release-checks`: **95/0/0**, восемь real-model
-проверок, 143.684 с; обе lint и R8/debug/test сборки прошли. Точные APK и снимки
-в `build/local-diagnostics/ux-alpha-4-20261104/`, отчёт `20261104T143143.240767Z`,
-публичная идентичность `releases/ux-alpha-4.json`. Подпись совпадает с Alpha 2/3.
-Исправлены отступы playback, высокое нажатие времени, повторяющийся Review,
-тяжёлые тени, разорванные шапки, поле редактора и оси/стили Save. Волна обработки
-теперь заметно двигается; новый тест дал RED на Alpha 3 и GREEN на кандидате.
-Astra приняла фактические снимки, включая установившийся 200% landscape/IME.
-Первый full-run упал на инкрементальной Kotlin release-компиляции; без изменения
-исходника nonincremental Kotlin rebuild и повторный полный цикл прошли.
+Чистый `7b102ae` прошёл полный `qa-local.py --release-checks`: **103/0/0**, восемь
+real-model проверок, 145.206 с JUnit / 146.192 с runner wall. Обе lint и debug/test/R8
+сборки прошли за 3m51s, 36 core tests cached. Отчёт `20261104T163619.353337Z`,
+точные APK и приватные ручные кадры/видео в `build/local-diagnostics/ux-alpha-5-20261104/`.
+Идентичность: `releases/ux-alpha-5.json`, подпись совпадает с Alpha 2–4.
 
-Перед продолжением проверь статус публикации в current-android-delivery-work.json
-и GitHub: Alpha 4 опубликована отдельным релизом с проверенными серверными SHA,
-предыдущие релизы неизменны. Выделенный AVD остановлен после восстановления
-320×640, portrait, font1, light; тяжёлых задач нет.
-Приёмка интерфейса владельцем пока открыта. STT/LLM и телефонные требования ниже
-не закрыты этим UI-релизом. Счётчик загрузок не менялся, модели не скачивать заново.
+Приведены к одной системе шапки, metadata и Settings. Поиск и фильтрация плавно
+перестраивают layout; исправлено реальное наложение уходящих строк. Copy показывает
+подтверждение; long-press открывает действия записи; Done/Save отделён от Next hint.
+Дублирующий язык из Settings убран, основной picker запоминает выбор. Восемь новых
+тестов, исходные oversized/draft/storage assertions сохранены. Sol/Terra и Astra
+проверили код и реальные статичные/движущиеся кадры, включая animations off.
+
+Alpha 5 опубликована; серверные размеры и SHA всех трёх файлов совпадают,
+прямая ссылка APK отвечает 200. [PR #6](https://github.com/andreizpgh/Focal/pull/6)
+содержит изменения: перед действием проверь его статус и
+`build/local-diagnostics/current-android-delivery-work.json`. AVD остановлен,
+portrait/font1/light/320×640 восстановлены, тяжёлых задач нет. Не пересобирай уже
+проверенный APK ради документации. Модели не скачивались; STT-настройки не менялись.
+200% landscape/IME проверялись. После ручного поворота восстанавливай portrait,
+пока Focal foreground, затем Home→app: иначе retained Android rotation override
+может пересоздавать Activity после Home и давать ложный lifecycle failure.
+Финализация, приёмка UI владельцем и телефонные/STT gates остаются открытыми.
 
 ## Приоритет и организация
 
-Предыдущий проверенный Android checkpoint — **UX Alpha 3**, `ed9d7cb`, версия
-`0.1.0-alpha.3` / code 3. Полный `qa-local.py --release-checks` прошёл **94 теста,
-0 ошибок/пропусков**, включая восемь real-model checks, за 149.326 с. Сборка с
-обеими lint-проверками и R8 прошла, 36 core tests cached. Отчёт
-`20261104T121600.005709Z`; точные APK в
-`build/local-diagnostics/ux-alpha-3-20261104/verified-apks/`, идентичность в
-`releases/ux-alpha-3.json`. Подпись совпадает с Alpha 2. Перед новым действием
-проверь `build/local-diagnostics/current-android-delivery-work.json` и текущий
-статус GitHub: PR #1–4 уже merged, следующие изменения требуют нового PR.
-
-Исправлены замечания по меню записи, выбору языка снизу слева, временным меткам,
-редактору, отступам и playback. Выбранный язык виден при 200% шрифте. Review —
-подсказка распознавателя, не проверка языка; это теперь объяснено в фильтре.
-В тёмном редакторе обнаружены и исправлены светлые системные панели отдельного
-окна. Один новый test APK дал RED на старом кандидате и GREEN после исправления;
-исходные проверки oversized editor не ослаблены. Сохраняй Sessions / Focus wave.
-Скриншоты владельца приватны, для публичных примеров используй только наши
-синтетические данные.
+Сохраняй Sessions / Focus wave и уже проверенные lifecycle/storage guards.
+История Alpha 2–4 и предыдущих Android checkpoints находится в handoff и quality
+report; не пересобирай их ради восстановления контекста. Скриншоты владельца
+приватны, для публичных примеров используй только наши синтетические данные.
 
 Владелец пользуется Pixel 10. Примеры удалены — не проси их снова. Нужны обычные
 заметки с HTML/API/guardrails в русской и иной речи. Простой glossary prompt

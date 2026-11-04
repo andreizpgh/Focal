@@ -11,6 +11,13 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -24,6 +31,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.Modifier
@@ -57,6 +65,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
@@ -69,6 +79,7 @@ import app.focal.data.Passage
 import app.focal.data.Preferences
 import app.focal.recording.LiveSession
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -107,6 +118,8 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     var destination by rememberSaveable(stateSaver = destinationSaver) { mutableStateOf<Destination>(Destination.Sessions) }
     val selected = (destination as? Destination.Session)?.id
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
+    var contextualNoteId by rememberSaveable { mutableStateOf<String?>(null) }
+    val detailId = selected ?: contextualNoteId
     var modelRetryId by rememberSaveable { mutableStateOf<String?>(null) }
     var searchValue by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     val searchQuery = searchValue.text
@@ -163,8 +176,19 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         } else onDispose { }
     }
 
+    fun closeDialog() { dialog = null; contextualNoteId = null }
+    fun showSessionActions(id: String) {
+        if (dialog != null || editingId != null || editorDirty || renameDirty || formSaving || pendingOpenTarget != null) return
+        when {
+            selected == id -> Unit
+            destination == Destination.Sessions && library.notes.any { it.id == id } -> contextualNoteId = id
+            else -> return
+        }
+        dismissInput()
+        dialog = "actions"
+    }
     fun performOpen(id: String?) {
-        dismissInput(); editingId = null; dialog = null; pendingOpenTarget = null
+        dismissInput(); editingId = null; closeDialog(); pendingOpenTarget = null
         editorDirty = false; renameDirty = false; formSaving = false
         model.select(id)
         destination = id?.let { Destination.Session(it) } ?: Destination.Sessions
@@ -176,7 +200,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         } else performOpen(id)
     }
     fun notify(message: String) { scope.launch { snackbar.showSnackbar(message) } }
-    LaunchedEffect(selected) { model.select(selected) }
+    LaunchedEffect(detailId) { model.select(detailId) }
     LaunchedEffect(searchQuery) { model.search(searchQuery) }
     LaunchedEffect(requested) {
         if (handledRequest != requested.second || handledRequestId != requested.first) {
@@ -218,9 +242,10 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     BackHandler(destination == Destination.Sessions && searchOpen) {
         searchOpen = false; searchValue = TextFieldValue(""); dismissInput()
     }
-    LaunchedEffect(selected, library.selectedId, library.note, library.loaded, library.error) {
-        if (selected != null && library.loaded && library.selectedId == selected && library.note == null && library.error == null) {
-            open(null)
+    BackHandler(dialog == "actions", onBack = ::closeDialog)
+    LaunchedEffect(detailId, library.selectedId, library.note, library.loaded, library.error) {
+        if (detailId != null && library.loaded && library.selectedId == detailId && library.note == null && library.error == null) {
+            if (selected != null) open(null) else closeDialog()
             notify("Session is no longer available.")
         }
     }
@@ -251,26 +276,30 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         }
         if (needed.isEmpty()) model.record() else permissions.launch(needed.toTypedArray())
     }
-    val note = library.note?.takeIf { it.id == selected }
+    val actionNote = library.note?.takeIf { it.id == detailId && library.selectedId == detailId }
+    val note = actionNote?.takeIf { it.id == selected }
     val active = note != null && live.noteId == note.id
     val audioAvailable = library.audioBytes > 0 && (live.noteId == null || live.processing)
+    val actionActive = detailId != null && live.noteId == detailId
     val hasUnprocessedAudio = library.pending > 0 || library.hasUnpublishedTail
-    val canRemoveAudio = !active && !hasUnprocessedAudio && library.audioBytes > 0 && library.error == null
+    val canRemoveAudio = actionNote != null && !actionActive && !hasUnprocessedAudio && library.audioBytes > 0 && library.error == null
     val transcript = remember(library.passages) { library.passages.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n") }
+    val canShare = actionNote != null && transcript.isNotBlank() && library.error == null
     fun allowTextTransfer(action: String): Boolean {
         if (fitsTextTransferBudget(transcript)) return true
         notify("This transcript is too long to $action at once. Copy a smaller selection from the passage editor.")
         return false
     }
-    fun copyTranscript() {
-        if (!allowTextTransfer("copy")) return
-        try {
+    fun copyTranscript(): Boolean {
+        if (!allowTextTransfer("copy")) return false
+        return try {
             val clip = ClipData.newPlainText("Focal transcript", transcript)
             if (Build.VERSION.SDK_INT >= 33) clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
             context.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
-            if (Build.VERSION.SDK_INT < 33) notify("Text copied")
+            true
         } catch (_: RuntimeException) {
             notify("Couldn't copy text. Try copying a smaller selection from the passage editor.")
+            false
         }
     }
     fun shareTranscript() {
@@ -290,86 +319,56 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             containerColor = MaterialTheme.colorScheme.background,
             snackbarHost = { SnackbarHost(snackbar) },
             topBar = {
-                if (!compactSearch) Row(Modifier.fillMaxWidth()
-                    .onSizeChanged { if (destination == Destination.Sessions) sessionsHeaderHeight = it.height }
-                    .statusBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = if (destination == Destination.Sessions) 4.dp else 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                AnimatedVisibility(
+                    visible = !compactSearch,
+                    enter = expandVertically(animationSpec = tween(180), expandFrom = Alignment.Top) + fadeIn(tween(120)),
+                    exit = shrinkVertically(animationSpec = tween(180), shrinkTowards = Alignment.Top) + fadeOut(tween(120)),
                 ) {
-                    when (destination) {
-                        Destination.Sessions -> SessionsHeader(
-                            attentionCount = library.notes.count(::sessionNeedsAttention),
-                            attentionOnly = attentionOnly,
-                            toggleAttention = {
-                                attentionOnly = !attentionOnly
-                                libraryListState.requestScrollToItem(0)
-                            },
-                        ) {
-                            if (library.notes.isNotEmpty() || searchOpen || searchQuery.isNotBlank()) {
-                                val searchActionFocus = remember { FocusRequester() }
-                                IconAction(Symbol.Search, if (searchOpen) "Close search" else "Search sessions",
-                                    Modifier.focusRequester(searchActionFocus)) {
-                                    searchOpen = !searchOpen
-                                    setSearchInputActive(searchOpen)
-                                    if (searchOpen) libraryListState.requestScrollToItem(0)
-                                    if (!searchOpen) { searchValue = TextFieldValue(""); dismissInput() }
-                                }
-                                LaunchedEffect(searchInputActive, searchHasFocus) {
-                                    // Keyboard navigation can immediately refocus the field after clearFocus.
-                                    if (!searchInputActive && searchHasFocus) searchActionFocus.requestFocus()
-                                }
-                            }
-                            IconAction(Symbol.Settings, "Settings") { dismissInput(); destination = Destination.Settings }
-                        }
-                        Destination.Settings -> {
-                            IconAction(Symbol.Back, "Back to sessions") { open(null) }
-                            Text("Settings", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).padding(start = 8.dp).semantics { heading() })
-                        }
-                        is Destination.Session -> {
-                            IconAction(Symbol.Back, "Back to sessions") { open(null) }
-                            Spacer(Modifier.weight(1f))
-                            if (note != null) {
-                                var menu by remember(selected) { mutableStateOf(false) }
-                                Box {
-                                    IconAction(Symbol.More, "Session options") { menu = true }
-                                    DropdownMenu(
-                                        expanded = menu, onDismissRequest = { menu = false },
-                                        modifier = Modifier.width(228.dp),
-                                        shape = RoundedCornerShape(22.dp), containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                        tonalElevation = 0.dp, shadowElevation = 0.dp,
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                                    ) {
-                                        SessionMenuItem("Rename", Symbol.Edit) { menu = false; dialog = "rename" }
-                                        SessionMenuItem(
-                                            "Share text", Symbol.Share,
-                                            enabled = transcript.isNotBlank() && library.error == null,
-                                            reason = when {
-                                                library.error != null -> "Reload this session"
-                                                transcript.isBlank() -> "No text to share"
-                                                else -> null
-                                            },
-                                        ) {
-                                            menu = false
-                                            shareTranscript()
+                    Box(Modifier.fillMaxWidth()
+                        .onSizeChanged { if (destination == Destination.Sessions) sessionsHeaderHeight = it.height }
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                        .padding(horizontal = 20.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        BoxWithConstraints(Modifier.widthIn(max = 720.dp).fillMaxWidth().heightIn(min = 48.dp)) {
+                            val headerStyle = if (LocalDensity.current.fontScale >= 1.5f || maxWidth < 260.dp)
+                                MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium
+                            when (destination) {
+                                Destination.Sessions -> SessionsHeader(
+                                    headerStyle = headerStyle,
+                                    attentionCount = library.notes.count(::sessionNeedsAttention),
+                                    attentionOnly = attentionOnly,
+                                    toggleAttention = {
+                                        attentionOnly = !attentionOnly
+                                        libraryListState.requestScrollToItem(0)
+                                    },
+                                ) {
+                                    if (library.notes.isNotEmpty() || searchOpen || searchQuery.isNotBlank()) {
+                                        val searchActionFocus = remember { FocusRequester() }
+                                        IconAction(Symbol.Search, if (searchOpen) "Close search" else "Search sessions",
+                                            Modifier.focusRequester(searchActionFocus)) {
+                                            searchOpen = !searchOpen
+                                            setSearchInputActive(searchOpen)
+                                            if (!searchOpen) { searchValue = TextFieldValue(""); dismissInput() }
                                         }
-                                        val activeReason = if (active) {
-                                            if (live.processing) "Transcription is running" else "Recording is active"
-                                        } else null
-                                        SessionMenuItem(
-                                            "Remove audio", Symbol.Audio, enabled = canRemoveAudio,
-                                            reason = activeReason ?: when {
-                                                hasUnprocessedAudio -> "Transcription is unfinished"
-                                                library.audioBytes == 0L -> "No original audio"
-                                                library.error != null -> "Reload this session"
-                                                else -> null
-                                            },
-                                        ) { menu = false; dialog = "audio" }
-                                        HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                                            color = MaterialTheme.colorScheme.outlineVariant)
-                                        SessionMenuItem(
-                                            "Delete session", Symbol.Trash, enabled = !active, reason = activeReason, destructive = true,
-                                        ) { menu = false; dialog = "delete" }
+                                        LaunchedEffect(searchInputActive, searchHasFocus) {
+                                            // Keyboard navigation can immediately refocus the field after clearFocus.
+                                            if (!searchInputActive && searchHasFocus) searchActionFocus.requestFocus()
+                                        }
                                     }
+                                    IconAction(Symbol.Settings, "Settings") {
+                                        if (dialog == null) { dismissInput(); destination = Destination.Settings }
+                                    }
+                                }
+                                else -> Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    IconAction(Symbol.Back, "Back to sessions") { open(null) }
+                                    Text(
+                                        if (destination == Destination.Settings) "Settings" else "Session",
+                                        style = headerStyle,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f).padding(start = 8.dp).semantics { heading() },
+                                    )
+                                    if (note != null) IconAction(Symbol.More, "Session options") { showSessionActions(note.id) }
                                 }
                             }
                         }
@@ -377,7 +376,11 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 }
             },
             bottomBar = {
-                if (destination != Destination.Settings) {
+                if (destination != Destination.Settings) AnimatedVisibility(
+                    visible = destination != Destination.Sessions || !searchOpen || live.noteId != null,
+                    enter = expandVertically(animationSpec = tween(180), expandFrom = Alignment.Bottom) + fadeIn(tween(120)),
+                    exit = shrinkVertically(animationSpec = tween(180), shrinkTowards = Alignment.Bottom) + fadeOut(tween(120)),
+                ) {
                     Surface(color = MaterialTheme.colorScheme.background) {
                         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 12.dp)) {
                             when {
@@ -400,7 +403,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                                         note.id, playback, library.audioBytes / 32,
                                         { model.playNote(note) }, { model.seekNote(note, it) }
                                     )
-                                    PrimaryButton("Copy text", Symbol.Copy, transcript.isNotBlank() && library.error == null, ::copyTranscript)
+                                    CopyTranscriptButton(note.id, transcript, enabled = canShare, copy = ::copyTranscript)
                                 }
                                 live.noteId != null -> PrimaryButton(
                                     if (live.processing) "Open transcript" else "Open recording", Symbol.Audio
@@ -424,8 +427,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) {
                     when (destination) {
                         Destination.Settings -> SettingsScreen(
-                            settings.language, settings.theme, model.app.preferences::language, model.app.preferences::theme,
-                            ready, preparing, setupError, { openModel() }, ::notify,
+                            settings.theme, model.app.preferences::theme, ready, preparing, setupError, { openModel() }, ::notify,
                         )
                         Destination.Sessions -> LibraryScreen(
                             library.notes, library.loaded, live, ::open, searchValue, {
@@ -435,6 +437,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                             attentionOnly = attentionOnly, setAttentionOnly = { attentionOnly = it }, listState = libraryListState,
                             inputActive = searchInputActive, setInputActive = ::setSearchInputActive,
                             searchFocusChanged = { searchHasFocus = it }, searchFieldMeasured = { searchFieldHeight = it },
+                            onSessionActions = ::showSessionActions,
                         )
                         is Destination.Session -> if (note != null) NoteScreen(
                             note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { if (library.error == null) editingId = it.id else notify("Reload this session before editing.") }, { if (ready) model.retry(note.id) else openModel(note.id) },
@@ -488,9 +491,40 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 saved
             }
         }
-        if (dialog == "rename" && note != null) RenameSessionDialog(note, { dialog = null },
+        if (dialog == "actions" && detailId != null) {
+            val loading = library.selectedId != detailId
+            val activeReason = if (actionActive) {
+                if (live.processing) "Transcription is running" else "Recording is active"
+            } else null
+            val shareReason = when {
+                library.error != null || actionNote == null -> "Reload this session"
+                transcript.isBlank() -> "No text to share"
+                else -> null
+            }
+            val audioReason = activeReason ?: when {
+                library.error != null || actionNote == null -> "Reload this session"
+                hasUnprocessedAudio -> "Transcription is unfinished"
+                library.audioBytes == 0L -> "No original audio"
+                else -> null
+            }
+            SessionActionsSheet(
+                title = actionNote?.title ?: library.notes.firstOrNull { it.id == detailId }?.title ?: "Session options",
+                loading = loading, loaded = actionNote != null,
+                shareReason = shareReason.takeUnless { loading }, audioReason = audioReason.takeUnless { loading },
+                deleteReason = activeReason.takeUnless { loading },
+                onDismiss = ::closeDialog,
+            ) { action ->
+                when (action) {
+                    SessionAction.Rename -> if (actionNote != null) dialog = "rename" else closeDialog()
+                    SessionAction.Share -> { closeDialog(); if (canShare) shareTranscript() }
+                    SessionAction.RemoveAudio -> if (canRemoveAudio) dialog = "audio" else closeDialog()
+                    SessionAction.Delete -> if (actionNote != null && !actionActive) dialog = "delete" else closeDialog()
+                }
+            }
+        }
+        if (dialog == "rename" && actionNote != null) RenameSessionDialog(actionNote, ::closeDialog,
             onDirtyChange = { renameDirty = it }, onSavingChange = { formSaving = it },
-        ) { title -> model.renameSession(note.id, title) }
+        ) { title -> model.renameSession(actionNote.id, title) }
         if (pendingOpenTarget != null) AlertDialog(
             onDismissRequest = { pendingOpenTarget = null }, title = { Text("Leave this session?") },
             text = { Text(if (formSaving) "Finishing your save…" else "Unsaved changes will be discarded.") },
@@ -500,20 +534,24 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             }) { Text("Discard & open", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { pendingOpenTarget = null }) { Text("Keep editing") } },
         )
-        if (dialog in listOf("delete", "audio") && note != null) AlertDialog(
-            onDismissRequest = { dialog = null },
+        if ((dialog == "delete" || dialog == "audio") && actionNote != null) AlertDialog(
+            onDismissRequest = ::closeDialog,
             title = { Text(if (dialog == "delete") "Delete this session?" else "Remove its audio?") },
             text = { Text(if (dialog == "delete") "The text and recording will be permanently deleted from this device." else "The text will stay. You won’t be able to listen to passages again. Frees ${"%.1f".format(library.audioBytes / 1048576.0)} MB.") },
-            confirmButton = { TextButton(enabled = dialog == "delete" || canRemoveAudio, onClick = {
-                if (dialog == "delete") { model.delete(note.id); open(null) } else model.removeAudio(note.id)
-                dialog = null
+            confirmButton = { TextButton(enabled = if (dialog == "delete") !actionActive else canRemoveAudio, onClick = {
+                if (dialog == "delete") {
+                    model.delete(actionNote.id)
+                    if (selected == actionNote.id) open(null)
+                } else model.removeAudio(actionNote.id)
+                closeDialog()
             }) { Text(if (dialog == "delete") "Delete" else "Remove audio", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = ::closeDialog) { Text("Cancel") } }
         )
     }
 }
 
 @Composable private fun SessionsHeader(
+    headerStyle: TextStyle,
     attentionCount: Int, attentionOnly: Boolean, toggleAttention: () -> Unit,
     actions: @Composable RowScope.() -> Unit,
 ) {
@@ -527,47 +565,20 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             colors = focalChipColors(), shape = CircleShape,
         )
     }
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-        BoxWithConstraints(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(start = 4.dp)) {
-            val inlineFilter = fontScale <= 1.15f && maxWidth >= 340.dp
-            val compactTitle = fontScale >= 1.5f || maxWidth < 260.dp
-            Column {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Sessions", modifier = Modifier.weight(1f).semantics { heading() },
-                        style = if (compactTitle) MaterialTheme.typography.titleLarge
-                            else MaterialTheme.typography.headlineLarge,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                    if (inlineFilter && showFilter) ReviewFilter()
-                    actions()
-                }
-                if (!inlineFilter && showFilter) ReviewFilter()
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(start = 4.dp)) {
+        val inlineFilter = fontScale <= 1.15f && maxWidth >= 340.dp
+        Column {
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Sessions", modifier = Modifier.weight(1f).semantics { heading() },
+                    style = headerStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                if (inlineFilter && showFilter) ReviewFilter()
+                actions()
             }
+            if (!inlineFilter && showFilter) ReviewFilter()
         }
     }
-}
-
-@Composable private fun SessionMenuItem(
-    label: String, symbol: Symbol, enabled: Boolean = true, reason: String? = null,
-    destructive: Boolean = false, onClick: () -> Unit,
-) {
-    DropdownMenuItem(
-        text = {
-            Column {
-                val color = if (destructive && enabled) MaterialTheme.colorScheme.error else LocalContentColor.current
-                Text(label, style = MaterialTheme.typography.bodyLarge, color = color)
-                if (reason != null) Text(reason, style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
-            }
-        },
-        leadingIcon = {
-            val color = if (destructive && enabled) MaterialTheme.colorScheme.error else LocalContentColor.current
-            Glyph(symbol, Modifier.size(19.dp), color)
-        },
-        enabled = enabled, onClick = onClick, modifier = Modifier.heightIn(min = 48.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
-    )
 }
 
 @Composable private fun LibraryCaptureDock(
@@ -754,6 +765,42 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 12.dp))
     }
 }
+
+@Composable internal fun CopyTranscriptButton(noteId: String, transcript: String, enabled: Boolean, copy: () -> Boolean) {
+    key(noteId, transcript) {
+        var successPulse by remember { mutableIntStateOf(0) }
+        LaunchedEffect(successPulse) {
+            if (successPulse != 0) {
+                delay(1_800)
+                successPulse = 0
+            }
+        }
+        val copied = enabled && successPulse != 0
+        Button(
+            onClick = { successPulse = if (copy()) successPulse + 1 else 0 }, enabled = enabled,
+            shape = CircleShape, contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp).semantics {
+                text = AnnotatedString(if (copied) "Copied" else "Copy text")
+                liveRegion = LiveRegionMode.Polite
+            },
+        ) {
+            val color = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+            Box(Modifier.clearAndSetSemantics {}, contentAlignment = Alignment.CenterStart) {
+                // Reserve the full label width so the check and text fade in place.
+                Text("Copy text", style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(start = 32.dp).alpha(0f))
+                Crossfade(targetState = copied, animationSpec = tween(150), label = "Copy feedback") { success ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Glyph(if (success) Symbol.Check else Symbol.Copy, Modifier.size(20.dp), color)
+                        Text(if (success) "Copied" else "Copy text", style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(start = 12.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable internal fun IconAction(symbol: Symbol, label: String, modifier: Modifier = Modifier, click: () -> Unit) {
     IconButton(onClick = click, modifier = modifier.semantics { contentDescription = label }) { Glyph(symbol) }
 }

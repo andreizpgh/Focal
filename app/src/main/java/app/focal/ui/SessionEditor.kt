@@ -1,6 +1,9 @@
 package app.focal.ui
 
+import android.animation.ValueAnimator
 import android.os.Build
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
@@ -23,6 +26,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -30,11 +34,13 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -50,7 +56,7 @@ import app.focal.data.fitsPassageDraftBudget
 import kotlinx.coroutines.launch
 
 @Suppress("DEPRECATION")
-@Composable private fun DialogSystemBars() {
+@Composable internal fun DialogSystemBars() {
     val view = LocalView.current
     val background = MaterialTheme.colorScheme.background
     val light = background.luminance() > .5f
@@ -91,6 +97,18 @@ import kotlinx.coroutines.launch
     DisposableEffect(passage.id) { onDispose { onDirtyChange(false); onSavingChange(false) } }
     val needsReview = passage.uncertain && !passage.reviewed
     val canAdvance = needsReview && hasNextReview
+    val dirty = text != passage.text
+    val passageAlpha = remember { Animatable(1f) }
+    var displayedPassageId by remember { mutableStateOf(passage.id) }
+    LaunchedEffect(passage.id) {
+        if (displayedPassageId != passage.id) {
+            displayedPassageId = passage.id
+            if (ValueAnimator.areAnimatorsEnabled()) {
+                passageAlpha.snapTo(.82f)
+                passageAlpha.animateTo(1f, tween(150))
+            } else passageAlpha.snapTo(1f)
+        }
+    }
     fun closeEditor() { focus.clearFocus(force = true); keyboard?.hide(); dismiss() }
     fun requestClose() {
         if (saving) return
@@ -119,7 +137,8 @@ import kotlinx.coroutines.launch
         containerColor = MaterialTheme.colorScheme.background,
     ) {
         DialogSystemBars()
-        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(scroll).padding(horizontal = 24.dp).padding(bottom = 8.dp)) {
+        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(scroll).padding(horizontal = 24.dp)
+            .padding(bottom = 8.dp).graphicsLayer { alpha = passageAlpha.value }) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (needsReview) "Review passage" else "Edit passage", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f).semantics { heading() })
                 IconButton(onClick = ::requestClose, enabled = !saving,
@@ -201,14 +220,38 @@ import kotlinx.coroutines.launch
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Assertive },
             )
-            Button(onClick = { commit(canAdvance) }, enabled = !saving, shape = CircleShape,
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
-                Text(if (saving) "Saving…" else if (canAdvance) "Save & next" else "Save changes",
-                    style = MaterialTheme.typography.labelLarge)
+            @Composable fun SaveButton(modifier: Modifier = Modifier) {
+                Button(onClick = { commit(false) }, enabled = !saving, shape = CircleShape,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                    modifier = modifier.heightIn(min = 54.dp).testTag("editor-save").semantics {
+                        stateDescription = if (dirty) "Saves changes and closes the editor"
+                            else if (needsReview) "Confirms this passage and closes the editor"
+                            else "Closes the editor"
+                    }) {
+                    Text(if (saving) "Saving…" else if (dirty) "Save" else "Done",
+                        style = MaterialTheme.typography.labelLarge)
+                }
             }
-            if (canAdvance) TextButton(onClick = { commit(false) }, enabled = !saving, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text("Save & close", style = MaterialTheme.typography.labelLarge)
+            @Composable fun NextButton(modifier: Modifier = Modifier) {
+                TextButton(onClick = { commit(true) }, enabled = !saving,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+                    modifier = modifier.heightIn(min = 54.dp).testTag("editor-next").semantics {
+                        stateDescription = if (dirty) "Saves and confirms this passage, then opens the next hint"
+                            else "Confirms this passage, then opens the next hint"
+                    }) {
+                    Text(if (dirty) "Save & next" else "Next hint", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val stack = maxWidth < 300.dp || LocalDensity.current.fontScale >= 1.5f
+                if (!canAdvance) SaveButton(Modifier.fillMaxWidth())
+                else if (stack) Column(Modifier.fillMaxWidth()) {
+                    SaveButton(Modifier.fillMaxWidth())
+                    NextButton(Modifier.fillMaxWidth())
+                } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    NextButton(Modifier.weight(1f))
+                    SaveButton(Modifier.weight(1f))
+                }
             }
         }
     }

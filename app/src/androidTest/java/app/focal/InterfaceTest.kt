@@ -712,18 +712,18 @@ class InterfaceTest {
         val app = application()
         val initial = app.preferences.settings.value
         try {
-            compose.onNodeWithContentDescription("Settings").performClick()
-            compose.onNodeWithText("Speech language").performClick()
+            val currentLanguage = Preferences.languages[initial.language]
+            compose.onNodeWithContentDescription("Speech language: $currentLanguage").performClick()
             languageOption("Русский").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Settings").performClick()
+            compose.onNodeWithText("Speech language").assertDoesNotExist()
             compose.onNodeWithText("Dark").performClick()
             compose.onNodeWithText("Light").performClick()
             capture("settings-brand")
             compose.onNodeWithContentDescription("Back to sessions").performClick()
-            compose.onNodeWithContentDescription("Speech language: Русский").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Settings").performClick()
-            compose.onNodeWithText("Speech language").performClick()
+            compose.onNodeWithContentDescription("Speech language: Русский").assertIsDisplayed().performClick()
             languageOption("English").performScrollTo().performClick()
-            compose.onNodeWithContentDescription("Back to sessions").performClick()
+            compose.activityRule.scenario.recreate()
             compose.onNodeWithContentDescription("Speech language: English").assertIsDisplayed()
         } finally {
             app.preferences.language(initial.language)
@@ -869,7 +869,8 @@ class InterfaceTest {
             waitForSessionReady("Sample note", "Это тестовая запись.")
             compose.onNodeWithText(reviewHint).assertDoesNotExist()
             reviewFilter("1 to review").performClick()
-            compose.onNodeWithText(reviewHint).assertIsDisplayed()
+            compose.onNodeWithText(reviewHint).assertDoesNotExist()
+            reviewFilter("Show all").assertIsSelected()
             compose.onNode(hasText("Это тестовая запись.") and hasClickAction()).performScrollTo().performClick()
             waitForEditor()
             capture("review")
@@ -880,14 +881,14 @@ class InterfaceTest {
             // A real storage write failure must preserve the draft and the saved original text.
             store.writableDatabase.execSQL("PRAGMA query_only=ON")
             try {
-                compose.onNodeWithText("Save changes").performScrollTo().performClick()
+                compose.onNodeWithTag("editor-save").performScrollTo().performClick()
                 compose.waitUntil(10_000) {
                     compose.onAllNodesWithText("Couldn't save. Your changes are still here. Try again.").fetchSemanticsNodes().isNotEmpty()
                 }
                 compose.onNode(hasSetTextAction()).assertTextContains("Это исправленная запись.")
                 assertEquals("Это тестовая запись.", store.passages(id).single().text)
             } finally { store.writableDatabase.execSQL("PRAGMA query_only=OFF") }
-            compose.onNodeWithText("Save changes").performScrollTo().performClick()
+            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
             compose.waitUntil(10_000) { store.passages(id).single().reviewed }
             compose.waitUntil(10_000) {
                 compose.onAllNodesWithText("No flagged passages.").fetchSemanticsNodes().isNotEmpty()
@@ -1006,7 +1007,7 @@ class InterfaceTest {
             assertEquals(edits.first(), app.store.passages(id)[0].text)
             org.junit.Assert.assertTrue(app.store.passages(id)[0].reviewed)
             compose.onNode(hasSetTextAction()).performTextReplacement(edits[1])
-            compose.onNodeWithText("Save & close").performScrollTo().performClick()
+            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
             val passages = app.store.passages(id)
             assertEquals(edits[1], passages[1].text)
@@ -1126,7 +1127,7 @@ class InterfaceTest {
             compose.onNode(hasSetTextAction()).assertTextContains(draft)
             assertWarningVisible("after rotation")
             capture("oversized-editor-after-recreation")
-            compose.onNodeWithText("Save changes").performScrollTo().performClick()
+            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
             assertEquals(draft, app.store.passages(id).single().text)
         } finally { app.store.delete(id) }
@@ -1161,7 +1162,7 @@ class InterfaceTest {
             compose.onNode(hasSetTextAction()).performTextReplacement(changedDraft)
             compose.onNodeWithText(warning).assertDoesNotExist()
             compose.onNode(hasSetTextAction()).assertTextContains(changedDraft)
-            compose.onNodeWithText("Save changes").performScrollTo().performClick()
+            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
             assertEquals(changedDraft, app.store.passages(id).single().text)
         } finally { app.store.delete(id) }
