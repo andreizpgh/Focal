@@ -45,7 +45,10 @@ states. Exact artifact audit checks model and native hashes, certificate continu
 are in [interface preview](interface-preview.md). No model was downloaded and no
 recognition setting changed. Phone performance, seven-language speech quality,
 noise hallucinations, mixed-language terms, local correction and owner UI acceptance
-remain open. Alpha 5 delivery is prepared; publication status is recorded in the handoff.
+remain open. The [Alpha 5 release](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-5)
+is published with verified remote asset sizes/digests; the public download returns
+200. [PR #6](https://github.com/andreizpgh/Focal/pull/6) carries this update.
+Full-history Gitleaks found no leaks before publication. Earlier assets are unchanged.
 
 ## UX Alpha 4 · 2026-11-04
 

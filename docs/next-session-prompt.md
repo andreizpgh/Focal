@@ -20,8 +20,11 @@ real-model проверок, 145.206 с JUnit / 146.192 с runner wall. Обе l
 тестов, исходные oversized/draft/storage assertions сохранены. Sol/Terra и Astra
 проверили код и реальные статичные/движущиеся кадры, включая animations off.
 
-Доставка подготовлена. Перед действием проверь фактическую публикацию в GitHub и
-`build/local-diagnostics/current-android-delivery-work.json`. Не пересобирай уже
+Alpha 5 опубликована; серверные размеры и SHA всех трёх файлов совпадают,
+прямая ссылка APK отвечает 200. [PR #6](https://github.com/andreizpgh/Focal/pull/6)
+содержит изменения: перед действием проверь его статус и
+`build/local-diagnostics/current-android-delivery-work.json`. AVD остановлен,
+portrait/font1/light/320×640 восстановлены, тяжёлых задач нет. Не пересобирай уже
 проверенный APK ради документации. Модели не скачивались; STT-настройки не менялись.
 200% landscape/IME проверялись. После ручного поворота восстанавливай portrait,
 пока Focal foreground, затем Home→app: иначе retained Android rotation override

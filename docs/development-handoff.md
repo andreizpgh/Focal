@@ -35,11 +35,14 @@ Sol/Terra source reviews and Astra actual screenshot/motion/reduced-motion revie
 passed. Initial focused test failures and their causes remain documented; the clean
 full run passed on the first attempt. No speech setting or download ledger changed.
 
-Alpha 5 delivery is prepared, not yet recorded as published here. Check GitHub and
-`build/local-diagnostics/current-android-delivery-work.json` before publishing or
-repeating work. PR #1–5 are already merged; use a new PR. Preserve existing releases.
+The [Alpha 5 APK](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-5/Focal.apk)
+is published: all three remote asset sizes/digests match local verified files and
+the public download returns 200. [PR #6](https://github.com/andreizpgh/Focal/pull/6)
+tracks this delivery; check its status and `build/local-diagnostics/current-android-delivery-work.json`
+before continuing. Earlier release assets are unchanged. The dedicated AVD is
+stopped after restoring portrait, font1, light and 320×640; no heavy job remains.
 Owner UI acceptance, seven-language STT, noise/mixed terms, correction and physical
-Pixel 10 gates remain open. Keep heavy checks sequential, then stop only the dedicated AVD.
+Pixel 10 gates remain open. Keep later heavy checks sequential.
 
 ## Previous delivery step · UX Alpha 4
 
