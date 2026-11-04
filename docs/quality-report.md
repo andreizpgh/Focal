@@ -325,9 +325,9 @@ review verified 796 inputs and 289 outputs. Only existing synthetic speech contr
 and two previously recorded emulator-noise signals were consumed; fresh held-out
 audio remains closed. The production decoder is unchanged.
 
-The optional [ownership build overlay](whisper-lifetime-research.md) now generates
-the exact independently reviewed prototype without changing Android or the pinned
-submodule. Nine tests cover 19 configuration scenarios, including rejection of
+The [ownership build overlay](whisper-lifetime-research.md) was first added as an
+inactive option generating the exact independently reviewed prototype without
+changing the pinned submodule. Nine tests cover 19 configuration scenarios, including rejection of
 unknown inputs and speech-policy overlay composition. The full host suite passed
 **155 tests with no skips in 7.478 s**, using the existing pinned NumPy 2.4.6
 environment. This is new host evidence; the latest full Android checkpoint remains
@@ -349,6 +349,15 @@ It retained one inference thread, RSS guards and all functional assertions. The
 maximum sampled VmHWM was 249,576 KiB. This does not establish a specific slow
 stage, sanitizer overhead factor, patched/retry behavior or phone performance.
 
+The later real-model ownership matrix is now covered by 23 matched cases from
+one preserved attempt and seven from a separately reviewed continuation. All
+15 patched cases pass with clean sanitizers; baseline has five healthy controls
+and ten expected regressions. Same-state beam/greedy/auto retry outputs match the
+required healthy controls exactly. The earlier wall timeout and subsequent
+CPU-limit failure remain failed attempts. These checks reused the cached model
+and consumed no new held-out speech. They establish scoped ownership behavior,
+not speech accuracy, speed, arbitrary OOM resilience or phone resource budgets.
+
 ## Remaining release gates
 
 Independent source review also found a native allocation-failure ownership defect:
@@ -359,9 +368,17 @@ regressions now reproduce two ASan use-after-free paths and related cleanup erro
 baseline four controls pass/20 expected errors; the ownership-only prototype passes
 all 24 cases with clean sanitizers. Independent review verified source/tool hashes,
 all binaries/dependencies and 48 execution logs. These use real engine/GGML source
-with synthetic descriptors and graph bypasses. Actual-model retry, loader wrappers,
-Android recovery/cancellation and a reviewed production integration remain required.
-No real host OOM was induced; the application has not yet received this fix.
+with synthetic descriptors and graph bypasses. The later actual-model retry and
+loader-wrapper checks above close that host gate. The isolated Android patched build then passed both strict tests in 173.937 s:
+audio/manual edits/pending work survive the error and ordinary recovery succeeds;
+in-flight cancel/close keeps its owner until return and destroys it once.
+A first run failed only its 30 s arrival wait; the separately reviewed 120 s
+arrival bound observed the checkpoint after 34.520 s without changing functional
+assertions or the 30 s barrier/45 s completion bounds. The failed run is preserved.
+No real host OOM was induced. Ordinary builds now include the ownership-only fix;
+core checks, both lint variants, debug/test and unsigned release/R8 builds pass.
+The [Android evidence](benchmarks/2026-11-03-local/engine-lifetime-android-results.json)
+keeps the fault artifacts separate. Full ordinary-artifact QA remains pending.
 
 1. Resolve recovery hallucinations on varying weak noise without suppressing quiet
    speech. Verify any engine/VAD change with paired development data, frozen fresh

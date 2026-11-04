@@ -1,16 +1,17 @@
-# Research build: state ownership on allocation failure
+# Whisper state ownership and regression tests
 
-The optional `focal_whisper_lifetime_overlay()` generates a build-directory copy
-of the pinned engine with the ownership-only prototype exercised in the
+`focal_whisper_lifetime_overlay()` generates a build-directory copy of the pinned
+engine with the ownership-only fix exercised in the
 [model-free allocation-failure study](benchmarks/2026-11-03-local/report.md#native-ownership-model-free-allocation-failure-regression).
-It is not enabled in Android and does not modify the submodule. It changes no
-sampling, SOT, VAD, thresholds, model weights or transcription policy.
+Normal Android builds now include it; the explicit fault-test baseline retains
+the original engine. It does not modify the submodule, sampling, SOT, VAD,
+thresholds, model weights or transcription policy.
 
 ## Fix and limits
 
 On self-KV growth failure, the original engine frees a state still owned by the
 caller; closing that caller can access freed memory. Early state cleanup can
-also free uninitialized batch pointers. The prototype:
+also free uninitialized batch pointers. The fix:
 
 - retains the borrowed state on a failed cache replacement;
 - prepares the next KV cache before releasing the old cache;
@@ -43,7 +44,7 @@ the same LF output without changing the original files.
 
 Unknown source/header bytes, imported or missing targets, missing/duplicate engine
 inputs, repeated application and composition with the SOT/VAD/beam research
-overlays are rejected. This is a separate ownership experiment. File checks do
+overlays are rejected. This is a separate ownership change. File checks do
 not replace validation of the full submodule, toolchain and loaded dependencies.
 
 ```sh
@@ -59,6 +60,42 @@ cmake --build build/whisper-lifetime-research --target whisper-cli --parallel 2
 These are optional build instructions, not a claim that this public CLI build or
 its real-model inference has been verified. No Python or external patch program
 is needed during configuration.
+
+## Isolated Android fault tests
+
+The explicit `focalNativeFaultTests` Gradle property builds a separate debug-only
+artifact. `baseline` uses the pinned engine; `patched` adds the exact ownership
+postimage above. Normal builds omit this property. Android release tasks reject
+either value, with an independent CMake debug-build guard.
+
+```sh
+./gradlew -PfocalNativeFaultTests=baseline :app:assembleDebug :app:assembleDebugAndroidTest
+./gradlew -PfocalNativeFaultTests=patched :app:assembleDebug :app:assembleDebugAndroidTest
+```
+
+Build and run these variants sequentially on a dedicated test emulator. Archive
+each exact app/test APK pair before rebuilding; do not distribute fault artifacts.
+The selected variant replaces the instrumentation source set, so it is not the
+normal 85-test suite and must not be reported as a full `qa-local.py` pass.
+
+The helper instruments build copies of the engine and JNI, leaving their tracked
+sources unchanged. It refuses one self-KV allocation only after the real encoder
+has completed and the same state requests growth from one to three decoders.
+The fixture checks the actual bundled model and public JFK audio hashes. No real
+host memory pressure is induced. A baseline reproduction requires both verified
+native `-7` markers and an actual fatal caller-close stack; an arbitrary failed
+JUnit assertion is insufficient.
+
+The patched tests require unchanged audio, pending chunks and reviewed manual
+edits after the service handles `-7`, followed by successful ordinary recovery
+with a fresh engine. A separate barrier-only case cancels and closes an in-flight
+decode, checks that its owner survives until return, rejects partial output and
+requires exactly one destruction. Cancellation and allocation refusal are kept
+separate because cancellation could mask the allocation error.
+
+Before publishing an ordinary build, check both APK ABIs and DEX files for the
+absence of fault helpers, JNI exports and markers, then run the unchanged full
+suite. Source review and these commands alone are not runtime evidence.
 
 ## Verification boundary
 
@@ -82,9 +119,20 @@ healthy baseline in 79.903 s with strict counters and clean sanitizers. This
 supports insufficient time for the original control; it does not validate the
 remaining matrix or quantify sanitizer overhead. No recompile or download occurred.
 
-Actual-model same-state beam/greedy retry and close, the three loader wrappers,
-Android error/recovery/cancellation and phone resource checks remain open. Set
-separately reviewed matrix bounds from the diagnostic and auto/retry control flow;
-retain all assertions and the failed attempt. Do not enable this overlay in the
-application on the strength of configuration tests alone. The [handoff](development-handoff.md)
-records the next required checks.
+The later matrix and a seven-case continuation now cover all 30 original
+case/variant pairs: patched 15 pass with clean sanitizers; baseline five controls
+pass and ten expected regressions reproduce. Same-state beam/greedy/auto retries,
+close and the three loader wrappers are covered with actual model graphs. All
+required canonical comparisons match exactly. This is combined coverage, not a
+single clean run: the initial timeout and a later auto-retry CPU-limit failure
+remain recorded. No model was downloaded and no held-out speech was consumed.
+
+The isolated Android patched variant subsequently passed both strict integration
+tests in 173.937 s: service failure preserves original audio, reviewed edits and
+pending work before ordinary recovery succeeds; in-flight cancel/close retains
+the engine until return, discards partial output and destroys it once. The first
+attempt retained a failed 30 s arrival wait. A reviewed 120 s arrival allowance
+then observed the actual checkpoint after 34.520 s; the 30 s barrier hold and
+45 s completion/cleanup bounds were unchanged. These are test workload timings,
+not phone latency measurements. Full normal-artifact QA and phone resource
+checks are separate gates recorded in the [handoff](development-handoff.md).

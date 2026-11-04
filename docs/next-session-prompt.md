@@ -1,294 +1,106 @@
-# Продолжение после паузы · 2026-11-04
+# Продолжение Focal · 2026-11-04
 
-Пользователь явно возобновил работу. Состояние паузы сохранено в
-`docs/pause-checkpoint.md`; все исходные хэши совпали. Отклонённая Android VAD
-интеграция сохранена в приватном архиве и удалена из рабочей сборки вместе с
-её assets. Независимые исправления поиска прошли шесть строгих тестов и ручные
-повороты/Home при 200% шрифте. Новый полный QA чистого `b59c6ee` прошёл:
-84 Android-теста без ошибок/пропусков, восемь real-model checks, 36 core tests,
-debug/release lint и R8; отдельно прошли 146 Python-тестов. После проверки AVD
-выключен с сохранением данных. Последующий `101a153` сохраняет курсор поиска
-после перехода в результат и назад: свежий RED на пересобранном старом source
-и GREEN на новом прошли с одним test APK. Полный QA чистого `101a153` —
-**85 Android-тестов без ошибок/пропусков**, восемь model checks, 36 core,
-debug/release lint и R8. Host sources не изменились; 146 Python-тестов остаются
-результатом предыдущего `b59c6ee`, их заново не запускали. Точные новые APK
-сохранены приватно для следующих baseline; AVD снова выключен.
-Тяжёлые прогоны выполняй последовательно.
-
-Последующий STT screen с исправленным распределением beam и явной ошибкой
-при отсутствии winner завершился REJECT: 14 strict positive failures,
-3 успешных новых empty и отдельный native -11 (RU normal meeting), 28 noise skips.
-Независимо проверены 796 inputs / 289 outputs / 11 deps; свежие 42 held-out clips
-не использованы. FR/PT quiet потеряли верное отрицание; PT normal потерял его
-даже при улучшении WER/CER. 27/28 совпадений с rejected top-k относятся только
-к accepted text, не ко всем metadata. Не интегрируй этот вариант и не считай
-исправление локального контракта улучшением качества.
-В двух quiet FR/PT случаях raw beam уже содержал короткое отрицание: его подавила
-существующая no-speech conjunction после успешного ASR, не VAD и не -11.
-Диагноз сохранён отдельно; он не разрешает ослаблять пороги или принимать
-остальные ошибки. No-speech baseline с прежней неверной строкой logits некалиброван.
-Общий бюджет теперь 881 742 333 / 1 000 000 000 байт: добавлены две резервации
-по 1 MiB для matching ASan/UBSan runtime; фактически скачано 834 149 байт.
-Пакеты проверены по подписи и распакованы только в ignored build, без system install.
-Изолированный lifetime v4 теперь прошёл: 24/24 patched cases, исходный engine
-дал 4 GREEN/20 ожидаемых RED, включая два actual ASan use-after-free после
-ошибки self-KV → caller close. Независимо проверены 664 inputs / 94 tool dependencies и 48 logs.
-Это actual source+GGML с synthetic descriptors и graph bypasses, не real ASR.
-Source freeze `93a52a4e…ee9c` сохранён в `build/stt/engine-lifetime-research-v4/`;
-прежняя v3 link failure сохранена отдельно. Следующий этап — realgraph retry/close,
-три loader wrappers, затем Android error/recovery/cancel. В production patch ещё нет;
-phone gates открыты. Не повторяй уже завершённую model-free suite без новой причины.
-
-Опциональный `cmake/focal-whisper-lifetime.cmake` воспроизводит exact reviewed
-postimage `8cc010e3…ed64b`, в Android он не включён. Его 9 тестов покрывают
-19 configure-сценариев; полный host suite прошёл 155 тестов без skips за 7.478 s.
-Последний полный Android QA по-прежнему относится к чистому `101a153` (85 тестов).
-Realgraph в `build/stt/engine-lifetime-realgraph-research/` теперь подготовлен:
-freeze `86d55e19…209e`, 682 inputs / 96 tool identities, 16 Python oracle tests.
-Независимые prebuild/postbuild review прошли; два sanitized варианта собраны
-последовательно за 91.926 s с существующими GGML archives. Новых загрузок нет.
-**Первый real-model прогон НЕ завершён:** baseline `healthy_owned_beam` загрузил
-модель и создал state graphs, но превысил wall limit 60 s (exit -9). Других
-сценариев и patched запусков нет; нет FULL_RETURN, canonical или fault marker.
-Ошибка missing canonical вторична к timeout. Независимо сверены единственный
-лог, все inputs/binaries и семь loaded deps. Лог не различает незавершённую
-работу encoder/decoder; SIMD включён. Сохрани попытку как failed и все assertions.
-Отдельный independently reviewed healthy baseline diagnostic затем прошёл за
-79.903 s с тем же binary/model/PCM и строгими проверками: wall180 / CPU150–155 s,
-один поток и прежние RSS limits. Диагностический freeze `022953fa…01b65`,
-summary `a62dfe93…084ce`. Максимальный sampled VmHWM — 249 576 KiB; последний
-CPU sample — 78.06 s при elapsed78.030 s. Исходных 60 s для этого control
-не хватало; конкретная стадия и вклад sanitizers не измерены. Новую матрицу
-готовь только с отдельно проверенными лимитами, учитывая auto и retry paths;
-единственный healthy baseline не подтверждает patched/retry/auto. Результат и
-хэши — в `engine-lifetime-realgraph-results.json` локального benchmark report.
-Прежний interrupted draft и unexecuted prebuild v1 сохранены отдельно;
-PREPARATION-STATUS внутри freeze описывает состояние до исполнения.
-Android fault/recovery/cancel план ещё не реализован; подробности в handoff.
-
-# Prompt for the next Codex session
-
-Продолжи разработку Focal в существующем checkout, ветка
-`codex/sessions-stt-handoff`, draft PR #1:
-https://github.com/andreizpgh/Focal/pull/1.
-
+Продолжи в существующем checkout, ветка `codex/sessions-stt-handoff`,
+draft PR [#1](https://github.com/andreizpgh/Focal/pull/1). Новый worktree не нужен.
 Прочитай `AGENTS.md`, `docs/development-handoff.md`, `docs/quality-report.md`,
-`docs/architecture.md`, `docs/local-emulator-qa.md`, `docs/device-validation.md`,
-`docs/stt-quality-experiments.md` и оба отчёта в
-`docs/benchmarks/2026-11-03-stt/` и `docs/benchmarks/2026-11-03-local/`.
+`docs/architecture.md`, `docs/local-emulator-qa.md` и `docs/device-validation.md`.
+Подробные исследования находятся в `docs/benchmarks/2026-11-03-local/report.md`
+и `docs/benchmarks/2026-11-03-stt/report.md`; не повторяй их ради восстановления контекста.
 
-Цель — финализация всего приложения и измеримое качество/скорость STT на всех
-семи языках. Сохрани утверждённые Sessions / Focus wave, тихий английский интерфейс,
-выбор языка речи, светлую тему с чёрными акцентами и dark/system. Не возвращайся
-к поиску логотипа, бренду в шапке или декоративным заставкам. Исходное аудио и
-ручные правки должны сохраняться; inference не должен блокировать capture.
+## Приоритет и организация
 
-Локальный Linux-эмулятор ускоряется **KVM (`-accel on`)**. Отключён Vulkan,
-а не виртуализация CPU. Dedicated AVD использует host GLES, два vCPU и фактически
-2560 MiB RAM; другие устройства/данные не менялись. Используй `scripts/qa-local.py`.
-Длительные проверки выполняй локально, Actions — только для ограниченных checkpoints.
+Ближайшая цель — следующий проверенный APK с исправлением владения памятью
+движка. Заверши его Android-проверки, обычный полный QA и ручной интерфейсный
+проход, затем сохрани проверенные коммиты, обнови PR и выдай APK. До этого не
+расширяй STT-исследование. Пользователь просит сократить лишнюю работу без потери
+качества и явно разрешил фокусированных субагентов GPT-6.1 Sol xhigh; root
+отвечает за интеграцию и приёмку. Новые пользовательские чаты не нужны.
 
-Исходный сбой `oversizedEditorInputKeepsTheValidDraftThroughRotation` исправлен
-в `12e958c`: повтор accepted value от input connection стирал предупреждение.
-Гипотеза «предупреждение было вне экрана» опровергнута наблюдением UI. Проверки
-не ослаблены; реальная вставка с клавиатурой, поворот и Save & next прошли.
-Последний полный прогон чистого HEAD `101a153` прошёл **85 Android-тестов без
-ошибок/пропусков**, все восемь обязательных real-model checks, 36 core tests,
-debug/release lint и R8. Отдельно 146 Python host tests ранее повторены при `b59c6ee`
-в окружении с hash-pinned NumPy; host sources с тех пор не менялись.
-Точные APK/hash/fingerprint и ограничения QA приведены в отчётах; прежние
-dirty-source runs не стали проверками чистого HEAD задним числом.
+Тяжёлые процессы запускай по одному: сборка, нативный inference, Android QA.
+Используй пониженный приоритет, CPU affinity 0–3, не более двух Gradle/CMake
+workers, без parallel Gradle. Модели повторно не скачивай; длительные проверки
+выполняй локально, Actions экономно. Не запускай `gradlew clean`: ignored `build/`
+содержит невоспроизводимые без загрузок артефакты и сохранённые попытки.
 
-`6872bb4` исправляет разрезание emoji лимитами названий 120/72 UTF-16.
-`129ee02` исправляет обнаруженное ручным поворотом падение Rename:
-FocusRequester вызывался до готовности поля в отдельной композиции Dialog.
-Строгая регрессия сначала упала на старом APK, затем прошла; реальный landscape
-сохранил черновик и фокус, Save после закрытия клавиатуры записал точное название.
+## Актуальный Android checkpoint
 
-Более позднее исправление Rename прокручивает всю форму с учётом IME/system insets:
-при 200% шрифте в landscape реальными свайпами доступны заголовок и Save/Cancel
-над клавиатурой. Проверены Save, dirty Cancel → Keep editing и Discard; обе прежние
-строгие регрессии прошли (5.964 s). Это focused QA рабочего APK с непринятой STT
-интеграцией, не новый clean full-suite checkpoint. Поиск с крупным шрифтом,
-landscape IME и настоящим Home → Focal теперь исправлен и проверен отдельно
-на base-only APK; этот же APK прошёл полный 84-test QA. Точные артефакты
-описаны в quality report.
+Последний полный обычный QA — чистый `101a153`: 85 Android-тестов без ошибок
+и пропусков, восемь обязательных real-model checks, 36 core tests,
+debug/release lint, debug/test и unsigned release/R8. Точный проверенный APK
+архивирован в `build/local-diagnostics/search-return-verification-20261104/verified-apks/`;
+его SHA — в quality report. Это рабочая тестовая версия, не финальный релиз.
 
-Ручная запись сохранила 2:32:37 аудио после удаления карточки и примерно
-149 минут screen-off. Память измерялась отдельно первые 30 минут, не весь сеанс.
-Проверены уведомление Pause/Resume/Finish, Unicode edit/copy/share, 200% шрифт,
-крупный допустимый черновик и paging legacy-текста. После Deny → Retry → Grant
-устаревшая permission-подсказка теперь исчезает. Это не подтверждает реальные
-микрофон/звук, TalkBack или ресурсы ARM-телефона: AVD запущен с `-no-audio`.
+Исходный oversized-editor сбой исправлен в `12e958c`: input connection повторял
+accepted draft и стирал предупреждение. Причина установлена наблюдением UI,
+проверки не ослаблены. Дополнительно исправлены permission feedback, Unicode
+названия, Rename focus/scrolling и поиск/caret. Сохраняй Sessions / Focus wave,
+тихий английский интерфейс, явный язык речи, light с чёрными акцентами и dark/system.
 
-**Открытый шумовой сбой восстановления.** После force-stop
-сохранённый слабый меняющийся сигнал эмулятора превращается в выдуманный текст.
-Это не точные нули: измерены PCM16 от −8 до 7, RMS около 0.000124. Узкая защита
-от строго постоянного zero/DC уже проверена на 126 сочетаниях семи языков,
-длительности и контекста; она сохраняет аудио и правки, но не закрывает этот
-реальный manual failure. Не поднимай общий порог громкости ради зелёной проверки.
+Ownership-интеграция прошла адресные Android-тесты. Isolated debug baseline
+подтвердил native -7 и падение при последующем JNI close; не повторять.
+Patched attempt02: два теста без ошибок/пропусков, 173.937 s. Аудио, reviewed
+правка и очередь сохранены; обычное восстановление новым движком успешно.
+Отмена/close сохраняет owner до return, не отдаёт partial output, освобождает
+ресурсы один раз. Первый cancellation run не дождался checkpoint за 30 s;
+после независимого ревью arrival limit 120 s достиг checkpoint за 34.520 s.
+Barrier hold остался 30 s, completion/cleanup 45 s; assertions не ослаблены.
+Прежняя failed attempt сохранена. Источники/артефакты independently verified.
 
-Показатель `noSpeech` закреплённого whisper.cpp почти одинаков для речи и шума.
-Код запрашивает только последнюю строку logits начального prompt, а no-speech
-читает первую. Исследуется минимальный fix SOT-строки в отдельной ignored-копии,
-с учётом preceding text context. В `docs/whisper-sot-research.md` описан
-опциональный hash-verified build overlay; в Android он не включён.
-Submodule `4979e04f5dcaccb36057e059bbaed8a2f5288315`
-и shipped engine пока не изменены. Сначала проверь итог исследовательского отчёта,
-затем парную речь/шум; любой намеренный engine update требует явной provenance,
-повторного QA и сохранённого baseline. Не используй текущие noSpeech значения
-как калиброванный фильтр.
+Обычный APK теперь включает ownership overlay без fault hooks. Обычная
+сборка/core/lint/release прошла за 4m42s; артефакты находятся в
+`build/local-diagnostics/ownership-app-verification-20261104/`.
+**Сначала прочитай `build/local-diagnostics/current-android-delivery-work.json`
+и свежие QA результаты; проверь процессы перед новым тяжёлым запуском.** Далее
+проверка обоих ABI/DEX на отсутствие helper, source checkpoint, полный
+`scripts/qa-local.py --release-checks` и ручной UI. Не засчитывай
+успех adb как PASS без точных test IDs/counts/status. Адресный результат находится
+в `build/local-diagnostics/android-native-fault-patched-attempt02/`.
 
-Подтверждённый DEV-повтор SOT с фиксированными порогами 0.8/0 снизил normal/quiet
-word errors с 207/303 до 179/294 без роста WER/CER в 14 ячейках. Оба шумовых
-образца дали пустой результат на всех семи языках с пустым text context;
-непустой trusted context проверяется отдельно. Но вариант **не принят**:
-пять новых пустых chunks сохраняют автоматический lexical speech-loss flag.
-Разбор reference/time указывает на ложное global alignment, но не доказывает
-отсутствие потери речи. Не стирай этот флаг ради принятия. Первый запуск нарушил
-внешний freeze из-за неисполняемого root-файла; он оставлен диагностическим,
-новый повтор на actual snapshot inputs прошёл проверки хешей. Подробности и
-provenance в local benchmark report/engine-dev-results.json. Combined VAD
-завершён с прежними 136/178 errors: четыре регрессии к production остались,
-вариант отклонён для held-out. Выходы baseline/candidate совпали в 28/28
-synthetic positive controls (нулевая нормализованная WER в 8/28 случаях,
-буквальное совпадение с reference только в 1/28),
-но noise с непустым context дал strict [] только в 13/14 случаях: один французский
-выход содержит пунктуацию. Порог не меняли. VAD-only сохранил все samples этих
-28 синтетических клипов; это не доказательство качества человеческой речи.
-DEV-вариант presence-only дал 179/266 word errors без роста в 14 ячейках;
-28 positive outputs остались прежними, 28 noise cases пропустили ASR. При наличии
-речи весь исходный ASR input и его границы остаются прежними. Это восстановленный
-отчёт после report-only KeyError, не clean run: independent review проверил
-219 inputs, 1638 outputs и 185 VAD decisions, исходный FAILED сохранён. Шесть
-новых пустых chunks и автоматический lexical-loss flag остаются для adjudication;
-reference/time evidence приведено отдельно. Кандидат не принят и не включён
-в принятую Android-версию. Auto encoder context уже проверен и отклонён:
-183/249 word errors, но WER/CER ухудшились в 6 ячейках против production и в 9
-против full-context presence; 15 positive canaries провалили gate. Было 150 новых
-ASR calls, VAD decisions использованы из проверенного cache; новых VAD calls нет.
-Свежая test-часть по-прежнему закрыта.
+## Завершённый нативный gate
 
-Отдельный research-only VAD API overlay (`docs/whisper-vad-research.md`) исправляет
-возврат успешных частичных probabilities при compute error и добавляет отмену
-между CPU graph nodes. Проверены точное совпадение с исходным engine, отмена и
-reuse; SOT не подключён. Native conditioner/presence parity уже прошла на всех
-185 использованных DEV/control requests: точные conditioned PCM, probability bits,
-ranges и decisions (150 present / 35 absent), исходные floats неизменны. Независимо
-проверены 784 frozen inputs. Публичный aggregate — native-presence-parity.json.
-Парное сравнение с переиспользуемым ASR context завершилось **REJECT**:
-223/256 → 176/255 normal/quiet word errors, но ES quiet ухудшился 16 → 19,
-10 positive controls провалили gate; в португальском потерялось ранее правильно
-распознанное отрицание. Независимо проверены 3129 inputs, 2176 outputs и actual
-Kotlin replay. Пять новых пустых DEV chunks и четыре lexical flags остаются
-открытыми. Публичные результаты — persistent-presence-dev-results.json.
-Приложение держит engine открытым, cold results этот режим не подтверждали.
+Ownership-only overlay `cmake/focal-whisper-lifetime.cmake` даёт exact postimage
+`8cc010e36be180b2843287562cd69104a2b1f11e4d7a95827fffce7db70ed64b`.
+Submodule `4979e04f5dcaccb36057e059bbaed8a2f5288315` не менялся.
+Model-free: patched 24/24; actual-model composite: patched 15/15,
+baseline пять здоровых controls и десять ожидаемых regressions.
+Все 30 уникальных case/variant pairs покрыты. Составное покрытие — 23 ранее
+успешных случая + семь из отдельного продолжения, а не один чистый прогон.
+Прежние 60 s timeout и SIGXCPU сохранены; функциональные oracles не менялись.
+Результат continuation — `7e3d7e03…cdc7`; независимый postrun review PASS.
+Не повторяй ни model-free suite, ни 30 завершённых случаев без новой причины.
+Это проверка ownership, не all-language STT, arbitrary OOM или phone performance.
 
-Неопубликованный Android-кандидат прошёл 26 focused tests и ещё две строгие
-регрессии подготовки/повторного диалога: каждая упала без своего исправления и
-прошла с ним. Ручные EN/RU force-stop → Continue сохраняют реальные меняющиеся
-PCM эмулятора и показывают Unclear speech без выдуманного текста. Это не отменяет
-STT-регрессий и не заменяет полный clean QA. Интеграция пока не принята; не выдавай
-её за готовое улучшение. Fixed-history повторы выявили причину на одном ES DEV
-prefix: beam sampler сортирует logits, но выбирает случайные IDs; RNG decoder0
-сохраняется между calls. Однострочный reset убрал различия target во всех четырёх
-повторах. Это диагностика, не принятая политика. Настоящий top-k — отдельный
-кандидат: research overlay в `docs/whisper-beam-research.md` прошёл actual-sampler
-RED 7/8 → GREEN 8/8 и 20 configure checks. Его 14-call ES повтор устранил history
-различия, но прежний пустой input 1.06 s теперь даёт 122 символа с native end 5 s.
-Не выдавай детерминизм за качество. Полный persistent DEV comparison завершён
-и отклонён: 335 ASR + 185 VAD, errors 223/256 → 176/246, но шесть ячеек WER/CER
-ухудшились и 14 positive controls не прошли. FR/PT quiet потеряли ранее верные
-отрицания несмотря на positive VAD. Все 28 noise пропускают ASR, но это не
-отменяет регрессии речи. Независимо проверены 4289 inputs / 2187 outputs;
-8 новых empty DEV chunks и 7 lexical flags остаются открытыми.
-28/28 точных positives относятся только к двум новым arms; против production
-точных 6/28. Safe aggregate — true-topk-dev-results.json. Отдельный EN diagnosis
-показал два полностью пропущенных gate клипа с 25 reference words; ошибки частично
-обрезанного клипа нельзя целиком приписать framing. Предложенный fixed-window
-вариант с тем же decoder не запускался: он уже наследует failed controls.
-Android smoke на семи DEV first chunks сохранил
-все inputs, но тексты RU/FR и review label FR отличаются от host. Не объявляй
-численную идентичность сред или улучшение качества по этим семи примерам.
-Подробности и безопасные aggregates — в local benchmark report.
-Held-out остаётся закрытым до принятия и заморозки окончательного кандидата.
+## Эмулятор и данные
 
-Следующий research-прогон сохранил все исходные ASR calls и raw outputs, применяя
-VAD только после декодирования к выдаваемым passages. Все 185 raw результатов
-совпали с production; 185 ASR + 185 VAD, без skip. WER normal/quiet 223/256 →
-179/252, CER 598/822 → 436/803, без ухудшения 14 ячеек. 28 positives неизменны;
-28 noise имеют nonempty raw ASR, но пустую выдачу. Независимо проверены 2877
-inputs / 945 outputs, actual Kotlin replay и safe export post-asr-dev-results.json.
-Пять изменённых DEV ranges просмотрены по source-local text/time, четыре lexical
-flags сохранены; акустическое отсутствие потерь не доказано. WER улучшился только
-в EN/ES/IT; все семь языков и ускорение не подтверждены. Held-out закрыт.
-Автоматическое скрытие уже полученного ASR требует immutable original ASR,
-видимой provenance, Undo, защиты ручных edits и phone gates; простой JNI return[]
-не соответствует контракту. В Android эту политику не включали.
+Dedicated AVD — `focal_local_qa`, serial `emulator-5554`,
+`ANDROID_AVD_HOME="$PWD/build/avd"`. KVM работает (`-accel on`); выключен Vulkan,
+а не CPU acceleration. Host GLES, два vCPU, requested 2048/effective 2560 MiB,
+320×640/160dpi. Другие AVD/данные не менять, не wipe/uninstall. `-no-audio`
+не проверяет настоящий микрофон или слышимое воспроизведение.
 
-Greedy1 + corrected SOT + presence screen завершён и отклонён до human DEV:
-15 strict positive failures, включая потери правильных FR/PT отрицаний;
-critical review также нашёл испорченный компонент времени IT при проходящих
-WER/CER. Все 28 noise пропускают ASR. Независимый postrun review завершён
-2026-11-04: проверены 1762 inputs, 255 outputs, 11 dependencies и safe exports
-greedy-control-results.json / greedy-critical-review.json. Не запускай автоматически
-полный DEV/framing или retuning для этого отклонённого варианта.
+Общий download ledger продолжается: **881 742 333 / 1 000 000 000 байт**
+зарезервировано, остаток **118 257 667**, включая прежнюю резервацию 61 000 000
+на один будущий CI download. Счётчик не сбрасывать, повторы учитывать.
+Модель base Q5_1 и корпус уже локальны. Свежие 42 held-out клипа **не открыты**;
+облачная test-часть уже использована и не является новой независимой проверкой.
 
-Следующая model-free проверка подтвердила повторный выбор одинаковых beam-веток
-и выдачу невыбранного decoder после отказа всех кандидатов. Четыре actual-source
-варианта дали строго ожидаемые 15/4/11/0 failures; combined прошёл 22 сценария.
-Независимо проверены 1231 inputs и 24 outputs; plan SHA начинается с 915cb6bd,
-safe aggregate — beam-controlflow-model-free-results.json. Модели/аудио не
-запускались: качество, скорость и Android adoption этим не подтверждаются.
-Прежний true-top-k parent всё ещё отклонён. Следующий neural screen требует
-отдельной заморозки исходников, build и diagnostics; все прежние controls
-сохраняются, final error -11 считается провалом, а raw failed state сохраняется
-до reset/free. Не включай эти изменения в Android по одному harness PASS.
+## Открытые требования
 
-Независимый source review также нашёл production lifetime defect: при отказе
-расширения self-KV pinned engine освобождает переданный state и возвращает -7;
-обычный JNI/service close затем освобождает его повторно. Ранний cleanup batch и
-частичный KV allocation тоже требуют проверки. Динамического воспроизведения
-ещё нет: готовится отдельный ownership-only patch и адресная fault injection в
-ignored build, без реального OOM/давления памяти. Сохрани external-state API,
-retry и submodule. Защита отдельного research probe через fatal process exit
-не является исправлением Android; этот gate остаётся открытым.
+- Восстановление на слабом меняющемся шуме всё ещё может выдумывать текст.
+  Constant zero/DC guard этого не решает. Не повышай общий RMS-порог ради PASS.
+- Измеримое качество и скорость на всех семи языках не установлены. SOT/VAD/beam
+  варианты отклонены из-за потерь речи, отрицаний или других regressions; не
+  включать их по суммарному WER. Результаты и source-bound diagnosis сохранены.
+  Original audio/ASR, ручные правки, provenance и Undo обязательны для коррекции.
+- Телефон владелец подключит позже при себе. Его отсутствие не блокирует локальную
+  разработку. Реальные микрофон/playback, TalkBack, ARM latency/memory, батарея,
+  нагрев, screen-off/calls/OEM background и русская живая диктовка остаются открыты.
+- Стабильная release-подпись и проверка точного release APK ещё нужны. Не заменять
+  опубликованный alpha непроверенным APK и не объявлять финализацию завершённой.
 
-Свежая FLEURS-выборка: 42 dev + 42 ещё не использованных test. Старые IDs,
-PCM и совпавшие reference hashes исключены; один итальянский test заменён из
-уже скачанного cache до оценки. Старую test-часть облачного исследования нельзя
-объявлять новой проверкой. Ни одну новую политику не настраивай на held-out.
-
-Снижение RMS-порога отвергнуто из-за шума и обычной речи. Offline Silero с causal
-усилением только VAD-входа и текущим context-on дал на dev 136/178 word errors
-в normal/quiet против baseline 207/303 (864 слова в каждом условии). Суммы по
-семи языкам улучшились, но отдельные условия ухудшились. Это коррелированные
-варианты тех же записей, не удвоенная независимая выборка. Context-off не дал
-лучшего общего результата. Эти варианты не включены в Android; свежая test-часть
-остаётся закрытой, пока проверяется дефект engine confidence. Заморозь один
-обоснованный вариант и критерии до её подготовки/оценки.
-
-Общий model/corpus budget продолжается: **879 645 181 / 1 000 000 000 байт**
-зарезервировано, включая 61 000 000 на один будущий
-CI model/fixture fetch. Дополнительно не зарезервировано **120 354 819 байт**.
-Не начинай счётчик заново, учитывай повторы. Не скачивай
-заново прежние Q8/small модели. Base Q5_1 и небольшой Silero доступны локально;
-старые облачные артефакты на ноутбук не переносились. Аудио, веса, reference/ASR,
-сырые логи и абсолютные локальные пути не публикуй.
-
-Продолжай независимые фокусированные ревью capture/recovery, JNI/STT,
-storage/privacy, playback/state, UI/accessibility и доказательных инструментов.
-Проверяй подтверждённые проблемы автоматикой и реальным интерфейсом. Для host
-тестов используй Python 3.11+ и hash-pinned venv из CONTRIBUTING.md.
-
-Свободный ARM64-телефон пользователь подключит позже при себе. Его отсутствие
-не блокирует доступную локальную работу. План подключения и проверок уже в
-`docs/device-validation.md`; не подключай/не тестируй телефон без пользователя,
-не выдавай скорость ноутбука за телефонную. Батарея, нагрев, настоящие calls/routes,
-микрофон, TalkBack и стабильная подпись остаются отдельными gates.
-
-Делай осмысленные проверенные коммиты, проверяй staged diff и Gitleaks по полной
-истории перед публикацией. Обновляй существующий PR #1, quality report и handoff.
-Не заменяй опубликованный APK и не называй финализацию завершённой, пока остаются
-неподтверждённые требования. Автоматическая коррекция остаётся выключенной.
+Сохраняй оригинальное аудио и транзакционное восстановление; inference вне capture,
+без неограниченных PCM queues, Internet permission, analytics или accounts.
+Коммиты/код — English, сообщения владельцу — коротко по-русски. Перед публикацией
+staged diff review и full-history Gitleaks. В Git не публиковать модели, аудио,
+транскрипты, сырые логи, локальную конфигурацию и ключи. Все проверенные изменения
+сохраняй в этой ветке и существующем PR; новые Actions пока не нужны.

@@ -931,11 +931,11 @@ The [safe results](engine-lifetime-model-free-results.json), SHA-256
 source freeze `93a52a4eaeccea734787edd2a1644fb2bb757feec4f1873c7ac959eee0aaee9c`,
 build `c41023c547d0db162adb1b6ea843bca40e23ee47beff62aa7e743e6a5377f9b1`,
 and run `36bdf88a58b03a327caec62fa751831286d6aa0f5141f600ef1ae9e8efc7f84c`.
-Actual-model same-state beam/greedy retries and close, all three loader wrappers,
-Android error/recovery/cancel behavior, and phone resources remain unverified.
-This is neither arbitrary OOM hardening nor a production fix.
+This model-free study does not verify actual-model retries, loader wrappers,
+Android error/recovery/cancel behavior or phone resources. The subsequent
+real-graph results are recorded below. This is not arbitrary OOM hardening.
 
-## Native ownership: incomplete real-graph attempt
+## Native ownership: real-graph verification and preserved failed attempts
 
 The separate real-graph harness removes the model-free graph/encoder bypasses and
 uses the existing base-q5_1 model and one previously consumed synthetic English
@@ -983,11 +983,55 @@ that account for actual auto-language and retry control flow. Diagnostic freeze
 `a62dfe93aa95709a998bae8006a9f50f238e97adcd237b9af7a0ca95ca8084ce`.
 
 The [safe attempt record](engine-lifetime-realgraph-results.json), SHA-256
-`2383da167b637e90061751e212d41736c746fcf3d42d9f45d628b2e9ed0d0329`, binds
+`31a91aba58cdc2f7e95aad2a93774909b5d4ad9e29fdeca4f20a48359efdd3d2`, binds
 freeze `86d55e199ca49267e07077953405e7451ec11aa27c76444027b369de7097209e`,
 build `10784342ea8feac161b4adb1b69a1aeca16de20844b92d993fe952e855e1e46e`,
 and attempt `ce3fdb10ba4c11cb2d1bae9b359bd5fd83bbbc234f9aada7c79a3e1f0457db8b`.
 Timings describe sanitizer verification work, not application or phone performance.
+
+A revised bounded matrix subsequently matched 23 processes before the patched
+same-state auto-language retry reached its CPU soft limit (`SIGXCPU`, -24).
+That attempt remains incomplete: the first call returned the intended -7 and the
+second language detection completed, but no retry canonical was produced.
+A separately reviewed continuation ran only the seven unresolved processes,
+without rebuilding or repeating the 23 matched cases. All seven matched in
+326.010 s; the retry canonical exactly equals the earlier healthy auto result.
+
+Independent review confirms **30/30 unique case/variant pairs** across the two
+attempts: all 15 patched cases pass with clean sanitizers; baseline has five
+healthy controls and ten expected regressions (two actual use-after-free reports
+and eight ownership assertions). Secondary leak reports after assertions are not
+eight independently established leak defects. The accepted unique coverage has
+29 full returns, 15 successful calls, five language detections and six wrapper
+exception cases. The two attempts actually launched 31 processes and recorded
+30 full returns, including the unsuccessful auto attempt's first -7. Neither
+that CPU-limit failure nor the earlier 60-second timeout is relabeled as passing.
+
+The continuation summary is
+`7e3d7e034e2550386c67f283be127dc550259e2a3074b724bcf3655597ddcdc7`;
+its independently checked source/runtime identities and eight outputs are bound
+by the aggregate above. The baseline/patched maximum tracked KV allocations are
+53,477,376 / 59,768,832 bytes; these are harness allocation accounting, not RSS or
+phone budgets. This completes the scoped actual-model ownership matrix, without
+establishing Android recovery, all-language accuracy/speed or release acceptance.
+
+## Android ownership integration
+
+The separate [Android aggregate](engine-lifetime-android-results.json) records an
+expected baseline native close failure and two passing patched integration tests.
+The real service error path preserves saved audio, reviewed manual edits and
+pending chunks, then ordinary recovery completes with a new engine. The separate
+in-flight cancellation case checks owner lifetime, cancellation without partial
+output, exactly-once destruction and a fresh successful decode.
+
+The first patched run remains failed because its 30 s checkpoint-arrival wait
+expired. Independent source review accepted a separate 120 s arrival allowance,
+leaving the 30 s barrier hold, 45 s completion/cleanup bounds and all functional
+assertions unchanged. The next run reached the checkpoint after 34.520 s and
+passed both tests with no skips in 173.937 s. Both native ABIs were archived and
+hashed; runtime evidence here is x86_64 only. These fault artifacts precede the
+normal-build activation and do not replace full ordinary-artifact QA. No model,
+audio or raw logs are published.
 
 ## Android seven-language integration smoke
 

@@ -17,6 +17,16 @@ development checkpoint, not a verified distribution release. The public alpha
 APK is unchanged. Seven-language read-speech results are now measured on the host;
 ARM phone performance and full application acceptance remain open.
 
+## Current delivery step
+
+The ownership-only native fix now has complete scoped actual-model coverage and
+passing Android recovery/cancellation tests. It is enabled in ordinary Android
+builds; normal artifact inspection and a fresh full-suite run are next. The most
+recent complete ordinary suite remains `101a153` until that run finishes.
+Keep the next delivery focused on a verified APK; do not expand speech research
+before it. The owner explicitly permits focused GPT-6.1 Sol xhigh subagents,
+with root retaining integration and acceptance. Heavy local jobs remain sequential.
+
 ## Product direction
 
 Keep the selected **D / Sessions** layout: a dated recording library, white/light
@@ -120,7 +130,7 @@ The current engine's `noSpeech` is nearly uniform for speech and noise. Source
 inspection identifies an unrequested/wrong initial logits row. A minimal SOT-row
 fix is being researched in an ignored source snapshot, with independent review.
 An optional [hash-verified build overlay](whisper-sot-research.md) is now available;
-it is not wired into Android. No submodule or shipped engine change has been made.
+it is not wired into Android. No SOT speech-policy change is enabled and the submodule remains unchanged.
 Validate it on paired speech and noise before any threshold or engine adoption.
 
 A verified dev-only SOT/abstention repeat (`0.8` no-speech, `0` log-probability
@@ -330,12 +340,14 @@ this is not an actual-model recovery or arbitrary OOM proof. Preserve the v4
 freeze and the failed v3 link attempt separately. Next verify real graphs and
 same-state beam/greedy retries, the three loader wrappers, then Android error →
 close → pending-audio/manual-edit preservation → new-engine recovery/cancellation.
-Production is still unfixed; do not infer phone resource behavior from host tests
-or induce real host memory pressure. The diagnostic probe's fatal-process handling
+That model-free evidence alone did not establish a production fix; the later
+actual-model and Android checks below supply the next evidence. Do not infer
+phone resource behavior from host tests or induce real host memory pressure. The diagnostic probe's fatal-process handling
 is not a production Android fix. See the local benchmark report for scope/hashes.
 
-The optional [ownership-only CMake overlay](whisper-lifetime-research.md) reproduces
-the exact reviewed `8cc010e3…ed64b` postimage and remains disabled in Android.
+The [ownership-only CMake overlay](whisper-lifetime-research.md) reproduces the
+exact reviewed `8cc010e3…ed64b` postimage. It was initially inactive; after the
+checks below, ordinary Android builds now include it without the fault helper.
 Nine tests cover 19 configuration cases; the full host suite now passes 155 tests
 without skips (7.478 s). No extra Android run was needed for this inactive hook.
 Real-graph preparation in `build/stt/engine-lifetime-realgraph-research/` is now
@@ -369,14 +381,29 @@ summary `a62dfe93aa95709a998bae8006a9f50f238e97adcd237b9af7a0ca95ca8084ce`.
 Before a new matrix, review bounds against actual auto-language/retry control flow;
 the one healthy result does not establish retry, auto-language or patched outcomes.
 
-The Android follow-up plan remains unimplemented. Use a separate explicit opt-in
-debug fault artifact and test source set, leaving normal APKs and the strict
-85-test/eight-model-check suite free of hooks. Service tests must await app/model
-readiness themselves, then await complete worker/service cleanup before normal
-recovery. In-flight cancellation needs a separate barrier-only case: cancellation
-would mask a simultaneous allocation error, and the observer must not retain an
-extra engine owner. Validate native -7, original audio/manual edits, pending chunks,
-normal-engine recovery and exactly-once destruction before production adoption.
+The later matrix matched 23 processes before an auto retry hit its CPU limit;
+a separate continuation completed the seven remaining processes in 326.010 s.
+Independent postrun review confirms 30/30 unique pairs: patched 15 pass, baseline
+five controls pass and ten expected regressions reproduce. Exact canonical parity
+covers same-state beam/greedy/auto retries. Both resource-limit failures stay
+failed; this is composite coverage, not a single clean run. Do not rerun these
+completed host cases without a new source change or finding.
+
+The Android follow-up is implemented as explicit opt-in debug variants with
+separate test sources. The baseline reproduced native -7 followed by a fatal
+caller close. The patched artifact passed both strict recovery/cancellation tests
+in 173.937 s, preserving original audio, reviewed edits and pending chunks, then
+recovering with the ordinary factory/new engine. Cancel/close keeps the active
+owner until return, rejects partial output and frees it once. The helper observer
+holds no extra owner. A first cancellation test failed its 30 s arrival wait;
+a reviewed 120 s wait reached the checkpoint after 34.520 s, while the barrier
+hold remains 30 s and completion/cleanup remain 45 s. The failed attempt is retained.
+
+Ordinary builds include only the ownership fix. Before delivery, verify no fault
+helper, JNI exports or markers in both APK ABIs/DEX; run the unchanged strict
+85-test/eight-model-check `qa-local.py --release-checks` suite and manual UI QA.
+Phone resources and speech-policy accuracy are separate open gates. Exact test
+artifacts and source identities remain private; publish only the safe aggregate.
 
 1. Resolve the observed recovery hallucinations on weak varying noise. Investigate
    the no-speech logits defect with the pinned source plus an explicit, reviewed

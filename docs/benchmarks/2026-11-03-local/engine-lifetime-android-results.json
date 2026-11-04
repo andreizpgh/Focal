@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "status": "PASS for two targeted patched Android fault tests; normal full QA and release verification pending",
+  "scope": "Explicit opt-in debug fault artifacts on an accelerated API 35 x86_64 emulator, using the bundled multilingual base model and documented public speech fixture. Actual targeted native KV allocation refusal and deterministic in-flight decode barrier; no real host memory exhaustion.",
+  "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+  "public_fixture_sha256": "d7d4e74b8a333ed02186008bc109a1b1a19d16da668bd56e785d80d69a16a72f",
+  "original_engine_preimage_sha256": "02566a39137a14e0798ec0d88e78bd626f21e7549bc27d1cb5e4a30b101a0f7e",
+  "ownership_engine_postimage_sha256": "8cc010e36be180b2843287562cd69104a2b1f11e4d7a95827fffce7db70ed64b",
+  "baseline": {
+    "status": "EXPECTED_NATIVE_BASELINE_RED",
+    "test_id": "app.focal.NativeFaultBaselineTest#allocationFailureThenCloseReproducesNativeDefect",
+    "targeted_allocator_refusals": 1,
+    "encoder_completions": 1,
+    "native_result": -7,
+    "fatal_signal": "SIGSEGV",
+    "failure_stage": "Native close after the real allocator failure returned to JNI",
+    "instrumentation_completed_successfully": false,
+    "evidence_scope": "Preserved previously reviewed baseline result; distinct from patched outcomes.",
+    "result_sha256": "75777c942e2e1938afaa763316f906edf50edff5e1ffe954ff67192bd3790b76",
+    "artifacts": {
+      "app_apk_sha256": "0e9e23f993793c5defcdd17de0502a2a0a0b922de3a4665c2b98701d74b0acfd",
+      "test_apk_sha256": "89d0b407577b7a60e5b5ac0e569351416c07477b9732429f7e1d9b4766a9287e",
+      "native_library_sha256": {
+        "arm64-v8a": "2e18fd629b446b50b43b6fcb014a702fd370410c4801dddb2c1f1321cddc3768",
+        "x86_64": "96f2a6f5d87e80ef71c6d66d16735189b20fe9dc7ad248cb1babd3a4d0a64ad4"
+      },
+      "artifact_record_sha256": "23a7a5d79cc436d238f32824c8fcc8b0b4ecea0e9c7e02f30b0ee8a8a02dc774",
+      "selected_source_inputs_sha256": "2c633b2e04d28cdb6c35ef9311309d4b76439cd83e8cc27d61b8a20ff2d0bfa3",
+      "selected_source_input_count": 11
+    }
+  },
+  "patched_attempt_01": {
+    "status": "FAILED: one test passed; arrival checkpoint wait failed before barrier",
+    "test_results": [
+      {
+        "test_id": "app.focal.NativeFaultRecoveryTest#inFlightCancellationAndCloseKeepOwnerUntilDecodeReturns",
+        "status": "FAILED",
+        "failure": "The 30-second arrival allowance expired before reaching the native barrier."
+      },
+      {
+        "test_id": "app.focal.NativeFaultRecoveryTest#nativeAllocationFailurePreservesAudioAndEditsAndNormalRecoverySucceeds",
+        "status": "PASSED"
+      }
+    ],
+    "passed": 1,
+    "failures": 1,
+    "skipped": 0,
+    "instrumentation_seconds": 125.687,
+    "runner_elapsed_seconds": 126.73183737200452,
+    "arrival_limit_seconds": 30,
+    "barrier_hold_limit_seconds": 30,
+    "finish_and_cleanup_limit_seconds_each": 45,
+    "result_sha256": "afe6151a22e36cc4113e945672791f4058735e8e654336fce65f41cd8f379e4e",
+    "instrumentation_sha256": "6bd66cee1fd85172e4a817c7c8a9c670f30873ce477086ac5f08babf51e039a9",
+    "artifacts": {
+      "app_apk_sha256": "cfa7741c0058e3dd4b3740b11ed27aec00e01d4fdae3dcf8ad094748d0d4ec84",
+      "test_apk_sha256": "db0ed20227ff7a83cba5afa542486049c01d70716361e3436fe6f4f6e0eadb4a",
+      "native_library_sha256": {
+        "arm64-v8a": "5537d1634502a654d668d3d802bfcd594ddcffbfa43014555d51a2eef5417305",
+        "x86_64": "83acea7a76bb3d4ff05134c334b4135da31595ea9f3e5a4cb1ce2bb08a08b7b2"
+      },
+      "artifact_record_sha256": "8bdf0557ed124306afbe8555e3fe4668d2e73d01ba088a91a7341e9ef885f0fb",
+      "selected_source_inputs_sha256": "2c633b2e04d28cdb6c35ef9311309d4b76439cd83e8cc27d61b8a20ff2d0bfa3",
+      "selected_source_input_count": 11
+    },
+    "interpretation": "The original failure is retained. Preparation-to-refusal milestones did not measure pure encoder time; they motivated a separately bounded arrival allowance without relaxing functional assertions."
+  },
+  "patched_attempt_02": {
+    "status": "PASS",
+    "test_ids": [
+      "app.focal.NativeFaultRecoveryTest#inFlightCancellationAndCloseKeepOwnerUntilDecodeReturns",
+      "app.focal.NativeFaultRecoveryTest#nativeAllocationFailurePreservesAudioAndEditsAndNormalRecoverySucceeds"
+    ],
+    "passed": 2,
+    "failures": 0,
+    "skipped": 0,
+    "instrumentation_seconds": 173.937,
+    "runner_elapsed_seconds": 175.0048935690138,
+    "arrival_limit_seconds": 120,
+    "barrier_hold_limit_seconds": 30,
+    "finish_and_cleanup_limit_seconds_each": 45,
+    "observed_barrier_arrival_wait_ms": 34520,
+    "functional_assertions_unchanged": true,
+    "verified_behaviors": [
+      "A real allocator refusal reaches JNI as a transcription exception; the service closes the engine exactly once and leaves pending audio, chunk metadata and reviewed manual edits unchanged.",
+      "The ordinary service factory opens a new engine and completes recovery on the same saved audio, preserving its SHA-256 and reviewed passage; recovery never opens the microphone.",
+      "Cancellation and handle removal occur while actual decode is paused after its encoder; the decoder retains ownership until release, returns cancellation without output and destroys the engine exactly once.",
+      "Repeated cancel/close is harmless and a fresh engine decodes the public fixture."
+    ],
+    "result_sha256": "bf9458e710f45d5775fb18998f772121e6e523d222b422d6ddbe87792bddf218",
+    "instrumentation_sha256": "7bc4d4fe773cf9976b365f48f852cbe2c467fd3b8307be0d3e22c0cfd4fc4565",
+    "execution_record_sha256": "ea8bf153ff3a5dec39cebfb17f15fe60eb30e359361c7703269f378de1149471",
+    "artifacts": {
+      "app_apk_sha256": "5786b4795fe03e4a2843c96f7cb93bc327c0966f9724fa4717ccc02743174695",
+      "test_apk_sha256": "520306f8e9b0ae4bd0fd646c5641d07dbc8bad94f2a1826677e384e0bac2886e",
+      "native_library_sha256": {
+        "arm64-v8a": "c1eeccf79aed1a01a4cc7d10b313c4e1b5389003920cbc387c8839fad11e4121",
+        "x86_64": "bdec943bc44bbde481e52df3fbcb7372f17b84512cf89d3e9eb72f948e5c667e"
+      },
+      "artifact_record_sha256": "32979f991a7f6fd3d3a6744b79ae2a575838d89ddefd43a8f73cd1534d7e4ef3",
+      "selected_source_inputs_sha256": "acb19db19163dd3dd2dad721f22d105070816486fec685e7e52e757cf6505a02",
+      "selected_source_input_count": 11
+    },
+    "independent_review": "Exact test IDs and status transitions, zero skips, archived APKs, both native ABI hashes, embedded model/fixture hashes and eleven selected source bindings verified. Ten sources remain byte-identical; the recorded pre-activation CMake source was reconstructed exactly from the later one-condition wiring change."
+  },
+  "normal_build_integration": {
+    "status": "Ownership overlay enabled in source; full normal QA pending",
+    "cmake_source_sha256": "85e08b5e330943828b12ccb8cbebe5108211f08e63eb6b485fdeb55eed90af05",
+    "tested_fault_artifact_cmake_source_sha256": "aad0026ae05b67d41c0c562b8a832b0bb5e31e0587332ac0afa001e67593dc46",
+    "activation": "Normal builds select the ownership overlay. Only an explicitly selected fault baseline retains the original engine; fault hooks and Kotlin helper sources require the debug opt-in.",
+    "ordinary_instrumentation_suite_tests": 85,
+    "normal_and_release_hook_absence_verified": false,
+    "full_normal_qa_verified": false
+  },
+  "limitations": [
+    "The two patched tests ran in the dedicated fault artifact before normal-build activation; they do not replace the complete normal debug/release QA cycle.",
+    "The baseline native failure and first patched arrival failure remain separate preserved outcomes.",
+    "Both native ABIs were archived and hashed, but runtime testing here exercised only x86_64.",
+    "The emulator timings and checkpoint wait are validation observations, not phone latency, thermal, battery, background reliability or seven-language recognition measurements.",
+    "This covers the specified native failure and lifecycle paths, not arbitrary allocation failures or release acceptance."
+  ]
+}
