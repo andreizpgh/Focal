@@ -1,9 +1,9 @@
 # Install Focal
 
-**[Download Focal.apk](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-3/Focal.apk)**
+**[Download Focal.apk](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-4/Focal.apk)**
 
 Android 8.0 or newer and an ARM64 phone. The speech model is included; no account
-or extra download is needed. This is UX Alpha 3, version `0.1.0-alpha.3`, for testing.
+or extra download is needed. This is UX Alpha 4, version `0.1.0-alpha.4`, for testing.
 
 1. Open the download link on your phone.
 2. Open **Focal.apk** from your browser’s downloads or the Files app.
@@ -15,14 +15,14 @@ For Russian speech, choose **Русский** in the speech-language selector fi
 The interface and default speech language are English.
 
 The APK is also available under **Assets** on the
-[release page](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-3).
+[release page](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-4).
 You don’t need a GitHub account, Android Studio, or a ZIP archive.
 
 ## If you tried the previous download
 
-UX Alpha 3 is a new locally verified, development-signed build. It passed 94 Android
-tests on the dedicated emulator; see the [release verification](../releases/ux-alpha-3.json).
-Its signing certificate matches Alpha 2, so installing over Alpha 2 should update it in place.
+UX Alpha 4 is a new locally verified, development-signed build. It passed 95 Android
+tests on the dedicated emulator; see the [release verification](../releases/ux-alpha-4.json).
+Its signing certificate matches Alpha 2 and Alpha 3, so installing over either version should update it in place.
 Compatibility with Alpha 1's cloud-generated certificate remains unverified.
 
 If Android refuses the update, keep the old installation if it contains important

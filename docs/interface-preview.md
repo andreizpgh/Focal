@@ -1,6 +1,18 @@
 # Interface preview
 
-## UX Alpha 3 · 2026-11-04
+## UX Alpha 4 · 2026-11-04
+
+Actual, unretouched captures of the verified `0.1.0-alpha.4` APK on the dedicated
+Android 15 emulator at 411 × 890 dp. The note is a synthetic UI fixture, not an
+accuracy example. Owner screenshots remain private.
+[Download Alpha 4](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-4) ·
+[Build and QA identity](../releases/ux-alpha-4.json)
+
+| Active passage | Editor · light | Editor · dark |
+| --- | --- | --- |
+| ![Playback highlight with internal padding](screenshots/ux-alpha-4-playback.png) | ![Filled editor and centered Save labels](screenshots/ux-alpha-4-editor-light.png) | ![Matching editor and system bars in dark theme](screenshots/ux-alpha-4-editor-dark.png) |
+
+## Earlier UX Alpha 3 · 2026-11-04
 
 Actual captures of the verified `0.1.0-alpha.3` APK on the dedicated Android 15
 emulator, 411 × 891 dp. All notes are synthetic UI fixtures; these images do not
@@ -46,8 +58,8 @@ Themed, notification and compact UI marks use crisp geometry; the themed/UI
 variants retain the opacity falloff. Source assets and outlined wordmarks are
 versioned with a reproducible generator.
 
-During transcription, a small wave gently shifts emphasis between two adjacent
-strokes while the centre remains stable. One status sits above the audio/copy dock
+During transcription, the compact Focus wave changes bar heights in a visible
+repeating sweep; the surrounding text and layout remain still. One status sits above the audio/copy dock
 and stays visible when the transcript scrolls. It is indeterminate: no invented
 completion percentage. The animation stops when processing ends or the UI leaves
 STARTED, and becomes static when system animations are disabled. No delayed launch

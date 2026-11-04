@@ -1,16 +1,34 @@
 # Продолжение Focal · 2026-11-04
 
 Продолжи в существующем checkout, ветка `codex/sessions-stt-handoff`, синхронизированная
-с `main`. PR [#1](https://github.com/andreizpgh/Focal/pull/1), #2 и #3 уже merged.
-Alpha 3 опубликована; для следующих изменений проверяй новый PR. Новый worktree не нужен.
+с `main` после публикации. PR #1–4 уже merged. Alpha 4 прошла QA;
+проверь статус нового релиза и PR перед продолжением. Новый worktree не нужен.
 Прочитай `AGENTS.md`, `docs/development-handoff.md`, `docs/quality-report.md`,
 `docs/architecture.md`, `docs/local-emulator-qa.md` и `docs/device-validation.md`.
 Подробные исследования находятся в `docs/benchmarks/2026-11-03-local/report.md`
 и `docs/benchmarks/2026-11-03-stt/report.md`; не повторяй их ради восстановления контекста.
 
+## Последний UI checkpoint · Alpha 4
+
+`a3038fa` прошёл полный `qa-local.py --release-checks`: **95/0/0**, восемь real-model
+проверок, 143.684 с; обе lint и R8/debug/test сборки прошли. Точные APK и снимки
+в `build/local-diagnostics/ux-alpha-4-20261104/`, отчёт `20261104T143143.240767Z`,
+публичная идентичность `releases/ux-alpha-4.json`. Подпись совпадает с Alpha 2/3.
+Исправлены отступы playback, высокое нажатие времени, повторяющийся Review,
+тяжёлые тени, разорванные шапки, поле редактора и оси/стили Save. Волна обработки
+теперь заметно двигается; новый тест дал RED на Alpha 3 и GREEN на кандидате.
+Astra приняла фактические снимки, включая установившийся 200% landscape/IME.
+Первый full-run упал на инкрементальной Kotlin release-компиляции; без изменения
+исходника nonincremental Kotlin rebuild и повторный полный цикл прошли.
+
+Перед продолжением проверь статус публикации в current-android-delivery-work.json
+и GitHub: Alpha 4 должна быть отдельным новым релизом, предыдущие неизменны.
+Приёмка интерфейса владельцем пока открыта. STT/LLM и телефонные требования ниже
+не закрыты этим UI-релизом. Счётчик загрузок не менялся, модели не скачивать заново.
+
 ## Приоритет и организация
 
-Текущий проверенный Android checkpoint — **UX Alpha 3**, `ed9d7cb`, версия
+Предыдущий проверенный Android checkpoint — **UX Alpha 3**, `ed9d7cb`, версия
 `0.1.0-alpha.3` / code 3. Полный `qa-local.py --release-checks` прошёл **94 теста,
 0 ошибок/пропусков**, включая восемь real-model checks, за 149.326 с. Сборка с
 обеими lint-проверками и R8 прошла, 36 core tests cached. Отчёт
@@ -18,7 +36,7 @@ Alpha 3 опубликована; для следующих изменений �
 `build/local-diagnostics/ux-alpha-3-20261104/verified-apks/`, идентичность в
 `releases/ux-alpha-3.json`. Подпись совпадает с Alpha 2. Перед новым действием
 проверь `build/local-diagnostics/current-android-delivery-work.json` и текущий
-статус GitHub: PR #1–3 уже merged, следующие изменения требуют нового PR.
+статус GitHub: PR #1–4 уже merged, следующие изменения требуют нового PR.
 
 Исправлены замечания по меню записи, выбору языка снизу слева, временным меткам,
 редактору, отступам и playback. Выбранный язык виден при 200% шрифте. Review —
