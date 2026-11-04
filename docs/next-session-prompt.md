@@ -2,8 +2,9 @@
 
 Существующий checkout, ветка `codex/sessions-stt-handoff`. Прочитай AGENTS.md,
 development-handoff, quality-report, architecture, local-emulator-qa и device-validation.
-Новый worktree не нужен. PR #1–7 merged; фактическую доставку Alpha 6 проверь в GitHub
-и `build/local-diagnostics/current-android-delivery-work.json`.
+Новый worktree не нужен. PR #1–7 merged; доставка Alpha 6 —
+[PR #8](https://github.com/andreizpgh/Focal/pull/8). Перед продолжением проверь его
+статус и `build/local-diagnostics/current-android-delivery-work.json`.
 
 ## Последний checkpoint · Alpha 6
 
@@ -32,12 +33,13 @@ Thread-contract RED/GREEN подтверждён одним test APK; девят
 Это не воспроизведение редкого interleaving и не доказанный phone crash.
 Финальный полный результат — только указанный выше. Не повторять старые диагностики.
 
-Alpha 6 подготовлена, статус публикации проверь перед действием. Использовать
-`Focal-0.1.0-alpha.6.apk`; старые assets не заменять. Не пересобирать проверенный APK
-ради документов. Перед следующими тестами восстановить portrait/font1/light/320×640;
-после поворота делать это при Focal foreground, затем Home→app. После QA остановить
-только `focal_local_qa`. Модели не скачивались, STT не менялся. Приёмка интерфейса,
-все STT/LLM и физические Pixel 10 gates остаются открытыми.
+Alpha 6 опубликована: три серверных размера/SHA совпадают, прямая ссылка
+`Focal-0.1.0-alpha.6.apk` отвечает 200. Старые assets сохранены. Не пересобирать
+проверенный APK ради документов. Выделенный AVD остановлен; portrait/font1/light,
+320×640/160dpi и animation scales 1 восстановлены. После будущего ручного поворота
+восстанавливай portrait при Focal foreground, затем Home→app. Тяжёлых процессов нет.
+Модели не скачивались, STT не менялся. Приёмка интерфейса, все STT/LLM и физические
+Pixel 10 gates остаются открытыми.
 
 ## Приоритет и организация
 

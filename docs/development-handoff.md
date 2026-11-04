@@ -39,12 +39,14 @@ thread-contract RED/GREEN and nine focused checks cover this boundary; the old
 rare Compose test-clock interleaving is not claimed as reproduced.
 Initial failed/interrupted runs are recorded in the quality report, not counted as PASS.
 
-Alpha 6 is prepared for publication. Check GitHub and the private current-work file
-before uploading. Use the unique `Focal-0.1.0-alpha.6.apk` filename and preserve all
-older assets. PR #1–7 already merged; create a new PR for this delivery. User UI
-acceptance, seven-language quality/speed/noise/mixed terms, correction and physical
-Pixel 10 checks remain open. The dedicated AVD is stopped after restoring portrait,
-font scale 1, 320×640/160dpi and animation scales 1; no heavy job remains.
+The [Alpha 6 APK](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-6/Focal-0.1.0-alpha.6.apk)
+is published. All three remote asset sizes/digests match the verified local files;
+the public APK link returns 200. Delivery is tracked in
+[PR #8](https://github.com/andreizpgh/Focal/pull/8); check its current status before
+continuing. Earlier assets are unchanged. User UI acceptance, seven-language
+quality/speed/noise/mixed terms, correction and physical Pixel 10 checks remain open.
+The dedicated AVD is stopped after restoring portrait, font scale 1,
+320×640/160dpi and animation scales 1; no heavy job remains.
 
 ## Previous delivery step · UX Alpha 5
 
