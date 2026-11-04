@@ -13,11 +13,36 @@ Branch: `codex/sessions-stt-handoff`. Baseline before the redesign:
 `14be1ae6afe15e5229982d9e8cfe63d0f276e393`.
 
 The redesign and reliability work are implemented and reviewed. The branch is a
-development checkpoint, not a verified distribution release. The public alpha
-APK is unchanged. Seven-language read-speech results are now measured on the host;
+development checkpoint, not a verified stable distribution release. Alpha 1
+assets are unchanged; the newer UX preview is described below. Seven-language
+read-speech results are measured on the host;
 ARM phone performance and full application acceptance remain open.
 
 ## Current delivery step
+
+Published [UX Alpha 2](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-2)
+for the owner's interface feedback. Version `0.1.0-alpha.2` / code 2 comes from
+clean `fe70758`: 89 Android tests passed without failures/skips, including all
+eight real-model checks, in 154.329 seconds. The 254-second build passed both lints,
+debug/test/unsigned release builds and 36 cached core tests. The published debug
+APK is exactly the one used for focused, manual and full QA; see the
+[release manifest](../releases/ux-alpha-2.json) and [quality report](quality-report.md).
+
+Continue transcription now exposes saved tails in interrupted notes even with
+an empty queue; the store protects those tails against removal. Both regressions
+failed on the prior APK and passed on this candidate. Notification-denial guidance
+passed a real dialog → Home/lock → return → pause/resume → Finish check. Source
+audio was preserved; host audio was disabled, so real phone audio remains untested.
+The dedicated emulator is stopped. Artifacts are in
+`build/local-diagnostics/ux-alpha-2-20261104/verified-apks/`.
+
+Next, address confirmed UX/UI feedback from the owner, then validate the phone
+when the owner connects it by cable. The owner installed Alpha 1 but reported no
+important notes; explain reinstall only if Android rejects the development
+signature update. Keep the phone and seven-language STT gates open. No new engine,
+model or speech policy is part of this UX release. Alpha 1 was not overwritten.
+
+### Previous verified checkpoint
 
 The Whisper ownership fix is enabled in ordinary Android builds. Clean `036d716`
 passed all 87 Android tests, including the eight required model checks, in 149.980
@@ -51,8 +76,8 @@ Back. Its extra reads and logs leave the failed run's event ordering unknown.
 before Back. Later assertions are unchanged. Three focused UI tests passed in
 12.177 seconds on unchanged app APK `b68946e9…ae647` with test APK `b25ff568…bd76`.
 
-The exact verified debug APK is ready for local delivery; it is not a finished
-release. Continue with focused local STT work after publishing this checkpoint. The owner permits focused
+The earlier exact APK remains archived; use UX Alpha 2 above for the owner preview.
+The owner permits focused
 GPT-6.1 Sol xhigh and Terra reviewers, with root retaining integration and acceptance.
 
 ## Product direction

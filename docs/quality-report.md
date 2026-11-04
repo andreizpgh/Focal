@@ -1,20 +1,64 @@
 # Product verification · 2026-11-04
 
-The Sessions / Focus wave direction is preserved. App source `f359fd5` includes
-the Whisper ownership fix, incremental native input checks, service cancellation
-ordering and recovery retry feedback. The current test checkpoint `036d716`
-changes only the search test setup. The public alpha APK is unchanged. Paired
-speech accuracy and speed across all seven languages, physical-phone validation
-and stable signing remain open.
+The Sessions / Focus wave direction is preserved. Source `fe70758` is published
+as [UX Alpha 2](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-2), version
+`0.1.0-alpha.2` / code 2, for interface feedback before physical-phone validation.
+The previous Alpha 1 assets were not changed. Paired speech accuracy and speed
+across all seven languages, physical-phone validation and stable signing remain open.
 
 A [primary-source review](stt-quality-experiments.md#practical-direction-after-primary-source-review)
 on 2026-11-04 keeps the scope on ordinary voice notes and background capture.
 Independent Sol/Terra research and Astra review rejected further investment in
-the narrow terminal-only recovery filter for now. This documentation checkpoint
-adds no production STT change, fresh inference, APK build or phone measurement;
-the verified artifacts and unresolved quality gates below are unchanged.
+the narrow terminal-only recovery filter for now. That research-only checkpoint
+(`86a3a1c`) added no production STT change or fresh inference. The subsequent UX
+checks below are separate; no speech policy was changed.
 
-## Current local evidence
+## UX Alpha 2
+
+Clean `fe70758350a114d5e66775ee114cd48778217594` passed the complete local runner
+with `--release-checks`: **89 Android tests, zero failures/skips**, including all
+eight mandatory real-model tests, in **154.329 seconds**. The 254-second build
+phase passed debug/release lint and debug/test/unsigned release builds; 36 core
+tests used cached results for unchanged source. Report `20261104T102008.204711Z`
+binds the exact APKs. [Public release manifest](../releases/ux-alpha-2.json)
+
+The new interface regression reproduces an interrupted session with a completed,
+manually edited passage and a saved tail absent from the queue. The old APK has
+no Continue button; the new one recovers only the tail without opening a microphone
+or changing the original PCM/manual passage. A separate store regression proves
+that pending-count zero previously allowed deletion of that tail. Removal now
+rechecks recoverable tails transactionally; fully processed interrupted notes
+retain the existing removal behavior. Both tests failed at their intended
+assertions on the previous APK and passed on the candidate with the same test APK.
+Five focused checks passed in 6.201 seconds, including the unchanged oversized-editor
+rotation test. The initial focused-run postprocessor incorrectly applied the full
+suite's eight-model-test requirement; its diagnostic is retained. The subsequent
+full suite above passes that requirement without modification.
+
+Manual system-dialog denial of notifications showed the new recording guidance.
+Home, short screen lock, return, pause/resume and Finish retained a `READY` session
+of 110,704 ms with exactly 3,542,528 PCM bytes. Host audio was disabled and no chunks
+were produced; this is not speech-quality or physical-microphone evidence.
+Permission grants/flags were restored. The dedicated AVD was stopped after QA.
+
+Focused Sol review found the issues, Astra reviewed the source and publication,
+and Terra independently checked the exact artifacts and full result. Published
+APK SHA-256 is `955c7bb599ce4236013545ba50901cee5403146ecedf4f47e527193e5d91b315`;
+test APK is `68153fa7ee70c80b8434d4d8bc4f2ae24e2d1f915cbba4473cfe53c2ac483376`.
+These are the same bytes used for focused, manual and full verification. All six
+native libraries remain byte-identical to the earlier verified build; model,
+signature, 16 KiB ZIP/ELF alignment and absence of Internet/fault helpers/Silero
+were checked. The release uses the development signature, without rebuilding or
+re-signing. Alpha 1 update compatibility is not established.
+
+All four uploaded asset digests and the annotated tag were checked before
+publishing; an unauthenticated HEAD request returned HTTP 200 without downloading
+the APK body. Full-history Gitleaks covered 82 commits before release publication.
+One initial GitHub push failed with a server error; separate branch/tag retries
+succeeded. No Actions or model/corpus downloads were needed. Exact local artifacts
+are archived under `build/local-diagnostics/ux-alpha-2-20261104/verified-apks/`.
+
+## Previous local checkpoint · 036d716
 
 | Area | Evidence and scope |
 | --- | --- |
@@ -78,9 +122,10 @@ verifies the strengthened test setup. The app source remains `f359fd5`.
 Local verification used no additional Actions or downloads. The shared ledger
 has 881,742,333 bytes reserved, including 61,000,000 for one publication CI
 download. The remaining allowance is 118,257,667 bytes.
-All 42 fresh held-out clips remain closed. Full-history Gitleaks passed for
-78 commits through code checkpoint `036d716`; final publication also requires
-scanning the documentation commit. The secret-scanning workflow remains enabled.
+All 42 fresh held-out clips remain closed. The earlier full-history Gitleaks scan
+covered 78 commits through code checkpoint `036d716`; publication of `a2e9674`
+covered 79. The UX Alpha 2 scan is recorded above. The secret-scanning workflow
+remains enabled.
 
 The emulator uses **KVM with `-accel on`** and host GLES; only Vulkan is disabled.
 Other projects' AVDs and data were preserved. The `-no-audio` setup does not verify
