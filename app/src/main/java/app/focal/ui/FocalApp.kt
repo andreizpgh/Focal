@@ -462,7 +462,6 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 .then(if (destination == Destination.Sessions) Modifier.consumeWindowInsets(padding).imePadding() else Modifier),
                 contentAlignment = Alignment.TopCenter) {
                 Box(Modifier.widthIn(max = 760.dp).fillMaxSize().graphicsLayer {
-                    alpha = if (pageReady) pageEntrance.value else 1f
                     translationY = if (pageReady) (1f - pageEntrance.value) * 8.dp.toPx() else 0f
                 }) {
                     when (destination) {
