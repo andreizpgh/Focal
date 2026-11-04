@@ -40,12 +40,37 @@ The [validator comparison](benchmarks/2026-11-03-local/validator-preflight-resul
 measured host preflight only: first-call median 176.52→70.33 ms, later calls
 125.65→9.48 ms with a warm OS file cache. It is not ASR decoding or phone speed.
 The [six-pair glossary screen](benchmarks/2026-11-03-local/mixed-term-hint-results.json)
-failed and is not shipped. Local Qwen correction is a separate, unintegrated
-research candidate; all seven-language quality/noise and phone gates remain open.
-The owner raised the cumulative download ceiling to 5 GB; the
-[ledger](benchmarks/2026-11-03-stt/download-budget.json) retains every prior
-reservation and one new verified 396.7 MB Qwen download. The 42 fresh held-out
-clips remain unopened.
+failed and is not shipped. Two local correction screens on the same 21 consumed
+DEV/synthetic texts also failed their fixed acceptance rules:
+
+| Candidate | Valid abstentions | Invalid replies | Valid edits | Host call total |
+| --- | ---: | ---: | ---: | ---: |
+| [Qwen3-0.6B Q4](benchmarks/2026-11-03-local/correction-shadow-qwen3-06b-results.json) | 16 | 5 | 0 | 24.62 s |
+| [Qwen3.5-2B Q4](benchmarks/2026-11-03-local/correction-shadow-qwen35-2b-results.json) | 20 | 1 | 0 | 142.36 s |
+
+The frozen complete-validation rule withheld aggregate WER/CER. Timings include
+initial load and are descriptive host costs, not phone results. One accidental 2B
+preflight generation is preserved separately and excluded from the matched run.
+A subsequent source audit identified that the schema emits replacement before
+source. A separate [16-call synthetic diagnostic](benchmarks/2026-11-03-local/correction-schema-order-results.json)
+returned the same counts for both orders: five abstentions, three invalid replies
+and zero valid repairs per arm. Reordering alone did not improve yield on those
+eight canaries. These results cannot reject local correction generally. Automatic
+correction, all-language quality/noise improvements and phone acceptance remain open.
+
+A separate [Whisper small warm screen](benchmarks/2026-11-03-local/whisper-small-warm-controls-results.json)
+stopped after eight Portuguese controls. Noise insertions fell 247→4, but
+small corrupted a quiet negation that base recognized correctly. The critical
+regression prevents promotion; no remaining language sessions ran. Its 369.27 s
+host cost is not comparable to the cached baseline or phone performance.
+
+The [ledger](benchmarks/2026-11-03-stt/download-budget.json) retains all prior
+reservations under the owner's revised 5 GB ceiling. Current reservation:
+**2,749,583,598 bytes**, remaining **2,250,416,402 bytes**. Both Qwen files and
+Whisper small are verified local caches; no base STT model was downloaded again. The 42 fresh
+held-out clips remain unopened. Alpha 3 was published and merged through
+[PR #3](https://github.com/andreizpgh/Focal/pull/3); these research results do not
+change its verified APK.
 
 ## Earlier delivery checkpoints
 

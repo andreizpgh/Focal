@@ -70,10 +70,12 @@ base model as a practical baseline, not an accuracy or phone-performance claim.
 Newer alternatives do not justify an immediate engine migration:
 [sherpa-onnx Qwen3-ASR 0.6B INT8](https://k2-fsa.github.io/sherpa/onnx/qwen3-asr/pretrained.html)
 lists all seven languages, but its three ONNX files are approximately 937 MiB
-combined, beyond the remaining download budget; model-file size is not runtime
-memory. [Moonshine's current language list](https://github.com/moonshine-ai/moonshine/blob/main/docs/index.md)
+combined, beyond the budget remaining at that review; the later 5 GB ceiling
+removes that download blocker. Model-file size is not runtime memory.
+[Moonshine's current language list](https://github.com/moonshine-ai/moonshine/blob/main/docs/index.md)
 does not establish all seven for STT; several required languages appear under
-TTS instead. No alternative model or runtime was downloaded or integrated.
+TTS instead. No alternative ASR model or runtime was downloaded or integrated
+in that review.
 
 Android explicitly provides the [microphone foreground-service type](https://developer.android.com/develop/background-work/services/fgs/service-types#microphone)
 for continuing capture in the background. Start it from the visible app after
@@ -162,9 +164,12 @@ before each request. Reuse verified files; a larger budget does not justify
 fetching whole corpus shards or every model variant.
 
 The [shared ledger](benchmarks/2026-11-03-stt/download-budget.json) now reserves
-**1,278,465,663 bytes**, leaving **3,721,534,337 bytes**. This retains the earlier
+**2,749,583,598 bytes**, leaving **2,250,416,402 bytes**. This retains the earlier
 881,742,333 bytes, including the 61,000,000-byte future CI reserve, and adds
-17,858 bytes of candidate metadata plus one 396,705,472-byte Qwen download.
+17,858 bytes of initial metadata, 196,608 bytes reserved for runtime/candidate
+metadata, two Qwen weight transfers of 396,705,472 and 1,280,835,840 bytes,
+and 190,085,487 bytes for the locally missing Whisper small research file.
+The old cloud small transfer remains counted; this local transfer adds to it.
 The original allocation below is historical context, not an instruction to
 repeat downloads. The older corpus figures describe the previous cloud study;
 complete shards were never fetched. Keep recordings and weights outside Git.
@@ -202,22 +207,100 @@ The other six languages were not run, and the hint is not shipped. eSpeak
 fixtures are a cheap failure screen, not a measurement of natural code switching
 or Pixel recognition. [Aggregate results](benchmarks/2026-11-03-local/mixed-term-hint-results.json)
 
+### Current shortlist after the budget increase
+
+The larger allowance supports measured comparisons, not a model catalogue in
+the app. Qwen3.5-2B Q4_K_M was selected as one modern local comparator at
+1,280,835,840 bytes. Its official card lists multilingual and instruction
+benchmarks, not ASR correction precision. Gemma was also considered: the newer
+Gemma 4 E2B has a published mobile path, but its examined Q4_0 text artifact is
+2,841,481,184 bytes, before runtime memory. It has not been downloaded or tested
+here. Neither vendor benchmark selects an optimal note-taking model for Pixel 10.
+[Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B),
+[Gemma 4 model card](https://ai.google.dev/gemma/docs/core/model_card_4),
+[pinned Gemma text artifact](https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/blob/6938c58e698502037401a5f19f6905f2fb2f7dee/gemma-4-E2B-it-Q4_0.gguf)
+
+For ASR, Whisper small can use the existing host note-replay pipeline with only
+the model changed. Its earlier isolated EN/PT regressions require early noise
+and negation rejection before a longer seven-language run. Qwen3-ASR 0.6B is a
+credible later acoustic alternative now that download size fits the ceiling;
+its different Android runtime, audio limits, timestamps and silent-input behavior
+need a bounded host check before any integration. Keep the app on the accepted
+base configuration until paired evidence warrants changing it.
+[Qwen3-ASR publisher](https://github.com/QwenLM/Qwen3-ASR),
+[sherpa-onnx Qwen3-ASR models](https://k2-fsa.github.io/sherpa/onnx/qwen3-asr/pretrained.html)
+
+### Whisper small warm control screen · 2026-11-04
+
+The locally missing pinned small Q5_1 file was downloaded once and checked against
+`models/stt-candidates.json`; the earlier cloud transfer remains in the budget.
+Eight Portuguese controls reused the historical warm host binary, exact audio,
+prompts and call order. Only the model changed within that decoder pipeline.
+Four noise controls reduced inserted words from 247 to 4, but the quiet
+one-word negation changed from correct to wrong (0→1 word error, 0→3 character
+errors), both before and after passage commit. This critical regression rejects
+the configuration; no subsequent ordinary-speech or other-language sessions ran.
+[Control results](benchmarks/2026-11-03-local/whisper-small-warm-controls-results.json)
+
+The run took 369.27 host seconds with the historical four decoder threads
+restricted to two logical CPUs. Baseline scheduling differed, so no speed
+comparison is claimed. These are synthetic host controls, not microphone or
+Pixel results; the remaining noise output is still a failure. Android's current
+model validator does not accept small. No model substitution was shipped.
+
 ### Local correction shadow screen · 2026-11-04
 
 The Unsloth Qwen3-0.6B Q4_K_M candidate is **396,705,472 bytes** and has now
 been downloaded locally and verified against SHA-256
 `ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a`.
 It is a community quantization, separate from Qwen's official Q8 artifact.
-No correction inference or application integration is claimed by this preparation
-checkpoint. [Pinned Unsloth artifact](https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/blob/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_K_M.gguf)
+The 21-case source-only run completed with 16 abstentions, five invalid replies
+and no valid edit. It failed the frozen screen; it is not integrated into the app.
+[Pinned Unsloth artifact](https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/blob/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_K_M.gguf)
 
 The 35 synthetic fixtures with supplied choices remain an offline format check.
 A separate 21-request shadow plan gives the model only text and language. It
 pairs seven already-consumed DEV ASR excerpts with clean reference controls
 and includes seven synthetic stress cases. The model can abstain or find one
 short, exact-source replacement. Acoustic adjudication is required for any
-claimed speech correction. Automatic correction remains disabled pending the
-quality, provenance, Undo and phone gates below.
+claimed speech correction.
+
+A separately registered Qwen3.5-2B Q4_K_M comparison kept the same 21 texts,
+order, instructions, caps and validator. It returned 20 abstentions and one
+reply that exhausted the 48-token limit, with no valid edit. Invalid replies
+are not counted as successful abstentions; the frozen complete-validation rule
+withheld paired aggregate WER/CER for both runs. The 0.6B and 2B runs took 24.62
+and 142.36 host seconds respectively, including initial loading. Different architectures, templates,
+quantizations and prefix-cache behavior prevent treating this as a phone speed
+comparison. [0.6B aggregate](benchmarks/2026-11-03-local/correction-shadow-qwen3-06b-results.json),
+[2B aggregate](benchmarks/2026-11-03-local/correction-shadow-qwen35-2b-results.json)
+
+The 2B host configuration uses a generic chat template verified byte-for-byte
+against Ollama's Qwen3.5 renderer for these 21 two-message inputs. This preserves
+the JSON grammar with thinking disabled on Ollama 0.21.2. An initial diagnostic
+request used the wrong debug field and generated one extra response with the
+reference parser. It is preserved separately and excluded from the 21-case
+comparison. The corrected 42 render-only calls performed no token generation. No
+prompt, example or scoring threshold was tuned from that accidental answer.
+
+A subsequent source review identified an interface limitation: the sorted JSON
+serializer puts `replacement` before `source`, and the pinned runtime generates
+required properties in schema order. This does not establish causation, but
+a separate order-only diagnostic tested eight new synthetic texts with both
+schemas (16 calls, four languages). Each arm returned five abstentions and three
+contract-invalid replies, with zero valid repairs; three parseable edit objects
+per arm confirmed the actual field order. Reordering alone did not improve valid
+repair yield on these canaries. Some rejected whole-sentence outputs did repair
+a typo, while another chose a wrong word. That is a reason to distinguish
+language ability from the response contract, not to reclassify invalid outputs
+as passes. The original 21 cases were not rerun, and no further LLM calls are
+planned from this result. The failed screens do not prove that Qwen, Gemma or
+text correction generally cannot help.
+[Schema-order diagnostic](benchmarks/2026-11-03-local/correction-schema-order-results.json),
+[Ollama's pinned grammar converter](https://github.com/ollama/ollama/blob/v0.21.2/llama/llama.cpp/common/json-schema-to-grammar.cpp)
+
+Automatic correction remains disabled pending the quality, provenance, Undo
+and phone gates below.
 
 A small downloaded read-speech subset cannot establish a high-precision release
 claim. The current 56 clips span 650.1 seconds; 21 development clips and 35 official
