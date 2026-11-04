@@ -20,6 +20,12 @@ ARM phone performance and full application acceptance remain open.
 
 ## Current delivery step
 
+[PR #1](https://github.com/andreizpgh/Focal/pull/1) integrates the verified UX Alpha 2
+checkpoint into `main`, including the approved Focus wave logo and current APK
+link. Main integration is separate from final application acceptance: the open
+speech and phone requirements below still apply. Continue in the existing checkout
+and branch after synchronizing with `main`; use a new PR for subsequent changes.
+
 Published [UX Alpha 2](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-2)
 for the owner's interface feedback. Version `0.1.0-alpha.2` / code 2 comes from
 clean `fe70758`: 89 Android tests passed without failures/skips, including all
@@ -376,8 +382,9 @@ would be fixed; retain the safe diagnosis and original raw records.
 
 ## Continue locally and in the cloud
 
-Use this checkout/branch and existing draft PR #1. Initialize the recorded
-submodule. Read `AGENTS.md`, the quality/benchmark reports and
+Use this checkout/branch, synchronized with `main`. PR #1 records the UX Alpha 2
+integration; subsequent changes need a new PR. Initialize the recorded submodule.
+Read `AGENTS.md`, the quality/benchmark reports and
 [the local QA guide](local-emulator-qa.md). Keep public history focused and scan
 full history for secrets before pushing; never publish raw recordings/transcripts,
 model weights, local configuration or signing material.

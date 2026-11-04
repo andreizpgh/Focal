@@ -1,7 +1,8 @@
 # Продолжение Focal · 2026-11-04
 
-Продолжи в существующем checkout, ветка `codex/sessions-stt-handoff`,
-draft PR [#1](https://github.com/andreizpgh/Focal/pull/1). Новый worktree не нужен.
+Продолжи в существующем checkout, ветка `codex/sessions-stt-handoff`, синхронизированная
+с `main`. PR [#1](https://github.com/andreizpgh/Focal/pull/1) переносит проверенный
+UX Alpha 2 в `main`; следующие изменения оформляй новым PR. Новый worktree не нужен.
 Прочитай `AGENTS.md`, `docs/development-handoff.md`, `docs/quality-report.md`,
 `docs/architecture.md`, `docs/local-emulator-qa.md` и `docs/device-validation.md`.
 Подробные исследования находятся в `docs/benchmarks/2026-11-03-local/report.md`
@@ -137,4 +138,4 @@ Dedicated AVD — `focal_local_qa`, serial `emulator-5554`,
 Коммиты/код — English, сообщения владельцу — коротко по-русски. Перед публикацией
 staged diff review и full-history Gitleaks. В Git не публиковать модели, аудио,
 транскрипты, сырые логи, локальную конфигурацию и ключи. Все проверенные изменения
-сохраняй в этой ветке и существующем PR; новые Actions пока не нужны.
+сохраняй в этой ветке и новом PR после интеграции #1; новые Actions пока не нужны.

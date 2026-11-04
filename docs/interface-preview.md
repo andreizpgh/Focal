@@ -1,10 +1,11 @@
 # Interface preview
 
-Native Android captures of the monochrome interface, using synthetic sample notes
-on an Android 10 emulator at approximately 390 × 846 dp. The recording capture uses a synthetic
-session state to exercise layout; it does not demonstrate microphone capture or
-recognition quality. These screens describe the working tree, not the existing
-0.1 alpha download.
+Native Android captures from 2026-11-02, using synthetic sample notes on an
+Android 10 emulator at approximately 390 × 846 dp. They show the Sessions / Focus
+wave design; some controls have changed since these captures. The recording
+capture uses a synthetic session state to exercise layout, not microphone capture
+or recognition quality. For the current testing build, download
+[UX Alpha 2](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-2).
 
 | Sessions · light | Sessions · dark |
 | --- | --- |
@@ -21,9 +22,6 @@ recognition quality. These screens describe the working tree, not the existing
 [Vector logo](mark.svg) · [Logo preview](mark-preview.png)
 
 [Approved brand sources and rebuild instructions](../design/brand/README.md)
-
-The owner-private [mobile gallery](https://focal-design-review.andreizakharov.chatgpt.site/native/)
-shows these same unretouched captures with light/dark switching.
 
 The selected Sessions direction uses a white canvas, black primary actions and
 a dated timeline. Recording uses an open timer and a Focus wave amplitude envelope

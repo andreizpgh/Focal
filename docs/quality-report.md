@@ -6,6 +6,12 @@ as [UX Alpha 2](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-2), ve
 The previous Alpha 1 assets were not changed. Paired speech accuracy and speed
 across all seven languages, physical-phone validation and stable signing remain open.
 
+The public landing page now names UX Alpha 2 explicitly and uses the approved
+Focus wave logo. [PR #1](https://github.com/andreizpgh/Focal/pull/1) integrates this
+checkpoint into `main`. The publication follow-up changes documentation only;
+application and build inputs remain identical to verified `fe70758`. Interface
+captures are dated separately and are not presented as exact Alpha 2 screenshots.
+
 A [primary-source review](stt-quality-experiments.md#practical-direction-after-primary-source-review)
 on 2026-11-04 keeps the scope on ordinary voice notes and background capture.
 Independent Sol/Terra research and Astra review rejected further investment in
