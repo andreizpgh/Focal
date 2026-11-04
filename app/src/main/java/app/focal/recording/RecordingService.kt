@@ -544,7 +544,11 @@ class RecordingService : Service() {
                 getSystemService(NotificationManager::class.java).cancel(NOTIFICATION)
             }
         }
-        stopping.set(true); interruptInput(); transcriber?.cancel(); scope.cancel()
+        stopping.set(true); interruptInput()
+        // Prevent a worker that is still opening its engine from starting a decode
+        // after teardown has already looked for an engine to cancel.
+        scope.cancel()
+        transcriber?.cancel()
         app.scope.launch {
             try {
                 startup?.join(); capture?.join(); worker?.join()

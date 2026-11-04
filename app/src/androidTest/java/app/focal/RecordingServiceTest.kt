@@ -21,11 +21,14 @@ import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingInput
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
+import app.focal.recording.SessionOperations
 import app.focal.speech.SpeechPlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
@@ -37,6 +40,8 @@ import java.nio.ByteOrder
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicLong
 
@@ -298,6 +303,59 @@ class RecordingServiceTest {
         assertEquals(1, app.store.pendingCount(id))
         assertEquals("INTERRUPTED", app.store.note(id)!!.state)
         assertTrue(app.store.note(id)!!.error.contains("Synthetic decoder"))
+    }
+
+    @Test fun stoppingRecoveryKeepsInFlightResultPending() {
+        val id = app.store.create("en")
+        val pcm = ByteArray(1200 * 32) { (it % 97).toByte() }
+        app.store.audioFile(id).writeBytes(pcm)
+        app.store.duration(id, 1200)
+        val completed = app.store.beginChunk(id, 0, false)
+        app.store.finishChunk(completed, 600)
+        app.store.complete(app.store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = completed,
+            start = 0, end = 600, text = "Original", uncertain = true)))
+        app.store.edit(app.store.passages(id).single(), "Keep this correction")
+        val savedPassage = app.store.passages(id).single()
+        app.store.finishChunk(app.store.beginChunk(id, 600, false), 1200)
+        app.store.state(id, "INTERRUPTED")
+        val savedChunks = app.store.chunks(id)
+        val decoding = CountDownLatch(1)
+        val releaseResult = CountDownLatch(1)
+        val decodeReturned = CountDownLatch(1)
+        val returnedDuringCancel = AtomicBoolean()
+        val closes = AtomicInteger()
+        RecordingService.decoderFactoryForTests = {
+            object : RecordingDecoder {
+                override suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int) {
+                    decoding.countDown()
+                    try {
+                        check(releaseResult.await(10, TimeUnit.SECONDS)) { "Test decode was not released." }
+                        currentCoroutineContext().ensureActive()
+                        store.complete(chunk, listOf(Passage(noteId = id, chunkId = chunk.id,
+                            start = chunk.start, end = chunk.end, text = "Synthetic result", uncertain = false)))
+                    } finally { decodeReturned.countDown() }
+                }
+                override fun cancel() {
+                    // A decode can return an already-produced result while the stop request is in flight.
+                    releaseResult.countDown()
+                    returnedDuringCancel.set(decodeReturned.await(3, TimeUnit.SECONDS))
+                }
+                override fun close() { closes.incrementAndGet() }
+            }
+        }
+        try {
+            activity.onActivity { RecordingService.command(it, RecordingService.RECOVER, id) }
+            assertTrue("Recovery must start decoding", decoding.await(5, TimeUnit.SECONDS))
+            assertTrue(app.stopService(Intent(app, RecordingService::class.java)))
+            finish(id)
+            await { !SessionOperations.matchesSession(capture = false, noteId = id) }
+            assertTrue("Decode must return during the cancellation request", returnedDuringCancel.get())
+            assertEquals("The in-flight chunk must remain pending", savedChunks, app.store.chunks(id))
+            assertEquals(listOf(savedPassage), app.store.passages(id))
+            assertEquals("INTERRUPTED", app.store.note(id)!!.state)
+            assertArrayEquals(pcm, app.store.audioFile(id).readBytes())
+            assertEquals(1, closes.get())
+        } finally { releaseResult.countDown() }
     }
 
     @Test fun startingCaptureExcludesPlaybackBeforeServicePublishesItsNote() {
