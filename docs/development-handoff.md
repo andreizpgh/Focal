@@ -18,7 +18,57 @@ assets are unchanged; the newer UX preview is described below. Seven-language
 read-speech results are measured on the host;
 ARM phone performance and full application acceptance remain open.
 
-## Current delivery step · UX Alpha 6
+## Current checkpoint · 2026-11-05
+
+Unreleased UI commit `5f290bc` removes the duplicate first library date,
+groups Speech model and Appearance together, and uses a 4 dp / 220 ms ease-out
+page transition. Five focused checks passed in 13.717 s; core, debug lint and
+app/test builds passed in 1m 58s. Source and actual frames received manual
+review; details and limits are at the top of [quality-report](quality-report.md).
+Alpha 6 remains the latest release; no new APK has been released. The owner
+prioritizes an STT decision before any cosmetic Review work. Real-phone quality,
+latency, memory, battery, thermal and background gates remain open.
+
+The laptop rebooted on November 5; its cause is unknown and the available
+evidence does not establish OOM. ASR `screen-01` preserves two complete pairs,
+a verified Qwen arm 03 and an interrupted zero-byte tail. The continuation
+completed 15 valid pairs, then a noise response hit the 128-token cap with 73
+inserted words; five cases were not run. Seven ordinary DEV clips improved from
+28 to 21 errors / 144 reference words, but three varying-noise inputs produced
+17 → 75 raw insertions including the failed response. Qwen ASR is not promoted;
+quiet negation and late-phrase losses also matter. See the
+[comparison report](benchmarks/2026-11-05-stt/report.md) for scope and limits.
+
+The `corrected_text` attempt 1 failed preflight on an immediate unload race,
+with zero generations. Attempt 2 completed 21 calls: six accepted edits (four
+synthetic reference-exact repairs, one synthetic repair still misspelled and one
+Italian DEV reference-exact repair), 11 abstentions and four extra-quote changes
+blocked by the adapter. DEV errors changed 44 → 43 / 159 reference words; no
+audio adjudication was done. Automatic correction remains disabled. Preserve
+failed and interrupted results; do not claim final quality or phone performance.
+
+The four Parakeet model files are verified (670,478,772 bytes), with the existing
+runtime reused. Its 21-case screen is complete: ordinary errors were 28 → 16 /
+144 words and varying-noise insertions 17 → 0. Four synthetic mixed-term cases
+gave 1 → 2 exact matches / 8 occurrences, with no exact API or guardrails hits;
+critical mixed-term and quiet-speech behavior remains unresolved. The 42-DEV
+comparison is complete: seven cached quality pairs and 35 fresh cold AB/BA pairs.
+Aggregate word errors fell 146 → 98 / 864; Spanish worsened 15 → 44 / 177,
+including one 41-error output mixing Spanish and English. Independent review
+verified all raw-result hashes and reproduced the scores. The next single bounded 129-chunk pipeline replay has not
+launched. The separate 42 held-out clips remain closed. No backend or APK changed;
+see the comparison report for language conditioning, timing and other limits.
+
+Run only one heavy job at a time in a systemd unit with `MemoryHigh=3G`,
+`MemoryMax=4G`, `MemorySwapMax=0`, `CPUQuota=150%`, `Nice=10` and CPUs 0–3.
+Check the live job and `build/local-diagnostics/current-android-delivery-work.json`
+before starting any further work.
+
+The cumulative [download ledger](benchmarks/2026-11-03-stt/download-budget.json)
+reserves **4,424,079,423 / 5,000,000,000 bytes**, leaving **575,920,577**.
+Keep retries and the existing CI reserve counted; reuse verified local artifacts.
+
+## Previous delivery step · UX Alpha 6
 
 Clean `fe1dc9176563233016baeea50a8b7000e3ca163c` passes full local QA: **108/0/0**, eight
 required real-model checks, 181.672s JUnit/182.695s runner wall. Both lints,
@@ -136,8 +186,9 @@ A bounded vocabulary buffer reduced host model-validation time, with unchanged
 malformed-input/cancellation decisions and real-model acceptance. This is not
 ASR decoding or phone speed. A six-pair synthetic RU/English glossary experiment
 failed its guards; no prompt was shipped or other-language follow-up run.
-The owner authorized a **5 GB cumulative download ceiling**, retaining prior
-reservations: **2,749,583,598 / 5,000,000,000 bytes**, leaving **2,250,416,402**.
+At this historical checkpoint the **5 GB cumulative download ceiling** had
+reservations of **2,749,583,598 bytes**, leaving **2,250,416,402**; see the
+current checkpoint above for the updated total.
 Pinned Qwen3-0.6B and Qwen3.5-2B Q4 files are local and verified; do not fetch
 again. Each completed the same 21 source-only DEV/synthetic requests. The first
 returned 16 abstentions and five invalid replies; the second returned 20
@@ -447,10 +498,10 @@ WER gain into an all-language Android claim.
 
 The current shared ceiling is **5,000,000,000 bytes including retries**, raised
 by the owner on 2026-11-04 for removable local research artifacts. Reservation:
-**2,749,583,598 bytes**, including the existing 61,000,000-byte future CI reserve;
-remaining **2,250,416,402 bytes**. The old reservation prefix is preserved.
-The additional reservations include two Qwen Q4 files, one local Whisper small
-transfer and bounded metadata. All three local model files are verified.
+**4,424,079,423 bytes**, including the existing 61,000,000-byte future CI reserve;
+remaining **575,920,577 bytes**. The old reservation prefix is preserved.
+The ledger includes two Qwen Q4 files, one local Whisper small transfer, the
+Qwen ASR runtime and model, and bounded metadata.
 Do not reset the ledger or repeatedly fetch existing models. The 42 fresh
 held-out clips remain closed.
 CI model downloads also count; use Actions for bounded checkpoints, and the

@@ -1,4 +1,18 @@
-# Product verification · 2026-11-04
+# Product verification · 2026-11-05
+
+## Local STT research checkpoint · 2026-11-05
+
+The Parakeet host comparison completed 42 previously used DEV clips: word errors
+146 → 98 / 864 and lexical character errors 262 → 229 / 4,349 against Whisper.
+Spanish worsened 15 → 44 / 177, including one output mixing Spanish and English;
+six other languages improved in both aggregate measures. Thirty-five fresh cold
+pairs supplied matched host timings, while seven earlier pairs were reused for
+quality only. Independent review verified all raw-result hashes and reproduced
+the scores; the separate held-out
+cohort, real-phone gates and one planned 129-chunk pipeline replay remain open.
+See [the research report](benchmarks/2026-11-05-stt/report.md) for limits and
+earlier synthetic controls. The application backend is unchanged; no new APK was
+released.
 
 ## Post-Alpha 6 UI checkpoint · unreleased
 

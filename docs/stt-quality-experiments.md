@@ -13,7 +13,25 @@ measured gain and must preserve what was spoken, including deliberate factual
 mistakes, unusual names, repetitions, and imperfect grammar. A text-only model
 cannot establish which of two plausible words was actually said.
 
-## What the measured checkpoint changes
+## New local comparison · 2026-11-05
+
+The [new aggregate report](benchmarks/2026-11-05-stt/report.md) records a Qwen3-ASR
+screen and a separate full-text correction experiment. Qwen reduced word errors
+on seven ordinary DEV clips, but generated a repeated paragraph on noise until
+its output cap; it is not promoted. Full-text Qwen3.5-2B correction repaired four
+synthetic typos and one reference-supported DEV word, but also accepted an
+incorrect spelling repair. Automatic edits remain disabled. These are new
+experiments; earlier failures below are not reclassified as successes.
+
+Parakeet TDT v3 INT8 completed the 21-case screen and a 42-clip DEV comparison,
+reusing the installed runtime and verified earlier outputs. DEV word errors
+fell 146 → 98 / 864, but Spanish worsened 15 → 44 / 177. Its language selection
+is automatic. A single replay through the application's existing audio ranges
+comes before any backend decision. The 42 unused held-out
+clips remain closed. Heavy work runs serially with an explicit memory/CPU limit
+after an unexpected host reboot of unverified cause.
+
+## What the earlier measured checkpoint changes
 
 The [fresh local continuation](benchmarks/2026-11-03-local/report.md) retains
 42 development clips and a separate unconsumed 42-clip cohort. Lower energy
@@ -164,11 +182,13 @@ before each request. Reuse verified files; a larger budget does not justify
 fetching whole corpus shards or every model variant.
 
 The [shared ledger](benchmarks/2026-11-03-stt/download-budget.json) now reserves
-**2,749,583,598 bytes**, leaving **2,250,416,402 bytes**. This retains the earlier
+**4,424,079,423 bytes**, leaving **575,920,577 bytes**. This retains the earlier
 881,742,333 bytes, including the 61,000,000-byte future CI reserve, and adds
 17,858 bytes of initial metadata, 196,608 bytes reserved for runtime/candidate
 metadata, two Qwen weight transfers of 396,705,472 and 1,280,835,840 bytes,
 and 190,085,487 bytes for the locally missing Whisper small research file.
+The November 5 continuation also includes 2,200,000 bytes reserved for metadata,
+1,001,817,053 bytes for Qwen-ASR files/runtime, and 670,478,772 bytes for Parakeet.
 The old cloud small transfer remains counted; this local transfer adds to it.
 The original allocation below is historical context, not an instruction to
 repeat downloads. The older corpus figures describe the previous cloud study;
