@@ -935,6 +935,60 @@ Actual-model same-state beam/greedy retries and close, all three loader wrappers
 Android error/recovery/cancel behavior, and phone resources remain unverified.
 This is neither arbitrary OOM hardening nor a production fix.
 
+## Native ownership: incomplete real-graph attempt
+
+The separate real-graph harness removes the model-free graph/encoder bypasses and
+uses the existing base-q5_1 model and one previously consumed synthetic English
+meeting clip. Its frozen 15-case-per-variant matrix requires healthy-output parity,
+safe error/close, same-state beam/greedy/auto retries and three loader-wrapper
+exception cases. All functional comparisons were fixed before execution.
+
+Independent prebuild/postbuild review verified 682 inputs, 96 tool/link identities,
+both compiled binaries and seven dependencies. Two complete Whisper/harness
+translation units built sequentially in 91.926 s, reusing 23 sanitized GGML units;
+there was no configure, model download or held-out evaluation. Sixteen pure Python
+tests of strict expected-exit classification passed before freezing the runner.
+
+The first healthy baseline process loaded the model and initialized actual state
+graphs, but exceeded the frozen 60-second wall limit. The runner killed the child
+(exit -9) and stopped; only one of the planned 30 processes started. No full return,
+canonical output, injected fault or patched execution occurred. The complete
+attempt took 60.535 s. Its missing-canonical validation message is secondary to
+the recorded timeout. This is neither an expected regression RED nor evidence
+for or against the patch's actual-model behavior. The final graph-ready marker
+does not identify encoder versus decoder as the unfinished stage. The recorded
+GGML build enables SIMD; absent SIMD is not a supported diagnosis.
+
+Independent failed-attempt review rechecked the input/binary identities, the only
+execution log and all seven loaded dependencies. No child process remained after
+termination. Preserve this failed attempt and diagnose before another separately
+reviewed bounded execution; retain all functional assertions. The existing v4
+model-free result stands separately. Android integration/recovery/cancellation,
+production acceptance and physical-phone resource gates remain open.
+
+A separately frozen and independently reviewed diagnostic subsequently ran only
+the same healthy baseline binary, model and PCM with unchanged functional checks.
+It completed successfully in 79.903 s with one successful full call, one model and
+state graph, no injected fault and clean sanitizers. The separate allowances were
+180 s wall/150–155 s CPU; one inference thread and all RSS guards remained fixed.
+Forty-one observations include a final log-only sample after child reap. The last
+live sample recorded 78.06 CPU seconds at 78.030 elapsed, and maximum sampled
+VmHWM was 249,576 KiB. The final full return was observed by 79.900 s. These
+observations support an insufficient original 60-second allowance for this
+instrumented healthy control. They do not identify the slow stage, quantify
+sanitizer overhead, prove any patched/retry/auto case or measure phone resources.
+The prior attempt remains failed; a new matrix needs separately reviewed bounds
+that account for actual auto-language and retry control flow. Diagnostic freeze
+`022953faed8205a9ca1eb758ee92599138bf61913692167ba89caaf560e01b65` binds summary
+`a62dfe93aa95709a998bae8006a9f50f238e97adcd237b9af7a0ca95ca8084ce`.
+
+The [safe attempt record](engine-lifetime-realgraph-results.json), SHA-256
+`2383da167b637e90061751e212d41736c746fcf3d42d9f45d628b2e9ed0d0329`, binds
+freeze `86d55e199ca49267e07077953405e7451ec11aa27c76444027b369de7097209e`,
+build `10784342ea8feac161b4adb1b69a1aeca16de20844b92d993fe952e855e1e46e`,
+and attempt `ce3fdb10ba4c11cb2d1bae9b359bd5fd83bbbc234f9aada7c79a3e1f0457db8b`.
+Timings describe sanitizer verification work, not application or phone performance.
+
 ## Android seven-language integration smoke
 
 The unpublished VAD candidate was exercised through its actual Android JNI on

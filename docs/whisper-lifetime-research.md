@@ -70,8 +70,21 @@ that passed all 24 model-free sanitizer cases. The original engine passed four
 controls and failed 20 expected regressions, including two ASan use-after-free
 reports. Those tests use real engine/GGML code with explicit graph bypasses.
 
+The separate real-graph harness now has independent prebuild/postbuild review and
+two successfully compiled sanitized variants. Its first healthy baseline process
+loaded the cached model and initialized actual state graphs, but hit the frozen
+60-second wall limit before a full return or canonical output. No other case or
+patched process ran. The [failed-attempt record](benchmarks/2026-11-03-local/engine-lifetime-realgraph-results.json)
+preserves this incomplete evidence; the logs do not identify encoder versus decoder
+as the unfinished stage. It is not an expected regression RED or patch acceptance.
+A separately reviewed single-case diagnostic then completed that unchanged
+healthy baseline in 79.903 s with strict counters and clean sanitizers. This
+supports insufficient time for the original control; it does not validate the
+remaining matrix or quantify sanitizer overhead. No recompile or download occurred.
+
 Actual-model same-state beam/greedy retry and close, the three loader wrappers,
-Android error/recovery/cancellation and phone resource checks remain open. The
-separate real-graph harness is incomplete preparation, not an executed experiment.
-Do not enable this overlay in the application on the strength of configuration
-tests alone. The [handoff](development-handoff.md) records the next required checks.
+Android error/recovery/cancellation and phone resource checks remain open. Set
+separately reviewed matrix bounds from the diagnostic and auto/retry control flow;
+retain all assertions and the failed attempt. Do not enable this overlay in the
+application on the strength of configuration tests alone. The [handoff](development-handoff.md)
+records the next required checks.

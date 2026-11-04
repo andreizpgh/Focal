@@ -334,6 +334,21 @@ environment. This is new host evidence; the latest full Android checkpoint remai
 the separately verified 85-test `101a153` build. No new real-model or app run was
 performed for the optional overlay.
 
+The separately frozen real-graph harness subsequently compiled both sanitized
+variants in 91.926 s; independent prebuild/postbuild reviews verified 682 inputs,
+96 tool/link identities and seven runtime dependencies. Its first healthy baseline
+case loaded the cached model and initialized real state graphs, then hit the
+60-second wall limit. Only that process ran; there is no full return or canonical
+output, and the patched variant was not executed. The attempt is incomplete,
+not an expected RED or proof of recovery. Independent review confirmed the
+[failed-attempt record](benchmarks/2026-11-03-local/engine-lifetime-realgraph-results.json).
+No model download, held-out evaluation or application change occurred.
+A separately reviewed single-case diagnostic then passed the unchanged healthy
+baseline in 79.903 s, supporting an insufficient original 60-second allowance.
+It retained one inference thread, RSS guards and all functional assertions. The
+maximum sampled VmHWM was 249,576 KiB. This does not establish a specific slow
+stage, sanitizer overhead factor, patched/retry behavior or phone performance.
+
 ## Remaining release gates
 
 Independent source review also found a native allocation-failure ownership defect:

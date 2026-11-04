@@ -44,12 +44,28 @@ phone gates открыты. Не повторяй уже завершённую 
 postimage `8cc010e3…ed64b`, в Android он не включён. Его 9 тестов покрывают
 19 configure-сценариев; полный host suite прошёл 155 тестов без skips за 7.478 s.
 Последний полный Android QA по-прежнему относится к чистому `101a153` (85 тестов).
-Следующая realgraph-подготовка в `build/stt/engine-lifetime-realgraph-research/`
-не завершена: нет полного плана, cases,
-runner/freeze, сборки или результатов. Прочитай её `PREPARATION-STATUS.md`;
-666 файлов сохранены с хэшами в `INCOMPLETE-SNAPSHOT.json`. Это черновик,
-не разрешение запуска. Заверши подготовку и независимое prelaunch review;
-используй существующие fixtures/ASan archives, не скачивай модели повторно.
+Realgraph в `build/stt/engine-lifetime-realgraph-research/` теперь подготовлен:
+freeze `86d55e19…209e`, 682 inputs / 96 tool identities, 16 Python oracle tests.
+Независимые prebuild/postbuild review прошли; два sanitized варианта собраны
+последовательно за 91.926 s с существующими GGML archives. Новых загрузок нет.
+**Первый real-model прогон НЕ завершён:** baseline `healthy_owned_beam` загрузил
+модель и создал state graphs, но превысил wall limit 60 s (exit -9). Других
+сценариев и patched запусков нет; нет FULL_RETURN, canonical или fault marker.
+Ошибка missing canonical вторична к timeout. Независимо сверены единственный
+лог, все inputs/binaries и семь loaded deps. Лог не различает незавершённую
+работу encoder/decoder; SIMD включён. Сохрани попытку как failed и все assertions.
+Отдельный independently reviewed healthy baseline diagnostic затем прошёл за
+79.903 s с тем же binary/model/PCM и строгими проверками: wall180 / CPU150–155 s,
+один поток и прежние RSS limits. Диагностический freeze `022953fa…01b65`,
+summary `a62dfe93…084ce`. Максимальный sampled VmHWM — 249 576 KiB; последний
+CPU sample — 78.06 s при elapsed78.030 s. Исходных 60 s для этого control
+не хватало; конкретная стадия и вклад sanitizers не измерены. Новую матрицу
+готовь только с отдельно проверенными лимитами, учитывая auto и retry paths;
+единственный healthy baseline не подтверждает patched/retry/auto. Результат и
+хэши — в `engine-lifetime-realgraph-results.json` локального benchmark report.
+Прежний interrupted draft и unexecuted prebuild v1 сохранены отдельно;
+PREPARATION-STATUS внутри freeze описывает состояние до исполнения.
+Android fault/recovery/cancel план ещё не реализован; подробности в handoff.
 
 # Prompt for the next Codex session
 

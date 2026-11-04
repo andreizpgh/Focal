@@ -338,13 +338,45 @@ The optional [ownership-only CMake overlay](whisper-lifetime-research.md) reprod
 the exact reviewed `8cc010e3…ed64b` postimage and remains disabled in Android.
 Nine tests cover 19 configuration cases; the full host suite now passes 155 tests
 without skips (7.478 s). No extra Android run was needed for this inactive hook.
-Real-graph preparation in `build/stt/engine-lifetime-realgraph-research/` is
-incomplete: the plan, case specification, runners and freeze are unfinished.
-`PREPARATION-STATUS.md` and the private
-666-file `INCOMPLETE-SNAPSHOT.json` preserve the draft, existing fixtures and exact
-v4 archives. They are not execution authorization. Finish preparation and obtain
-independent prelaunch review before compiling or opening the model. Do not restart
-the completed v4 checks merely to resume this work.
+Real-graph preparation in `build/stt/engine-lifetime-realgraph-research/` is now
+frozen as `86d55e199ca49267e07077953405e7451ec11aa27c76444027b369de7097209e`:
+682 inputs, 96 tool/link identities and 16 passing pure Python evaluator tests.
+Independent prebuild and postbuild reviews passed. Two sanitized full-engine
+translation units built sequentially in 91.926 s, reusing the exact 23-TU GGML
+archives and existing runtime/model/audio files. No downloads occurred.
+
+The first actual-model attempt is **incomplete**: only baseline
+`healthy_owned_beam` started. Model load and actual state-graph initialization
+completed, then the frozen 60-second wall deadline killed the process (exit -9).
+There was no full return, canonical output or fault marker; patched was not run.
+The runner's missing-canonical message is secondary to the recorded timeout.
+Independent review verified the single log, unchanged inputs/binaries and seven
+loaded dependencies. The log cannot locate unfinished encoder versus decoder work;
+SIMD is enabled. Preserve the failed attempt and all functional assertions.
+See the [safe attempt record](benchmarks/2026-11-03-local/engine-lifetime-realgraph-results.json).
+The interrupted 666-file draft and unexecuted preparation v1 remain separate.
+Do not repeat the completed v4 suite merely to resume work.
+
+A separately frozen, independently reviewed single healthy baseline diagnostic
+then passed in 79.903 s without recompile or downloads. It uses the same binary,
+model, PCM and full assertions, with 180 s wall/150–155 s CPU allowances, unchanged
+RSS guards and one inference thread. The last live observation recorded 78.06 CPU
+seconds at 78.030 elapsed; maximum sampled VmHWM was 249,576 KiB. This supports an
+insufficient original 60-second allowance for this instrumented control, not a
+specific slow stage, sanitizer overhead factor or phone performance. Diagnostic
+freeze is `022953faed8205a9ca1eb758ee92599138bf61913692167ba89caaf560e01b65`,
+summary `a62dfe93aa95709a998bae8006a9f50f238e97adcd237b9af7a0ca95ca8084ce`.
+Before a new matrix, review bounds against actual auto-language/retry control flow;
+the one healthy result does not establish retry, auto-language or patched outcomes.
+
+The Android follow-up plan remains unimplemented. Use a separate explicit opt-in
+debug fault artifact and test source set, leaving normal APKs and the strict
+85-test/eight-model-check suite free of hooks. Service tests must await app/model
+readiness themselves, then await complete worker/service cleanup before normal
+recovery. In-flight cancellation needs a separate barrier-only case: cancellation
+would mask a simultaneous allocation error, and the observer must not retain an
+extra engine owner. Validate native -7, original audio/manual edits, pending chunks,
+normal-engine recovery and exactly-once destruction before production adoption.
 
 1. Resolve the observed recovery hallucinations on weak varying noise. Investigate
    the no-speech logits defect with the pinned source plus an explicit, reviewed
