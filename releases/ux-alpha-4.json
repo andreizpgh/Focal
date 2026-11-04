@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "tag": "ux-alpha-4",
+  "title": "Focal 0.1.0 \u00b7 UX Alpha 4",
+  "provenance": "local-emulator-qa",
+  "source_commit": "a3038fa104f0178599ac1642fd3c0e471f368742",
+  "source_clean": true,
+  "application_id": "app.focal",
+  "version_name": "0.1.0-alpha.4",
+  "version_code": 4,
+  "build_variant": "debug",
+  "apk_sha256": "66b5a48c255f2465c284b3b57332219389a1f21ec6d58a83fe83ca31ce62d23d",
+  "apk_bytes": 76700613,
+  "test_apk_sha256": "6f54d379420cb3fa2f2ddffe854cd25f4210bb59177ccd33677d81a3baee2198",
+  "signing": {
+    "type": "development",
+    "certificate_sha256": "3e407a18880c9277982d6ad6222b39738484a3b768e4d268415eb795709aa3bc",
+    "alpha_1_update_compatibility": "not verified",
+    "alpha_2_certificate_matches": true,
+    "alpha_3_certificate_matches": true
+  },
+  "model": {
+    "repository": "ggerganov/whisper.cpp",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "filename": "ggml-base-q5_1.bin",
+    "sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "bytes": 59707625,
+    "license": "MIT"
+  },
+  "engine_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+  "qa": {
+    "runner": "scripts/qa-local.py --release-checks",
+    "run": "20261104T143143.240767Z",
+    "android_api": 35,
+    "android_abi": "x86_64",
+    "hardware_acceleration": "KVM",
+    "virtual_cpus": 2,
+    "android_tests": 95,
+    "failures": 0,
+    "skips": 0,
+    "required_real_model_tests": 8,
+    "instrumentation_seconds": 143.684,
+    "build_seconds": 250,
+    "core_tests": 36,
+    "core_execution": "cached results for unchanged core source",
+    "debug_lint": "passed",
+    "release_lint": "passed",
+    "unsigned_release_build": "passed; not the instrumented or published APK",
+    "zip_and_elf_alignment_bytes": 16384,
+    "build_seconds_note": "Gradle reported 4m10s; build wall time is not app performance."
+  },
+  "targeted_regressions": {
+    "same_installed_test_apk": true,
+    "expected_baseline_assertion_failures": 1,
+    "candidate_passes": 5,
+    "candidate_instrumentation_seconds": 10.684,
+    "scope": "Motion test failed on Alpha 3 (2px maximum silhouette change) and passed on the first Alpha 4 candidate, together with save/next, oversized editor rotation, library browsing restoration and timestamp playback. The final APK passed the complete suite."
+  },
+  "manual": {
+    "scope": "Synthetic notes at 411x890dp, normal/200% font, portrait/actual landscape, keyboard and scroll-to-save, persisted draft, light/dark, language and action menus, playback highlight. A settled landscape frame confirmed the caret fully above the keyboard after an earlier transitional frame clipped it. The final Save-close text style matches Save-next. Final APK captures are linked from interface-preview.md.",
+    "audio": "Emulator host audio disabled; no audible playback or microphone claim.",
+    "private_owner_screenshots_published": false
+  },
+  "independent_review": [
+    "Sol/Terra focused UI implementation and motion regression",
+    "Astra critical source and actual screenshot review, including settled landscape IME",
+    "Terra independent final QA/APK/model/signature audit"
+  ],
+  "not_established": [
+    "Physical Pixel 10 microphone, audible playback and installation",
+    "Phone background reliability, battery, thermals and ARM latency",
+    "Seven-language accuracy/speed improvement, mixed-language terms and varying-noise hallucination fix",
+    "Local language-model correction accuracy and reversible correction UX",
+    "Stable production signing and release-variant runtime validation"
+  ],
+  "build_recovery": "First full attempt failed incremental release Kotlin compilation resolving existing top-level functions. An unchanged-source nonincremental Kotlin rebuild passed; the complete runner then passed. No repository clean, native engine change or model download."
+}

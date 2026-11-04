@@ -292,10 +292,19 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             topBar = {
                 if (!compactSearch) Row(Modifier.fillMaxWidth()
                     .onSizeChanged { if (destination == Destination.Sessions) sessionsHeaderHeight = it.height }
-                    .statusBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    .statusBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = if (destination == Destination.Sessions) 4.dp else 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     when (destination) {
-                        Destination.Sessions -> {
-                            Text("Sessions", style = MaterialTheme.typography.headlineLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 4.dp).semantics { heading() })
+                        Destination.Sessions -> SessionsHeader(
+                            attentionCount = library.notes.count(::sessionNeedsAttention),
+                            attentionOnly = attentionOnly,
+                            toggleAttention = {
+                                attentionOnly = !attentionOnly
+                                libraryListState.requestScrollToItem(0)
+                            },
+                        ) {
                             if (library.notes.isNotEmpty() || searchOpen || searchQuery.isNotBlank()) {
                                 val searchActionFocus = remember { FocusRequester() }
                                 IconAction(Symbol.Search, if (searchOpen) "Close search" else "Search sessions",
@@ -326,8 +335,8 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                                     DropdownMenu(
                                         expanded = menu, onDismissRequest = { menu = false },
                                         modifier = Modifier.width(228.dp),
-                                        shape = RoundedCornerShape(22.dp), containerColor = MaterialTheme.colorScheme.surface,
-                                        tonalElevation = 0.dp, shadowElevation = 8.dp,
+                                        shape = RoundedCornerShape(22.dp), containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                        tonalElevation = 0.dp, shadowElevation = 0.dp,
                                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                                     ) {
                                         SessionMenuItem("Rename", Symbol.Edit) { menu = false; dialog = "rename" }
@@ -504,6 +513,41 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
 }
 
+@Composable private fun SessionsHeader(
+    attentionCount: Int, attentionOnly: Boolean, toggleAttention: () -> Unit,
+    actions: @Composable RowScope.() -> Unit,
+) {
+    val fontScale = LocalDensity.current.fontScale
+    val showFilter = attentionCount > 0 || attentionOnly
+    @Composable fun ReviewFilter() {
+        FilterChip(
+            selected = attentionOnly,
+            onClick = toggleAttention,
+            label = { Text(if (attentionOnly) "Show all" else "$attentionCount to review") },
+            colors = focalChipColors(), shape = CircleShape,
+        )
+    }
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        BoxWithConstraints(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(start = 4.dp)) {
+            val inlineFilter = fontScale <= 1.15f && maxWidth >= 340.dp
+            val compactTitle = fontScale >= 1.5f || maxWidth < 260.dp
+            Column {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Sessions", modifier = Modifier.weight(1f).semantics { heading() },
+                        style = if (compactTitle) MaterialTheme.typography.titleLarge
+                            else MaterialTheme.typography.headlineLarge,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    if (inlineFilter && showFilter) ReviewFilter()
+                    actions()
+                }
+                if (!inlineFilter && showFilter) ReviewFilter()
+            }
+        }
+    }
+}
+
 @Composable private fun SessionMenuItem(
     label: String, symbol: Symbol, enabled: Boolean = true, reason: String? = null,
     destructive: Boolean = false, onClick: () -> Unit,
@@ -600,15 +644,15 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 Surface(
                     modifier = Modifier.width(212.dp).heightIn(max = minOf(360.dp, available))
                         .semantics { paneTitle = "Speech language" },
-                    shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shadowElevation = 8.dp,
+                    shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
                     Column(Modifier.verticalScroll(rememberScrollState()).padding(6.dp).selectableGroup()) {
                         Preferences.languages.forEach { (id, name) ->
                             val selected = id == language
                             Row(
                                 Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
-                                    .then(if (selected) Modifier.background(MaterialTheme.colorScheme.surfaceVariant) else Modifier)
+                                    .then(if (selected) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh) else Modifier)
                                     .then(if (selected) Modifier.bringIntoViewRequester(selectedRequester)
                                         .onGloballyPositioned { coordinates ->
                                             if (coordinates.isAttached && coordinates.size.width > 0 && coordinates.size.height > 0)

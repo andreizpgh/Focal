@@ -1,5 +1,52 @@
 # Product verification · 2026-11-04
 
+## UX Alpha 4 · 2026-11-04
+
+Clean `a3038fa104f0178599ac1642fd3c0e471f368742` passed the full local
+`qa-local.py --release-checks`: **95 Android tests, zero failures/skips**, including
+all eight required real-model checks, in **143.684 seconds**. Both lints and the
+debug/test/unsigned release/R8 builds passed in 4m10s; 36 unchanged core tests
+used cached results. [Exact APK identity](../releases/ux-alpha-4.json).
+
+This update fixes flush playback highlights, tall timestamp pressed states,
+repeated Review labels, separated header filters, heavy popup shadows and
+mismatched Save-label placement. The editor uses a filled surface with explicit
+focus/error states. The processing wave now changes bar heights visibly;
+it retains indeterminate semantics, lifecycle bounds and reduced-motion behavior.
+Plain filled/text [buttons](https://developer.android.com/develop/ui/compose/components/button)
+keep the two Save labels centered, and the moving status follows the
+[indeterminate-progress pattern](https://developer.android.com/develop/ui/compose/components/progress).
+
+The new motion regression failed on the installed Alpha 3, which only varied
+opacity, and the same installed test APK passed the candidate alongside four
+existing editor/playback/browsing regressions (5/0/0 in 10.684s). The final APK
+passed all 95 tests. Existing oversized-draft assertions were not weakened.
+The filter test now asserts the fixed header remains displayed while preserving
+its earlier scroll restoration checks; review copy expectations match the dots.
+
+Manual synthetic-note checks covered normal/200% font, true landscape with IME,
+scroll-to-save, persisted edits, light/dark, menus and playback. A settled frame
+confirmed the active line and caret above the keyboard; an earlier capture was
+during its transition. Sol/Terra handled focused changes; Astra independently
+reviewed source and actual screens. Artifact audit verifies the unchanged model,
+six native libraries, certificate continuity, 16KB ZIP alignment, and no Internet
+permission or fault helpers. Captures are in [interface preview](interface-preview.md).
+
+The first full-run attempt failed incremental release Kotlin resolution of
+existing functions. Recompiling Kotlin without incremental state passed on
+unchanged source, followed by the complete successful run. Its failed log remains
+private alongside the successful report `20261104T143143.240767Z`.
+
+This is a UI testing release. It does not establish seven-language STT improvement,
+noise suppression, local correction safety or Pixel 10 resource/background results.
+No model was downloaded and no recognition setting changed. Owner acceptance of
+the revised interface remains open.
+
+The [Alpha 4 testing release](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-4)
+is published with verified remote asset sizes and SHA-256 digests.
+[PR #5](https://github.com/andreizpgh/Focal/pull/5) carries the UI and delivery docs;
+full-history secret scanning found no leaks. Prior assets remain unchanged.
+
 ## UX Alpha 3 · 2026-11-04
 
 Clean `ed9d7cb8250eb8f7ad454fad47c5f70bf7b9a8de` passed the full local

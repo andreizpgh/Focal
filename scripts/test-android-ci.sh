@@ -42,7 +42,8 @@ if [[ $booted != true ]]; then report_boot_error; exit 1; fi
 "$ANDROID_HOME/platform-tools/adb" shell input keyevent 82
 "$ANDROID_HOME/platform-tools/adb" shell settings put global window_animation_scale 0
 "$ANDROID_HOME/platform-tools/adb" shell settings put global transition_animation_scale 0
-"$ANDROID_HOME/platform-tools/adb" shell settings put global animator_duration_scale 0
+# Keep in-content animation enabled: the processing indicator has a visual motion check.
+"$ANDROID_HOME/platform-tools/adb" shell settings put global animator_duration_scale 1
 # Bound individual test methods as well as the suite. A method timeout cannot
 # guarantee interruption of a stuck main-thread teardown, so retain the outer
 # limit and leave time to publish diagnostics. Either timeout fails the job.
