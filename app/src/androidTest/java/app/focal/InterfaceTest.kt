@@ -466,8 +466,9 @@ class InterfaceTest {
             compose.onNode(hasSetTextAction()).assertIsNotFocused().assertTextEquals(prefix + suffix)
 
             compose.onNode(hasSetTextAction()).performClick()
-            compose.onNode(hasSetTextAction()).performTextInputSelection(androidx.compose.ui.text.TextRange((prefix + suffix).length))
             waitForKeyboard(true)
+            compose.onNode(hasSetTextAction()).performTextInputSelection(androidx.compose.ui.text.TextRange((prefix + suffix).length))
+            assertSelectionAtEnd(prefix + suffix)
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
             waitForKeyboard(false)
             assertSelectionAtEnd(prefix + suffix)
