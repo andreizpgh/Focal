@@ -1,7 +1,7 @@
 package app.focal.ui
 
 import android.animation.ValueAnimator
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -30,6 +30,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import kotlin.math.min
+import kotlin.math.PI
+import kotlin.math.sin
 
 private val focusWaveHeights = floatArrayOf(7f, 12f, 19f, 30f, 40f, 30f, 19f, 12f, 7f)
 private val focusWaveAlphas = floatArrayOf(.18f, .3f, .5f, .75f, 1f, .75f, .5f, .3f, .18f)
@@ -40,11 +42,10 @@ internal fun DrawScope.drawFocusWave(
     bounds: Size = size,
     level: Float = 1f,
     minimumBarHeight: Float = 0f,
-    focusShift: Float = 0f,
+    processingPhase: Float? = null,
 ) {
     if (!bounds.width.isFinite() || !bounds.height.isFinite() || bounds.width <= 0f || bounds.height <= 0f) return
     val amplitude = if (level.isFinite()) level.coerceIn(0f, 1f) else 0f
-    val focus = if (focusShift.isFinite()) focusShift.coerceIn(-1f, 1f) else 0f
     // Match the source SVG's 54 × 42 viewBox, 3.2 stroke and 6.2 pitch.
     val scale = min(bounds.width / 54f, bounds.height / 42f)
     val startX = (bounds.width - 54f * scale) / 2f + .6f * scale
@@ -54,15 +55,13 @@ internal fun DrawScope.drawFocusWave(
     for (index in focusWaveHeights.indices) {
         val maximum = focusWaveHeights[index] * scale
         val resting = minimum.coerceAtMost(maximum)
-        val height = resting + (maximum - resting) * amplitude
+        val pulse = processingPhase?.takeIf { it.isFinite() }?.let {
+            .35f + .65f * ((sin(it * 2f * PI.toFloat() - index * .55f) + 1f) / 2f)
+        } ?: 1f
+        val height = resting + (maximum - resting) * amplitude * pulse
         if (height <= 0f) continue
-        val alpha = focusWaveAlphas[index] + when (index) {
-            3 -> .12f * focus
-            5 -> -.12f * focus
-            else -> 0f
-        }
         drawRoundRect(
-            color = color.copy(alpha = color.alpha * alpha),
+            color = color.copy(alpha = color.alpha * focusWaveAlphas[index]),
             topLeft = Offset(startX + index * 6.2f * scale, centerY - height / 2f),
             size = Size(barWidth, height),
             cornerRadius = CornerRadius(min(barWidth, height) / 2f),
@@ -80,13 +79,13 @@ internal fun DrawScope.drawFocusWave(
     val phase: State<Float> = if (animate) {
         val transition = rememberInfiniteTransition(label = "transcription focus")
         transition.animateFloat(
-            initialValue = -1f,
+            initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1400, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
+                animation = tween(1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
             ),
-            label = "focus shift",
+            label = "processing wave",
         )
     } else {
         remember { mutableFloatStateOf(0f) }
@@ -95,7 +94,7 @@ internal fun DrawScope.drawFocusWave(
         if (contentDescription != null) this.contentDescription = contentDescription
         progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
     }) {
-        // Read animation state only in drawing; positions and all bar heights stay fixed.
-        drawFocusWave(color, focusShift = phase.value)
+        // Draw-only animation keeps the surrounding text and layout still.
+        drawFocusWave(color, processingPhase = if (animate) phase.value else null)
     }
 }

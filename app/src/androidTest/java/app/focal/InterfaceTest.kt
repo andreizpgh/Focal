@@ -329,8 +329,7 @@ class InterfaceTest {
                 restoredPosition, .001f)
             assertEquals("Session moved within the library viewport after navigation and recreation", rowOffset,
                 restoredOffset, 1f)
-            list.performScrollToNode(hasText("Show all"))
-            reviewFilter("Show all").assertIsSelected()
+            reviewFilter("Show all").assertIsDisplayed().assertIsSelected()
         } finally { ids.forEach(app.store::delete) }
     }
 
@@ -863,7 +862,7 @@ class InterfaceTest {
         val app = application()
         val store = app.store
         val id = readySession(store, "Sample note", listOf("Это тестовая запись."), language = "ru", uncertain = setOf(0))
-        val reviewHint = "Flags are review hints. You can check and edit any passage."
+        val reviewHint = "Dots mark recognizer hints. You can check and edit any passage."
         try {
             waitForTitle("Sample note")
             compose.onNodeWithText("Sample note").performClick()

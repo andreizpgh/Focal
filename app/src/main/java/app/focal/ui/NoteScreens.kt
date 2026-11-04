@@ -69,6 +69,9 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
     Glyph(Symbol.Logo, Modifier.size(size.dp), MaterialTheme.colorScheme.onSurface)
 }
 
+internal fun sessionNeedsAttention(note: Note): Boolean =
+    note.reviewCount > 0 || note.state == "ERROR" || note.state == "INTERRUPTED"
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable internal fun LibraryScreen(
     notes: List<Note>, loaded: Boolean, live: LiveSession, open: (String?) -> Unit,
@@ -90,10 +93,8 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
     var inputRequestIssued by remember(inputActive) { mutableStateOf(false) }
     val query = searchValue.text
     var viewportHeight by remember { mutableIntStateOf(0) }
-    fun needsAttention(note: Note) = note.reviewCount > 0 || note.state in listOf("ERROR", "INTERRUPTED")
-    val attentionCount = notes.count(::needsAttention)
     // Text search is supplied by the store, including passages outside the preview.
-    val visible = notes.filter { !attentionOnly || needsAttention(it) }.sortedByDescending { it.created }
+    val visible = notes.filter { !attentionOnly || sessionNeedsAttention(it) }.sortedByDescending { it.created }
     val today = LocalDate.now()
     val groups = visible.groupBy { sessionDay(it.created) }
     fun dismissSearchInput() {
@@ -115,19 +116,8 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
         state = listState,
         contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp),
     ) {
-        if (attentionCount > 0 || attentionOnly || searchOpen || query.isNotBlank()) item {
+        if (searchOpen || query.isNotBlank()) item {
             Column {
-                if (attentionCount > 0 || attentionOnly) Row(
-                    Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    FilterChip(
-                        selected = attentionOnly,
-                        onClick = { setAttentionOnly(!attentionOnly) },
-                        label = { Text(if (attentionOnly) "Show all" else "$attentionCount to review", style = MaterialTheme.typography.labelMedium) },
-                        colors = focalChipColors(),
-                        shape = RoundedCornerShape(50),
-                    )
-                }
                 AnimatedVisibility(searchOpen) {
                     val requester = remember { FocusRequester() }
                     val visibilityRequester = remember { BringIntoViewRequester() }
@@ -199,7 +189,7 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
             }
         }
         groups.forEach { (day, sessions) ->
-            item(key = "day:$day") { SessionDayHeader(dayLabel(day, today)) }
+            item(key = "day:$day") { SessionDayHeader(dayLabel(day, today), first = day == groups.keys.first()) }
             items(sessions, key = { it.id }) { note ->
                 SessionRow(note, live) { dismissSearchInput(); open(note.id) }
             }
@@ -207,10 +197,12 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
     }
 }
 
-@Composable private fun SessionDayHeader(label: String) {
+@Composable private fun SessionDayHeader(label: String, first: Boolean) {
     val line = MaterialTheme.colorScheme.outlineVariant
     val dot = MaterialTheme.colorScheme.onSurface
-    Row(Modifier.fillMaxWidth().padding(top = 18.dp).heightIn(min = 34.dp).height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(top = if (first) 6.dp else 18.dp).heightIn(min = 34.dp).height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Canvas(Modifier.width(24.dp).fillMaxHeight()) {
             val x = 4.dp.toPx()
             drawLine(line, Offset(x, size.height / 2), Offset(x, size.height), 1.dp.toPx())
@@ -270,28 +262,49 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
     val review = library.passages.count { it.uncertain && !it.reviewed }
     val canRetryTranscription = library.pending > 0 || note.mayNeedRecovery
     val passages = if (reviewOnly) library.passages.filter { it.uncertain && !it.reviewed } else library.passages
+    val fontScale = LocalDensity.current.fontScale
+    @Composable fun ReviewFilter() {
+        FilterChip(
+            selected = reviewOnly, onClick = toggleReview, shape = CircleShape, colors = focalChipColors(),
+            leadingIcon = { Box(Modifier.size(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant)) },
+            label = { Text(if (reviewOnly) "Show all" else "$review to review", style = MaterialTheme.typography.labelMedium) },
+        )
+    }
+    @Composable fun Metadata(modifier: Modifier = Modifier) {
+        Text(
+            "${dayLabel(sessionDay(note.created), LocalDate.now())}, ${sessionTime(note.created)}" +
+                (if (live == null) " · ${Transcript.time(note.duration)}" else "") +
+                " · ${Preferences.languages[note.language] ?: note.language}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = modifier,
+        )
+    }
     val activePassage = playbackPosition?.let { position ->
         library.passages.lastOrNull { position >= it.start && position < it.end }?.id
     }
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 0.dp, bottom = 24.dp),
     ) {
         item {
-            Column(Modifier.padding(top = 8.dp, bottom = if (live == null) 22.dp else 12.dp)) {
+            Column(Modifier.padding(top = 0.dp, bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
                     Text(
                         if (note.title == "Untitled note" && live != null) "New recording" else note.title,
                         style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f).semantics { heading() },
                     )
                 }
-                Text(
-                    "${dayLabel(sessionDay(note.created), LocalDate.now())}, ${sessionTime(note.created)}" +
-                        (if (live == null) " · ${Transcript.time(note.duration)}" else "") +
-                        " · ${Preferences.languages[note.language] ?: note.language}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp),
-                )
+                BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                    if ((review > 0 || reviewOnly) && maxWidth >= 330.dp && fontScale < 1.3f) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Metadata(Modifier.weight(1f))
+                            ReviewFilter()
+                        }
+                    } else Column {
+                        Metadata()
+                        if (review > 0 || reviewOnly) ReviewFilter()
+                    }
+                }
                 if (live == null && library.audioBytes == 0L && library.passages.isNotEmpty()) Text(
                     "Text only", style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 5.dp),
@@ -314,18 +327,12 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             }
         }
-        if (review > 0 || reviewOnly) item {
-            Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                FilterChip(
-                    selected = reviewOnly, onClick = toggleReview, shape = RoundedCornerShape(50), colors = focalChipColors(),
-                    modifier = Modifier.align(Alignment.End),
-                    label = { Text(if (reviewOnly) "Show all" else "$review to review", style = MaterialTheme.typography.labelMedium) },
-                )
-                if (reviewOnly) Text(
-                    "Flags are review hints. You can check and edit any passage.",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        if (reviewOnly) item {
+            Text(
+                "Dots mark recognizer hints. You can check and edit any passage.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
         }
         if (passages.isEmpty() && (live == null || reviewOnly)) item {
             Text(
@@ -388,47 +395,54 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
     val flagged = passage.uncertain && !passage.reviewed
     val timestamp = Transcript.time(passage.start)
     val fontScale = LocalDensity.current.fontScale
-    val line = MaterialTheme.colorScheme.outlineVariant
     val ink = MaterialTheme.colorScheme.onSurface
     @Composable fun TimeLabel(modifier: Modifier) {
         Column(
-            modifier.then(if (audioAvailable) Modifier.clickable(role = Role.Button, onClick = seek) else Modifier)
-                .semantics { contentDescription = if (audioAvailable) "Listen from $timestamp" else "Passage at $timestamp" }
-                .padding(top = 5.dp, end = 12.dp, bottom = 14.dp),
+            modifier.clip(RoundedCornerShape(12.dp))
+                .then(if (audioAvailable) Modifier.clickable(role = Role.Button, onClick = seek) else Modifier)
+                .semantics {
+                    contentDescription = if (audioAvailable) "Listen from $timestamp" else "Passage at $timestamp"
+                    if (flagged) stateDescription = "Flagged for review"
+                }
+                .padding(horizontal = 4.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(timestamp, style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace,
                 color = if (active) ink else MaterialTheme.colorScheme.onSurfaceVariant)
-            if (flagged) Text("Review", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+            if (flagged) Box(Modifier.size(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant))
         }
     }
     @Composable fun PassageText(modifier: Modifier) {
-        if (!fitsPassageDraftBudget(passage.text)) {
-            Column(modifier.clickable(role = Role.Button, onClickLabel = "Open full passage at $timestamp", onClick = edit)
-                .semantics { if (active) stateDescription = "Current audio passage" }.padding(top = 1.dp, bottom = 26.dp)) {
-                Text(passageTextPart(passage.text, 0, 512), style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 6, overflow = TextOverflow.Ellipsis)
-                Text("Open full passage", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
-            }
-            return
+        val oversized = !fitsPassageDraftBudget(passage.text)
+        Column(modifier.clip(RoundedCornerShape(12.dp))
+            .background(if (active) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "${if (oversized) "Open full passage" else if (flagged) "Review passage" else "Edit passage"} at $timestamp",
+                onClick = edit,
+            ).semantics {
+                if (active || flagged) stateDescription = listOfNotNull(
+                    "Current audio passage".takeIf { active },
+                    "Flagged for review".takeIf { flagged },
+                ).joinToString(", ")
+            }.padding(12.dp)) {
+            Text(
+                if (oversized) passageTextPart(passage.text, 0, 512) else passage.text.ifBlank { "Unclear speech" },
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = if (oversized) 6 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis,
+            )
+            if (oversized) Text("Open full passage", style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(top = 8.dp))
         }
-        Text(passage.text.ifBlank { "Unclear speech" }, style = MaterialTheme.typography.bodyLarge,
-            modifier = modifier.clickable(
-                role = Role.Button, onClickLabel = "${if (flagged) "Review passage" else "Edit passage"} at $timestamp", onClick = edit,
-            ).semantics { if (active) stateDescription = "Current audio passage" }
-                .padding(top = 1.dp, bottom = 26.dp))
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-        .background(if (active) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)) {
-        if (fontScale >= 1.4f || maxWidth < 300.dp) Column(Modifier.fillMaxWidth()) {
-            TimeLabel(Modifier.heightIn(min = 48.dp))
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+        if (fontScale >= 1.4f || maxWidth < 260.dp) Column(Modifier.fillMaxWidth()) {
+            TimeLabel(Modifier.heightIn(min = 48.dp).widthIn(min = 56.dp))
             PassageText(Modifier.fillMaxWidth())
-        } else Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            TimeLabel(Modifier.width(if (timestamp.length > 5) 80.dp else 64.dp).heightIn(min = 48.dp).fillMaxHeight())
-            Canvas(Modifier.width(1.dp).fillMaxHeight()) {
-                drawLine(line, Offset.Zero, Offset(0f, size.height), 1.dp.toPx())
-            }
-            PassageText(Modifier.weight(1f).padding(start = 12.dp, end = 4.dp))
+        } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TimeLabel(Modifier.width(if (timestamp.length > 5) 76.dp else 56.dp).heightIn(min = 48.dp))
+            PassageText(Modifier.weight(1f))
         }
     }
 }

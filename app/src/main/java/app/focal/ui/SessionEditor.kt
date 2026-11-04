@@ -3,11 +3,13 @@ package app.focal.ui
 import android.os.Build
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -19,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -130,8 +134,17 @@ import kotlinx.coroutines.launch
             } else Text(audioUnavailableReason, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 14.dp))
             Spacer(Modifier.height(12.dp))
+            Text("Transcript", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
             key(passage.id) {
-                OutlinedTextField(
+                var focused by remember { mutableStateOf(false) }
+                val shape = RoundedCornerShape(16.dp)
+                val borderColor = when {
+                    inputTooLarge -> MaterialTheme.colorScheme.error
+                    focused -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.outlineVariant
+                }
+                TextField(
                     text, {
                         // The input connection can replay the accepted value on
                         // focus loss/recreation after a rejected edit. Only a
@@ -141,13 +154,20 @@ import kotlinx.coroutines.launch
                             if (!inputTooLarge) { text = it; onDirtyChange(it != passage.text) }
                         }
                     }, enabled = !saving,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 144.dp, max = 320.dp), minLines = 3,
-                    textStyle = MaterialTheme.typography.bodyLarge, shape = RoundedCornerShape(16.dp), label = { Text("Transcript") },
-                    colors = OutlinedTextFieldDefaults.colors(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 144.dp, max = 320.dp)
+                        .border(if (focused || inputTooLarge) 2.dp else 1.dp, borderColor, shape)
+                        .onFocusChanged { focused = it.isFocused }
+                        .semantics { contentDescription = "Transcript" }, minLines = 3,
+                    textStyle = MaterialTheme.typography.bodyLarge, shape = shape,
+                    colors = TextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         errorContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                        errorIndicatorColor = Color.Transparent,
                     ),
                     isError = inputTooLarge,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
@@ -181,9 +201,14 @@ import kotlinx.coroutines.launch
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Assertive },
             )
-            PrimaryButton(if (saving) "Saving…" else if (canAdvance) "Save & next" else "Save changes", Symbol.Check, !saving) { commit(canAdvance) }
+            Button(onClick = { commit(canAdvance) }, enabled = !saving, shape = CircleShape,
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
+                Text(if (saving) "Saving…" else if (canAdvance) "Save & next" else "Save changes",
+                    style = MaterialTheme.typography.labelLarge)
+            }
             if (canAdvance) TextButton(onClick = { commit(false) }, enabled = !saving, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text("Save & close")
+                Text("Save & close", style = MaterialTheme.typography.labelLarge)
             }
         }
     }
