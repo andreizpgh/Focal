@@ -12,22 +12,40 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
@@ -38,6 +56,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
@@ -56,6 +75,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private sealed interface Destination {
     data object Sessions : Destination
@@ -303,31 +323,43 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                                 var menu by remember(selected) { mutableStateOf(false) }
                                 Box {
                                     IconAction(Symbol.More, "Session options") { menu = true }
-                                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                        DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; dialog = "rename" })
-                                        DropdownMenuItem(text = { Text("Share text") }, enabled = transcript.isNotBlank() && library.error == null, onClick = {
+                                    DropdownMenu(
+                                        expanded = menu, onDismissRequest = { menu = false },
+                                        modifier = Modifier.width(228.dp),
+                                        shape = RoundedCornerShape(22.dp), containerColor = MaterialTheme.colorScheme.surface,
+                                        tonalElevation = 0.dp, shadowElevation = 8.dp,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                    ) {
+                                        SessionMenuItem("Rename", Symbol.Edit) { menu = false; dialog = "rename" }
+                                        SessionMenuItem(
+                                            "Share text", Symbol.Share,
+                                            enabled = transcript.isNotBlank() && library.error == null,
+                                            reason = when {
+                                                library.error != null -> "Reload this session"
+                                                transcript.isBlank() -> "No text to share"
+                                                else -> null
+                                            },
+                                        ) {
                                             menu = false
                                             shareTranscript()
-                                        })
-                                        DropdownMenuItem(text = {
-                                            Column {
-                                                Text("Remove audio")
-                                                val reason = when {
-                                                    active -> if (live.processing) "Transcription is running" else "Recording is active"
-                                                    hasUnprocessedAudio -> "Transcription is unfinished"
-                                                    library.audioBytes == 0L -> "No original audio"
-                                                    else -> null
-                                                }
-                                                if (reason != null) Text(reason, style = MaterialTheme.typography.labelMedium)
-                                            }
-                                        }, enabled = canRemoveAudio,
-                                            onClick = { menu = false; dialog = "audio" })
-                                        DropdownMenuItem(text = {
-                                            Column {
-                                                Text("Delete session", color = MaterialTheme.colorScheme.error)
-                                                if (active) Text(if (live.processing) "Transcription is running" else "Recording is active", style = MaterialTheme.typography.labelMedium)
-                                            }
-                                        }, enabled = !active, onClick = { menu = false; dialog = "delete" })
+                                        }
+                                        val activeReason = if (active) {
+                                            if (live.processing) "Transcription is running" else "Recording is active"
+                                        } else null
+                                        SessionMenuItem(
+                                            "Remove audio", Symbol.Audio, enabled = canRemoveAudio,
+                                            reason = activeReason ?: when {
+                                                hasUnprocessedAudio -> "Transcription is unfinished"
+                                                library.audioBytes == 0L -> "No original audio"
+                                                library.error != null -> "Reload this session"
+                                                else -> null
+                                            },
+                                        ) { menu = false; dialog = "audio" }
+                                        HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant)
+                                        SessionMenuItem(
+                                            "Delete session", Symbol.Trash, enabled = !active, reason = activeReason, destructive = true,
+                                        ) { menu = false; dialog = "delete" }
                                     }
                                 }
                             }
@@ -366,8 +398,9 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                                 ) { open(live.noteId) }
                                 destination == Destination.Sessions -> {
                                     LibraryCaptureDock(
-                                        Preferences.languages[settings.language].orEmpty(), library.loaded && library.error == null,
-                                        chooseLanguage = { dismissInput(); dialog = "language" }, record = ::start,
+                                        settings.language, library.loaded && library.error == null,
+                                        selectLanguage = model.app.preferences::language,
+                                        dismissInput = ::dismissInput, record = ::start,
                                     )
                                 }
                             }
@@ -407,7 +440,6 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 }
             }
         }
-        if (dialog == "language") LanguageDialog(settings.language, model.app.preferences::language) { dialog = null }
         if (dialog == "model") AlertDialog(
             onDismissRequest = { dialog = null; modelRetryId = null }, title = { Text("Speech model") },
             text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
@@ -472,17 +504,34 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
 }
 
-@Composable private fun LibraryCaptureDock(language: String, loaded: Boolean, chooseLanguage: () -> Unit, record: () -> Unit) {
+@Composable private fun SessionMenuItem(
+    label: String, symbol: Symbol, enabled: Boolean = true, reason: String? = null,
+    destructive: Boolean = false, onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = {
+            Column {
+                val color = if (destructive && enabled) MaterialTheme.colorScheme.error else LocalContentColor.current
+                Text(label, style = MaterialTheme.typography.bodyLarge, color = color)
+                if (reason != null) Text(reason, style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
+            }
+        },
+        leadingIcon = {
+            val color = if (destructive && enabled) MaterialTheme.colorScheme.error else LocalContentColor.current
+            Glyph(symbol, Modifier.size(19.dp), color)
+        },
+        enabled = enabled, onClick = onClick, modifier = Modifier.heightIn(min = 48.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
+    )
+}
+
+@Composable private fun LibraryCaptureDock(
+    language: String, loaded: Boolean, selectLanguage: (String) -> Unit, dismissInput: () -> Unit, record: () -> Unit,
+) {
     val fontScale = LocalDensity.current.fontScale
-    @Composable fun LanguageAction() {
-        TextButton(onClick = chooseLanguage, modifier = Modifier.heightIn(min = 52.dp)
-            .semantics { contentDescription = "Speech language: $language" }) {
-            Text(language, style = MaterialTheme.typography.labelLarge)
-            Glyph(Symbol.Chevron, Modifier.padding(start = 6.dp).size(12.dp).rotate(90f))
-        }
-    }
     @Composable fun RecordAction(modifier: Modifier) {
-        Button(onClick = record, enabled = loaded, shape = androidx.compose.foundation.shape.CircleShape,
+        Button(onClick = record, enabled = loaded, shape = CircleShape,
             modifier = modifier.heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)) {
             Glyph(Symbol.Record, Modifier.size(16.dp), if (loaded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
             Text("Record", Modifier.padding(start = 10.dp), style = MaterialTheme.typography.labelLarge)
@@ -490,12 +539,105 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         if (fontScale >= 1.5f || maxWidth < 280.dp) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            LanguageAction()
+            CaptureLanguagePicker(language, selectLanguage, dismissInput)
             RecordAction(Modifier.fillMaxWidth())
         } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            LanguageAction()
+            CaptureLanguagePicker(language, selectLanguage, dismissInput)
             RecordAction(Modifier.weight(1f))
         }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable private fun CaptureLanguagePicker(language: String, select: (String) -> Unit, dismissInput: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    var anchorTop by remember { mutableIntStateOf(0) }
+    val label = Preferences.languages.getValue(language)
+    val density = LocalDensity.current
+    val direction = LocalLayoutDirection.current
+    val insets = WindowInsets.safeDrawing
+    val gap = with(density) { 8.dp.roundToPx() }
+    val top = insets.getTop(density) + gap
+    val left = insets.getLeft(density, direction) + gap
+    val right = insets.getRight(density, direction) + gap
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    Box(Modifier.onGloballyPositioned { anchorTop = it.boundsInWindow().top.roundToInt() }) {
+        OutlinedButton(
+            onClick = { dismissInput(); expanded = true },
+            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Speech language: $label" },
+            shape = CircleShape, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+            contentPadding = PaddingValues(horizontal = 13.dp, vertical = 8.dp),
+        ) {
+            LanguageGlobe()
+            Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp))
+            Glyph(Symbol.Chevron, Modifier.size(13.dp).rotate(if (expanded) 90f else -90f), color)
+        }
+        if (expanded) {
+            val position = remember(top, left, right, gap) {
+                object : PopupPositionProvider {
+                    override fun calculatePosition(
+                        anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize,
+                    ): IntOffset {
+                        val start = if (layoutDirection == LayoutDirection.Ltr) anchorBounds.left else anchorBounds.right - popupContentSize.width
+                        val end = (windowSize.width - right - popupContentSize.width).coerceAtLeast(left)
+                        return IntOffset(start.coerceIn(left, end),
+                            (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(top))
+                    }
+                }
+            }
+            val available = with(density) { (anchorTop - top - gap).coerceAtLeast(1).toDp() }
+            Popup(popupPositionProvider = position, onDismissRequest = { expanded = false },
+                properties = PopupProperties(focusable = true)) {
+                val selectedRequester = remember(language) { BringIntoViewRequester() }
+                var selectedLaidOut by remember(language) { mutableStateOf(false) }
+                LaunchedEffect(language, selectedLaidOut, available) {
+                    if (selectedLaidOut) {
+                        withFrameNanos { }
+                        selectedRequester.bringIntoView()
+                    }
+                }
+                Surface(
+                    modifier = Modifier.width(212.dp).heightIn(max = minOf(360.dp, available))
+                        .semantics { paneTitle = "Speech language" },
+                    shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shadowElevation = 8.dp,
+                ) {
+                    Column(Modifier.verticalScroll(rememberScrollState()).padding(6.dp).selectableGroup()) {
+                        Preferences.languages.forEach { (id, name) ->
+                            val selected = id == language
+                            Row(
+                                Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
+                                    .then(if (selected) Modifier.background(MaterialTheme.colorScheme.surfaceVariant) else Modifier)
+                                    .then(if (selected) Modifier.bringIntoViewRequester(selectedRequester)
+                                        .onGloballyPositioned { coordinates ->
+                                            if (coordinates.isAttached && coordinates.size.width > 0 && coordinates.size.height > 0)
+                                                selectedLaidOut = true
+                                        } else Modifier)
+                                    .selectable(selected, role = Role.RadioButton, onClick = { select(id); expanded = false })
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                if (selected) Glyph(Symbol.Check, Modifier.size(17.dp), color)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun LanguageGlobe() {
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    Canvas(Modifier.size(16.dp)) {
+        val stroke = 1.25.dp.toPx()
+        val radius = size.minDimension / 2 - stroke / 2
+        drawCircle(color, radius = radius, style = Stroke(stroke))
+        drawOval(color, Offset(center.x - radius * .43f, center.y - radius),
+            Size(radius * .86f, radius * 2), style = Stroke(stroke))
+        drawLine(color, Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), stroke)
     }
 }
 
@@ -506,12 +648,8 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     var scrub by remember(noteId) { mutableStateOf<Float?>(null) }
     val position = (scrub?.toLong() ?: current?.positionMs ?: 0).coerceIn(0, duration)
     val fontScale = LocalDensity.current.fontScale
-    val interaction = remember { MutableInteractionSource() }
-    val sliderColors = SliderDefaults.colors(
-        thumbColor = MaterialTheme.colorScheme.onSurface,
-        activeTrackColor = MaterialTheme.colorScheme.onSurface,
-        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant,
-    )
+    val fill = MaterialTheme.colorScheme.onSurface
+    val track = MaterialTheme.colorScheme.outline
     BoxWithConstraints(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
         val compact = fontScale >= 1.5f || maxWidth < 280.dp
         Column {
@@ -525,18 +663,22 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 }
                 Slider(value = position.toFloat(),
                     onValueChange = { scrub = it }, onValueChangeFinished = { scrub?.let { seek(it.toLong()) }; scrub = null },
-                    colors = sliderColors, interactionSource = interaction,
                     thumb = {
-                        SliderDefaults.Thumb(
-                            interactionSource = interaction, colors = sliderColors,
-                            modifier = Modifier.size(12.dp), thumbSize = DpSize(12.dp, 12.dp),
-                        )
+                        Canvas(Modifier.size(16.dp)) { drawCircle(fill) }
                     },
-                    track = { state ->
-                        SliderDefaults.Track(
-                            sliderState = state, modifier = Modifier.height(3.dp), colors = sliderColors,
-                            drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 1.5.dp,
-                        )
+                    track = {
+                        Canvas(Modifier.fillMaxWidth().height(3.dp)) {
+                            val radius = CornerRadius(size.height / 2)
+                            val filledWidth = size.width * (position.toFloat() / duration)
+                            drawRoundRect(track, cornerRadius = radius)
+                            if (filledWidth > 0f) {
+                                val rtl = layoutDirection == LayoutDirection.Rtl
+                                clipRect(left = if (rtl) size.width - filledWidth else 0f,
+                                    right = if (rtl) size.width else filledWidth) {
+                                    drawRoundRect(fill, cornerRadius = radius)
+                                }
+                            }
+                        }
                     },
                     valueRange = 0f..duration.toFloat(), modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics {
                         contentDescription = "Audio position"

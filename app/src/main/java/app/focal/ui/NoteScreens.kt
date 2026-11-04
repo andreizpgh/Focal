@@ -315,16 +315,21 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
             }
         }
         if (review > 0 || reviewOnly) item {
-            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.End) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 FilterChip(
                     selected = reviewOnly, onClick = toggleReview, shape = RoundedCornerShape(50), colors = focalChipColors(),
+                    modifier = Modifier.align(Alignment.End),
                     label = { Text(if (reviewOnly) "Show all" else "$review to review", style = MaterialTheme.typography.labelMedium) },
+                )
+                if (reviewOnly) Text(
+                    "Flags are review hints. You can check and edit any passage.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
         if (passages.isEmpty() && (live == null || reviewOnly)) item {
             Text(
-                if (reviewOnly) "All checked." else "No speech transcribed.",
+                if (reviewOnly) "No flagged passages." else "No speech transcribed.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 24.dp),
             )
@@ -389,12 +394,12 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
         Column(
             modifier.then(if (audioAvailable) Modifier.clickable(role = Role.Button, onClick = seek) else Modifier)
                 .semantics { contentDescription = if (audioAvailable) "Listen from $timestamp" else "Passage at $timestamp" }
-                .padding(top = 5.dp, bottom = 14.dp),
+                .padding(top = 5.dp, end = 12.dp, bottom = 14.dp),
         ) {
             Text(timestamp, style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace,
                 color = if (active) ink else MaterialTheme.colorScheme.onSurfaceVariant)
             if (flagged) Text("Review", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 5.dp))
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
         }
     }
     @Composable fun PassageText(modifier: Modifier) {
@@ -413,17 +418,17 @@ internal const val SEARCH_QUERY_MAX_CHARS = 200
             ).semantics { if (active) stateDescription = "Current audio passage" }
                 .padding(top = 1.dp, bottom = 26.dp))
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp))
+    BoxWithConstraints(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
         .background(if (active) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)) {
         if (fontScale >= 1.4f || maxWidth < 300.dp) Column(Modifier.fillMaxWidth()) {
             TimeLabel(Modifier.heightIn(min = 48.dp))
             PassageText(Modifier.fillMaxWidth())
         } else Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            TimeLabel(Modifier.width(if (timestamp.length > 5) 64.dp else 48.dp).fillMaxHeight())
+            TimeLabel(Modifier.width(if (timestamp.length > 5) 80.dp else 64.dp).heightIn(min = 48.dp).fillMaxHeight())
             Canvas(Modifier.width(1.dp).fillMaxHeight()) {
                 drawLine(line, Offset.Zero, Offset(0f, size.height), 1.dp.toPx())
             }
-            PassageText(Modifier.weight(1f).padding(start = 15.dp))
+            PassageText(Modifier.weight(1f).padding(start = 12.dp, end = 4.dp))
         }
     }
 }

@@ -1,5 +1,6 @@
 package app.focal.ui
 
+import android.os.Build
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
@@ -18,10 +19,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -33,11 +37,30 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import app.focal.core.Transcript
 import app.focal.data.Note
 import app.focal.data.Passage
 import app.focal.data.fitsPassageDraftBudget
 import kotlinx.coroutines.launch
+
+@Suppress("DEPRECATION")
+@Composable private fun DialogSystemBars() {
+    val view = LocalView.current
+    val background = MaterialTheme.colorScheme.background
+    val light = background.luminance() > .5f
+    SideEffect {
+        val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = background.toArgb()
+        if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = light
+            isAppearanceLightNavigationBars = light
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable internal fun EditSheet(
@@ -91,7 +114,8 @@ import kotlinx.coroutines.launch
         onDismissRequest = ::requestClose, sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.background,
     ) {
-        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(scroll).padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
+        DialogSystemBars()
+        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(scroll).padding(horizontal = 24.dp).padding(bottom = 8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (needsReview) "Review passage" else "Edit passage", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f).semantics { heading() })
                 IconButton(onClick = ::requestClose, enabled = !saving,
@@ -99,11 +123,13 @@ import kotlinx.coroutines.launch
             }
             Text("${Transcript.time(passage.start)}–${Transcript.time(passage.end)}", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
-            if (audio) TextButton(onClick = play, contentPadding = PaddingValues(vertical = 12.dp)) {
-                Glyph(if (playing) Symbol.Pause else Symbol.Play, Modifier.size(17.dp))
+            if (audio) FilledTonalButton(onClick = play, modifier = Modifier.heightIn(min = 48.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
+                Glyph(if (playing) Symbol.Pause else Symbol.Play, Modifier.size(17.dp), MaterialTheme.colorScheme.onSecondaryContainer)
                 Text(if (playing) "Pause playback" else "Listen to this part", modifier = Modifier.padding(start = 10.dp))
             } else Text(audioUnavailableReason, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 14.dp))
+            Spacer(Modifier.height(12.dp))
             key(passage.id) {
                 OutlinedTextField(
                     text, {
@@ -116,7 +142,13 @@ import kotlinx.coroutines.launch
                         }
                     }, enabled = !saving,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 144.dp, max = 320.dp), minLines = 3,
-                    textStyle = MaterialTheme.typography.bodyLarge, shape = RoundedCornerShape(8.dp), label = { Text("Transcript") },
+                    textStyle = MaterialTheme.typography.bodyLarge, shape = RoundedCornerShape(16.dp), label = { Text("Transcript") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        errorContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
                     isError = inputTooLarge,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 )
@@ -192,6 +224,7 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
     val text = remember(passage.text, index) { passageTextPart(passage.text, index) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = dismiss, sheetState = sheetState, containerColor = MaterialTheme.colorScheme.background) {
+        DialogSystemBars()
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Saved passage", style = MaterialTheme.typography.headlineMedium,
@@ -259,6 +292,7 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
         onDismissRequest = ::requestClose,
         properties = DialogProperties(decorFitsSystemWindows = false),
     ) {
+        DialogSystemBars()
         Surface(
             modifier = Modifier.widthIn(max = 560.dp).systemBarsPadding().imePadding().padding(horizontal = 20.dp, vertical = 16.dp),
             shape = AlertDialogDefaults.shape, color = AlertDialogDefaults.containerColor,

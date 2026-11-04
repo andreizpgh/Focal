@@ -1,5 +1,54 @@
 # Product verification · 2026-11-04
 
+## UX Alpha 3 · 2026-11-04
+
+Clean `ed9d7cb8250eb8f7ad454fad47c5f70bf7b9a8de` passed the full local
+`qa-local.py --release-checks` cycle: **94 Android tests, zero failures/skips**,
+including all eight required real-model checks, in **149.326 seconds**.
+Gradle reported a five-minute build with debug/release lint, debug/test and
+unsigned release/R8 builds; 36 unchanged core tests used cached results.
+The exact [development-signed APK](../releases/ux-alpha-3.json) is version
+`0.1.0-alpha.3` / code 3. Its certificate matches Alpha 2. The unsigned release
+build is a separate build check, not the instrumented or published artifact.
+
+The UI updates the upward language popup, rounded session actions, timestamp
+spacing, passage-editor padding and playback thumb. A new regression checks the
+selected last language at 200% font. Review hints now explicitly allow checking
+any passage; “No flagged passages” no longer implies an error-free transcript.
+Recognition thresholds and decoder settings are unchanged.
+
+Manual dark-theme observation found that the editor's separate window kept
+light system bars. A new test failed on candidate `abd18287…e5c36b` at the dark
+status-bar flag. The same test APK passed on `d2efdb6a…eda17`, together with three
+editor/rotation regressions: **4/0/0 in 11.455 s**. The final dark-editor capture
+confirms the navigation background also changed. Earlier focused UI/validator
+checks passed **9/0/0 in 16.322 s** before this final color-only window fix.
+Original oversized-editor assertions were retained.
+
+Manual synthetic-note checks covered light/dark, language/menu placement,
+playback, seeks 20 dp above/below the track and 200% landscape editing with the
+IME. Save controls remained reachable by scrolling and the edit persisted.
+Captures made before the dialog fix are recorded separately from the final APK.
+Host audio was disabled. These checks establish neither audible playback nor
+Pixel 10 background, microphone, thermal, battery or ARM latency behavior.
+Sol/Terra cross-reviewed implementation, Astra reviewed the critical changes and
+screens, and Terra independently checked the final full-QA/APK/model/signature
+chain. Native libraries match Alpha 2; model hashes, 16 KB ZIP alignment and
+absence of Internet permission, Silero and fault-test code were verified.
+
+The [validator comparison](benchmarks/2026-11-03-local/validator-preflight-results.json)
+measured host preflight only: first-call median 176.52→70.33 ms, later calls
+125.65→9.48 ms with a warm OS file cache. It is not ASR decoding or phone speed.
+The [six-pair glossary screen](benchmarks/2026-11-03-local/mixed-term-hint-results.json)
+failed and is not shipped. Local Qwen correction is a separate, unintegrated
+research candidate; all seven-language quality/noise and phone gates remain open.
+The owner raised the cumulative download ceiling to 5 GB; the
+[ledger](benchmarks/2026-11-03-stt/download-budget.json) retains every prior
+reservation and one new verified 396.7 MB Qwen download. The 42 fresh held-out
+clips remain unopened.
+
+## Earlier delivery checkpoints
+
 The Sessions / Focus wave direction is preserved. Source `fe70758` is published
 as [UX Alpha 2](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-2), version
 `0.1.0-alpha.2` / code 2, for interface feedback before physical-phone validation.

@@ -1,11 +1,23 @@
 # Interface preview
 
-Native Android captures from 2026-11-02, using synthetic sample notes on an
-Android 10 emulator at approximately 390 × 846 dp. They show the Sessions / Focus
-wave design; some controls have changed since these captures. The recording
-capture uses a synthetic session state to exercise layout, not microphone capture
-or recognition quality. For the current testing build, download
-[UX Alpha 2](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-2).
+## UX Alpha 3 · 2026-11-04
+
+Actual captures of the verified `0.1.0-alpha.3` APK on the dedicated Android 15
+emulator, 411 × 891 dp. All notes are synthetic UI fixtures; these images do not
+represent recognition accuracy. The owner's feedback screenshots are private.
+[Download Alpha 3](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-3) ·
+[Build and QA identity](../releases/ux-alpha-3.json)
+
+| Speech language | Session actions | Passage editor · dark |
+| --- | --- | --- |
+| ![Languages open above the lower-left button](screenshots/ux-alpha-3-languages.png) | ![Rounded session actions with separated deletion](screenshots/ux-alpha-3-actions.png) | ![Dark editor with padded playback control and matching system bars](screenshots/ux-alpha-3-editor-dark.png) |
+
+## Earlier Sessions / Focus wave captures
+
+The following native Android captures are from 2026-11-02 on Android 10 at
+approximately 390 × 846 dp. Some controls have since changed. The recording
+capture uses synthetic session state to exercise layout, not actual capture
+or recognition quality.
 
 | Sessions · light | Sessions · dark |
 | --- | --- |

@@ -3,13 +3,13 @@
   <h1>Focal</h1>
   <p>Offline voice notes for Android. Record, review, and copy.</p>
   <p>
-    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/ux-alpha-2/Focal.apk">Download UX Alpha 2</a></strong>
+    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/ux-alpha-3/Focal.apk">Download UX Alpha 3</a></strong>
     &nbsp; · &nbsp;
     <a href="docs/install.md">Install guide</a>
     &nbsp; · &nbsp;
     <a href="https://github.com/andreizpgh/Focal/releases">Releases</a>
   </p>
-  <sub>Android 8.0+ · ARM64 · Version 0.1.0-alpha.2</sub>
+  <sub>Android 8.0+ · ARM64 · Version 0.1.0-alpha.3</sub>
 </div>
 
 <br>

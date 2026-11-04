@@ -782,6 +782,28 @@ class InterfaceTest {
         }
     }
 
+    @Test fun selectedLanguageIsVisibleWhenPickerOpensAtLargeFont() {
+        val app = application()
+        val originalLanguage = app.preferences.settings.value.language
+        val model = ViewModelProvider(compose.activity)[FocalViewModel::class.java]
+        try {
+            app.preferences.language("pt")
+            val density = compose.activity.resources.displayMetrics.density
+            val opened = MutableStateFlow<Pair<String?, Long>>(null to 0)
+            compose.runOnUiThread {
+                compose.activity.setContent {
+                    CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 2f)) {
+                        Box(Modifier.requiredSize(320.dp, 560.dp)) { FocalApp(model, opened) }
+                    }
+                }
+            }
+            compose.onNodeWithContentDescription("Speech language: Português").performClick()
+            languageOption("Português").assertIsDisplayed().assertIsSelected()
+        } finally {
+            app.preferences.language(originalLanguage)
+        }
+    }
+
     @Test fun largeFontInSmallWindowKeepsCaptureAndSessionControlsReachable() {
         val app = application()
         val originalLive = RecordingState.live.value
@@ -841,11 +863,14 @@ class InterfaceTest {
         val app = application()
         val store = app.store
         val id = readySession(store, "Sample note", listOf("Это тестовая запись."), language = "ru", uncertain = setOf(0))
+        val reviewHint = "Flags are review hints. You can check and edit any passage."
         try {
             waitForTitle("Sample note")
             compose.onNodeWithText("Sample note").performClick()
             waitForSessionReady("Sample note", "Это тестовая запись.")
+            compose.onNodeWithText(reviewHint).assertDoesNotExist()
             reviewFilter("1 to review").performClick()
+            compose.onNodeWithText(reviewHint).assertIsDisplayed()
             compose.onNode(hasText("Это тестовая запись.") and hasClickAction()).performScrollTo().performClick()
             waitForEditor()
             capture("review")
@@ -865,8 +890,14 @@ class InterfaceTest {
             } finally { store.writableDatabase.execSQL("PRAGMA query_only=OFF") }
             compose.onNodeWithText("Save changes").performScrollTo().performClick()
             compose.waitUntil(10_000) { store.passages(id).single().reviewed }
+            compose.waitUntil(10_000) {
+                compose.onAllNodesWithText("No flagged passages.").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("No flagged passages.").assertIsDisplayed()
+            compose.onNodeWithText("All checked.").assertDoesNotExist()
             reviewFilter("Show all").performClick()
             waitForSessionReady("Sample note", "Это исправленная запись.")
+            compose.onNodeWithText(reviewHint).assertDoesNotExist()
             compose.onNodeWithText("Это исправленная запись.").assertIsDisplayed()
             compose.onNodeWithText("Copy text").performClick()
             compose.runOnIdle {
@@ -874,6 +905,44 @@ class InterfaceTest {
                     .primaryClip!!.getItemAt(0).text.toString())
             }
         } finally { store.delete(id) }
+    }
+
+    @Test fun editorWindowSystemBarsFollowThemeWithoutLosingDraft() {
+        // The platform insets controller identifies the actual dialog window on API 30+.
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 30)
+        val app = application()
+        val initialTheme = app.preferences.settings.value.theme
+        val title = "Editor theme fixture"
+        val original = "Keep the saved passage."
+        val draft = "Keep the unsaved draft too."
+        val id = readySession(app.store, title, listOf(original))
+        val activityDecor = compose.activity.window.decorView
+        val field = compose.onNode(hasSetTextAction())
+        try {
+            compose.runOnIdle { app.preferences.theme("light") }
+            waitForTitle(title)
+            compose.onNodeWithText(title).performClick()
+            waitForSessionReady(title, original)
+            compose.onNode(hasText(original) and hasClickAction()).performScrollTo().performClick()
+            waitForEditor()
+            field.performTextReplacement(draft)
+            for (theme in listOf("dark", "light")) {
+                compose.runOnIdle { app.preferences.theme(theme) }
+                field.assertTextContains(draft)
+                val editorView = checkNotNull(field.fetchSemanticsNode().root as? android.view.View)
+                capture("editor-system-bars-$theme")
+                compose.runOnIdle {
+                    assertTrue("The editor must have its own window", editorView.rootView !== activityDecor)
+                    val bars = checkNotNull(ViewCompat.getWindowInsetsController(editorView))
+                    assertEquals("Editor status bar in $theme theme", theme == "light", bars.isAppearanceLightStatusBars)
+                    assertEquals("Editor navigation bar in $theme theme", theme == "light", bars.isAppearanceLightNavigationBars)
+                }
+            }
+            assertEquals(original, app.store.passages(id).single().text)
+        } finally {
+            compose.runOnUiThread { app.preferences.theme(initialTheme) }
+            app.store.delete(id)
+        }
     }
 
     @Test fun saveAndNextAdvancesReviewAndSaveAndCloseCopiesCommittedText() {
