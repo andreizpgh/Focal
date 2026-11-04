@@ -1,5 +1,60 @@
 # Product verification · 2026-11-04
 
+## UX Alpha 6 · 2026-11-04
+
+Clean `fe1dc9176563233016baeea50a8b7000e3ca163c` passed `qa-local.py --release-checks`:
+**108 Android tests, zero failures/skips**, including eight required real-model
+checks. JUnit: 181.672s; runner wall: 182.695s. Both lints and debug/test/R8
+builds passed in 3m 57s; 36 unchanged core tests used cached results.
+[Exact APK identity](../releases/ux-alpha-6.json).
+
+Live transcription now follows the newest words until the user scrolls toward
+older text. **Latest** resumes following. A bottom anchor keeps the last line of
+long passages visible; window size changes, editor/background suspension,
+state restoration and the final store snapshot are covered by regressions.
+
+The library header shows the visible day and opens a day filter with **All dates**.
+It preserves search and review selection, and repeat selection preserves scroll.
+The recording screen uses a compact fixed status/timer/wave; the finished note
+shows its date in the toolbar and its title once. Page content enters over 160ms
+with an 8dp movement, using one current composition and fully visible content.
+System animation settings are respected. Settings uses three tonal groups with
+restrained internal dividers.
+
+Five new tests cover live following/manual reading/resize, day filtering and
+library publication threads.
+Existing oversized draft and recovery assertions are retained; user-facing
+selectors now say recording instead of session. An initial date regression was
+traced to four pixels of the previous row inside content padding. Selecting the
+first visible item outside that padding fixes the header without changing the
+expectation. A separate new-test failure matched both row and filter labels;
+the selector now identifies the actual selectable filter. All failed diagnostics
+remain private. Dark Settings titles now explicitly use primary text color.
+
+Sol/Terra reviewed focused code, and Astra reviewed the actual interface. Manual
+coverage and exact artifact identities are recorded in the release manifest.
+No speech setting or download ledger changed. Owner UI acceptance, seven-language
+STT quality/speed, varying noise, mixed terms, correction and physical Pixel 10
+validation remain open. This is a testing release, not completed finalization.
+
+A later full run completed 106/107: Compose's test frame clock applied layout on
+an IO thread after a library update. Storage reads now remain on IO while success
+and error state publication runs on Main. A deterministic thread-contract test
+fails on the old app and passes on the new app with the same test APK; all nine
+focused ViewModel/action checks pass in 8.624s JUnit. Three earlier pairs of the
+original action tests passed, so the rare frame-clock interleaving was not reproduced.
+This is a tested publication boundary, not evidence of a physical-phone crash.
+
+The first full run was 106/107 because a live-draft test awaited the removed title.
+Its readiness guard now checks loaded live content; all draft assertions remain.
+A later run was intentionally interrupted for the page-motion fix. The clean
+full result above is the release gate. A subsequent run ended with host exit 143
+and no summary; its cause is unknown. An earlier search assertion in that run
+failed whole AnnotatedString equality despite matching printed text and caret.
+Two unchanged diagnostics passed (1 and 12 tests); the specific metadata was not
+reproduced. The revised assertion checks exact characters independently of styling,
+retaining all exact caret, focus and navigation checks. Publication status is in the handoff.
+
 ## UX Alpha 5 · 2026-11-04
 
 Clean `7b102aee07b418a4e9ff6f01c426f708f2956cef` passed the complete local

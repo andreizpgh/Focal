@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "tag": "ux-alpha-6",
+  "title": "Focal 0.1.0 · UX Alpha 6",
+  "provenance": "local-emulator-qa",
+  "source_commit": "fe1dc9176563233016baeea50a8b7000e3ca163c",
+  "source_clean": true,
+  "application_id": "app.focal",
+  "version_name": "0.1.0-alpha.6",
+  "version_code": 6,
+  "build_variant": "debug",
+  "apk_sha256": "95a2344bae66d11fc1d45dd337d6f07061bf1e2ca20f615c01d3ad97c92e8a7b",
+  "apk_bytes": 76801637,
+  "test_apk_sha256": "1d1cb3b694413630987402369fa6b969828c812cd3915f7f3d28fbc40e647c95",
+  "signing": {
+    "type": "development",
+    "certificate_sha256": "3e407a18880c9277982d6ad6222b39738484a3b768e4d268415eb795709aa3bc",
+    "alpha_1_update_compatibility": "not verified",
+    "alpha_2_certificate_matches": true,
+    "alpha_3_certificate_matches": true,
+    "alpha_4_certificate_matches": true,
+    "alpha_5_certificate_matches": true
+  },
+  "model": {
+    "repository": "ggerganov/whisper.cpp",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "filename": "ggml-base-q5_1.bin",
+    "sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "bytes": 59707625,
+    "license": "MIT"
+  },
+  "engine_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+  "qa": {
+    "runner": "scripts/qa-local.py --release-checks",
+    "run": "20261104T185935.116019Z",
+    "android_api": 35,
+    "android_abi": "x86_64",
+    "hardware_acceleration": "KVM",
+    "virtual_cpus": 2,
+    "android_tests": 108,
+    "failures": 0,
+    "skips": 0,
+    "required_real_model_tests": 8,
+    "instrumentation_seconds": 181.672,
+    "build_seconds": 237,
+    "core_tests": 36,
+    "core_execution": "cached results for unchanged core source",
+    "debug_lint": "passed",
+    "release_lint": "passed",
+    "unsigned_release_build": "passed; not the instrumented or published APK",
+    "zip_and_elf_alignment_bytes": 16384,
+    "build_seconds_note": "Gradle reported 3m 57s; build wall time is not app performance.",
+    "runner_instrumentation_wall_seconds": 182.695
+  },
+  "targeted_regressions": {
+    "new_tests": 5,
+    "scope": "Live append/manual reading/restoration, modal suspension and long/final passages, viewport reflow/resize, and date filtering while retaining search/review and navigation. Original oversized draft and transactional assertions retained. The active-draft test now awaits live content and Resume instead of the deliberately removed title. Search persistence compares exact characters separately from annotation metadata, preserving exact caret and focus assertions. A deterministic regression checks off-main storage reads and Main publication of both success and error states."
+  },
+  "manual": {
+    "scope": "Synthetic notes, day filter and navigation at 411x890dp; settings in light/dark, 200% font and actual landscape; active draft recreation/notification video; reduced-motion date/note/copy checks. Final opaque content during 160 ms / 8 dp page transitions inspected frame by frame; one note opening briefly shows the normal loading indicator during its asynchronous read; public note/settings captures match the exact full-QA APK. Earlier large-font/dark/reduced-motion checks preceded page alpha removal and the IO/Main publication boundary; their layouts are unchanged.",
+    "audio": "Emulator host audio disabled; no audible playback or microphone claim.",
+    "private_owner_screenshots_published": false
+  },
+  "independent_review": [
+    "Sol/Terra focused implementation and cross-review",
+    "Astra critical source and actual static/motion/reduced-motion review",
+    "Terra independent final QA/APK/model/signature audit"
+  ],
+  "not_established": [
+    "Physical Pixel 10 microphone, audible playback and installation",
+    "Phone background reliability, battery, thermals and ARM latency",
+    "Seven-language accuracy/speed improvement, mixed-language terms and varying-noise hallucination fix",
+    "Local language-model correction accuracy and reversible correction UX",
+    "Stable production signing and release-variant runtime validation",
+    "Owner acceptance of the updated interface"
+  ],
+  "iteration_notes": "Initial focused date failure identified four pixels of previous-day content padding; firstVisibleItemIndex fixes the header. A new test selector was narrowed to the filter rather than its identically labelled row. First full run 106/107 had one failure at an obsolete live-title readiness guard; the unchanged draft/notification assertions passed after awaiting live content. Second full run intentionally interrupted for the frame-review alpha-zero correction, not counted as passing. Another attempt ended with host exit 143 and no summary; the cause is unknown. Its earlier search check failed whole AnnotatedString equality although printed characters and caret matched. Original diagnostics passed 1 and 12 tests without reproducing metadata; the revised check retains exact characters, caret, focus and navigation independently of decoration. A subsequent full run 106/107 failed through the Compose test frame clock after IO library publication. Storage reads now remain on IO and success/error state publication runs on Main. The deterministic thread contract failed on the old app and passed with the same test APK on the new app; all 9 focused ViewModel/action checks passed in 8.624s JUnit. This does not reproduce the rare test-clock interleaving or establish a phone crash. The final full run is the clean result above. All earlier diagnostics retained privately."
+}

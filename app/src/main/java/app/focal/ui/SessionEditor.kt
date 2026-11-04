@@ -370,7 +370,7 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
             val dialogKeyboard = LocalSoftwareKeyboardController.current
             // Scroll the complete form: fixed title/actions can exceed the space above a landscape IME.
             Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
-                Text("Session title", style = MaterialTheme.typography.headlineSmall,
+                Text("Recording title", style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.padding(bottom = 16.dp).semantics { heading() })
                 OutlinedTextField(
                     title, { title = Transcript.truncateUtf16(it, 120); onDirtyChange(title != note.title) }, singleLine = true, enabled = !saving,

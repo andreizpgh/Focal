@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +35,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.platform.LocalContext
@@ -86,6 +90,7 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     inputActive: Boolean = false, setInputActive: (Boolean) -> Unit = {},
     searchFocusChanged: (Boolean) -> Unit = {}, searchFieldMeasured: (Int) -> Unit = {},
     onSessionActions: (String) -> Unit = {},
+    recordingDay: LocalDate? = null, clearRecordingDay: () -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -98,7 +103,8 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     val query = searchValue.text
     var viewportHeight by remember { mutableIntStateOf(0) }
     // Text search is supplied by the store, including passages outside the preview.
-    val visible = notes.filter { !attentionOnly || sessionNeedsAttention(it) }.sortedByDescending { it.created }
+    val visible = notes.filter { (!attentionOnly || sessionNeedsAttention(it)) &&
+        (recordingDay == null || sessionDay(it.created) == recordingDay) }.sortedByDescending { it.created }
     val today = LocalDate.now()
     val groups = visible.groupBy { sessionDay(it.created) }
     fun dismissSearchInput() {
@@ -151,11 +157,11 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
                         searchFocusChanged(it.isFocused)
                     }
                     .onSizeChanged { searchFieldMeasured(it.height) }.bringIntoViewRequester(visibilityRequester)
-                    .semantics { contentDescription = "Search sessions" }.padding(bottom = 12.dp), singleLine = true,
+                    .semantics { contentDescription = "Search recordings" }.padding(bottom = 12.dp), singleLine = true,
                 textStyle = MaterialTheme.typography.bodyMedium,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { dismissSearchInput() }),
-                placeholder = { Text("Search sessions", style = MaterialTheme.typography.bodyMedium) },
+                placeholder = { Text("Search recordings", style = MaterialTheme.typography.bodyMedium) },
                 leadingIcon = { Glyph(Symbol.Search, Modifier.size(17.dp), MaterialTheme.colorScheme.onSurfaceVariant) },
                 trailingIcon = { if (query.isNotEmpty()) IconAction(Symbol.Close, "Clear search") { setSearchValue(TextFieldValue("")) } },
                 shape = RoundedCornerShape(10.dp),
@@ -171,7 +177,7 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
             Modifier.fillMaxWidth().weight(1f), state = listState,
             contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp),
         ) {
-            if (error != null) item { DataReadError(if (loaded) "Couldn't refresh sessions" else "Couldn't load sessions", error, retryLoad) }
+            if (error != null) item { DataReadError(if (loaded) "Couldn't refresh recordings" else "Couldn't load recordings", error, retryLoad) }
             if (!loaded && error == null) item {
                 LinearProgressIndicator(
                     Modifier.fillMaxWidth().padding(top = 16.dp),
@@ -182,14 +188,14 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
                 Column(Modifier.padding(top = 48.dp, bottom = 32.dp)) {
                     Text(
                         when {
-                            query.isNotBlank() -> "No matching sessions."
+                            query.isNotBlank() || recordingDay != null -> "No matching recordings."
                             attentionOnly -> "Nothing to review."
-                            else -> "No sessions yet."
+                            else -> "No recordings yet."
                         },
                         style = MaterialTheme.typography.titleLarge,
                     )
-                    if (query.isNotBlank() || attentionOnly) TextButton(
-                        onClick = { closeSearch(); setAttentionOnly(false) }, contentPadding = PaddingValues(0.dp),
+                    if (query.isNotBlank() || attentionOnly || recordingDay != null) TextButton(
+                        onClick = { closeSearch(); setAttentionOnly(false); clearRecordingDay() }, contentPadding = PaddingValues(0.dp),
                     ) { Text("Clear filters") }
                 }
             }
@@ -240,7 +246,7 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     }
     Row(
         modifier.fillMaxWidth().height(IntrinsicSize.Min).combinedClickable(
-            role = Role.Button, onClick = open, onLongClickLabel = "Session options",
+            role = Role.Button, onClick = open, onLongClickLabel = "Recording options",
             onLongClick = actions,
         ),
     ) {
@@ -285,10 +291,54 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     playing: Boolean, audioAvailable: Boolean, play: () -> Unit, rename: () -> Unit,
     seek: (Long) -> Unit = {}, playbackPosition: Long? = null,
     retryLoad: () -> Unit = {}, notificationsEnabled: Boolean = true,
+    followSuspended: Boolean = false,
 ) {
     val review = library.passages.count { it.uncertain && !it.reviewed }
     val canRetryTranscription = library.pending > 0 || note.mayNeedRecovery
-    val passages = if (reviewOnly) library.passages.filter { it.uncertain && !it.reviewed } else library.passages
+    val reviewing = live == null && reviewOnly
+    val passages = if (reviewing) library.passages.filter { it.uncertain && !it.reviewed } else library.passages
+    var following by rememberSaveable(note.id) { mutableStateOf(true) }
+    var awaitingFinalNote by rememberSaveable(note.id) { mutableStateOf(false) }
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+    SideEffect { if (live != null) awaitingFinalNote = true }
+    // The live flow can finish before the final store snapshot reaches the ViewModel.
+    val followSession = live != null || awaitingFinalNote
+    val finalNoteLoaded = live == null && (note.state !in liveNoteStates || library.error != null)
+    val showRecovery = live == null && (note.error.isNotBlank() || canRetryTranscription)
+    val tail = passages.lastOrNull()
+    // The extra item gives the true bottom even when a single passage is taller than the viewport.
+    val tailIndex = passages.size + (if (live == null) 1 else 0) +
+        (if (library.error != null) 1 else 0) + (if (showRecovery) 1 else 0)
+    val listState = rememberSaveable(note.id, saver = LazyListState.Saver) {
+        val initialIndex = if (live != null && following && !reviewOnly && !followSuspended && tail != null) tailIndex else 0
+        LazyListState(firstVisibleItemIndex = initialIndex)
+    }
+    val viewport by remember(listState) { derivedStateOf { listState.layoutInfo.viewportSize } }
+    val mayFollow = followSession && !reviewOnly && !followSuspended && lifecycleState.isAtLeast(Lifecycle.State.RESUMED) &&
+        viewport.width > 0 && viewport.height > 0
+    LaunchedEffect(mayFollow, following, finalNoteLoaded, tail?.id, tail?.text?.length, tailIndex, viewport) {
+        if (mayFollow && following && tail != null) {
+            snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it == tailIndex + 1 }
+            listState.animateScrollToItem(tailIndex)
+        }
+        if (finalNoteLoaded && (mayFollow || !following || reviewing || tail == null)) awaitingFinalNote = false
+    }
+    val followGestures = remember(listState) {
+        object : NestedScrollConnection {
+            // App-driven listState scrolling bypasses nested scroll. A gesture toward older
+            // text must disengage before the first delta, even while an append is arriving.
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y > 0 && listState.canScrollBackward) following = false
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (consumed.y + available.y < 0 && !listState.canScrollForward) following = true
+                return Offset.Zero
+            }
+        }
+    }
+    val showLatest = live != null && !following && !reviewOnly
     @Composable fun ReviewFilter() {
         FilterChip(
             selected = reviewOnly, onClick = toggleReview, shape = CircleShape, colors = focalChipColors(),
@@ -299,73 +349,81 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     val activePassage = playbackPosition?.let { position ->
         library.passages.lastOrNull { position >= it.start && position < it.end }?.id
     }
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 0.dp, bottom = 24.dp),
-    ) {
-        item {
-            Column(Modifier.padding(top = 0.dp, bottom = 8.dp)) {
-                Row(verticalAlignment = Alignment.Top) {
+    Column(Modifier.fillMaxSize()) {
+        if (live != null) RecordingReadout(live, notificationsEnabled)
+        Box(Modifier.weight(1f)) {
+            LazyColumn(
+                Modifier.fillMaxSize().then(if (mayFollow) Modifier.nestedScroll(followGestures) else Modifier),
+                state = listState,
+                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = if (showLatest) 64.dp else 24.dp),
+            ) {
+                if (live == null) item(key = "note-header") {
+                    Column(Modifier.padding(top = 0.dp, bottom = 8.dp)) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            Text(
+                                note.title,
+                                style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f).semantics { heading() },
+                            )
+                        }
+                        FlowRow(
+                            Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            DurationLabel(note.duration, Modifier.align(Alignment.CenterVertically))
+                            Text(Preferences.languages[note.language] ?: note.language,
+                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.align(Alignment.CenterVertically))
+                            if (review > 0 || reviewOnly) ReviewFilter()
+                        }
+                        if (library.audioBytes == 0L && library.passages.isNotEmpty()) Text(
+                            "Text only", style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 5.dp),
+                        )
+                    }
+                }
+                if (library.error != null) item { DataReadError("Couldn't refresh this recording", library.error.orEmpty(), retryLoad) }
+                if (showRecovery) item {
+                    Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 18.dp)) {
+                        Text(
+                            when { note.state == "INTERRUPTED" -> "Transcription interrupted"; note.error.isBlank() -> "Transcription unfinished"; else -> "Transcription error" },
+                            style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error,
+                        )
+                        if (note.error.isNotBlank()) Text(note.error, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
+                        if (canRetryTranscription && library.audioBytes > 0) TextButton(onClick = retry, contentPadding = PaddingValues(0.dp)) {
+                            Text("Continue transcription")
+                        } else if (canRetryTranscription) Text("Original audio is unavailable.", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                    }
+                }
+                if (passages.isEmpty() && live == null) item {
                     Text(
-                        if (note.title == "Untitled note" && live != null) "New recording" else note.title,
-                        style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f).semantics { heading() },
+                        if (reviewing) "No flagged passages." else "No speech transcribed.",
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 24.dp),
                     )
                 }
-                Text(
-                    "${dayLabel(sessionDay(note.created), LocalDate.now())} at ${sessionTime(note.created)}",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
-                )
-                FlowRow(
-                    Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    if (live == null) DurationLabel(note.duration, Modifier.align(Alignment.CenterVertically))
-                    Text(Preferences.languages[note.language] ?: note.language,
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.align(Alignment.CenterVertically))
-                    if (review > 0 || reviewOnly) ReviewFilter()
+                items(passages, key = { it.id }) { passage ->
+                    TimedPassage(
+                        passage, active = passage.id == activePassage, audioAvailable = audioAvailable,
+                        seek = { seek(passage.start) }, edit = { edit(passage) },
+                        modifier = if (live != null) Modifier else Modifier.animateItem(
+                            fadeInSpec = tween(140, delayMillis = 240), placementSpec = tween(240), fadeOutSpec = tween(80),
+                        ),
+                    )
                 }
-                if (live == null && library.audioBytes == 0L && library.passages.isNotEmpty()) Text(
-                    "Text only", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 5.dp),
-                )
+                if (followSession && tail != null) item(key = "live-tail") { Spacer(Modifier.height(1.dp)) }
             }
-        }
-        if (library.error != null) item { DataReadError("Couldn't refresh this session", library.error.orEmpty(), retryLoad) }
-        if (live != null && !live.processing) item { RecordingReadout(live, notificationsEnabled) }
-        if (live == null && (note.error.isNotBlank() || canRetryTranscription)) item {
-            Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 18.dp)) {
-                Text(
-                    when { note.state == "INTERRUPTED" -> "Transcription interrupted"; note.error.isBlank() -> "Transcription unfinished"; else -> "Transcription error" },
-                    style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error,
-                )
-                if (note.error.isNotBlank()) Text(note.error, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
-                if (canRetryTranscription && library.audioBytes > 0) TextButton(onClick = retry, contentPadding = PaddingValues(0.dp)) {
-                    Text("Continue transcription")
-                } else if (canRetryTranscription) Text("Original audio is unavailable.", style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-            }
-        }
-        if (passages.isEmpty() && (live == null || reviewOnly)) item {
-            Text(
-                if (reviewOnly) "No flagged passages." else "No speech transcribed.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 24.dp),
-            )
-        }
-        items(passages, key = { it.id }) { passage ->
-            TimedPassage(
-                passage, active = passage.id == activePassage, audioAvailable = audioAvailable,
-                seek = { seek(passage.start) }, edit = { edit(passage) },
-                modifier = Modifier.animateItem(
-                    fadeInSpec = tween(140, delayMillis = 240), placementSpec = tween(240), fadeOutSpec = tween(80),
-                ),
-            )
+            if (showLatest) FilledTonalButton(
+                onClick = { following = true },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 8.dp)
+                    .heightIn(min = 48.dp).semantics { contentDescription = "Jump to latest transcript" },
+            ) { Text("Latest") }
         }
     }
 }
+
+private val liveNoteStates = setOf("RECORDING", "PAUSED", "PROCESSING")
 
 @Composable private fun DurationLabel(duration: Long, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -377,41 +435,44 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
 }
 
 @Composable private fun RecordingReadout(live: LiveSession, notificationsEnabled: Boolean) {
-    val fontScale = LocalDensity.current.fontScale
-    Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 26.dp)) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            if (fontScale >= 1.5f || maxWidth < 280.dp) Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                RecordingElapsed(live)
-                LevelMeter(if (live.paused) 0f else live.level, Modifier.fillMaxWidth())
-            } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                RecordingElapsed(live, Modifier.weight(1f))
-                LevelMeter(if (live.paused) 0f else live.level)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp, bottom = 8.dp)) {
+        val status = when {
+            live.processing -> live.message.ifBlank { "Transcribing" }
+            live.paused -> "Recording paused"
+            else -> "Recording"
+        }
+        FlowRow(
+            Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(Modifier.align(Alignment.CenterVertically), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(Modifier.size(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface))
+                Text(status, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            }
+            Row(Modifier.align(Alignment.CenterVertically), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(Transcript.time(live.duration), style = MaterialTheme.typography.labelLarge, fontFamily = FontFamily.Monospace)
+                if (live.processing) FocusProcessingIndicator(Modifier.size(width = 34.dp, height = 22.dp))
+                else LevelMeter(if (live.paused) 0f else live.level)
             }
         }
         val exceptionalMessage = live.message.takeIf {
+            !live.processing &&
             it.isNotBlank() && it !in listOf("Listening", "Paused", "Recording · transcribing", "Text appears after each spoken phrase.")
         }
         if (exceptionalMessage != null) Text(
             exceptionalMessage, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            modifier = Modifier.padding(top = 6.dp).semantics { liveRegion = LiveRegionMode.Polite },
         )
-        if (!notificationsEnabled) Text(
+        if (!notificationsEnabled && !live.processing) Text(
             "Notifications are off. Return to Focal to pause or finish.",
             style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            modifier = Modifier.padding(top = 6.dp).semantics { liveRegion = LiveRegionMode.Polite },
         )
-    }
-}
-
-@Composable private fun RecordingElapsed(live: LiveSession, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface))
-            Text(if (live.paused) "Recording paused" else "Recording", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-        }
-        Text(Transcript.time(live.duration), style = MaterialTheme.typography.headlineLarge,
-            fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 7.dp))
     }
 }
 
@@ -478,12 +539,12 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     }
 }
 
-@Composable private fun LevelMeter(level: Float, modifier: Modifier = Modifier.width(110.dp)) {
+@Composable private fun LevelMeter(level: Float) {
     val target = if (level.isFinite()) level.coerceIn(0f, 1f) else 0f
     val value by animateFloatAsState(target, animationSpec = tween(120), label = "microphone level")
     val ink = MaterialTheme.colorScheme.onSurface
     Canvas(
-        modifier.height(44.dp).semantics {
+        Modifier.size(width = 34.dp, height = 22.dp).semantics {
             contentDescription = "Microphone level"
             progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f)
         },
@@ -498,9 +559,9 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
 )
 
-private fun sessionDay(millis: Long): LocalDate = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
-@Composable private fun sessionTime(millis: Long): String = DateFormat.getTimeFormat(LocalContext.current).format(Date(millis))
-private fun dayLabel(day: LocalDate, today: LocalDate): String = when (day) {
+internal fun sessionDay(millis: Long): LocalDate = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
+@Composable internal fun sessionTime(millis: Long): String = DateFormat.getTimeFormat(LocalContext.current).format(Date(millis))
+internal fun dayLabel(day: LocalDate, today: LocalDate): String = when (day) {
     today -> "Today"
     today.minusDays(1) -> "Yesterday"
     else -> day.format(DateTimeFormatter.ofPattern(if (day.year == today.year) "MMMM d" else "MMMM d, yyyy", Locale.ENGLISH))

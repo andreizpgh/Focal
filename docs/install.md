@@ -1,12 +1,12 @@
 # Install Focal
 
-**[Download Focal-0.1.0-alpha.5.apk](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-5/Focal-0.1.0-alpha.5.apk)**
+**[Download Focal-0.1.0-alpha.6.apk](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-6/Focal-0.1.0-alpha.6.apk)**
 
 Android 8.0 or newer and an ARM64 phone. The speech model is included; no account
-or extra download is needed. This is UX Alpha 5, version `0.1.0-alpha.5`, for testing.
+or extra download is needed. This is UX Alpha 6, version `0.1.0-alpha.6`, for testing.
 
 1. Open the download link on your phone.
-2. Open **Focal-0.1.0-alpha.5.apk** from your browser’s downloads or the Files app.
+2. Open **Focal-0.1.0-alpha.6.apk** from your browser’s downloads or the Files app.
 3. If Android asks, allow **Install unknown apps** for that browser or file manager,
    then return to the APK and tap **Install**. You can turn that permission off afterward.
 
@@ -15,16 +15,16 @@ For Russian speech, choose **Русский** in the speech-language selector fi
 The interface and default speech language are English.
 
 The APK is also available under **Assets** on the
-[release page](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-5).
+[release page](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-6).
 You don’t need a GitHub account, Android Studio, or a ZIP archive.
-The versioned filename identifies this download; the original `Focal.apk` asset
-in the same release contains identical bytes and remains available.
+The versioned filename identifies this download. Earlier release assets remain available
+on their own release pages.
 
 ## If you tried the previous download
 
-UX Alpha 5 is a new locally verified, development-signed build. It passed 103 Android
-tests on the dedicated emulator; see the [release verification](../releases/ux-alpha-5.json).
-Its signing certificate matches Alpha 2–4, so installing over those versions should update it in place.
+UX Alpha 6 is a new locally verified, development-signed build. It passed 108 Android
+tests on the dedicated emulator; see the [release verification](../releases/ux-alpha-6.json).
+Its signing certificate matches Alpha 2–5, so installing over those versions should update it in place.
 Compatibility with Alpha 1's cloud-generated certificate remains unverified.
 
 If Android refuses the update, keep the old installation if it contains important

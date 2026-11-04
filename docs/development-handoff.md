@@ -18,7 +18,37 @@ assets are unchanged; the newer UX preview is described below. Seven-language
 read-speech results are measured on the host;
 ARM phone performance and full application acceptance remain open.
 
-## Current delivery step · UX Alpha 5
+## Current delivery step · UX Alpha 6
+
+Clean `fe1dc9176563233016baeea50a8b7000e3ca163c` passes full local QA: **108/0/0**, eight
+required real-model checks, 181.672s JUnit/182.695s runner wall. Both lints,
+debug/test/R8 builds passed in 3m 57s; 36 unchanged core tests cached. Exact APKs,
+private diagnostics and manual video: `build/local-diagnostics/ux-alpha-6-20261104/`.
+Report `20261104T185935.116019Z`; [release identity](../releases/ux-alpha-6.json).
+Signing matches Alpha 2–5. No models downloaded or STT settings changed.
+
+Live following respects manual reading, Latest, viewport changes, editor/background
+and final results. The library date header replaces Sessions and filters days while
+retaining search/review. The live screen removes title/date/review clutter; completed
+notes use date in toolbar and title in content. Page movement is 160 ms / 8 dp with opaque
+content, avoiding opacity-induced white frames. A note can briefly show its loading
+indicator while storage is read. Settings uses tonal groups and primary text color.
+Sol/Terra and Astra reviews passed; original storage/draft guards remain.
+Library reads stay on IO and success/error publication runs on Main. A deterministic
+thread-contract RED/GREEN and nine focused checks cover this boundary; the old
+rare Compose test-clock interleaving is not claimed as reproduced.
+Initial failed/interrupted runs are recorded in the quality report, not counted as PASS.
+
+The [Alpha 6 APK](https://github.com/andreizpgh/Focal/releases/download/ux-alpha-6/Focal-0.1.0-alpha.6.apk)
+is published. All three remote asset sizes/digests match the verified local files;
+the public APK link returns 200. Delivery is tracked in
+[PR #8](https://github.com/andreizpgh/Focal/pull/8); check its current status before
+continuing. Earlier assets are unchanged. User UI acceptance, seven-language
+quality/speed/noise/mixed terms, correction and physical Pixel 10 checks remain open.
+The dedicated AVD is stopped after restoring portrait, font scale 1,
+320×640/160dpi and animation scales 1; no heavy job remains.
+
+## Previous delivery step · UX Alpha 5
 
 Clean `7b102ae` passes the complete local QA: **103/0/0**, eight required real-model
 checks, 145.206s JUnit / 146.192s runner wall time; both lints and debug/test/R8

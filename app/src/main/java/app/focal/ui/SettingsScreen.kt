@@ -32,33 +32,49 @@ import kotlinx.coroutines.withContext
     val context = LocalContext.current
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(32.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         Column {
             SettingsSectionLabel("Recording")
-            SettingsRow("Speech model", when { preparing -> "Preparing…"; setupError != null -> "Needs attention"; modelReady -> "Ready"; else -> "Not installed" },
-                enabled = !preparing, click = openModel)
-            if (setupError != null) Text(setupError, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(bottom = 16.dp))
+            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = MaterialTheme.colorScheme.onSurface) {
+                Column {
+                    SettingsRow("Speech model", when { preparing -> "Preparing…"; setupError != null -> "Needs attention"; modelReady -> "Ready"; else -> "Not installed" },
+                        enabled = !preparing, click = openModel)
+                    if (setupError != null) Text(setupError, style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp))
+                }
+            }
         }
         Column {
             SettingsSectionLabel("Appearance")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
-                listOf("light" to "Light", "dark" to "Dark", "system" to "System").forEach { (id, name) ->
-                    FilterChip(colors = focalChipColors(), shape = RoundedCornerShape(50), selected = theme == id,
-                        onClick = { setTheme(id) }, label = { Text(name) })
+            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = MaterialTheme.colorScheme.onSurface) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    listOf("light" to "Light", "dark" to "Dark", "system" to "System").forEach { (id, name) ->
+                        FilterChip(colors = focalChipColors(), shape = RoundedCornerShape(50), selected = theme == id,
+                            onClick = { setTheme(id) }, label = { Text(name) })
+                    }
                 }
             }
         }
         Column {
             SettingsSectionLabel("Help & about")
-            SettingsRow("Using Focal", click = { help = true })
-            SettingsRow("Source code", click = {
-                try { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/andreizpgh/Focal".toUri())) }
-                catch (_: ActivityNotFoundException) { notify("No app is available to open this link.") }
-                catch (_: SecurityException) { notify("This device cannot open the link.") }
-            })
-            SettingsRow("Licenses", click = { licenses = true })
+            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = MaterialTheme.colorScheme.onSurface) {
+                Column {
+                    SettingsRow("Using Focal", click = { help = true })
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsRow("Source code", click = {
+                        try { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/andreizpgh/Focal".toUri())) }
+                        catch (_: ActivityNotFoundException) { notify("No app is available to open this link.") }
+                        catch (_: SecurityException) { notify("This device cannot open the link.") }
+                    })
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsRow("Licenses", click = { licenses = true })
+                }
+            }
             Row(
                 Modifier.padding(top = 18.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -77,7 +93,7 @@ import kotlinx.coroutines.withContext
                 HelpTopic("Recording", "Choose the speech language beside Record. Focal remembers your last choice for new recordings. Record, then finish to review and copy the text. Without a speech model, the audio is saved for transcription later.")
                 HelpTopic("In the background", "Recording can continue with the screen off or in another app. Force-stopping Focal or restarting your phone ends it. Some phones restrict background apps.")
                 HelpTopic("Reviewing words", "Dots are hints from the speech recognizer, not a grammar check. Tap any passage to listen and edit, including those without a dot. Done confirms it; Next hint confirms it and moves on. Your original audio stays unchanged.")
-                HelpTopic("Keeping sessions", "Audio and text are stored on this device. Uninstalling Focal deletes them. Copy or share text you need before uninstalling.")
+                HelpTopic("Keeping recordings", "Audio and text are stored on this device. Uninstalling Focal deletes them. Copy or share text you need before uninstalling.")
             }
         },
         confirmButton = { TextButton(onClick = { help = false }) { Text("Done") } },
@@ -91,7 +107,8 @@ import kotlinx.coroutines.withContext
 
 @Composable private fun SettingsRow(label: String, value: String? = null, enabled: Boolean = true, click: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = click).padding(vertical = 14.dp),
+        Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = click)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Column(Modifier.weight(1f)) {

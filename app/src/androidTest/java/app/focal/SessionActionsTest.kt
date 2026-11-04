@@ -65,14 +65,14 @@ class SessionActionsTest {
                 activity.startActivity(Intent(activity.intent).setClass(activity, MainActivity::class.java)
                     .putExtra(RecordingService.NOTE, other).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP))
             }
-            compose.waitUntil(10_000) { compose.onAllNodes(hasText("Leave this session?")).fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(10_000) { compose.onAllNodes(hasText("Leave this recording?")).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("Keep editing").performClick()
             compose.onNode(hasSetTextAction()).assertTextContains(renamed)
             assertEquals(title, store.note(target)?.title)
             compose.onNodeWithText("Save").performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasText(renamed) and longPress).fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("Sessions").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Session options").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Browse recording dates").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Recording options").assertDoesNotExist()
             assertEquals(renamed, store.note(target)?.title)
             assertEquals("Another saved session", store.note(other)?.title)
         } finally {
@@ -120,7 +120,7 @@ class SessionActionsTest {
             }
             val firstRow = hasText(firstTitle) and longPress
             val secondRow = hasText(secondTitle) and longPress
-            val loading = compose.onNodeWithContentDescription("Loading session options")
+            val loading = compose.onNodeWithContentDescription("Loading recording options")
             val heading = SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)
             compose.waitUntil(10_000) { compose.onAllNodes(firstRow).fetchSemanticsNodes().isNotEmpty() }
             blockNextRead.set(true)
@@ -130,7 +130,7 @@ class SessionActionsTest {
             loading.assertIsDisplayed()
             compose.onNodeWithText("Rename").assertIsNotEnabled()
             compose.onNodeWithText("Share text").assertIsNotEnabled()
-            compose.onNodeWithText("Delete session").assertIsNotEnabled()
+            compose.onNodeWithText("Delete recording").assertIsNotEnabled()
 
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
             loading.assertDoesNotExist()
