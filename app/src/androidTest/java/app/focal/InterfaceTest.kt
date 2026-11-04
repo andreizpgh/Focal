@@ -742,7 +742,13 @@ class InterfaceTest {
             app.store.state(id, "PAUSED")
             // A synthetic active session isolates navigation/draft recovery from microphone and decoder behavior.
             RecordingState.live.value = LiveSession(noteId = id, duration = 1_000, paused = true)
-            waitForSessionReady("Active draft regression", originalText, audioAvailable = false)
+            // The live screen intentionally omits the title; await its actual loaded content.
+            compose.waitUntil(10_000) {
+                compose.onAllNodesWithContentDescription("Recording options").fetchSemanticsNodes().isNotEmpty() &&
+                    compose.onAllNodesWithContentDescription("Resume recording").fetchSemanticsNodes().isNotEmpty() &&
+                    compose.onAllNodesWithText(originalText).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("Active draft regression").assertDoesNotExist()
             compose.onNode(hasText(originalText) and hasClickAction()).performScrollTo().performClick()
             waitForEditor()
             compose.onNodeWithText("Audio unavailable during recording.").assertIsDisplayed()
