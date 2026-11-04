@@ -1,6 +1,23 @@
 # Interface preview
 
-## UX Alpha 4 · 2026-11-04
+## UX Alpha 5 · 2026-11-04
+
+Actual, unretouched captures of the verified `0.1.0-alpha.5` APK on the dedicated
+Android 15 emulator at 411 × 890 dp. The note is our synthetic UI fixture, not an
+accuracy example. Owner screenshots remain private.
+[Download Alpha 5](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-5) ·
+[Build and QA identity](../releases/ux-alpha-5.json)
+
+| Session | Editor | Settings |
+| --- | --- | --- |
+| ![Shared navigation header, readable metadata and aligned timestamps](screenshots/ux-alpha-5-note.png) | ![Distinct Next hint and Done actions](screenshots/ux-alpha-5-editor.png) | ![Consistent header and sections separated by whitespace](screenshots/ux-alpha-5-settings.png) |
+
+Search and result/filter movement were checked in actual screen recordings, including
+entry and exit frames. Long-press exposes the session actions sheet; Copy shows a
+brief check and confirmation. Reduced-motion checks covered search, editor and actions.
+These checks do not establish smoothness or frame rates on a physical phone.
+
+## Earlier UX Alpha 4 · 2026-11-04
 
 Actual, unretouched captures of the verified `0.1.0-alpha.4` APK on the dedicated
 Android 15 emulator at 411 × 890 dp. The note is a synthetic UI fixture, not an
