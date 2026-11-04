@@ -325,6 +325,15 @@ review verified 796 inputs and 289 outputs. Only existing synthetic speech contr
 and two previously recorded emulator-noise signals were consumed; fresh held-out
 audio remains closed. The production decoder is unchanged.
 
+The optional [ownership build overlay](whisper-lifetime-research.md) now generates
+the exact independently reviewed prototype without changing Android or the pinned
+submodule. Nine tests cover 19 configuration scenarios, including rejection of
+unknown inputs and speech-policy overlay composition. The full host suite passed
+**155 tests with no skips in 7.478 s**, using the existing pinned NumPy 2.4.6
+environment. This is new host evidence; the latest full Android checkpoint remains
+the separately verified 85-test `101a153` build. No new real-model or app run was
+performed for the optional overlay.
+
 ## Remaining release gates
 
 Independent source review also found a native allocation-failure ownership defect:

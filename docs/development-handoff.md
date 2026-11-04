@@ -334,6 +334,18 @@ Production is still unfixed; do not infer phone resource behavior from host test
 or induce real host memory pressure. The diagnostic probe's fatal-process handling
 is not a production Android fix. See the local benchmark report for scope/hashes.
 
+The optional [ownership-only CMake overlay](whisper-lifetime-research.md) reproduces
+the exact reviewed `8cc010e3…ed64b` postimage and remains disabled in Android.
+Nine tests cover 19 configuration cases; the full host suite now passes 155 tests
+without skips (7.478 s). No extra Android run was needed for this inactive hook.
+Real-graph preparation in `build/stt/engine-lifetime-realgraph-research/` is
+incomplete: the plan, case specification, runners and freeze are unfinished.
+`PREPARATION-STATUS.md` and the private
+666-file `INCOMPLETE-SNAPSHOT.json` preserve the draft, existing fixtures and exact
+v4 archives. They are not execution authorization. Finish preparation and obtain
+independent prelaunch review before compiling or opening the model. Do not restart
+the completed v4 checks merely to resume this work.
+
 1. Resolve the observed recovery hallucinations on weak varying noise. Investigate
    the no-speech logits defect with the pinned source plus an explicit, reviewed
    research patch; retain the original engine for paired comparison. Do not hide

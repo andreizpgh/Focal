@@ -40,6 +40,17 @@ Source freeze `93a52a4e…ee9c` сохранён в `build/stt/engine-lifetime-r
 три loader wrappers, затем Android error/recovery/cancel. В production patch ещё нет;
 phone gates открыты. Не повторяй уже завершённую model-free suite без новой причины.
 
+Опциональный `cmake/focal-whisper-lifetime.cmake` воспроизводит exact reviewed
+postimage `8cc010e3…ed64b`, в Android он не включён. Его 9 тестов покрывают
+19 configure-сценариев; полный host suite прошёл 155 тестов без skips за 7.478 s.
+Последний полный Android QA по-прежнему относится к чистому `101a153` (85 тестов).
+Следующая realgraph-подготовка в `build/stt/engine-lifetime-realgraph-research/`
+не завершена: нет полного плана, cases,
+runner/freeze, сборки или результатов. Прочитай её `PREPARATION-STATUS.md`;
+666 файлов сохранены с хэшами в `INCOMPLETE-SNAPSHOT.json`. Это черновик,
+не разрешение запуска. Заверши подготовку и независимое prelaunch review;
+используй существующие fixtures/ASan archives, не скачивай модели повторно.
+
 # Prompt for the next Codex session
 
 Продолжи разработку Focal в существующем checkout, ветка
