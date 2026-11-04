@@ -1,9 +1,11 @@
 """Configure the optional ownership overlay; never build or load a speech model."""
 import hashlib
+import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -39,6 +41,7 @@ add_subdirectory(src)
 include("{overlay.as_posix()}")
 {call}
 {after}
+add_custom_target(check_configuration)
 function(record_sources)
     get_target_property(actual whisper SOURCES)
     file(WRITE "${{CMAKE_BINARY_DIR}}/sources.txt" "${{actual}}")
@@ -64,6 +67,23 @@ cmake_language(DEFER CALL record_sources)
         self.assertEqual([str(generated), "../include/whisper.h", "extra.cpp"],
                          (self.build / "sources.txt").read_text().split(";"))
 
+    def assert_incremental_change_is_rejected(self, path, error):
+        command = ["cmake", "--build", str(self.build), "--target", "check_configuration"]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        original = path.read_bytes()
+        try:
+            path.write_bytes(original + b"\n// Changed preimage.\n")
+            # Make the change newer even on filesystems with coarse timestamps.
+            future = time.time_ns() + 2_000_000_000
+            os.utime(path, ns=(future, future))
+            result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+            output = result.stdout + result.stderr
+            self.assertNotEqual(0, result.returncode, output)
+            self.assertIn(error, output)
+        finally:
+            path.write_bytes(original)
+
     def test_lf_source_generates_exact_reviewed_engine(self):
         self.configure()
 
@@ -84,6 +104,43 @@ cmake_language(DEFER CALL record_sources)
                 path.write_bytes(content + b"\n// Changed preimage.\n")
                 self.configure(expected_error="requires the pinned preimages")
                 path.write_bytes(content)
+
+    def test_incremental_build_rechecks_source_and_header(self):
+        for relative in ("src/whisper.cpp", "include/whisper.h"):
+            with self.subTest(relative=relative):
+                self.configure()
+                self.assert_incremental_change_is_rejected(
+                    self.source / relative, "requires the pinned preimages")
+
+    def test_incremental_fault_build_rechecks_engine_and_jni(self):
+        fault_overlay = ROOT / "app/src/main/cpp/native_fault.cmake"
+        jni = self.source / "whisper_jni.cpp"
+        shutil.copyfile(ROOT / "app/src/main/cpp/whisper_jni.cpp", jni)
+        (self.source / "src/CMakeLists.txt").write_text(
+            "add_library(whisper STATIC whisper.cpp ../include/whisper.h extra.cpp)\n")
+        for variant in ("baseline", "patched"):
+            for path, error in (
+                (self.source / "src/whisper.cpp", "preimages" if variant == "patched" else "exact selected"),
+                (jni, "JNI source has changed"),
+            ):
+                with self.subTest(variant=variant, path=path.name):
+                    lifetime = (f'include("{OVERLAY.as_posix()}")\n'
+                                'focal_whisper_lifetime_overlay()\n') if variant == "patched" else ""
+                    (self.source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.19)
+project(fault_test LANGUAGES CXX)
+set(FOCAL_NATIVE_FAULT_TESTS ON)
+set(FOCAL_ANDROID_DEBUG_BUILD ON)
+set(FOCAL_NATIVE_FAULT_VARIANT {variant})
+add_subdirectory(src)
+{lifetime}add_library(focal SHARED whisper_jni.cpp)
+include("{fault_overlay.as_posix()}")
+focal_native_fault_overlay()
+add_custom_target(check_configuration)
+''')
+                    result = subprocess.run(["cmake", "-S", str(self.source), "-B", str(self.build)],
+                                            capture_output=True, text=True, timeout=30)
+                    self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                    self.assert_incremental_change_is_rejected(path, error)
 
     def test_missing_and_imported_targets_are_rejected(self):
         self.configure(target="", expected_error="requires the whisper target")
