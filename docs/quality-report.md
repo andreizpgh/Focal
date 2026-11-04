@@ -1,5 +1,22 @@
 # Product verification · 2026-11-04
 
+## Post-Alpha 6 UI checkpoint · unreleased
+
+The first library group no longer repeats its toolbar date; subsequent date
+boundaries remain visible. Speech model and Appearance share one settings
+group. Page movement is reduced to 4dp over 220ms with an ease-out curve;
+content stays opaque and only one page tree is composed. Review is unchanged
+pending the next speech-quality evaluation.
+
+Local core/debug lint/app/test build passed in 1m58s. Five focused date, motion
+and settings tests passed in 13.717s, with no failures or skips. Manual checks
+covered light/dark, 200% landscape scrolling and five recorded page transitions.
+Terra reviewed the date source; Astra reviewed source and consecutive actual
+frames. The brief note-loading indicator is still separate from the entrance
+animation. These checks do not establish phone frame timing or user acceptance.
+Private evidence: `build/local-diagnostics/ui-followup-stt-batch-20261104/`.
+The dedicated AVD was restored and stopped; no new APK release is claimed.
+
 ## UX Alpha 6 · 2026-11-04
 
 Clean `fe1dc9176563233016baeea50a8b7000e3ca163c` passed `qa-local.py --release-checks`:

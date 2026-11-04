@@ -199,8 +199,8 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
                     ) { Text("Clear filters") }
                 }
             }
-            groups.forEach { (day, sessions) ->
-                item(key = "day:$day") { SessionDayHeader(dayLabel(day, today), first = day == groups.keys.first(), modifier = Modifier.animateItem(
+            groups.entries.forEachIndexed { index, (day, sessions) ->
+                if (index > 0) item(key = "day:$day") { SessionDayHeader(dayLabel(day, today), modifier = Modifier.animateItem(
                     fadeInSpec = tween(140, delayMillis = 240), placementSpec = tween(240), fadeOutSpec = tween(80),
                 )) }
                 items(sessions, key = { it.id }) { note ->
@@ -217,10 +217,10 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     }
 }
 
-@Composable private fun SessionDayHeader(label: String, first: Boolean, modifier: Modifier = Modifier) {
+@Composable private fun SessionDayHeader(label: String, modifier: Modifier = Modifier) {
     val line = MaterialTheme.colorScheme.outlineVariant
     val dot = MaterialTheme.colorScheme.onSurface
-    Row(modifier.fillMaxWidth().padding(top = if (first) 6.dp else 18.dp).heightIn(min = 34.dp).height(IntrinsicSize.Min),
+    Row(modifier.fillMaxWidth().padding(top = 18.dp).heightIn(min = 34.dp).height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Canvas(Modifier.width(24.dp).fillMaxHeight()) {

@@ -10,6 +10,7 @@ import android.os.Build
 import android.provider.Settings
 import android.animation.ValueAnimator
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.ui.graphics.graphicsLayer
 import java.time.LocalDate
 import androidx.activity.compose.BackHandler
@@ -314,7 +315,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     LaunchedEffect(destination, pageReady) {
         if (pageReady) {
             lastReadyPage = destination
-            pageEntrance.animateTo(1f, tween(160))
+            pageEntrance.animateTo(1f, tween(220, easing = LinearOutSlowInEasing))
         }
     }
     val audioAvailable = library.audioBytes > 0 && (live.noteId == null || live.processing)
@@ -462,7 +463,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 .then(if (destination == Destination.Sessions) Modifier.consumeWindowInsets(padding).imePadding() else Modifier),
                 contentAlignment = Alignment.TopCenter) {
                 Box(Modifier.widthIn(max = 760.dp).fillMaxSize().graphicsLayer {
-                    translationY = if (pageReady) (1f - pageEntrance.value) * 8.dp.toPx() else 0f
+                    translationY = if (pageReady) (1f - pageEntrance.value) * 4.dp.toPx() else 0f
                 }) {
                     when (destination) {
                         Destination.Settings -> SettingsScreen(

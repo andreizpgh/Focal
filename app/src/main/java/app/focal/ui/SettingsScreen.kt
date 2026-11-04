@@ -34,27 +34,22 @@ import kotlinx.coroutines.withContext
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        Column {
-            SettingsSectionLabel("Recording")
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer,
-                contentColor = MaterialTheme.colorScheme.onSurface) {
-                Column {
-                    SettingsRow("Speech model", when { preparing -> "Preparing…"; setupError != null -> "Needs attention"; modelReady -> "Ready"; else -> "Not installed" },
-                        enabled = !preparing, click = openModel)
-                    if (setupError != null) Text(setupError, style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp))
-                }
-            }
-        }
-        Column {
-            SettingsSectionLabel("Appearance")
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer,
-                contentColor = MaterialTheme.colorScheme.onSurface) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    listOf("light" to "Light", "dark" to "Dark", "system" to "System").forEach { (id, name) ->
-                        FilterChip(colors = focalChipColors(), shape = RoundedCornerShape(50), selected = theme == id,
-                            onClick = { setTheme(id) }, label = { Text(name) })
+        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer,
+            contentColor = MaterialTheme.colorScheme.onSurface) {
+            Column {
+                SettingsRow("Speech model", when { preparing -> "Preparing…"; setupError != null -> "Needs attention"; modelReady -> "Ready"; else -> "Not installed" },
+                    enabled = !preparing, click = openModel)
+                if (setupError != null) Text(setupError, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp))
+                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp)) {
+                    Text("Appearance", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                        listOf("light" to "Light", "dark" to "Dark", "system" to "System").forEach { (id, name) ->
+                            FilterChip(colors = focalChipColors(), shape = RoundedCornerShape(50), selected = theme == id,
+                                onClick = { setTheme(id) }, label = { Text(name) })
+                        }
                     }
                 }
             }
