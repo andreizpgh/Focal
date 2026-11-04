@@ -46,8 +46,11 @@ recording continuing after Home or screen lock until an explicit Finish or a
 reported interruption. Keep Sessions / Focus wave, explicit speech language,
 original audio and one bounded transcription worker. Background capture is a
 core acceptance requirement. Do not add live partial hypotheses, diarization,
-word alignment, LLM correction, cloud services or a model catalogue to complete
-this note-taking workflow.
+word alignment, cloud services or a model catalogue to complete this note-taking
+workflow. The owner's later feedback specifically requests local language
+correction research and visible, reversible edits. Evaluate that separately in
+the bounded shadow screen below; no correction model has yet demonstrated a
+paired accuracy benefit or passed the phone resource gates.
 
 The following are maintainer documentation and a published research paper.
 Shipped applications demonstrate product patterns; their troubleshooting advice
@@ -151,22 +154,20 @@ below, and no fine-tuned derivative is selected.
 
 ## One shared download budget
 
-Use a hard combined ceiling of **1,000,000,000 downloaded model/corpus bytes**,
-including failed/repeated transfers. Fetch LFS metadata first, pin immutable
-revisions and SHA-256 hashes, and reserve the full declared size before a request.
-Do not fetch whole corpus shards to obtain a few examples. If a shard or an
-updated model will exceed the reservation, stop and reduce the experiment set.
+The owner increased the cumulative ceiling to **5,000,000,000 bytes** on
+2026-11-04 for removable local research artifacts. Count models, corpus,
+metadata and failed/repeated transfers across sessions. Fetch metadata first,
+pin immutable revisions and SHA-256 hashes, and reserve the full declared size
+before each request. Reuse verified files; a larger budget does not justify
+fetching whole corpus shards or every model variant.
 
-The original prospective allocation below is retained for context, not as
-authorization to exceed the ceiling. The current conservative ledger reserves
-**881,742,333 bytes**, including the unchanged 645,592,677-byte prior checkpoint
-and a 61,000,000-byte reserve for one future publication CI run. The remaining
-allowance is **118,257,667 bytes**. The older corpus figures below describe the
-previous cloud study, not an additional allocation. Selected archive prefixes total 38,797,312 bytes; the separate 1,048,576-byte
-exploratory prefix is also charged. Complete corpus shards were never fetched. The larger corpus overhead means the 639 MB Qwen Q8 artifact
-no longer fits the remaining budget. E5 is deferred; no correction model was
-downloaded. Carry the ledger forward across environments and count future CI
-model fetches too. Use existing verified artifacts and consented local recordings.
+The [shared ledger](benchmarks/2026-11-03-stt/download-budget.json) now reserves
+**1,278,465,663 bytes**, leaving **3,721,534,337 bytes**. This retains the earlier
+881,742,333 bytes, including the 61,000,000-byte future CI reserve, and adds
+17,858 bytes of candidate metadata plus one 396,705,472-byte Qwen download.
+The original allocation below is historical context, not an instruction to
+repeat downloads. The older corpus figures describe the previous cloud study;
+complete shards were never fetched. Keep recordings and weights outside Git.
 
 | Artifact | Maximum reservation | Stage |
 | --- | ---: | --- |
@@ -188,6 +189,35 @@ directly from the original floating-point weights.
 Model-file size is not peak runtime memory.
 ([Upstream ASR files](https://huggingface.co/ggerganov/whisper.cpp/tree/main),
 [official Qwen GGUF files](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/tree/main))
+
+### Mixed-language glossary screen · 2026-11-04
+
+A prompt-only comparison of `HTML, API, guardrails.` against an empty prompt
+failed the frozen Russian DEV screen. Six paired synthetic fixtures used the
+same PCM, including quiet, absent-term and varying-noise controls. Twelve cold
+host calls produced one additional exact term, but five pairs regressed on at
+least one guard; noise insertions rose from five to seven words. Term matching
+ignores capitalization, so changing letter case cannot qualify as a gain.
+The other six languages were not run, and the hint is not shipped. eSpeak
+fixtures are a cheap failure screen, not a measurement of natural code switching
+or Pixel recognition. [Aggregate results](benchmarks/2026-11-03-local/mixed-term-hint-results.json)
+
+### Local correction shadow screen · 2026-11-04
+
+The Unsloth Qwen3-0.6B Q4_K_M candidate is **396,705,472 bytes** and has now
+been downloaded locally and verified against SHA-256
+`ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a`.
+It is a community quantization, separate from Qwen's official Q8 artifact.
+No correction inference or application integration is claimed by this preparation
+checkpoint. [Pinned Unsloth artifact](https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/blob/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_K_M.gguf)
+
+The 35 synthetic fixtures with supplied choices remain an offline format check.
+A separate 21-request shadow plan gives the model only text and language. It
+pairs seven already-consumed DEV ASR excerpts with clean reference controls
+and includes seven synthetic stress cases. The model can abstain or find one
+short, exact-source replacement. Acoustic adjudication is required for any
+claimed speech correction. Automatic correction remains disabled pending the
+quality, provenance, Undo and phone gates below.
 
 A small downloaded read-speech subset cannot establish a high-precision release
 claim. The current 56 clips span 650.1 seconds; 21 development clips and 35 official
@@ -240,11 +270,13 @@ Record and compare:
 Start with shadow evaluation. Token probabilities, model self-confidence and
 agreement between related models are uncalibrated features. Choose a small
 acceptance rule on development audio and evaluate its entire risk/coverage curve.
-For E5, prefer a choice among a small set of acoustic alternatives plus `abstain`.
-If free text is studied, return only a bounded list of edits against a hashed
+The source-only discovery screen allows one short replacement or abstention.
+An acoustic-choice comparison may instead use a small set of supplied alternatives.
+For free text, return only a bounded list of edits against a hashed
 source revision: at most four short spans, no full-document regeneration.
 Validate offsets, non-overlap, source hash, output length and exact unchanged text
-outside accepted spans. Invalid/late output is an abstention, not a fallback rewrite.
+outside accepted spans. Keep invalid and late outputs separate from explicit
+abstentions in shadow results. Only valid proposals can reach a correction preview.
 
 A starting experiment cap is 256 input tokens and 48 output tokens, no retained
 conversation and no thinking output. These caps are experimental settings, not

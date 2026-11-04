@@ -1,0 +1,211 @@
+{
+  "date": "2026-11-04",
+  "scope": "Synthetic isolated cold-host canaries. No phone, live-note or multilingual population claim.",
+  "decision": "Reject glossary hint; stop before the other six languages. Synthetic eSpeak output is not natural user dictation.",
+  "plan_sha256": "823929640378bfedbd32a4cc5aa4b0c4f63a84abdfbb6d4ba14ad720c83eb8c5",
+  "report_sha256": "776d8261466b4f3477864421b1110f3a5c5e1df4aef067025ecea559bb736083",
+  "asr_model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+  "calls": 12,
+  "pairs": 6,
+  "exact_term_gain": {
+    "ru": 1
+  },
+  "numeric_gate_passed": false,
+  "conditions": "Frozen mixed Russian/English TTS, normal/0.1 gain, absent-term speech and seeded varying noise. Same PCM per pair; prompt only changed. Case-insensitive term gains; casing separately recorded. Fresh host context, beam3/full context/two threads.",
+  "cases": [
+    {
+      "id": "ru-negation-normal",
+      "kind": "negation",
+      "gain": "normal",
+      "regressions": [],
+      "arms": {
+        "empty": {
+          "exact_target_hits": 1,
+          "surrounding_word_errors": 7,
+          "surrounding_character_errors": 21,
+          "noise_inserted_words": 0,
+          "cold_host_seconds": {
+            "wall": 4.925312881998252,
+            "load": 0.0894131,
+            "decode": 4.77724474
+          }
+        },
+        "hint": {
+          "exact_target_hits": 1,
+          "surrounding_word_errors": 6,
+          "surrounding_character_errors": 20,
+          "noise_inserted_words": 0,
+          "cold_host_seconds": {
+            "wall": 5.0753537099808455,
+            "load": 0.091614868,
+            "decode": 4.92478257
+          }
+        }
+      }
+    },
+    {
+      "id": "ru-negation-quiet",
+      "kind": "negation",
+      "gain": "quiet",
+      "regressions": [
+        "worse_surrounding_errors"
+      ],
+      "arms": {
+        "hint": {
+          "exact_target_hits": 0,
+          "surrounding_word_errors": 6,
+          "surrounding_character_errors": 22,
+          "noise_inserted_words": 0,
+          "cold_host_seconds": {
+            "wall": 7.28012932499405,
+            "load": 0.089016747,
+            "decode": 7.12091713
+          }
+        },
+        "empty": {
+          "exact_target_hits": 0,
+          "surrounding_word_errors": 10,
+          "surrounding_character_errors": 21,
+          "noise_inserted_words": 0,
+          "cold_host_seconds": {
+            "wall": 4.724692702002358,
+            "load": 0.090166486,
+            "decode": 4.57124533
+          }
+        }
+      }
+    },
+    {
+      "id": "ru-number-normal",
+      "kind": "number",
+      "gain": "normal",
+      "regressions": [
+        "worse_surrounding_errors"
+      ],
+      "arms": {
+        "empty": {
+          "exact_target_hits": 0,
+          "surrounding_word_errors": 7,
+          "surrounding_character_errors": 19,
+          "noise_inserted_words": 0,
+          "cold_host_seconds": {
+            "wall": 5.376031467982102,
+            "load": 0.089994395,
+            "decode": 5.24164348
+          }
+        },
+        "hint": {
+          "exact_target_hits": 0,
+          "surrounding_word_errors": 5,
+          "surrounding_character_errors": 206,
+          "noise_inserted_words": 0,
+          "cold_host_seconds": {
+            "wall": 8.634492016979493,
+            "load": 0.09531803,
+            "decode": 8.4885419
+          }
+        }
+      }
+    },
+    {
+      "id": "ru-number-quiet",
+      "kind": "number",
+      "gain": "quiet",
+      "regressions": [
+        "worse_surrounding_errors"
+      ],
+      "arms": {
+        "hint": {
+          "exact_target_hits": 1,
+          "surrounding_word_errors": 6,
+          "surrounding_character_errors": 23,
+          "noise_inserted_words": 0,
+          "cold_host_seconds": {
+            "wall": 5.325697678985307,
+            "load": 0.09188816,
+            "decode": 5.16226877
+          }
+        },
+        "empty": {
+          "exact_target_hits": 0,
+          "surrounding_word_errors": 5,
+          "surrounding_character_errors": 22,
+          "noise_inserted_words": 0,
+          "cold_host_seconds": {
+            "wall": 4.8265489200130105,
+            "load": 0.091663199,
+            "decode": 4.65325008
+          }
+        }
+      }
+    },
+    {
+      "id": "ru-absent-normal",
+      "kind": "absent",
+      "gain": "normal",
+      "regressions": [
+        "worse_surrounding_errors"
+      ],
+      "arms": {
+        "empty": {
+          "exact_target_hits": 0,
+          "surrounding_word_errors": 11,
+          "surrounding_character_errors": 28,
+          "noise_inserted_words": 0,
+          "cold_host_seconds": {
+            "wall": 5.226110559015069,
+            "load": 0.091921056,
+            "decode": 5.06710495
+          }
+        },
+        "hint": {
+          "exact_target_hits": 0,
+          "surrounding_word_errors": 10,
+          "surrounding_character_errors": 29,
+          "noise_inserted_words": 0,
+          "cold_host_seconds": {
+            "wall": 5.376630527985981,
+            "load": 0.092245192,
+            "decode": 5.20693709
+          }
+        }
+      }
+    },
+    {
+      "id": "ru-noise-noise",
+      "kind": "noise",
+      "gain": "noise",
+      "regressions": [
+        "more_noise_words",
+        "worse_surrounding_errors"
+      ],
+      "arms": {
+        "hint": {
+          "exact_target_hits": 0,
+          "surrounding_word_errors": 7,
+          "surrounding_character_errors": 43,
+          "noise_inserted_words": 7,
+          "cold_host_seconds": {
+            "wall": 4.975019581004744,
+            "load": 0.101546585,
+            "decode": 4.81137392
+          }
+        },
+        "empty": {
+          "exact_target_hits": 0,
+          "surrounding_word_errors": 5,
+          "surrounding_character_errors": 36,
+          "noise_inserted_words": 5,
+          "cold_host_seconds": {
+            "wall": 4.774776311998721,
+            "load": 0.092350843,
+            "decode": 4.62263795
+          }
+        }
+      }
+    }
+  ],
+  "heldout_opened": false,
+  "downloads": 0,
+  "phone_evidence": false
+}
