@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/mark.svg" width="80" height="80" alt="Focal">
+  <img src="docs/mark-preview.png" width="80" height="80" alt="Focal">
   <h1>Focal</h1>
   <p>Offline voice notes for Android. Record, review, and copy.</p>
   <p>
