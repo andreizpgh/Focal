@@ -367,8 +367,11 @@ class InterfaceTest {
         val selection = androidx.compose.ui.text.TextRange(6)
         val id = readySession(app.store, title, listOf(passage))
         fun assertQueryAndSelection() {
+            // Verify the saved query's characters and caret independently of text decoration.
             compose.onNode(hasSetTextAction()).assert(
-                SemanticsMatcher.expectValue(SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString(query))
+                SemanticsMatcher("Search query matches exactly") {
+                    it.config[SemanticsProperties.EditableText].text == query
+                }
             ).assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, selection))
         }
         try {
