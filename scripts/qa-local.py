@@ -355,7 +355,7 @@ def main(argv=None):
                           "java": run(["java", "-version"]).splitlines()[0],
                           "python": platform.python_version()}}
     (report / "manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    tasks = [":core:test", ":app:lintDebug", ":app:assembleDebug", ":app:assembleDebugAndroidTest"]
+    tasks = [":core:test", ":app:testDebugUnitTest", ":app:lintDebug", ":app:assembleDebug", ":app:assembleDebugAndroidTest"]
     if args.release_checks:
         tasks += [":app:lintRelease", ":app:assembleRelease"]
     print("Building and running host checks once; see build.log.", flush=True)
@@ -364,6 +364,7 @@ def main(argv=None):
     if result.returncode:
         raise QAError(f"Gradle failed (exit {result.returncode}); see {report / 'build.log'}")
     shutil.copytree(ROOT / "core/build/test-results/test", report / "core-test-results")
+    shutil.copytree(ROOT / "app/build/test-results/testDebugUnitTest", report / "app-test-results")
     for name in ("lint-results-debug.html", "lint-results-debug.xml", "lint-results-release.html", "lint-results-release.xml"):
         if "release" in name and not args.release_checks:
             continue

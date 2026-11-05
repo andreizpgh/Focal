@@ -106,7 +106,7 @@ first failure. Use `--release-checks` to add release lint and the unsigned
 release build. Builds and core unit tests run once, before all repetitions.
 The separate Python host-tool suite is not run by this command.
 
-The runner executes core unit tests, debug lint, the debug and instrumentation APK
+The runner executes core and app JVM unit tests, debug lint, the debug and instrumentation APK
 builds, then verifies the actual APK's embedded model against the committed
 SHA-256 and checks the test APK's speech fixture before installing either APK.
 After installation it starts Focal and verifies the SHA-256 of the model in its
@@ -123,7 +123,7 @@ check deliberately fails closed if new test source syntax is unsupported.
 Each invocation writes a fresh private directory under
 `build/local-emulator-qa/`, which Git ignores. `manifest.json` records the Git
 HEAD, dirty-state fingerprint, pinned submodule commits, model and APK hashes,
-host/emulator resources and tool versions. `build.log`, core test results and
+host/emulator resources and tool versions. `build.log`, core/app test results and
 lint reports describe the build; each `run-NN/` has raw instrumentation output,
 a JUnit XML summary and a JSON outcome. Raw test and build logs may contain
 private information or local paths. Do not commit or upload them without review;

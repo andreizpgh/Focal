@@ -119,6 +119,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     val playing by model.player.playing.collectAsStateWithLifecycle()
     val playback by model.player.playback.collectAsStateWithLifecycle()
     val requested by openedNote.collectAsStateWithLifecycle()
+    val alternative by model.alternativePreview.state.collectAsStateWithLifecycle()
     val view = LocalView.current
     var destination by rememberSaveable(stateSaver = destinationSaver) { mutableStateOf<Destination>(Destination.Sessions) }
     val selected = (destination as? Destination.Session)?.id
@@ -215,6 +216,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         dialog = "actions"
     }
     fun performOpen(id: String?) {
+        model.alternativePreview.stop()
         dismissInput(); editingId = null; closeDialog(); pendingOpenTarget = null
         editorDirty = false; renameDirty = false; formSaving = false
         model.select(id)
@@ -564,10 +566,21 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 shareReason = shareReason.takeUnless { loading }, audioReason = audioReason.takeUnless { loading },
                 deleteReason = activeReason.takeUnless { loading },
                 onDismiss = ::closeDialog,
+                alternativeAvailable = model.alternativeAvailable,
+                alternativeReason = (audioReason ?: when {
+                    actionNote?.state != "READY" -> "Finish the original transcription first"
+                    library.audioBytes > 180L * 16_000 * 2 -> "Available for recordings up to three minutes"
+                    else -> null
+                }).takeUnless { loading },
             ) { action ->
                 when (action) {
                     SessionAction.Rename -> if (actionNote != null) dialog = "rename" else closeDialog()
                     SessionAction.Share -> { closeDialog(); if (canShare) shareTranscript() }
+                    SessionAction.Alternative -> {
+                        val id = actionNote?.id
+                        closeDialog()
+                        if (id != null && !model.alternativePreview.start(id)) notify("Finish the current operation first.")
+                    }
                     SessionAction.RemoveAudio -> if (canRemoveAudio) dialog = "audio" else closeDialog()
                     SessionAction.Delete -> if (actionNote != null && !actionActive) dialog = "delete" else closeDialog()
                 }
@@ -598,6 +611,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             }) { Text(if (dialog == "delete") "Delete" else "Remove audio", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = ::closeDialog) { Text("Cancel") } }
         )
+        AlternativeTranscriptSheet(alternative, model.alternativePreview::stop)
     }
 }
 

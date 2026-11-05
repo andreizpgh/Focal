@@ -28,6 +28,7 @@ required_model_tests = {
 model_outcomes = {test: [] for test in required_model_tests}
 rows = []
 for label, root in (("Core", Path("core/build/test-results/test")),
+                    ("App JVM", Path("app/build/test-results/testDebugUnitTest")),
                     ("Android", Path("app/build/outputs/androidTest-results/connected"))):
     totals = {key: 0 for key in ("tests", "failures", "errors", "skipped")}
     files = list(root.rglob("TEST-*.xml")) if root.exists() else []

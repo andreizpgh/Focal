@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import app.focal.data.*
 import app.focal.recording.*
 import app.focal.speech.SpeechPlayer
+import app.focal.speech.PreviewEngineFactory
+import app.focal.speech.SavedAudioPreviewController
+import java.io.File
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
@@ -37,6 +40,15 @@ class FocalViewModel internal constructor(
     val preparing = MutableStateFlow(true)
     val errors = MutableSharedFlow<String>(extraBufferCapacity = 3)
     val player = SpeechPlayer(app, app.store, viewModelScope)
+    internal val alternativeAvailable = PreviewEngineFactory.available
+    internal val alternativePreview = SavedAudioPreviewController(app.store, viewModelScope) { checkCancelled ->
+        val power = app.getSystemService(android.os.PowerManager::class.java)
+        check(android.os.Build.VERSION.SDK_INT < 29 || power.currentThermalStatus < android.os.PowerManager.THERMAL_STATUS_SEVERE) {
+            "Let the device cool down before trying another transcription."
+        }
+        PreviewEngineFactory.open(File(app.filesDir, "parakeet-probe/model"),
+            if (power.isPowerSaveMode) 1 else 2, checkCancelled)
+    }
     val library: StateFlow<LibraryState> = libraryState.asStateFlow()
     private val initialPreparation = viewModelScope.async(Dispatchers.IO) {
         try { app.initialized.await(); modelReady.value = app.models.ready() }
@@ -170,5 +182,5 @@ class FocalViewModel internal constructor(
             errors.emit(e.message ?: "Something went wrong. Your saved notes are still on this device.")
         }
     }
-    override fun onCleared() { player.stop() }
+    override fun onCleared() { alternativePreview.close(); player.stop() }
 }

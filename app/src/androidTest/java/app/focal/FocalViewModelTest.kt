@@ -14,6 +14,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.Passage
 import app.focal.data.PassageSizeException
 import app.focal.recording.RecordingService
@@ -50,7 +51,7 @@ class FocalViewModelTest {
     }
 
     @After fun cleanup() {
-        owners.forEach { it.clear() }
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { owners.forEach { it.clear() } }
         created.forEach { app.store.delete(it) }
     }
 
