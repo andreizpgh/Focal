@@ -126,6 +126,25 @@ of the ten missing real-model checks (including real VAD speech/reset and graph-
 also fail the run; avoid editing the checkout while it runs. The test discovery
 check deliberately fails closed if new test source syntax is unsupported.
 
+
+### Optional Ultra variant
+
+Prepare the verified runtime and four model assets described in
+[Ultra transcription](ultra-transcription.md). To run the same full suite with
+the bundled alternative enabled, use the explicit variant flag:
+
+```sh
+python3 scripts/qa-local.py --serial emulator-5554 --dedicated-test-avd --ultra
+```
+
+Add `--release-checks` to include release lint and the unsigned, minified Ultra
+APK. The Ultra option extends the ordinary source-discovered suite and mandatory
+real-model checks with the shared alternative and Ultra asset tests. The separate
+private research batch is not included. Preserve and verify the exact APK pair,
+variant, asset and source identities in the private QA record; a test build or
+emulator result does not establish physical-phone acceptance.
+
+
 Each invocation writes a fresh private directory under
 `build/local-emulator-qa/`, which Git ignores. `manifest.json` records the Git
 HEAD, dirty-state fingerprint, pinned submodule commits, model and APK hashes,

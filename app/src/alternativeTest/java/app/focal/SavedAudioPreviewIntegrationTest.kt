@@ -3,6 +3,7 @@ package app.focal
 import android.content.ClipboardManager
 import android.graphics.Bitmap
 import android.os.SystemClock
+import android.system.Os
 import android.util.AtomicFile
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -13,6 +14,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.Passage
 import app.focal.recording.SessionOperations
 import app.focal.speech.PreviewPhase
+import app.focal.speech.UltraModelFiles
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -23,6 +25,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.UUID
@@ -40,11 +45,13 @@ class SavedAudioPreviewIntegrationTest {
         val receipts = File(app.filesDir, "parakeet-probe/receipts")
         check(receipts.mkdirs() || receipts.isDirectory) { "Cannot create the private receipt directory." }
         val receipt = JSONObject().put("schema", 1).put("run_id", runId).put("status", "FAIL")
+        val bundledCache = if (BuildConfig.FOCAL_ULTRA_BUNDLED) BundledCache(app.noBackupFilesDir, runId) else null
         var noteId: String? = null
         var phase = "fixture"
 
         try {
-            check(File(app.filesDir, "parakeet-probe/model").isDirectory) { "Stage the verified Parakeet model files first." }
+            if (bundledCache != null) bundledCache.isolate()
+            else check(File(app.filesDir, "parakeet-probe/model").isDirectory) { "Stage the verified Parakeet model files first." }
             val wav = instrumentation.context.assets.open("jfk.wav").use { it.readBytes() }
             check(wav.size == 352_044 && sha256(wav) == JFK_SHA256) { "The bundled public WAV fixture changed." }
             // The published hash binds the public WAV's standard PCM16 mono 16 kHz header.
@@ -57,20 +64,26 @@ class SavedAudioPreviewIntegrationTest {
             val chunk = store.beginChunk(id, 0, false)
             store.finishChunk(chunk, duration)
             store.complete(checkNotNull(store.nextChunk(id)), listOf(
-                Passage(noteId = id, chunkId = chunk, start = 0, end = duration,
-                    text = "Initial synthetic transcript.", uncertain = true)
+                Passage(noteId = id, chunkId = chunk, start = 0, end = duration / 2,
+                    text = "Initial synthetic transcript.", uncertain = true),
+                Passage(noteId = id, chunkId = chunk, start = duration / 2, end = duration,
+                    text = EXCLUDED_TEXT, uncertain = true),
             ))
-            store.edit(store.passages(id).single(), MANUAL_EDIT)
+            store.edit(store.passages(id).first(), MANUAL_EDIT)
             store.rename(id, title)
             store.duration(id, duration)
             store.state(id, "READY")
+            assertTrue(store.excludePassage(store.passages(id).last()))
 
             val savedNote = checkNotNull(store.note(id))
             val savedChunks = store.chunks(id)
             val savedPassages = store.passages(id)
             val savedAudioHash = sha256(audio.readBytes())
             assertEquals("ru", savedNote.language)
-            assertTrue(savedPassages.single().reviewed && savedPassages.single().uncertain)
+            val manual = savedPassages.single { it.text == MANUAL_EDIT }
+            assertTrue(manual.reviewed && manual.uncertain && !manual.excluded)
+            val excluded = savedPassages.single { it.text == EXCLUDED_TEXT }
+            assertTrue(excluded.excluded && excluded.originalTranscriptText == EXCLUDED_TEXT)
             receipt.put("fixture_wav_sha256", JFK_SHA256).put("frames", frames)
 
             phase = "open_recording"
@@ -84,13 +97,11 @@ class SavedAudioPreviewIntegrationTest {
                 compose.onAllNodesWithText(MANUAL_EDIT).fetchSemanticsNodes().isNotEmpty() &&
                     compose.onAllNodesWithContentDescription("Recording options").fetchSemanticsNodes().isNotEmpty()
             }
-            compose.onNodeWithContentDescription("Recording options").assertIsDisplayed().performClick()
-            val action = hasText("Alternative transcript") and hasClickAction()
-            compose.waitUntil(10_000) { compose.onAllNodes(action).fetchSemanticsNodes().isNotEmpty() }
+            val action = previewAction()
 
             phase = "start_preview"
             val started = SystemClock.elapsedRealtime()
-            compose.onNode(action).assertIsDisplayed().assertIsEnabled().performClick()
+            action.performClick()
             compose.waitUntil(10_000) {
                 compose.onAllNodesWithText(AUTOMATIC_LANGUAGE).fetchSemanticsNodes().isNotEmpty()
             }
@@ -113,6 +124,8 @@ class SavedAudioPreviewIntegrationTest {
             assertEquals(id, ready.noteId)
             assertEquals(frames, ready.completedFrames)
             assertEquals(frames, ready.totalFrames)
+            val extractedFiles = bundledCache?.fingerprint()
+            if (extractedFiles != null) receipt.put("bundled_model_extracted", true)
             compose.onNodeWithText(AUTOMATIC_LANGUAGE).assertIsDisplayed()
             val candidate = ready.segments.map { it.text }.filter(String::isNotBlank).joinToString("\n\n")
             assertTrue("The alternative text must be present in the preview.",
@@ -134,13 +147,24 @@ class SavedAudioPreviewIntegrationTest {
                 val copied = clipboard.primaryClip?.getItemAt(0)?.text?.toString()
                 assertTrue("Clipboard must equal the complete alternative.", copied == candidate)
             }
-            compose.onNodeWithContentDescription("Close alternative transcript").performClick()
-            compose.waitUntil(10_000) {
-                model.alternativePreview.state.value == null &&
-                    compose.onAllNodesWithText(AUTOMATIC_LANGUAGE).fetchSemanticsNodes().isEmpty() &&
-                    compose.onAllNodesWithText(MANUAL_EDIT).fetchSemanticsNodes().isNotEmpty()
+            closePreview(model)
+
+            if (bundledCache != null) {
+                phase = "reuse_bundled_model"
+                val warmAction = previewAction()
+                val warmStarted = SystemClock.elapsedRealtime()
+                warmAction.performClick()
+                compose.waitUntil(120_000) {
+                    model.alternativePreview.state.value?.phase in setOf(PreviewPhase.Ready, PreviewPhase.Failed)
+                }
+                val warm = checkNotNull(model.alternativePreview.state.value)
+                assertEquals(PreviewPhase.Ready, warm.phase)
+                assertEquals(frames, warm.completedFrames)
+                assertEquals(extractedFiles, bundledCache.fingerprint())
+                receipt.put("bundled_model_reused", true)
+                    .put("cached_menu_to_preview_ready_ms", SystemClock.elapsedRealtime() - warmStarted)
+                closePreview(model)
             }
-            compose.onNodeWithText(MANUAL_EDIT).assertIsDisplayed()
 
             phase = "verify_original"
             assertEquals(savedNote, store.note(id))
@@ -152,17 +176,107 @@ class SavedAudioPreviewIntegrationTest {
             phase = "complete"
         } finally {
             try {
-                noteId?.let { id ->
-                    compose.activityRule.scenario.onActivity { model.alternativePreview.stop() }
-                    runBlocking { withTimeoutOrNull(15_000) { model.alternativePreview.state.first { it == null } } }
-                    // A failed timeout must not delete the source while native work still owns it.
-                    val claim = SessionOperations.tryDestructive(id)
-                    if (claim != null) try { app.store.delete(id) } finally { claim.release() }
-                    receipt.put("fixture_deleted", claim != null)
+                try {
+                    noteId?.let { id ->
+                        compose.activityRule.scenario.onActivity { model.alternativePreview.stop() }
+                        runBlocking { withTimeoutOrNull(15_000) { model.alternativePreview.state.first { it == null } } }
+                        // A failed timeout must not delete the source while native work still owns it.
+                        val claim = SessionOperations.tryDestructive(id)
+                        if (claim != null) try { app.store.delete(id) } finally { claim.release() }
+                        receipt.put("fixture_deleted", claim != null)
+                    }
+                } finally {
+                    if (bundledCache != null) {
+                        val restored = bundledCache.restore()
+                        receipt.put("bundled_cache_restored", restored)
+                        if (phase == "complete") check(restored) { "The bundled cache is still in use." }
+                    }
                 }
+            } catch (failure: Exception) {
+                receipt.put("status", "FAIL")
+                throw failure
             } finally {
                 receipt.put("phase", phase).put("process_lifetime_peak_rss_kib", peakRssKiB() ?: JSONObject.NULL)
                 save(AtomicFile(File(receipts, "preview-$runId.json")), receipt)
+            }
+        }
+    }
+
+    private fun previewAction(): SemanticsNodeInteraction {
+        compose.onNodeWithContentDescription("Recording options").assertIsDisplayed().performClick()
+        val action = hasText("Transcribe with Ultra") and hasClickAction()
+        compose.waitUntil(10_000) { compose.onAllNodes(action).fetchSemanticsNodes().isNotEmpty() }
+        return compose.onNode(action).assertIsDisplayed().assertIsEnabled()
+    }
+
+    private fun closePreview(model: FocalViewModel) {
+        compose.onNodeWithContentDescription("Close alternative transcript").performClick()
+        compose.waitUntil(10_000) {
+            model.alternativePreview.state.value == null &&
+                compose.onAllNodesWithText(AUTOMATIC_LANGUAGE).fetchSemanticsNodes().isEmpty() &&
+                compose.onAllNodesWithText(MANUAL_EDIT).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText(MANUAL_EDIT).assertIsDisplayed()
+    }
+
+    /** For dedicated instrumentation only. Any prior model directories are moved, never copied. */
+    private class BundledCache(parent: File, private val runId: String) {
+        private val active = File(parent, UltraModelFiles.directoryName)
+        private val partial = File(parent, "${active.name}.partial")
+        private val previous = mutableMapOf<File, File>()
+        private var isolated = false
+
+        fun isolate() {
+            val claim = checkNotNull(SessionOperations.reserveSession(capture = false, noteId = null))
+            try {
+                for (directory in listOf(active, partial)) {
+                    if (!Files.exists(directory.toPath(), NOFOLLOW_LINKS)) continue
+                    check(Files.isDirectory(directory.toPath(), NOFOLLOW_LINKS)) { "Invalid Ultra cache directory." }
+                    val backup = File(directory.parentFile, "${directory.name}.test-backup-$runId")
+                    check(!Files.exists(backup.toPath(), NOFOLLOW_LINKS))
+                    Files.move(directory.toPath(), backup.toPath(), ATOMIC_MOVE)
+                    previous[directory] = backup
+                }
+                isolated = true
+            } finally {
+                claim.release()
+            }
+        }
+
+        fun fingerprint(): Map<String, Triple<Long, Long, Long>> {
+            check(!Files.exists(partial.toPath(), NOFOLLOW_LINKS)) { "Ultra extraction left a partial directory." }
+            val entries = checkNotNull(active.listFiles()) { "Bundled Ultra did not install on first use." }
+            assertEquals(MODEL_FILES, entries.associate { it.name to it.length() })
+            return entries.associate { file ->
+                check(Files.isRegularFile(file.toPath(), NOFOLLOW_LINKS))
+                val stat = Os.stat(file.path)
+                file.name to Triple(stat.st_dev, stat.st_ino, stat.st_mtime)
+            }
+        }
+
+        fun restore(): Boolean {
+            if (!isolated && previous.isEmpty()) return true
+            val claim = SessionOperations.reserveSession(capture = false, noteId = null) ?: return false
+            try {
+                if (isolated) {
+                    for (directory in listOf(active, partial)) {
+                        if (!Files.exists(directory.toPath(), NOFOLLOW_LINKS)) continue
+                        check(Files.isDirectory(directory.toPath(), NOFOLLOW_LINKS))
+                        val entries = checkNotNull(directory.listFiles())
+                        check(entries.all { it.name in MODEL_FILES && Files.isRegularFile(it.toPath(), NOFOLLOW_LINKS) }) {
+                            "Unexpected entry in the test's Ultra model cache."
+                        }
+                        entries.forEach { Files.delete(it.toPath()) }
+                        Files.delete(directory.toPath())
+                    }
+                }
+                for ((directory, backup) in previous) {
+                    check(!Files.exists(directory.toPath(), NOFOLLOW_LINKS))
+                    Files.move(backup.toPath(), directory.toPath(), ATOMIC_MOVE)
+                }
+                return true
+            } finally {
+                claim.release()
             }
         }
     }
@@ -200,8 +314,11 @@ class SavedAudioPreviewIntegrationTest {
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     private companion object {
-        const val AUTOMATIC_LANGUAGE = "Parakeet · Automatic language"
+        const val AUTOMATIC_LANGUAGE = "Ultra · Automatic language"
         const val MANUAL_EDIT = "Keep these manually reviewed words."
+        const val EXCLUDED_TEXT = "Preserve this excluded synthetic passage."
         const val JFK_SHA256 = "d7d4e74b8a333ed02186008bc109a1b1a19d16da668bd56e785d80d69a16a72f"
+        val MODEL_FILES = mapOf("encoder.int8.onnx" to 652_282_526L, "decoder.int8.onnx" to 11_845_274L,
+            "joiner.int8.onnx" to 6_355_277L, "tokens.txt" to 93_939L)
     }
 }

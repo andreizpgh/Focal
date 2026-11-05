@@ -1,5 +1,10 @@
 # Local speech-quality experiments
 
+The [November 5 decision review](stt-decision-review-2026-11-05.md) revisits
+candidate selection, input coverage and audio-grounded correction. It supersedes
+model-family conclusions, not historical measurements or failed acceptance
+criteria. The next priority is core transcription, not Review UI refinement.
+
 Research plan and measured checkpoint, **2026-11-03**. No automatic correction
 is enabled. The app retains multilingual base Q5_1, beam 3 and full encoder
 context. The current environment can obtain pinned Hugging Face artifacts;
@@ -213,14 +218,19 @@ below, and no fine-tuned derivative is selected.
 
 ## One shared download budget
 
-The owner increased the cumulative ceiling to **5,000,000,000 bytes** on
+The current cumulative ceiling is **8,500,000,000 bytes**, approved on November 5.
+The [shared ledger](benchmarks/2026-11-03-stt/download-budget.json) reserves
+**7,850,106,526 bytes**, leaving **649,893,474**. This includes every reservation
+described below, the new Ultra graphs, Gemma audio bundle, API runtime and metadata.
+
+The owner previously increased the ceiling to **5,000,000,000 bytes** on
 2026-11-04 for removable local research artifacts. Count models, corpus,
 metadata and failed/repeated transfers across sessions. Fetch metadata first,
 pin immutable revisions and SHA-256 hashes, and reserve the full declared size
 before each request. Reuse verified files; a larger budget does not justify
 fetching whole corpus shards or every model variant.
 
-The [shared ledger](benchmarks/2026-11-03-stt/download-budget.json) now reserves
+Before the Ultra/Gemma audio comparison, the shared ledger reserved
 **4,557,289,366 bytes**, leaving **442,710,634 bytes**. This retains the earlier
 881,742,333 bytes, including the 61,000,000-byte future CI reserve, and adds
 17,858 bytes of initial metadata, 196,608 bytes reserved for runtime/candidate
@@ -270,7 +280,10 @@ The other six languages were not run, and the hint is not shipped. eSpeak
 fixtures are a cheap failure screen, not a measurement of natural code switching
 or Pixel recognition. [Aggregate results](benchmarks/2026-11-03-local/mixed-term-hint-results.json)
 
-### Current shortlist after the budget increase
+### Historical shortlist after the November 4 budget increase
+
+This records the earlier selection. Completed Qwen-ASR, Small, Ultra and Gemma
+audio results now appear in the [November 5 decision review](stt-decision-review-2026-11-05.md).
 
 The larger allowance supports measured comparisons, not a model catalogue in
 the app. Qwen3.5-2B Q4_K_M was selected as one modern local comparator at

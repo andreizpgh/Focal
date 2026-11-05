@@ -1,5 +1,77 @@
 # Product verification · 2026-11-05
 
+## Alpha 8 bundled Ultra · final emulator verification
+
+Clean `db225cfcc171248ffd92e45ae64fae20aa03cdaa` completed
+`qa-local.py --ultra --release-checks` with **137/0/0** on the dedicated API 35
+x86_64 emulator. The suite includes ten existing real-model checks and eight
+Ultra checks covering extraction, verified cache reuse, copy, cancellation and
+import ownership. One of the eight verifies completed real Ultra inference. The separate
+background-cancellation test may stop before native model loading, so it is
+not counted as another guaranteed inference check. JUnit took 218.268 s and runner instrumentation wall time was
+219.510 s. Both lints, 36 core and 11 app JVM test results, and the debug,
+instrumentation and unsigned minified release builds were verified. Gradle
+reported 3m57s. The bounded service took 8m30.913s wall and 11m50.762s CPU,
+with 3.5G peak memory and zero swap. Report `20261105T112021.908751Z` binds
+the installed APK pair to the verified build.
+[Exact artifact and model provenance](../releases/stt-alpha-8.json).
+
+The published 815,300,046-byte testing debug APK has SHA-256
+`9971b9a10e06ff3fc506d00b797cba1fb0b999ff98b55758ae7526a500be4a37`.
+Manual review on that exact APK covered the public-fixture Ultra result, Copy,
+200% landscape, light/dark, return to portrait and licenses. The synthetic
+note, passages, chunks and original audio remained identical. A separately
+signed private copy of the minified build passed cold extraction, the public
+speech fixture, Copy and Close without the `DEBUGGABLE` flag. Its SHA-256 is
+`f5d87221a1c9fb5d00080babca52dafdc43ceabf0faa7a22a44c33b17c004401`.
+The before and after snapshots matched byte for byte. A later APK replacement
+on the emulator hit storage pressure. Reboot released retained package files
+without clearing app data; the exact debug APK was restored.
+[Alpha 8](https://github.com/andreizpgh/Focal/releases/tag/stt-alpha-8) is published.
+All six remote asset sizes and SHA-256 digests match the local release files.
+The direct APK link returns HTTP 200 with the Alpha 8 filename. Older assets
+are unchanged. The dedicated AVD is stopped; no models were downloaded during
+integration or QA.
+
+The first bundled run at `13349d8` passed 137/0/0. Its 200% landscape review
+found navigation overlap in the Ultra sheet. After the inset fix, `9726e6f`
+finished 136/137 with an EditorFooter timeout whose cause remains unconfirmed.
+A stronger focus assertion separately demonstrated that the editor retained
+focus after a failed save. Resolving focus and keyboard ownership inside the
+dialog passed four focused tests and the final full suite. The initial combined
+build also ran out of memory before R8 completed. A fresh release JVM with one
+worker and a 1,536 MiB heap completed that stage.
+
+Physical Pixel 10 installation, microphone and audible playback, latency, RAM,
+battery, thermals and background capture remain open. See the
+[device checklist](device-validation.md).
+
+## Optional Ultra · Android research and held-out quality
+
+A frozen paired screen of 42 disjoint FLEURS read-speech clips (six per language)
+compares the same PCM through full-input Base on the host and the Ultra
+saved-audio path on Android. Base → Ultra word errors were **184 → 51 / 961**
+and lexical character errors **369 → 94 / 5,010**. Word errors and lexical
+CER improved in each of the seven language aggregates. This meets the
+predeclared aggregate quality thresholds; it is not a phone-speed comparison or
+acceptance for natural speech. An independent audit verified all raw receipts,
+scoring, input identities and model staging; no acoustic adjudication was performed.
+
+On the earlier 20-case DEV screen, normal/quiet Ultra errors were 12/15 / 210
+words and four no-speech controls were blank. The first long Spanish framing
+failed the seam review. A revised bounded pause search was checked on the same
+long Russian and Spanish DEV inputs: 12 total decoder windows, complete verified
+coverage, and the previously observed Spanish repeated joins and invented tail
+were absent in that review. This does not prove all long boundaries are safe;
+the fallback overlap and difficult quiet or mixed-language speech remain open.
+
+The Android quality tests staged the model separately. The bundled app and
+minified runtime smoke are verified above. Ultra is an explicit copy-only
+alternative for saved recordings up to three minutes. Live Whisper, original
+audio, saved ASR and edits are preserved. Automatic LLM correction remains off.
+The cumulative download ledger is **7,850,618,526 / 8,500,000,000 bytes**. See
+the [Android quality report](benchmarks/2026-11-05-stt/ultra-android-report.md).
+
 ## Alpha 7 candidate · full verification 2026-11-05
 
 Clean `4ac250d322849e4cc2ee29c034b4c8b28330a78c` passed the complete local

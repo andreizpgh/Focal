@@ -45,17 +45,20 @@ import app.focal.speech.PreviewState
     ModalBottomSheet(onDismissRequest = stop, sheetState = sheet,
         containerColor = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
         DialogSystemBars()
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+        Column(Modifier.fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp).padding(bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Alternative transcript", style = MaterialTheme.typography.headlineMedium,
+                Text("Ultra transcript", style = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.weight(1f).semantics { heading() })
                 IconAction(Symbol.Close, "Close alternative transcript", click = stop)
             }
-            Text("Parakeet · Automatic language", style = MaterialTheme.typography.labelMedium,
+            Text("Ultra · Automatic language", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Your saved transcript and edits stay unchanged.", style = MaterialTheme.typography.bodyMedium,
+            Text("Ultra transcribes the full original recording, including audio from excluded passages. " +
+                "Your edits and exclusions stay with the saved transcript.", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             when (current.phase) {
                 PreviewPhase.Loading, PreviewPhase.Running, PreviewPhase.Stopping -> {

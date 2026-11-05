@@ -2,7 +2,184 @@
 
 Exploratory CPU measurements, not phone acceptance. Automatic correction remains
 disabled. Source audio and recognizer output are retained privately; this report
-contains aggregate results only. The 42 unused held-out clips remain unopened.
+contains aggregate results only. The later held-out Android comparison is linked below.
+
+## Current Android Ultra evaluation
+
+On 42 frozen held-out FLEURS clips, the same PCM produced Base host → Android
+Ultra word errors **184 → 51 / 961** and lexical character errors **369 → 94 /
+5,010**. Each of the seven language aggregates improved on both measures. An
+independent audit checked the raw outputs, source identities and scoring. This
+was a text-based comparison on a staged research build. The
+[bundled-app verification](../../quality-report.md#alpha-8-bundled-ultra--final-emulator-verification)
+records the separate emulator integration and minified smoke. Physical-phone
+validation remains open. The earlier DEV long-Spanish seam failure and the
+targeted follow-up are both retained in the [Android evaluation](ultra-android-report.md).
+
+## Gemma 4 E2B audio · correction of the stronger Ultra draft
+
+A separate frozen diagnostic used Ultra drafts for 18 correction calls; direct
+ASR was not repeated. The correction instruction, audio, runtime, model and
+decoding limits were unchanged, and no reference text or error locations were
+supplied. Unlike the earlier screen's stop-on-output-failure rule, this diagnostic
+collected all returned messages. All 18 responses were structurally valid, but
+two were invalid transcripts of noise. This is coverage completion, not a quality
+pass. [Audited aggregate](gemma4-ultra-correction.json).
+
+| Condition | Ultra | Gemma + Ultra draft |
+| --- | ---: | ---: |
+| Normal word errors / 210 | 15 | 14 |
+| Attenuated word errors / 210 | 14 | 14 |
+| Normal lexical character errors / 1,050 | 33 | 40 |
+| Attenuated lexical character errors / 1,050 | 31 | 38 |
+| Two noise cases, inserted words | 0 | 30 |
+
+Russian word errors improve 4 → 2 and 3 → 2. Italian word errors rise 0 → 1
+in both conditions because a digit is expanded into a word for the same
+quantity; that is a reference-format mismatch, not demonstrated semantic damage.
+Spanish totals tie while individual edits include both a repaired plural and a
+new pronoun mismatch. The Portuguese quantity error remains. The short Portuguese
+negative returns to its selected language; the French one remains in English.
+There are only seven unique ordinary source recordings, each used at two gains.
+
+On the two empty Ultra noise drafts, Gemma invents text: one response wrongly
+claims audio is unavailable, the other supplies a quotation. Both are retained
+in the raw-output score. Skipping empty drafts could avoid these calls, but that
+unexecuted rule is not a measured correction gain on speech. The earlier
+Base-draft screen's invalid response and unrun call remain separate failures.
+
+The added resident-model call takes a median 9.86 host seconds across these
+18 inputs; the bounded service took 183.04 s, reported 1.3G peak memory and no
+swap. This is not Pixel 10 latency. The small lexical gain, mixed edit quality
+and extra cost do not establish a benefit sufficient to enable automatic edits.
+The next experiment at that checkpoint was Ultra in the Android audio path,
+without a mandatory LLM stage. Keep the cached Gemma artifact and evidence;
+this result does not reject every local correction model or future approach.
+
+## Gemma 4 E2B audio · Base-draft screen remains incomplete
+
+One ordinary LiteRT E2B bundle and the API runtime were downloaded and verified.
+The first smoke stopped before inference because the harness had not created its
+cache directory. A separately preserved attempt corrected only that setup and
+completed one smoke, then four pilot calls. No weights were downloaded again;
+completed assay calls were not repeated. [Audited aggregate](gemma4-audio-screen.json).
+
+The fixed assay returned **35 of 36** planned responses: **34** met its text-output
+contract, **one** returned an unsupported reasoning channel with no visible
+transcript, and **one** was not run after the predeclared stop. All fourteen
+ordinary/attenuated speech cases completed in both arms. Direct transcription
+and correction of the current Base draft both receive audio and explicit
+language, without references or hinted error positions. Their results are
+separate; this is not a test of correction on Ultra's stronger draft.
+
+| Condition | Base | Small | Ultra | Gemma direct | Gemma + Base draft |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Normal word errors / 210 | 25 | 18 | 15 | 15 | 16 |
+| Attenuated word errors / 210 | 31 | 19 | 14 | 18 | 20 |
+| Two noise cases, inserted words | 12 | 4 | 0 | 1 | 12 |
+
+Correction reduces WER versus Base in 11/14 speech passages and ties in three,
+but that does not mean every edit is right: reference-based review found new
+mismatches inside some improved passages. Gemma direct has 58/64 lexical
+character errors on the normal/quiet groups versus Base 47/63; correction gives
+45/60. Thus WER alone obscures some tradeoffs. Noise correction preserves the
+Base hallucinations. The French direct short answer is empty; correction keeps
+its negative word. Portuguese correction returns the unsupported channel and
+its direct counterpart is explicitly unrun. Invalid output is not accepted as
+an empty, successful transcript, and the failed screen is not reclassified.
+
+One model stays resident within each stage, with fresh conversations, two text
+and two audio CPU threads, 2048 total-context and 256 response tokens, thinking
+requested off, and hard external deadlines. The invalid response still produced
+reasoning; this setting is not a sufficient output contract. The API exposes
+no independently checked finish reason: counters detect observed caps but do
+not prove EOS. Raw text, including any unwanted explanation, is scored without
+cleanup. Host timing and memory do not establish Pixel 10 audio performance.
+Automatic correction remains disabled. The separate audio-plus-Ultra diagnostic
+above tests added value against the stronger recognizer.
+
+## Parakeet Ultra · completed DEV42 comparison
+
+The same 42 consumed DEV clips now have results for Base, original Parakeet v3
+and Ultra. Seven exact Ultra outputs were reused from the 18-input diagnostic;
+only 35 new calls were needed. This is a composite quality comparison, with
+no new held-out input. Independent audit verified all 42 PCM bindings and 126
+raw outputs. [Aggregate and provenance](parakeet-ultra-dev-42.json).
+
+| Language | Reference words | Base errors | v3 errors | Ultra errors |
+| --- | ---: | ---: | ---: | ---: |
+| English | 88 | 11 | 3 | 5 |
+| Russian | 105 | 31 | 19 | 13 |
+| German | 122 | 13 | 5 | 3 |
+| French | 128 | 32 | 13 | 14 |
+| Spanish | 177 | 15 | 44 | 4 |
+| Italian | 126 | 31 | 7 | 3 |
+| Portuguese | 118 | 13 | 7 | 9 |
+| **Total** | **864** | **146** | **98** | **51** |
+
+Ultra improves WER and lexical CER against Base in every language in this DEV
+sample. Overall WER is **16.90% → 5.90%**; character errors **262 → 107 / 4,349**.
+Against v3, English/French/Portuguese word errors rise; the Spanish outlier
+accounts for much of the aggregate improvement. The earlier Portuguese clip
+with a merged numerical quantity remains a real regression within the better
+language aggregate. These are six sources per language, not population estimates.
+
+The separate [18-input diagnostic](parakeet-ultra-dev-18.json) also covers quiet
+versions and controls: normal Base/Small/Ultra errors 25/18/15, quiet 31/19/14,
+and two varying-noise inputs 12/4/0 insertions. Both short synthetic negatives
+become an English negative under Ultra: selected-language fidelity fails, but
+these text outputs do not establish a reversal of meaning. Those controls and
+the Portuguese error are retained, not outweighed into an unconditional pass.
+
+Ultra uses automatic language selection; Base and Small use explicit language.
+All receive complete PCM here, without the app gate. The 35 fresh Ultra calls
+took 164.78 s, median model load 2.77 s and decode 1.47 s, maximum process RSS
+1.26 GB under CPU150%/4GiB/no-swap limits. These are candidate-only host costs,
+not paired speed gains or Android timing. The next application experiment must
+verify framing, noise, long boundaries and resource use before changing the
+default. The 42 untouched held-out clips remain reserved for a frozen pipeline.
+
+## Ultra technical-term canaries · synthetic only
+
+Five existing eSpeak fixtures test one absent-term phrase plus two RU+EN
+scripts at normal and attenuated gain. No new speech was generated or downloaded.
+Exact target hits, out of eight, were Base **1**, v3 **2**, Ultra **4**. Ultra's
+four hits were HTML in all four positive fixtures; API and guardrails each
+remained 0/2. All three avoided target-word insertion in the absent-term control.
+Ultra retained the expected number token at both gains; none matched the
+expected Russian negation markers. These are lexical counts, not acoustic
+adjudication of meaning. [Audited aggregate](parakeet-ultra-mixed-5.json).
+
+Overall word errors fell 43 → 31 / 36 versus Base, but surrounding lexical
+character errors on the four positive fixtures rose 83 → 86 / 122. The poor
+surrounding transcription and artificial language joins limit what this screen
+can establish. It does not resolve natural HTML/API/guardrails dictation.
+Five fresh Ultra calls took 18.99 s; no matched timing or phone claim is made.
+
+## Small auto-context · complete full-PCM diagnostic
+
+A fixed diagnostic now fills the previously missing ordinary-speech check for
+cached Small Q5_1. Eighteen new candidate calls use the exact PCM and scoring
+from completed Base comparisons: seven normal DEV sources, their gain-0.1
+versions, two varying-noise controls and two synthetic short negatives. The
+normal/quiet versions share sources; none is fresh held-out evidence.
+[Audited aggregate](small-auto-diagnostic.json).
+
+Normal word errors fell **25 → 18 / 210**, attenuated errors **31 → 19 / 210**;
+lexical character errors fell **47 → 35 / 1,050** and **63 → 38 / 1,050**.
+Normal English word errors rose 2 → 3 while character errors fell 5 → 2;
+Portuguese ordinary speech tied. Noise insertions fell 12 → 4 but did not vanish.
+A short French negative that Base recognized correctly became an unrelated word;
+the Portuguese short negative improved. No control was dropped or retried.
+
+Base uses full encoder context; Small uses the frozen historical auto-context
+formula. This compares configurations rather than isolating model size. Both
+use explicit language and complete source PCM, without gate/VAD. Raw and emitted
+text agree for every result. Candidate cold calls took 232.07 s with maximum
+process RSS 450.6 MB under the bounded host job; cached Base timings are not a
+paired speed baseline. Independent audit verified all 18 PCM/result chains and
+recomputed both forms of the scores. Prior Small failures remain unchanged.
+This supports further accuracy work, not default-model promotion or a phone claim.
 
 ## Qwen3-ASR 0.6B INT8: not promoted
 

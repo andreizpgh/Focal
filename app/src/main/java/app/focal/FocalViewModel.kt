@@ -2,6 +2,7 @@ package app.focal
 
 import android.app.Application
 import android.net.Uri
+import androidx.annotation.MainThread
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.focal.data.*
@@ -55,8 +56,9 @@ class FocalViewModel internal constructor(
         check(android.os.Build.VERSION.SDK_INT < 29 || power.currentThermalStatus < android.os.PowerManager.THERMAL_STATUS_SEVERE) {
             "Let the device cool down before trying another transcription."
         }
-        PreviewEngineFactory.open(File(app.filesDir, "parakeet-probe/model"),
-            if (power.isPowerSaveMode) 1 else 2, checkCancelled)
+        val threads = if (power.isPowerSaveMode) 1 else 2
+        if (BuildConfig.FOCAL_ULTRA_BUNDLED) PreviewEngineFactory.openBundled(app, threads, checkCancelled)
+        else PreviewEngineFactory.open(File(app.filesDir, "parakeet-probe/model"), threads, checkCancelled)
     }
     val library: StateFlow<LibraryState> = libraryState.asStateFlow()
     private val initialPreparation = viewModelScope.async(Dispatchers.IO) {
@@ -199,20 +201,30 @@ class FocalViewModel internal constructor(
         check(live.value.noteId != id && app.store.pendingCount(id) == 0) { "Finish transcription before removing its source audio." }
         player.stopNote(id); app.store.removeAudio(id)
     }
-    fun importModel(uri: Uri, retryId: String? = null) = work {
-        initialPreparation.await()
-        modelImportLock.withLock {
-            preparing.value = true
+    @MainThread
+    fun importModel(uri: Uri, retryId: String? = null): Job {
+        // Preview variants keep model validation and native preview work exclusive.
+        val claim = if (alternativeAvailable) {
+            SessionOperations.reserveSession(capture = false, noteId = null)
+                ?: return work { errors.emit("Finish the current operation before importing a speech model.") }
+        } else null
+        return work {
             try {
-                val job = currentCoroutineContext()
-                app.contentResolver.openInputStream(uri)?.use { input ->
-                    app.models.install(input, checkCancelled = { job.ensureActive() })
-                } ?: error("Could not read this file.")
-                modelReady.value = app.models.ready()
-                app.startupError.value = null
-                if (retryId != null && modelReady.value) retry(retryId)
-            } finally { preparing.value = false }
-        }
+                initialPreparation.await()
+                modelImportLock.withLock {
+                    preparing.value = true
+                    try {
+                        val job = currentCoroutineContext()
+                        app.contentResolver.openInputStream(uri)?.use { input ->
+                            app.models.install(input, checkCancelled = { job.ensureActive() })
+                        } ?: error("Could not read this file.")
+                        modelReady.value = app.models.ready()
+                        app.startupError.value = null
+                    } finally { preparing.value = false }
+                }
+            } finally { claim?.release() }
+            if (retryId != null && modelReady.value) retry(retryId)
+        }.also { job -> job.invokeOnCompletion { claim?.release() } }
     }
     fun play(passage: Passage) {
         if (live.value.noteId != null && !live.value.processing) {

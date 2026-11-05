@@ -9,8 +9,13 @@ import java.io.RandomAccessFile
 internal object SavedAudioPreview {
     const val SAMPLE_RATE = 16_000
     const val MAX_DURATION_SECONDS = 180
-    private const val WINDOW_FRAMES = 16 * SAMPLE_RATE
+    private const val WINDOW_FRAMES = 30 * SAMPLE_RATE
     private const val OVERLAP_FRAMES = SAMPLE_RATE / 2
+    private const val MIN_TAIL_FRAMES = 5 * SAMPLE_RATE
+    private const val ENERGY_FRAME_SAMPLES = SAMPLE_RATE / 50
+    private const val PAUSE_FRAMES = 12
+    private const val MIN_NEW_WINDOW_FRAMES = 10 * SAMPLE_RATE
+    private const val PAUSE_ENERGY_RATIO = 0.01
     private const val FRAMES_PER_MS = SAMPLE_RATE / 1_000
 
     interface Decoder : AutoCloseable {
@@ -47,7 +52,12 @@ internal object SavedAudioPreview {
             try {
                 while (true) {
                     checkCancelled()
-                    val end = minOf(start + WINDOW_FRAMES, totalFrames)
+                    val limit = if (totalFrames - start <= WINDOW_FRAMES) totalFrames
+                    else minOf(start + WINDOW_FRAMES, totalFrames - MIN_TAIL_FRAMES)
+                    val pause = if (limit < totalFrames) lowEnergyCut(input, start, limit,
+                        (previousEnd ?: start) + MIN_NEW_WINDOW_FRAMES, scratch, checkCancelled)
+                    else null
+                    val end = pause ?: limit
                     val samples = readWindow(input, start, end - start, scratch)
                     checkCancelled()
                     if (samples.any { it != samples[0] }) {
@@ -79,7 +89,7 @@ internal object SavedAudioPreview {
                     onProgress(end, totalFrames)
                     if (end == totalFrames) break
                     previousEnd = end
-                    start = end - OVERLAP_FRAMES
+                    start = if (pause == null) end - OVERLAP_FRAMES else end
                 }
             } finally {
                 decoder?.close()
@@ -87,6 +97,46 @@ internal object SavedAudioPreview {
         }
         checkCancelled()
         return passages
+    }
+
+    /** Looks for a cut only. Every sample still belongs to at least one decode window. */
+    private fun lowEnergyCut(
+        input: RandomAccessFile, start: Int, limit: Int, minimumCut: Int,
+        scratch: ByteArray, checkCancelled: () -> Unit,
+    ): Int? {
+        val frameBytes = ENERGY_FRAME_SAMPLES * 2
+        val energies = LongArray((limit - start) / ENERGY_FRAME_SAMPLES)
+        input.seek(start * 2L)
+        var frame = 0
+        while (frame < energies.size) {
+            checkCancelled()
+            val frames = minOf(energies.size - frame, scratch.size / frameBytes)
+            input.readFully(scratch, 0, frames * frameBytes)
+            for (offset in 0 until frames * frameBytes step frameBytes) {
+                var sum = 0L
+                var squares = 0L
+                for (index in offset until offset + frameBytes step 2) {
+                    val sample = pcmSample(scratch, index).toLong()
+                    sum += sample
+                    squares += sample * sample
+                }
+                // This scaled variance removes constant microphone offset exactly.
+                energies[frame++] = ENERGY_FRAME_SAMPLES * squares - sum * sum
+            }
+        }
+        val threshold = energies.average() * PAUSE_ENERGY_RATIO
+        if (threshold == 0.0) return null
+
+        // Prefer an earlier pause to cutting a word at the maximum window length.
+        // Every nonfinal window still contributes at least ten seconds of new audio.
+        val searchStart = minimumCut - start
+        val firstFrame = (searchStart + ENERGY_FRAME_SAMPLES - 1) / ENERGY_FRAME_SAMPLES
+        var quietFrames = 0
+        for (index in energies.lastIndex downTo firstFrame) {
+            quietFrames = if (energies[index] <= threshold) quietFrames + 1 else 0
+            if (quietFrames == PAUSE_FRAMES) return start + (index + PAUSE_FRAMES / 2) * ENERGY_FRAME_SAMPLES
+        }
+        return null
     }
 
     private fun readWindow(input: RandomAccessFile, start: Int, frames: Int, scratch: ByteArray): FloatArray {
@@ -97,11 +147,12 @@ internal object SavedAudioPreview {
             val bytes = minOf((frames - filled) * 2, scratch.size)
             input.readFully(scratch, 0, bytes)
             for (index in 0 until bytes step 2) {
-                val low = scratch[index].toInt() and 0xff
-                val high = scratch[index + 1].toInt() shl 8
-                samples[filled++] = (high or low) / 32768f
+                samples[filled++] = pcmSample(scratch, index) / 32768f
             }
         }
         return samples
     }
+
+    private fun pcmSample(bytes: ByteArray, index: Int): Int =
+        (bytes[index + 1].toInt() shl 8) or (bytes[index].toInt() and 0xff)
 }

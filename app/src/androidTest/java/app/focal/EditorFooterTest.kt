@@ -9,6 +9,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasSetTextAction
@@ -69,6 +70,7 @@ class EditorFooterTest {
         compose.onNodeWithText("Couldn't save. Your changes are still here. Try again.")
             .performScrollTo().assertIsDisplayed()
         compose.onNode(hasSetTextAction()).assertTextContains("Revised hint")
+            .assertIsNotFocused()
         save.performScrollTo().assertTextEquals("Save").performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle {

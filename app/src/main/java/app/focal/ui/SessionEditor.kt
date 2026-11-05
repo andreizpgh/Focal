@@ -92,8 +92,6 @@ import kotlinx.coroutines.launch
     var inputTooLarge by rememberSaveable(passage.id) { mutableStateOf(false) }
     val scroll = rememberSaveable(passage.id, saver = ScrollState.Saver) { ScrollState(0) }
     val scope = rememberCoroutineScope()
-    val focus = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
     SideEffect { onDirtyChange(text != passage.text) }
     DisposableEffect(passage.id) { onDispose { onDirtyChange(false); onSavingChange(false) } }
     val needsReview = passage.uncertain && !passage.reviewed && !passage.excluded
@@ -110,17 +108,10 @@ import kotlinx.coroutines.launch
             } else passageAlpha.snapTo(1f)
         }
     }
-    fun closeEditor() { focus.clearFocus(force = true); keyboard?.hide(); dismiss() }
+    fun closeEditor() { dismiss() }
     fun requestClose() {
         if (saving) return
         if (text != passage.text) discard = true else closeEditor()
-    }
-    fun commit(next: Boolean) {
-        if (saving) return
-        if (passage.excluded && !dirty) { closeEditor(); return }
-        focus.clearFocus(force = true); keyboard?.hide()
-        saving = true; onSavingChange(true)
-        scope.launch { try { saveFailed = !save(text, next) } finally { saving = false; onSavingChange(false) } }
     }
     val confirmSheetChange = rememberUpdatedState<(SheetValue) -> Boolean> { target ->
         when {
@@ -139,6 +130,16 @@ import kotlinx.coroutines.launch
         containerColor = MaterialTheme.colorScheme.background,
     ) {
         DialogSystemBars()
+        // The editor owns a dialog window, separate from the activity's focus.
+        val focus = LocalFocusManager.current
+        val keyboard = LocalSoftwareKeyboardController.current
+        fun commit(next: Boolean) {
+            if (saving) return
+            if (passage.excluded && !dirty) { closeEditor(); return }
+            focus.clearFocus(force = true); keyboard?.hide()
+            saving = true; onSavingChange(true)
+            scope.launch { try { saveFailed = !save(text, next) } finally { saving = false; onSavingChange(false) } }
+        }
         Column(Modifier.fillMaxWidth().imePadding().verticalScroll(scroll).padding(horizontal = 24.dp)
             .padding(bottom = 8.dp).graphicsLayer { alpha = passageAlpha.value }) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

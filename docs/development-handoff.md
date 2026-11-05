@@ -15,27 +15,39 @@ Branch: `codex/sessions-stt-handoff`. Baseline before the redesign:
 The redesign and reliability work are implemented and reviewed. The branch is a
 development checkpoint, not a verified stable distribution release. Alpha 1
 assets are unchanged; the newer UX preview is described below. Seven-language
-read-speech results are measured on the host;
-ARM phone performance and full application acceptance remain open.
+read-speech results have been measured on the host and Android emulator; ARM
+phone performance and full application acceptance remain open.
 
 ## Current checkpoint · 2026-11-05
 
-[Alpha 7 is published](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-7) from clean `4ac250d322849e4cc2ee29c034b4c8b28330a78c`:
-**129/0/0**, ten required real-model checks, 186.980s JUnit / 187.992s runner wall.
-Both lints, core/JVM and debug/test/unsigned R8 builds passed. Exact APK identity
-is in [ux-alpha-7.json](../releases/ux-alpha-7.json). The archived debug APK equals
-the focused/manual build byte for byte. No model was downloaded.
+[Alpha 8](https://github.com/andreizpgh/Focal/releases/tag/stt-alpha-8) is published
+as a testing APK from clean `db225cf`. The final emulator
+QA completed **137/0/0**, and a separately signed minified copy passed the
+Ultra workflow smoke. The [quality report](quality-report.md) binds the exact
+artifacts and records the earlier landscape defect, 136/137 full run and
+separate editor focus regression. The [release provenance](../releases/stt-alpha-8.json)
+binds the downloaded APK to its verified source. GitHub asset sizes and digests
+match the local files; the direct link returns HTTP 200 and the Alpha 8 filename.
+Alpha 7 and older assets remain unchanged.
 
-Optional background-sound checking uses explicit Keep/Exclude, retained original
-audio/text and persistent Restore. Automatic correction and ordinary decoding
-remain unchanged. Original oversized-draft and capture/storage assertions passed.
-Source, actual screenshots and artifact checks were reviewed independently.
-The dedicated AVD and all heavy jobs are stopped. Phone and all-language
-quality/speed/mixed-term gates remain open; see [device-validation](device-validation.md).
-PR #9 is the delivery PR; PR #1–8 are already merged. The remote digest and
-HTTP 200 download filename match `Focal-0.1.0-alpha.7.apk`; signing matches
-Alpha 2–6. Do not upload it again or replace any asset. The next step is owner
-UX acceptance, then the owner-present Pixel 10 plan. See GitHub for PR merge state.
+[Ultra](ultra-transcription.md) reads up to three minutes of original audio
+from a finished recording and displays a separate copyable result with
+automatic language selection. Live Whisper, the original audio, stored ASR,
+edits and exclusion decisions are preserved. Automatic LLM correction stays
+disabled.
+
+The independently audited 42-clip held-out read-speech comparison found word
+errors **184 → 51 / 961** and lexical character errors **369 → 94 / 5,010**
+on identical PCM. Both measures improved in all seven language aggregates.
+The earlier Spanish DEV boundary failure and targeted two-input follow-up
+remain in the [Android quality report](benchmarks/2026-11-05-stt/ultra-android-report.md).
+That report also records the audit's source-identity and acoustic limits.
+
+The owner prioritizes STT. The next device step is the owner-present
+[Pixel 10 check](device-validation.md), including natural speech, mixed terms
+and phone resource use. Reuse existing artifacts. The download ledger remains
+**7,850,618,526 / 8,500,000,000 bytes**. No new model was downloaded during
+integration or QA. The dedicated AVD and heavy jobs are stopped.
 
 ## Earlier research and QA checkpoints
 
@@ -54,7 +66,7 @@ pair exceeded its shared case budget. A separate four-call noise continuation
 passed: seeded noise insertions 40 → 2, weak emulator noise 0 → 4. Automatic
 full-source bypass is rejected; the original 18-case attempt remains incomplete.
 Both results received independent audit and are linked from quality-report.
-No new public backend is enabled. The dedicated AVD is stopped.
+That checkpoint kept the existing production backend.
 
 One new, removable FUTO ACFT Base Q8_0 file (81,768,602 bytes) has been downloaded
 and matched its publisher's SHA-256; it has not been enabled in the app. This is a
@@ -66,9 +78,9 @@ results; both controls-first attempts remain rejected. Diagnostic completion of
 the remaining eight product-context pairs does not undo the failed quiet control.
 Both models failed longer quiet instructions; noise insertions remained nonzero.
 Independent Astra audits cover all results. See the [ACFT report](benchmarks/2026-11-05-stt/report.md#futo-acft-context-formulas-kept-separate).
-All heavy jobs have ended. Do not repeat finished Parakeet/Qwen/gate/ACFT runs,
-download another model speculatively or open held-out speech yet.
-Keep the 42 held-out clips unopened and all cached models. Alpha 6 remains latest.
+At that checkpoint the held-out cohort was unopened and Alpha 6 was the latest
+release. The later Ultra comparison consumed its 42 cases. Reuse the cached
+models and repeat a completed experiment only for a new, testable question.
 
 
 Previous ordinary-app checkpoint `e6f4ca4` passed full local QA: **109/0/0**, eight
@@ -87,7 +99,7 @@ groups Speech model and Appearance together, and uses a 4 dp / 220 ms ease-out
 page transition. Five focused checks passed in 13.717 s; core, debug lint and
 app/test builds passed in 1m 58s. Source and actual frames received manual
 review; details and limits are at the top of [quality-report](quality-report.md).
-Alpha 6 remains the latest release; no new APK has been released. The owner
+Alpha 6 was the latest release at that checkpoint. The owner
 prioritizes an STT decision before any cosmetic Review work. Real-phone quality,
 latency, memory, battery, thermal and background gates remain open.
 
@@ -149,8 +161,9 @@ Run only one heavy job at a time in a systemd unit with `MemoryHigh=3G`,
 Check the live job and `build/local-diagnostics/current-android-delivery-work.json`
 before starting any further work.
 
-The cumulative [download ledger](benchmarks/2026-11-03-stt/download-budget.json)
-reserves **4,557,289,366 / 5,000,000,000 bytes**, leaving **442,710,634**.
+At this earlier checkpoint the cumulative download reservation was
+**4,557,289,366 / 5,000,000,000 bytes**, leaving **442,710,634**.
+Use the [current ledger](benchmarks/2026-11-03-stt/download-budget.json), not this historical balance.
 This includes 1,000,000 bytes of Android runtime metadata and one verified
 49,441,341-byte official AAR transfer, 1,000,000 bytes of ACFT metadata reserve,
 and one 81,768,602-byte ACFT transfer; no model was downloaded again.
@@ -584,10 +597,11 @@ critical-error precision or Russian spontaneous-dictation performance. Preserve
 these limitations when comparing models; do not turn a fast host run or aggregate
 WER gain into an all-language Android claim.
 
-The current shared ceiling is **5,000,000,000 bytes including retries**, raised
-by the owner on 2026-11-04 for removable local research artifacts. Reservation:
+The earlier shared ceiling was **5,000,000,000 bytes including retries**, raised
+by the owner on 2026-11-04 for removable local research artifacts. Historical reservation:
 **4,557,289,366 bytes**, including the existing 61,000,000-byte future CI reserve;
-remaining **442,710,634 bytes**. The old reservation prefix is preserved.
+remaining **442,710,634 bytes**. The current ceiling and balance are at the top
+of this document and in the shared ledger; this historical prefix is preserved.
 The ledger includes two Qwen Q4 files, one local Whisper small transfer, the
 Qwen ASR runtime and model, and bounded metadata.
 Do not reset the ledger or repeatedly fetch existing models. The 42 fresh
