@@ -1,0 +1,511 @@
+{
+  "schema": 1,
+  "status": "COMPLETE_AUDITED",
+  "cases": 21,
+  "speech": {
+    "normal": {
+      "cases": 7,
+      "total": {
+        "whisper_base": {
+          "words": 210,
+          "word_errors": 25,
+          "characters": 1050,
+          "character_errors": 47,
+          "wer": 0.11904761904761904,
+          "lexical_cer": 0.04476190476190476
+        },
+        "previous_ultra": {
+          "words": 210,
+          "word_errors": 12,
+          "characters": 1050,
+          "character_errors": 29,
+          "wer": 0.05714285714285714,
+          "lexical_cer": 0.02761904761904762
+        },
+        "primary": {
+          "words": 210,
+          "word_errors": 12,
+          "characters": 1050,
+          "character_errors": 29,
+          "wer": 0.05714285714285714,
+          "lexical_cer": 0.02761904761904762
+        }
+      },
+      "per_language": {
+        "en": {
+          "whisper_base": {
+            "words": 28,
+            "word_errors": 2,
+            "characters": 120,
+            "character_errors": 5,
+            "wer": 0.07142857142857142,
+            "lexical_cer": 0.041666666666666664
+          },
+          "previous_ultra": {
+            "words": 28,
+            "word_errors": 1,
+            "characters": 120,
+            "character_errors": 4,
+            "wer": 0.03571428571428571,
+            "lexical_cer": 0.03333333333333333
+          },
+          "primary": {
+            "words": 28,
+            "word_errors": 1,
+            "characters": 120,
+            "character_errors": 4,
+            "wer": 0.03571428571428571,
+            "lexical_cer": 0.03333333333333333
+          }
+        },
+        "ru": {
+          "whisper_base": {
+            "words": 26,
+            "word_errors": 8,
+            "characters": 141,
+            "character_errors": 13,
+            "wer": 0.3076923076923077,
+            "lexical_cer": 0.09219858156028368
+          },
+          "previous_ultra": {
+            "words": 26,
+            "word_errors": 4,
+            "characters": 141,
+            "character_errors": 7,
+            "wer": 0.15384615384615385,
+            "lexical_cer": 0.04964539007092199
+          },
+          "primary": {
+            "words": 26,
+            "word_errors": 4,
+            "characters": 141,
+            "character_errors": 7,
+            "wer": 0.15384615384615385,
+            "lexical_cer": 0.04964539007092199
+          }
+        },
+        "de": {
+          "whisper_base": {
+            "words": 19,
+            "word_errors": 1,
+            "characters": 118,
+            "character_errors": 1,
+            "wer": 0.05263157894736842,
+            "lexical_cer": 0.00847457627118644
+          },
+          "previous_ultra": {
+            "words": 19,
+            "word_errors": 0,
+            "characters": 118,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          },
+          "primary": {
+            "words": 19,
+            "word_errors": 0,
+            "characters": 118,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          }
+        },
+        "fr": {
+          "whisper_base": {
+            "words": 32,
+            "word_errors": 2,
+            "characters": 160,
+            "character_errors": 5,
+            "wer": 0.0625,
+            "lexical_cer": 0.03125
+          },
+          "previous_ultra": {
+            "words": 32,
+            "word_errors": 0,
+            "characters": 160,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          },
+          "primary": {
+            "words": 32,
+            "word_errors": 0,
+            "characters": 160,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          }
+        },
+        "es": {
+          "whisper_base": {
+            "words": 59,
+            "word_errors": 4,
+            "characters": 279,
+            "character_errors": 3,
+            "wer": 0.06779661016949153,
+            "lexical_cer": 0.010752688172043012
+          },
+          "previous_ultra": {
+            "words": 59,
+            "word_errors": 2,
+            "characters": 279,
+            "character_errors": 3,
+            "wer": 0.03389830508474576,
+            "lexical_cer": 0.010752688172043012
+          },
+          "primary": {
+            "words": 59,
+            "word_errors": 2,
+            "characters": 279,
+            "character_errors": 3,
+            "wer": 0.03389830508474576,
+            "lexical_cer": 0.010752688172043012
+          }
+        },
+        "it": {
+          "whisper_base": {
+            "words": 25,
+            "word_errors": 3,
+            "characters": 141,
+            "character_errors": 2,
+            "wer": 0.12,
+            "lexical_cer": 0.014184397163120567
+          },
+          "previous_ultra": {
+            "words": 25,
+            "word_errors": 0,
+            "characters": 141,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          },
+          "primary": {
+            "words": 25,
+            "word_errors": 0,
+            "characters": 141,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          }
+        },
+        "pt": {
+          "whisper_base": {
+            "words": 21,
+            "word_errors": 5,
+            "characters": 91,
+            "character_errors": 18,
+            "wer": 0.23809523809523808,
+            "lexical_cer": 0.1978021978021978
+          },
+          "previous_ultra": {
+            "words": 21,
+            "word_errors": 5,
+            "characters": 91,
+            "character_errors": 15,
+            "wer": 0.23809523809523808,
+            "lexical_cer": 0.16483516483516483
+          },
+          "primary": {
+            "words": 21,
+            "word_errors": 5,
+            "characters": 91,
+            "character_errors": 15,
+            "wer": 0.23809523809523808,
+            "lexical_cer": 0.16483516483516483
+          }
+        }
+      }
+    },
+    "quiet": {
+      "cases": 7,
+      "total": {
+        "whisper_base": {
+          "words": 210,
+          "word_errors": 31,
+          "characters": 1050,
+          "character_errors": 63,
+          "wer": 0.14761904761904762,
+          "lexical_cer": 0.06
+        },
+        "previous_ultra": {
+          "words": 210,
+          "word_errors": 15,
+          "characters": 1050,
+          "character_errors": 32,
+          "wer": 0.07142857142857142,
+          "lexical_cer": 0.030476190476190476
+        },
+        "primary": {
+          "words": 210,
+          "word_errors": 15,
+          "characters": 1050,
+          "character_errors": 32,
+          "wer": 0.07142857142857142,
+          "lexical_cer": 0.030476190476190476
+        }
+      },
+      "per_language": {
+        "en": {
+          "whisper_base": {
+            "words": 28,
+            "word_errors": 6,
+            "characters": 120,
+            "character_errors": 19,
+            "wer": 0.21428571428571427,
+            "lexical_cer": 0.15833333333333333
+          },
+          "previous_ultra": {
+            "words": 28,
+            "word_errors": 1,
+            "characters": 120,
+            "character_errors": 4,
+            "wer": 0.03571428571428571,
+            "lexical_cer": 0.03333333333333333
+          },
+          "primary": {
+            "words": 28,
+            "word_errors": 1,
+            "characters": 120,
+            "character_errors": 4,
+            "wer": 0.03571428571428571,
+            "lexical_cer": 0.03333333333333333
+          }
+        },
+        "ru": {
+          "whisper_base": {
+            "words": 26,
+            "word_errors": 8,
+            "characters": 141,
+            "character_errors": 12,
+            "wer": 0.3076923076923077,
+            "lexical_cer": 0.0851063829787234
+          },
+          "previous_ultra": {
+            "words": 26,
+            "word_errors": 4,
+            "characters": 141,
+            "character_errors": 7,
+            "wer": 0.15384615384615385,
+            "lexical_cer": 0.04964539007092199
+          },
+          "primary": {
+            "words": 26,
+            "word_errors": 4,
+            "characters": 141,
+            "character_errors": 7,
+            "wer": 0.15384615384615385,
+            "lexical_cer": 0.04964539007092199
+          }
+        },
+        "de": {
+          "whisper_base": {
+            "words": 19,
+            "word_errors": 0,
+            "characters": 118,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          },
+          "previous_ultra": {
+            "words": 19,
+            "word_errors": 0,
+            "characters": 118,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          },
+          "primary": {
+            "words": 19,
+            "word_errors": 0,
+            "characters": 118,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          }
+        },
+        "fr": {
+          "whisper_base": {
+            "words": 32,
+            "word_errors": 5,
+            "characters": 160,
+            "character_errors": 9,
+            "wer": 0.15625,
+            "lexical_cer": 0.05625
+          },
+          "previous_ultra": {
+            "words": 32,
+            "word_errors": 0,
+            "characters": 160,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          },
+          "primary": {
+            "words": 32,
+            "word_errors": 0,
+            "characters": 160,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          }
+        },
+        "es": {
+          "whisper_base": {
+            "words": 59,
+            "word_errors": 4,
+            "characters": 279,
+            "character_errors": 3,
+            "wer": 0.06779661016949153,
+            "lexical_cer": 0.010752688172043012
+          },
+          "previous_ultra": {
+            "words": 59,
+            "word_errors": 2,
+            "characters": 279,
+            "character_errors": 3,
+            "wer": 0.03389830508474576,
+            "lexical_cer": 0.010752688172043012
+          },
+          "primary": {
+            "words": 59,
+            "word_errors": 2,
+            "characters": 279,
+            "character_errors": 3,
+            "wer": 0.03389830508474576,
+            "lexical_cer": 0.010752688172043012
+          }
+        },
+        "it": {
+          "whisper_base": {
+            "words": 25,
+            "word_errors": 3,
+            "characters": 141,
+            "character_errors": 2,
+            "wer": 0.12,
+            "lexical_cer": 0.014184397163120567
+          },
+          "previous_ultra": {
+            "words": 25,
+            "word_errors": 0,
+            "characters": 141,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          },
+          "primary": {
+            "words": 25,
+            "word_errors": 0,
+            "characters": 141,
+            "character_errors": 0,
+            "wer": 0.0,
+            "lexical_cer": 0.0
+          }
+        },
+        "pt": {
+          "whisper_base": {
+            "words": 21,
+            "word_errors": 5,
+            "characters": 91,
+            "character_errors": 18,
+            "wer": 0.23809523809523808,
+            "lexical_cer": 0.1978021978021978
+          },
+          "previous_ultra": {
+            "words": 21,
+            "word_errors": 8,
+            "characters": 91,
+            "character_errors": 18,
+            "wer": 0.38095238095238093,
+            "lexical_cer": 0.1978021978021978
+          },
+          "primary": {
+            "words": 21,
+            "word_errors": 8,
+            "characters": 91,
+            "character_errors": 18,
+            "wer": 0.38095238095238093,
+            "lexical_cer": 0.1978021978021978
+          }
+        }
+      }
+    }
+  },
+  "controls": {
+    "exact_zero": {
+      "inserted_words": 0,
+      "windows": 1
+    },
+    "exact_dc": {
+      "inserted_words": 0,
+      "windows": 1
+    },
+    "varying_noise_30s": {
+      "inserted_words": 0,
+      "windows": 1
+    },
+    "varying_noise_2s": {
+      "inserted_words": 0,
+      "windows": 1
+    }
+  },
+  "long": {
+    "russian": {
+      "reference_words": 210,
+      "reference_characters": 1174,
+      "primary": {
+        "word_errors": 22,
+        "character_errors": 48
+      },
+      "previous_ultra": {
+        "words": 210,
+        "word_errors": 22,
+        "characters": 1174,
+        "character_errors": 48
+      },
+      "windows": 5,
+      "duration_seconds": 138.4
+    },
+    "spanish_quiet": {
+      "reference_words": 354,
+      "reference_characters": 1706,
+      "primary": {
+        "word_errors": 7,
+        "character_errors": 10
+      },
+      "previous_ultra": {
+        "words": 354,
+        "word_errors": 7,
+        "characters": 1706,
+        "character_errors": 10
+      },
+      "windows": 7,
+      "duration_seconds": 179.08
+    },
+    "russian_repeated_over_three_minutes": {
+      "reference_words": 420,
+      "reference_characters": 2348,
+      "primary": {
+        "word_errors": 48,
+        "character_errors": 90
+      },
+      "previous_ultra": null,
+      "windows": 10,
+      "duration_seconds": 276.8
+    }
+  },
+  "provenance": {
+    "binding_sha256": "0ac829643c924f965cdbb0f7aa14fb02bacda691d9b71becd5e806833fa4e07b",
+    "manifest_sha256": "9fdbd8cca32f7af57c1d7dd06dfe076bff1c7f8230f83fc10b5d19fecbeb9d40",
+    "scorer_sha256": "dfde50ec467c30bfddabd19593ee00ba187caca0b1d202b557fa2b67a2946abb",
+    "score_script_sha256": "309fa209d7afa5bcbf679ab65300ae6bddc864f3e6f89bf2bf4b29df6608b910",
+    "results_archive_sha256": "96f007d6db974d95e02e414caf51479ea159435be6916d4cad019c2841ad2960",
+    "app_apk_sha256": "b5ed07accee170a3f7027a486bfca6241050bdceaae934f67c9a2d0836756c73",
+    "test_apk_sha256": "18fa36bed50b7edf4d5e5b785ffa96f3c69c6b948223f737ba38c1fafebe35d9"
+  },
+  "scope": "Previously consumed DEV audio; actual primary recovery service, staged on Android emulator. Capture is tested separately.",
+  "limitations": [
+    "Historical Whisper host baseline is a quality comparator only; no matched speed claim.",
+    "The over-three-minute Russian stream repeats the same source and is not an independent sample.",
+    "No physical-phone, natural code-switching or new held-out claim."
+  ]
+}

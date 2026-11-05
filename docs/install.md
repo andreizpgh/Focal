@@ -1,34 +1,35 @@
 # Install Focal
 
-**[Download Focal-0.1.0-alpha.8.apk](https://github.com/andreizpgh/Focal/releases/download/stt-alpha-8/Focal-0.1.0-alpha.8.apk)**
+**[Download Focal-0.1.0-alpha.9.apk](https://github.com/andreizpgh/Focal/releases/download/stt-alpha-9/Focal-0.1.0-alpha.9.apk)**
 
-Android 8.0 or newer and an ARM64 phone. Alpha 8 is an approximately **815 MB**
-testing APK, version `0.1.0-alpha.8`, with its speech models included. It works
-offline, without an account or extra downloads. The first Ultra request needs
+Android 8.0 or newer and an ARM64 phone. Alpha 9 is an approximately **816 MB**
+testing APK, version `0.1.0-alpha.9`, with its speech models included. It works
+offline, without an account or extra downloads. The first Ultra transcription needs
 about **705 MB of free private storage** in addition to the installed app;
-installation and updates also need temporary space. Later Ultra requests reuse
+installation and updates also need temporary space. Later recordings reuse
 the verified private model copy.
 
 1. Open the download link on your phone.
-2. Open **Focal-0.1.0-alpha.8.apk** from your browser’s downloads or the Files app.
+2. Open **Focal-0.1.0-alpha.9.apk** from your browser’s downloads or the Files app.
 3. If Android asks, allow **Install unknown apps** for that browser or file manager,
    then return to the APK and tap **Install**. You can turn that permission off afterward.
 
 Open Focal, allow microphone access and notifications, and tap **Record**.
-For Russian speech, choose **Русский** in the speech-language selector first.
-The interface and default speech language are English.
+The speech language shows **Automatic**: Ultra detects it and writes the transcript
+into the same note. The interface is English. Tap **Finish** and wait for the
+remaining audio to be transcribed, then listen, edit and copy.
 
 The APK is also available under **Assets** on the
-[release page](https://github.com/andreizpgh/Focal/releases/tag/stt-alpha-8).
+[release page](https://github.com/andreizpgh/Focal/releases/tag/stt-alpha-9).
 You don’t need a GitHub account, Android Studio, or a ZIP archive.
 The versioned filename identifies this download. Earlier release assets remain available
 on their own release pages.
 
 ## If you tried the previous download
 
-Alpha 8 is a locally verified, development-signed build. The exact APK passed
-137 Android tests on the dedicated emulator; see the [release verification](../releases/stt-alpha-8.json).
-Its signing certificate matches Alpha 2–7, so installing over those versions should update it in place.
+Alpha 9 is a locally verified, development-signed build. The exact APK passed
+146 Android tests on the dedicated emulator; see the [release verification](../releases/stt-alpha-9.json).
+Its signing certificate matches Alpha 2–8, so installing over those versions should update it in place.
 Compatibility with Alpha 1's cloud-generated certificate remains unverified.
 
 If Android refuses the update, keep the old installation if it contains important
@@ -38,12 +39,16 @@ the old alpha and install the new APK. Keep important transcripts exported while
 
 ## While testing
 
-After finishing a recording of up to three minutes, choose **Recording options →
-Transcribe with Ultra**. Ultra selects a language automatically and shows a
-separate result for copying. It reads the full original audio, including audio
-from excluded passages. Your saved transcript, edits and exclusions remain
-intact. Live transcription still uses Whisper and your selected speech language.
-Automatic LLM correction is off.
+Ultra is the primary engine for new recordings. During recording, the first
+block waits for 35 seconds of saved audio; Pause and Finish make the remaining
+audio eligible immediately, with time still needed for model preparation and
+decoding. Each window is up to 30 seconds. There is no three-minute recording
+limit; available storage and Android service limits still apply.
+
+Existing Whisper notes preserve their original audio, text, edits and selected
+language. **Continue transcription** uses the engine saved with that note.
+Only these older notes retain the separate **Transcribe with Ultra** preview
+for saved recordings up to three minutes. Automatic LLM correction is off.
 
 Recording continues when you leave the app or dismiss its task. Force-stopping
 Focal or restarting the phone ends recording; manufacturer restrictions can also

@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import app.focal.BuildConfig
 import app.focal.FocalViewModel
 import app.focal.core.Transcript
 import app.focal.data.Passage
@@ -423,7 +424,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                                         when {
                                             destination == Destination.Settings -> "Settings"
                                             note == null -> ""
-                                            active -> Preferences.languages[note.language] ?: note.language
+                                            active -> Preferences.languageLabel(note.language, note.speechEngine)
                                             else -> "${dayLabel(sessionDay(note.created), LocalDate.now())} at ${sessionTime(note.created)}"
                                         },
                                         style = if (destination == Destination.Settings) headerStyle else MaterialTheme.typography.bodyMedium,
@@ -493,7 +494,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                             recordingDay = recordingDay, clearRecordingDay = { recordingDayEpoch = null },
                         )
                         is Destination.Session -> if (note != null) NoteScreen(
-                            note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { if (library.error == null) editingId = it.id else notify("Reload this recording before editing.") }, { if (ready) model.retry(note.id) else openModel(note.id) },
+                            note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { if (library.error == null) editingId = it.id else notify("Reload this recording before editing.") }, { if (note.speechEngine == "ultra-v1" || ready) model.retry(note.id) else openModel(note.id) },
                             playback.isPlaying && playback.noteId == note.id, audioAvailable, { model.playNote(note) }, { dialog = "rename" },
                             seek = { model.seekNote(note, it) }, playbackPosition = playback.takeIf { it.noteId == note.id }?.positionMs,
                             retryLoad = model::retryLibrary, notificationsEnabled = notificationsEnabled,
@@ -515,18 +516,26 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 libraryListState.requestScrollToItem(0)
             }
         }
-        if (dialog == "model") AlertDialog(
+        if (dialog == "model" && BuildConfig.FOCAL_ULTRA_BUNDLED && modelRetryId == null) AlertDialog(
+            onDismissRequest = ::closeDialog, title = { Text("Speech model") },
+            text = { Text("Ultra works offline and selects the language automatically. Your original audio stays on this device.") },
+            confirmButton = { TextButton(onClick = ::closeDialog) { Text("Done") } },
+        ) else if (dialog == "model") AlertDialog(
             onDismissRequest = { dialog = null; modelRetryId = null }, title = { Text("Speech model") },
             text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                Text(when {
+                Text(if (BuildConfig.FOCAL_ULTRA_BUNDLED) when {
+                    preparing -> "Preparing the Whisper model for this older recording…"
+                    ready -> "Whisper is available for this older recording. You can choose a replacement model."
+                    else -> "Choose a Whisper model to continue transcription of this older recording."
+                } else when {
                     preparing -> "Preparing the speech model…"
                     ready -> "The multilingual speech model is installed. You can choose a replacement file."
                     else -> "Import ggml-base-q5_1.bin to transcribe saved and new recordings. You can record audio without it."
                 })
-                if (setupError != null) Text(setupError.orEmpty(), style = MaterialTheme.typography.bodyMedium,
+                if (setupError != null) Text(if (BuildConfig.FOCAL_ULTRA_BUNDLED) "Whisper: $setupError" else setupError.orEmpty(), style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
             } },
-            confirmButton = { TextButton(onClick = { dialog = null; import.launch(arrayOf("*/*")) }, enabled = !preparing) { Text("Choose model") } },
+            confirmButton = { TextButton(onClick = { dialog = null; import.launch(arrayOf("*/*")) }, enabled = !preparing) { Text(if (BuildConfig.FOCAL_ULTRA_BUNDLED) "Choose Whisper model" else "Choose model") } },
             dismissButton = { TextButton(onClick = { dialog = null; modelRetryId = null }) { Text("Cancel") } }
         )
         editing?.let { passage ->
@@ -577,14 +586,14 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 shareReason = shareReason.takeUnless { loading }, audioReason = audioReason.takeUnless { loading },
                 deleteReason = activeReason.takeUnless { loading },
                 onDismiss = ::closeDialog,
-                alternativeAvailable = model.alternativeAvailable,
+                alternativeAvailable = model.alternativeAvailable && actionNote?.speechEngine != "ultra-v1",
                 backgroundReason = (audioReason ?: when {
                     actionNote?.state != "READY" -> "Finish transcription first"
                     library.audioBytes > app.focal.speech.NoiseReviewController.MAX_DURATION_MS * 32 -> "Available for recordings up to 15 minutes"
                     else -> null
                 }).takeUnless { loading },
                 alternativeReason = (audioReason ?: when {
-                    preparing -> "Wait for the speech model to finish preparing"
+                    preparing && !BuildConfig.FOCAL_ULTRA_BUNDLED -> "Wait for the speech model to finish preparing"
                     actionNote?.state != "READY" -> "Finish the original transcription first"
                     library.audioBytes > 180L * 16_000 * 2 -> "Available for recordings up to three minutes"
                     else -> null
@@ -604,8 +613,8 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                     SessionAction.Alternative -> {
                         val id = actionNote?.id
                         closeDialog()
-                        if (id != null) {
-                            if (model.preparing.value) notify("Wait for the speech model to finish preparing.")
+                        if (id != null && actionNote?.speechEngine != "ultra-v1") {
+                            if (model.preparing.value && !BuildConfig.FOCAL_ULTRA_BUNDLED) notify("Wait for the speech model to finish preparing.")
                             else if (!model.alternativePreview.start(id)) notify("Finish the current operation first.")
                         }
                     }
@@ -709,13 +718,25 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         if (fontScale >= 1.5f || maxWidth < 280.dp) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            CaptureLanguagePicker(language, selectLanguage, dismissInput)
+            CaptureLanguageControl(language, selectLanguage, dismissInput)
             RecordAction(Modifier.fillMaxWidth())
         } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            CaptureLanguagePicker(language, selectLanguage, dismissInput)
+            CaptureLanguageControl(language, selectLanguage, dismissInput)
             RecordAction(Modifier.weight(1f))
         }
     }
+}
+
+@Composable private fun CaptureLanguageControl(language: String, select: (String) -> Unit, dismissInput: () -> Unit) {
+    if (BuildConfig.FOCAL_ULTRA_BUNDLED) {
+        Row(Modifier.heightIn(min = 48.dp).semantics(mergeDescendants = true) {
+            contentDescription = "Speech language: Automatic"
+        }.padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            LanguageGlobe()
+            Text("Automatic", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+        }
+    } else CaptureLanguagePicker(language, select, dismissInput)
 }
 
 @OptIn(ExperimentalFoundationApi::class)

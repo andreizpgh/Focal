@@ -1,22 +1,28 @@
-# Optional Ultra transcription build
+# Ultra transcription build
 
-The `-PfocalUltra=true` build includes Parakeet Ultra as an explicit alternative
-for a completed recording of up to three minutes. The alternative reads the
-saved original and displays copyable text; it does not replace the recording,
-the existing transcript, or manual edits. Live transcription continues to use
-Whisper. Ultra selects its language automatically rather than using the recording's
-selected speech language. Review its text before copying it. Processing is local;
-there is no LLM correction or model download in the app.
+In the `-PfocalUltra=true` build, Record uses Parakeet Ultra automatically for
+new notes. The recording control shows **Automatic** language. Finish saves
+the remaining speech in the same note, ready for review, editing, Copy or Share.
+Transcription stays offline and automatic LLM correction remains off.
 
-The four Ultra assets add 670,577,016 bytes to the model payload. On the first
-alternative request they are copied from the APK into app-private storage and
-verified; later requests verify and reuse that copy. Preparation requires the
-model's size plus 32 MiB of free private storage. Installing a standard build
-over this variant preserves that private copy along with the app's other data.
-APK, installed app and private copy each require space; these sizes are not a measurement of phone memory,
-latency, battery, or thermal behavior. Cancellation is checked during file
-preparation and between decoding operations; an active native decode cannot be
-interrupted until it returns.
+Ultra processes durable original PCM in windows of up to 30 seconds. While
+recording, it waits for 35 seconds of saved audio from the current cursor.
+Pause and Finish make the saved tail eligible without that wait. The window
+size limits each decode. Primary transcription supports recordings longer than
+three minutes within device storage and Android service limits. See
+[capture and recovery](architecture.md#ultra).
+
+Existing Whisper notes keep their language and engine for recovery. On a
+completed Whisper note of up to three minutes, **Transcribe with Ultra** opens
+a copyable preview from the original audio. Manual edits and exclusions remain
+in the saved note and are not applied to that new transcription.
+
+The four Ultra assets add 670,577,016 bytes to the model payload. The first
+nonconstant window triggers extraction and verification in app-private storage.
+Later sessions verify and reuse the copy. Preparation requires the model's size
+plus 32 MiB of free private storage. The APK and private copy both require disk
+space. Cancellation is checked during preparation and after a native decode
+returns.
 
 ## Prepare verified local assets
 
@@ -57,8 +63,8 @@ the package includes ONNX Runtime 1.28.2. Do not substitute a different AAR.
 ## Build and check
 
 Close the AVD before prebuild. Use one Gradle worker and a 1,536 MiB heap.
-The initial combined build ran out of memory before release R8 completed.
-Building the minified APK in a separate JVM completed that stage.
+The Alpha 8 combined build ran out of memory before release R8 completed.
+Building its minified APK in a separate JVM completed that stage.
 
 ```sh
 ./gradlew --offline --no-daemon --max-workers=1 --no-parallel \
@@ -81,8 +87,26 @@ Without the flag, the ordinary build uses the standard factory and does not
 include the Ultra runtime or model. The separate private research batch test is
 not part of the Ultra full application test suite.
 
-For the opt-in full emulator suite and optional release checks, follow the Ultra
-section in [local emulator QA](local-emulator-qa.md). Emulator tests and host
-experiments do not establish physical-phone acceptance or recognition quality
-for all languages. The comparison and its limits are recorded in the
-[STT benchmark report](benchmarks/2026-11-05-stt/report.md).
+## Primary-path verification
+
+The initial primary build completed in 5m 25s with 36 core JVM tests, 18 app
+JVM tests and debug lint passing. A focused emulator run passed 24 tests in
+53.281 s, including default Ultra recording with the public JFK fixture,
+synthetic capture longer than three minutes, database migration and recovery.
+
+On 21 previously used DEV inputs staged as saved audio, the Android recovery
+service matched earlier Ultra scores on all 14 short speech inputs. Against
+historical host Whisper Base, word errors were 25 → 12 / 210 for normal speech
+and 31 → 15 / 210 for quiet speech. The quiet Portuguese case rose from 5 to
+8 word errors. Four controls emitted no words. The two earlier long DEV
+streams matched prior Ultra word and character error counts. A 276.8-second
+Russian stream made by repeating existing DEV audio produced 48 errors / 420
+words in ten windows. The repeated stream is a duration check and shares its
+source with an earlier case. The comparison measures recognition on saved PCM
+and uses historical Base scores.
+
+The primary build passed all 146 emulator tests and a separate minified runtime
+smoke with public speech. Physical-phone validation remains pending.
+See [local emulator QA](local-emulator-qa.md) and
+[device validation](device-validation.md). Earlier saved-audio comparisons are
+recorded in the [STT benchmark report](benchmarks/2026-11-05-stt/report.md).

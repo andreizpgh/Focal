@@ -63,6 +63,8 @@ class RecordingServiceTest {
         await { RecordingState.live.value.noteId == null && !serviceRunning() }
         // Explicit decoder failure tests pending-queue behavior; it never supplies fake text.
         RecordingService.metadataCapacityForTests = null
+        // These tests protect legacy gate/metadata recovery; Ultra has full-PCM coverage tests.
+        RecordingService.speechEngineForTests = "whisper"
         RecordingService.decoderFactoryForTests = { error("Synthetic decoder unavailable for capture-only test") }
         RecordingService.inputFactoryForTests = { SyntheticInput().also { inputs += it } }
         activity = ActivityScenario.launch(MainActivity::class.java)
@@ -75,6 +77,7 @@ class RecordingServiceTest {
         RecordingService.inputFactoryForTests = null
         RecordingService.decoderFactoryForTests = null
         RecordingService.metadataCapacityForTests = null
+        RecordingService.speechEngineForTests = null
         if (::activity.isInitialized) activity.close()
         originalIds?.let { baseline -> app.store.notes().filter { it.id !in baseline }.forEach { app.store.delete(it.id) } }
     }

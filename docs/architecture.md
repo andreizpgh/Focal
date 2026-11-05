@@ -2,7 +2,8 @@
 
 Focal is a single Android application and a small pure-Kotlin `core` module.
 The Android UI is Jetpack Compose. SQLite stores notes, audio ranges, and editable
-passages. A pinned whisper.cpp submodule provides CPU inference through JNI.
+passages. The standard build uses a pinned whisper.cpp submodule through JNI.
+The Ultra build adds Parakeet Ultra with Sherpa ONNX for new notes.
 
 ## Capture and persistence
 
@@ -27,11 +28,13 @@ are no duplicate chunk audio files. Users can remove audio while retaining text.
 PCM is a deliberate first-version tradeoff: low capture overhead, simple recovery,
 and exact seeking. Compression is a future optimization, not implemented behavior.
 
-An energy gate finds candidate speech ranges with 500 ms pre-roll, 600 ms trailing
+For Whisper, an energy gate finds candidate speech ranges with 500 ms pre-roll, 600 ms trailing
 silence, and a 16 s maximum chunk. After eight seconds it can close a phrase at a
 240 ms breath, reducing hard cuts through words. It is a conservative signal-energy heuristic,
 not a trained VAD. Very quiet speech and noisy rooms need device evaluation.
-The original recording remains available even when a range is missed.
+The original recording remains available even when a range is missed. For Ultra,
+the gate supplies the microphone level and all recorded PCM is available to the
+window planner.
 
 Chunks refer to offsets in the original file. Before a chunk becomes `PENDING`,
 its audio is synced. Each completed chunk and its passages are committed in one
@@ -52,9 +55,10 @@ Continuing transcription also seals recoverable writing ranges and durable audio
 left by a failed live finalization before reading the pending queue.
 Force-stop, reboot, revoked permission, microphone preemption, storage exhaustion,
 and OEM process termination can stop capture. A crash can lose roughly the last
-second that has not been synced; no promise of lossless recovery is made. A durable
-deletion journal retries failed audio removal after restart. Database v1 migrates
-additively to v2, retaining notes and edits.
+second that has not been synced. A durable deletion journal retries failed audio
+removal after restart. Database v4 adds `notes.speech_engine` and the nullable
+`chunks.next_start` cursor. Existing notes migrate as Whisper, retaining their
+language, passages, manual edits and original audio.
 
 New passage edits and editable drafts share a 128 KiB UTF-8 limit. Oversized input
 is rejected visibly while preserving the preceding valid draft and saved text.
@@ -66,9 +70,12 @@ rewriting the saved source.
 
 ## Inference
 
-Live transcription and recovery use bundled multilingual Whisper Base Q5_1,
-about 57 MiB. It includes Russian and the six other languages exposed in
-settings. A fully bundled APK runs inference offline.
+### Whisper
+
+The standard build transcribes new notes with bundled multilingual Whisper Base
+Q5_1, about 57 MiB, and the selected speech language. Both builds recover existing
+Whisper notes with Whisper and the language saved with the note. Inference is
+offline.
 
 Every `NativeWhisper.open` validates the complete supported multilingual base
 structure before entering the private JNI loader: architecture, vocabulary and
@@ -121,18 +128,46 @@ comparison retains at most twelve word references on each side and refuses to us
 a token longer than 4,096 characters as evidence for deleting words. A NUL in a
 manual correction stops prompt carryover without changing that correction.
 
-The optional `focalUltra` build adds Sherpa ONNX and Parakeet Ultra INT8 for
-completed recordings up to three minutes. Ultra reads the full saved PCM in
-bounded windows up to 30 seconds and selects language automatically. The first
-eligible action extracts and verifies a private model copy. The preview stays
-in the ViewModel and Copy transfers its text. Original audio, stored ASR,
-manual edits and exclusion decisions remain with the recording.
+### Ultra
+
+In the `focalUltra` build, new notes use Parakeet Ultra with automatic language
+selection and save the result directly to the note. The `ultra-v1` engine
+identity binds the verified INT8 graphs and tokenizer, Sherpa ONNX 2.0.1 CPU
+greedy decoding, and the current framing rules. The first nonconstant window
+triggers model preparation. The speech worker creates one recognizer per
+recording or recovery, opens a fresh stream per window and releases the
+recognizer on the same worker.
+
+The speech worker reads from the synced PCM watermark. During live recording it
+waits for 35 seconds from the current cursor before planning a window of up to
+30 seconds. Pause and Finish make the saved tail eligible without the live
+threshold. Finish closes the microphone, syncs the final audio and drains the
+remaining transcription work. The planner prefers a qualifying low-energy cut
+and otherwise retains 500 ms of overlap. Exactly constant windows skip inference.
+Window offsets are stored in whole milliseconds. The original file retains any
+final samples that total less than one millisecond. The 30-second window bound
+allows recordings longer than three minutes, subject to storage and Android
+service limits.
+
+An Ultra range and its next cursor are saved together before inference.
+Recovery uses the recorded engine and processes the pending range before
+planning any unpublished tail. Committed passages and edits remain in place.
+Ultra passages use the window's source bounds. Possible overlap repetition and
+missing text can be flagged for review without assigning confidence scores or
+word timings. Cancellation during native decoding takes effect after the call
+returns. The service retains ownership until the worker closes the recognizer.
+
+On a completed Whisper note of up to three minutes, **Transcribe with Ultra**
+opens a separate copyable preview. It processes the original PCM and keeps the
+note's stored transcript, manual edits and exclusion decisions intact.
 
 The preview reserves a process-wide session claim before starting, serializing
 it with capture, recovery and explicit model import. The same worker owns
 recognizer creation, synchronous decode and release. Stop or backgrounding
 discards the result and keeps ownership until native work returns and the
 recognizer closes. Rotation retains the preview through its ViewModel.
+
+## Playback
 
 The player seeks in the original PCM and reports the actual AudioTrack playback
 head. Pausing preserves position, navigation stops the previous session, and audio

@@ -20,34 +20,38 @@ phone performance and full application acceptance remain open.
 
 ## Current checkpoint · 2026-11-05
 
-[Alpha 8](https://github.com/andreizpgh/Focal/releases/tag/stt-alpha-8) is published
-as a testing APK from clean `db225cf`. The final emulator
-QA completed **137/0/0**, and a separately signed minified copy passed the
-Ultra workflow smoke. The [quality report](quality-report.md) binds the exact
-artifacts and records the earlier landscape defect, 136/137 full run and
-separate editor focus regression. The [release provenance](../releases/stt-alpha-8.json)
-binds the downloaded APK to its verified source. GitHub asset sizes and digests
-match the local files; the direct link returns HTTP 200 and the Alpha 8 filename.
-Alpha 7 and older assets remain unchanged.
+Alpha 9 from clean `2341e7b` passed **146/0/0** in full emulator QA,
+manual checks on the exact debug APK and a separate minified runtime smoke.
+Original test notes, manual edits and audio survived both APK updates; the exact
+debug APK was restored and the dedicated AVD stopped. No models were downloaded.
+[Build and QA evidence](quality-report.md#alpha-9-primary-ultra--emulator-verification) ·
+[Release provenance](../releases/stt-alpha-9.json).
 
-[Ultra](ultra-transcription.md) reads up to three minutes of original audio
-from a finished recording and displays a separate copyable result with
-automatic language selection. Live Whisper, the original audio, stored ASR,
-edits and exclusion decisions are preserved. Automatic LLM correction stays
-disabled.
+Ultra transcribes new recordings into the note with automatic language
+selection. Live windows wait for 35 seconds of saved audio from the cursor and
+decode up to 30 seconds at a time. Pause and Finish make the saved tail eligible
+without the live wait. The three-minute limit applies to the copy-only preview
+for a completed Whisper note. Database v4 preserves legacy Whisper recovery,
+original audio, stored ASR, edits and exclusions. Automatic LLM correction
+stays disabled. [Ultra workflow](ultra-transcription.md).
 
-The independently audited 42-clip held-out read-speech comparison found word
-errors **184 → 51 / 961** and lexical character errors **369 → 94 / 5,010**
-on identical PCM. Both measures improved in all seven language aggregates.
-The earlier Spanish DEV boundary failure and targeted two-input follow-up
-remain in the [Android quality report](benchmarks/2026-11-05-stt/ultra-android-report.md).
-That report also records the audit's source-identity and acoustic limits.
+DEV21 on the primary recovery service matched the previous Ultra error counts
+on all 14 short speech cases. Against historical Base, normal and quiet totals
+were **25 → 12 / 210** and **31 → 15 / 210**. Quiet Portuguese was worse
+than Base (**5 → 8 / 21**). The 276.8-second Russian duration check repeated
+previous DEV material. [Primary integration report](benchmarks/2026-11-05-stt/ultra-primary-report.md).
 
-The owner prioritizes STT. The next device step is the owner-present
-[Pixel 10 check](device-validation.md), including natural speech, mixed terms
-and phone resource use. Reuse existing artifacts. The download ledger remains
-**7,850,618,526 / 8,500,000,000 bytes**. No new model was downloaded during
-integration or QA. The dedicated AVD and heavy jobs are stopped.
+The published Alpha 8 tested Ultra as a separate saved-audio preview and passed
+**137/0/0** at clean `db225cf`. Its historical staged 42-clip held-out comparison
+found **184 → 51 / 961** word errors and **369 → 94 / 5,010** lexical character
+errors, improving both measures across the seven language aggregates.
+[Alpha 8 provenance](../releases/stt-alpha-8.json) ·
+[Held-out and framing evidence](benchmarks/2026-11-05-stt/ultra-android-report.md).
+
+The next device step is the owner-present Pixel 10 check for natural speech,
+mixed terms, long capture and resource use. Reuse existing artifacts. The
+download ledger remains **7,850,618,526 / 8,500,000,000 bytes**. Integration
+and QA used cached models. [Device checklist](device-validation.md).
 
 ## Earlier research and QA checkpoints
 

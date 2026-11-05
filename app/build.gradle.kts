@@ -27,6 +27,11 @@ require(ultraOption == null || ultraOption == "true") {
     "focalUltra must be true; omit it for a normal build."
 }
 val ultra = ultraOption == "true"
+val primaryProbe = providers.gradleProperty("focalPrimaryProbe").orNull.let {
+    require(it == null || it == "true") { "focalPrimaryProbe must be true or omitted." }
+    it == "true"
+}
+require(!primaryProbe || ultra) { "Primary pipeline probes require the bundled Ultra variant." }
 require(listOf(nativeFaultVariant != null, parakeetTests, parakeetPreview, ultra).count { it } <= 1) {
     "Choose only one research build option."
 }
@@ -56,8 +61,8 @@ android {
         applicationId = "app.focal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.1.0-alpha.8"
+        versionCode = 9
+        versionName = "0.1.0-alpha.9"
         buildConfigField("boolean", "FOCAL_ULTRA_BUNDLED", ultra.toString())
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         externalNativeBuild {
@@ -109,6 +114,7 @@ android {
     if (parakeetPreview) sourceSets.getByName("androidTest").java.srcDir("src/parakeetPreviewTest/java")
     if (parakeetPreview || ultra) sourceSets.getByName("androidTest").java.srcDir("src/alternativeTest/java")
     if (ultra) sourceSets.getByName("androidTest").java.srcDir("src/ultraTest/java")
+    if (primaryProbe) sourceSets.getByName("androidTest").java.srcDir("src/primaryProbeTest/java")
     lint { abortOnError = true }
 }
 
@@ -124,6 +130,7 @@ gradle.taskGraph.whenReady {
     check(!(parakeetTests || parakeetPreview) || releaseTasks.isEmpty()) {
         "Parakeet research is debug-only. Omit focalParakeetTests/focalParakeetPreview for ${releaseTasks.joinToString { it.path }}."
     }
+    check(!primaryProbe || releaseTasks.isEmpty()) { "Primary batch probes are debug-only." }
 }
 
 dependencies {
