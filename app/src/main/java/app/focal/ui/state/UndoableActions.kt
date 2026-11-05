@@ -7,7 +7,9 @@ import app.focal.recording.SessionOperations
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,26 +19,34 @@ import kotlinx.coroutines.withContext
 
 /**
  * Delete and Remove audio with Undo ("Note deleted · Undo", "Audio removed · Undo"). Delete moves the note
- * to the trash at once (it leaves the library and search) and purges it after [UNDO_WINDOW_MS]; a trashed
- * note left by process death is purged at the next start. Remove audio is only scheduled: the audio is
- * deleted after the window unless undone, so an interrupted removal keeps the audio (the safe side).
- * Shared by the library and note screens; process-wide, because the snackbar outlives a screen.
+ * to the trash at once (it leaves the library and search); Remove audio is only scheduled (the note already
+ * shows "Text only", see [audioRemovalsPending]). Either is committed when its snackbar closes without Undo:
+ * the UI calls [commitDelete] / [commitRemoveAudio] on `SnackbarResult.Dismissed`, however long the user's
+ * accessibility timeout kept it open. If the UI never reports it (the screen went away mid-snackbar), the
+ * action commits after [FALLBACK_COMMIT_MS]; a trashed note left by process death is purged at the next
+ * start, and an interrupted removal keeps the audio (the safe side).
+ *
+ * An undo and a commit never both succeed: the store purges only a note that is still in the trash, and
+ * a removal is committed or undone by whichever takes it from the schedule first. A late undo returns false
+ * ("Too late to undo"). Shared by the library and note screens; process-wide, because the snackbar outlives
+ * a screen.
  */
 object UndoableActions {
-    const val UNDO_WINDOW_MS = 6_000L
+    /** Longer than any snackbar, including Android's longest "time to take action" (2 minutes). */
+    const val FALLBACK_COMMIT_MS = 10 * 60_000L
 
     private val removals = mutableMapOf<String, Job>()
     private val deletions = mutableMapOf<String, Job>()
     private val pendingRemovals = MutableStateFlow<Set<String>>(emptySet())
 
-    /** Notes whose audio removal waits for its undo window: show them as "Text only" already. */
+    /** Notes whose audio removal waits for its snackbar: show them as "Text only" already. */
     val audioRemovalsPending: StateFlow<Set<String>> = pendingRemovals.asStateFlow()
 
     /** Moves [noteId] to the trash. False (with [onError]) when it is busy or not deletable now. */
     suspend fun delete(app: FocalApplication, noteId: String, onError: (String) -> Unit): Boolean {
         val claim = SessionOperations.tryDestructive(noteId)
             ?: return false.also { onError("This note is busy. Try again when its current operation finishes.") }
-        val deleted = try { app.store.deleteWithUndo(noteId) }
+        val deleted = try { withContext(Dispatchers.IO) { app.store.deleteWithUndo(noteId) } }
         catch (error: Exception) {
             if (error is CancellationException) throw error
             onError("Could not delete this note."); false
@@ -45,17 +55,29 @@ object UndoableActions {
         synchronized(this) {
             deletions.remove(noteId)?.cancel()
             deletions[noteId] = app.scope.launch {
-                delay(UNDO_WINDOW_MS)
-                synchronized(this@UndoableActions) { deletions.remove(noteId) }
-                runCatching { app.store.purgeDeleted(noteId) }
+                delay(FALLBACK_COMMIT_MS)
+                val job = currentCoroutineContext().job
+                if (synchronized(this@UndoableActions) { deletions.remove(noteId, job) }) purge(app, noteId)
             }
         }
         return true
     }
 
+    /** The "Note deleted" snackbar closed without Undo: the note is deleted for good now. */
+    fun commitDelete(app: FocalApplication, noteId: String) {
+        synchronized(this) { deletions.remove(noteId)?.cancel() ?: return }
+        app.scope.launch { purge(app, noteId) }
+    }
+
+    /** Restores a trashed note. False when it was already deleted for good. */
     suspend fun undoDelete(app: FocalApplication, noteId: String): Boolean {
         synchronized(this) { deletions.remove(noteId)?.cancel() }
-        return app.store.undoDelete(noteId)
+        return withContext(Dispatchers.IO) { app.store.undoDelete(noteId) }
+    }
+
+    private fun purge(app: FocalApplication, noteId: String) {
+        // Only a note still in the trash is deleted: an undo that won the race keeps it.
+        runCatching { app.store.purgeDeleted(noteId) }
     }
 
     /**
@@ -73,23 +95,34 @@ object UndoableActions {
             removals.remove(noteId)?.cancel()
             pendingRemovals.update { it + noteId }
             removals[noteId] = app.scope.launch {
-                delay(UNDO_WINDOW_MS)
-                synchronized(this@UndoableActions) { removals.remove(noteId) }
-                try { commitRemoval(app, noteId) }
-                catch (error: Exception) {
-                    if (error is CancellationException) throw error
-                    onError(error.message ?: "Could not remove the audio.")
-                } finally { pendingRemovals.update { it - noteId } }
+                delay(FALLBACK_COMMIT_MS)
+                val job = currentCoroutineContext().job
+                if (synchronized(this@UndoableActions) { removals.remove(noteId, job) }) remove(app, noteId, onError)
             }
         }
         return true
     }
 
+    /** The "Audio removed" snackbar closed without Undo: the audio is deleted now. */
+    fun commitRemoveAudio(app: FocalApplication, noteId: String, onError: (String) -> Unit) {
+        synchronized(this) { removals.remove(noteId)?.cancel() ?: return }
+        app.scope.launch { remove(app, noteId, onError) }
+    }
+
+    /** Keeps the audio. False when its removal was already committed. */
     fun undoRemoveAudio(noteId: String): Boolean = synchronized(this) {
         val job = removals.remove(noteId) ?: return false
         job.cancel()
         pendingRemovals.update { it - noteId }
         true
+    }
+
+    private fun remove(app: FocalApplication, noteId: String, onError: (String) -> Unit) {
+        try { commitRemoval(app, noteId) }
+        catch (error: Exception) {
+            if (error is CancellationException) throw error
+            onError(error.message ?: "Could not remove the audio.")
+        } finally { pendingRemovals.update { it - noteId } }
     }
 
     /** Why the audio of [noteId] cannot be removed now, or null. */

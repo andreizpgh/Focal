@@ -55,6 +55,8 @@ sealed interface EditOutcome {
 sealed interface NoteEvent {
     data object Deleted : NoteEvent
     data object AudioRemoved : NoteEvent
+    /** Undo came after the deletion or removal was committed: "Too late to undo". */
+    data object TooLateToUndo : NoteEvent
     data class Replaced(val count: Int) : NoteEvent
     data class Error(val message: String) : NoteEvent
 }
@@ -210,7 +212,11 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         if (UndoableActions.delete(app, noteId) { eventFlow.tryEmit(NoteEvent.Error(it)) }) eventFlow.emit(NoteEvent.Deleted)
     }
 
-    fun undoDelete() = launch { UndoableActions.undoDelete(app, noteId) }
+    /** Undo on "Note deleted"; emits [NoteEvent.TooLateToUndo] if it was already deleted for good. */
+    fun undoDelete() = launch { if (!UndoableActions.undoDelete(app, noteId)) eventFlow.emit(NoteEvent.TooLateToUndo) }
+
+    /** The "Note deleted" snackbar closed without Undo (`SnackbarResult.Dismissed`): delete it for good now. */
+    fun commitDelete() = UndoableActions.commitDelete(app, noteId)
 
     /**
      * Schedules the audio removal (the text stays); emits [NoteEvent.AudioRemoved] for "Audio removed · Undo".
@@ -220,7 +226,11 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         if (UndoableActions.removeAudio(app, noteId) { eventFlow.tryEmit(NoteEvent.Error(it)) }) eventFlow.emit(NoteEvent.AudioRemoved)
     }
 
-    fun undoRemoveAudio() { UndoableActions.undoRemoveAudio(noteId) }
+    /** Undo on "Audio removed"; emits [NoteEvent.TooLateToUndo] if the audio was already deleted. */
+    fun undoRemoveAudio() { if (!UndoableActions.undoRemoveAudio(noteId)) eventFlow.tryEmit(NoteEvent.TooLateToUndo) }
+
+    /** The "Audio removed" snackbar closed without Undo (`SnackbarResult.Dismissed`): delete the audio now. */
+    fun commitRemoveAudio() = UndoableActions.commitRemoveAudio(app, noteId) { eventFlow.tryEmit(NoteEvent.Error(it)) }
 
     /** Re-reads the note after a read failure. */
     fun reload() { refresh.value++ }

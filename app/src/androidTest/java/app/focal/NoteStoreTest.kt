@@ -296,11 +296,22 @@ class NoteStoreTest {
         assertTrue(store.undoDelete(id))
         assertEquals("Keep or delete me.", store.transcript(id))
         assertArrayEquals(audio, store.audioFile(id).readBytes())
+        // A purge that runs after the undo keeps the restored note.
+        store.purgeDeleted(id)
+        assertEquals("Keep or delete me.", store.transcript(id))
+        assertArrayEquals(audio, store.audioFile(id).readBytes())
+        // An undo that comes after the purge reports that it is too late.
         assertTrue(store.deleteWithUndo(id))
-        store.recover() // the next start purges the trash
+        store.purgeDeleted(id)
         assertFalse(store.undoDelete(id))
-        assertFalse(store.audioFile(id).exists())
         assertTrue(store.paragraphs(id).isEmpty())
+        val again = store.insertNoteForTests(listOf("Keep or delete me."))
+        savedAudio(store, again, 1_000)
+        assertTrue(store.deleteWithUndo(again))
+        store.recover() // the next start purges the trash
+        assertFalse(store.undoDelete(again))
+        assertFalse(store.audioFile(again).exists())
+        assertTrue(store.paragraphs(again).isEmpty())
         store.writableDatabase.rawQuery("SELECT count(*) FROM pending_audio_deletions", null).use {
             it.moveToFirst(); assertEquals(0, it.getInt(0))
         }

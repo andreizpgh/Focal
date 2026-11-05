@@ -37,6 +37,8 @@ import java.time.ZoneId
 sealed interface LibraryEvent {
     data class Deleted(val noteId: String) : LibraryEvent
     data class AudioRemoved(val noteId: String) : LibraryEvent
+    /** Undo came after the deletion or removal was committed: "Too late to undo". */
+    data class TooLateToUndo(val noteId: String) : LibraryEvent
     data class Error(val message: String) : LibraryEvent
 }
 
@@ -116,7 +118,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (UndoableActions.delete(app, noteId) { eventFlow.tryEmit(LibraryEvent.Error(it)) }) eventFlow.emit(LibraryEvent.Deleted(noteId))
     }
 
-    fun undoDelete(noteId: String) = launch { UndoableActions.undoDelete(app, noteId) }
+    /** Undo on "Note deleted"; emits [LibraryEvent.TooLateToUndo] if it was already deleted for good. */
+    fun undoDelete(noteId: String) = launch {
+        if (!UndoableActions.undoDelete(app, noteId)) eventFlow.emit(LibraryEvent.TooLateToUndo(noteId))
+    }
+
+    /** The "Note deleted" snackbar closed without Undo (`SnackbarResult.Dismissed`): delete it for good now. */
+    fun commitDelete(noteId: String) = UndoableActions.commitDelete(app, noteId)
 
     /**
      * Schedules the audio removal; emits [LibraryEvent.AudioRemoved] for "Audio removed · Undo". Refused with
@@ -127,7 +135,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             eventFlow.emit(LibraryEvent.AudioRemoved(noteId))
     }
 
-    fun undoRemoveAudio(noteId: String) { UndoableActions.undoRemoveAudio(noteId) }
+    /** Undo on "Audio removed"; emits [LibraryEvent.TooLateToUndo] if the audio was already deleted. */
+    fun undoRemoveAudio(noteId: String) {
+        if (!UndoableActions.undoRemoveAudio(noteId)) eventFlow.tryEmit(LibraryEvent.TooLateToUndo(noteId))
+    }
+
+    /** The "Audio removed" snackbar closed without Undo (`SnackbarResult.Dismissed`): delete the audio now. */
+    fun commitRemoveAudio(noteId: String) =
+        UndoableActions.commitRemoveAudio(app, noteId) { eventFlow.tryEmit(LibraryEvent.Error(it)) }
 
     /** The note's body as Copy puts it (visible paragraphs joined by a blank line; no title). */
     suspend fun copyText(noteId: String): String = withContext(Dispatchers.IO) { store.transcript(noteId) }

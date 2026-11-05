@@ -785,8 +785,11 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         return restored
     }
 
-    /** Permanently deletes a trashed note, or every trashed note. */
-    fun purgeDeleted(id: String? = null) = trashed(id).forEach(::delete)
+    /**
+     * Permanently deletes a trashed note, or every trashed note. A note restored by [undoDelete] meanwhile is
+     * kept: the purge checks the trash inside its own transaction, so an undo either wins or reports false.
+     */
+    fun purgeDeleted(id: String? = null) = trashed(id).forEach { delete(it, onlyTrashed = true) }
 
     private fun trashed(id: String?): List<String> = readableDatabase.rawQuery(
         "SELECT id FROM notes WHERE deleted_at IS NOT NULL" + if (id == null) "" else " AND id=?",
@@ -794,8 +797,12 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
 
     /** Permanently deletes a note, its text and its audio now. */
-    fun delete(id: String) {
-        writableDatabase.transaction {
+    fun delete(id: String) { delete(id, onlyTrashed = false) }
+
+    private fun delete(id: String, onlyTrashed: Boolean) {
+        val deleted = writableDatabase.transaction {
+            if (onlyTrashed && rawQuery("SELECT 1 FROM notes WHERE id=? AND deleted_at IS NOT NULL", arrayOf(id)).use { !it.moveToFirst() })
+                return@transaction false
             insertWithOnConflict("pending_audio_deletions", null, ContentValues().apply { put("note_id", id) }, SQLiteDatabase.CONFLICT_IGNORE)
             val paragraphIds = rawQuery("SELECT id FROM paragraphs WHERE note_id=?", arrayOf(id)).use { c ->
                 buildList { while (c.moveToNext()) add(c.getLong(0)) }
@@ -803,8 +810,9 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
             paragraphIds.forEach { unindexParagraph(it) }
             noteSeq(this, id)?.let { unindexTitle(it) }
             delete("notes", "id=?", arrayOf(id))
+            true
         }
-        try { deletePendingAudio(id) } finally { changed() }
+        if (deleted) try { deletePendingAudio(id) } finally { changed() }
     }
 
     /**
@@ -867,7 +875,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         }
         // A deletion that was not undone before the process ended is final. Its rows go now; a failed
         // file deletion stays in the journal and is retried below and at the next start.
-        if (noteId == null) trashed(null).forEach { id -> try { delete(id) } catch (_: IOException) { } }
+        if (noteId == null) trashed(null).forEach { id -> try { delete(id, onlyTrashed = true) } catch (_: IOException) { } }
         // Filesystem and SQLite cannot share a transaction. A committed intent makes
         // deletion retryable after process death or a transient filesystem failure.
         val deletions = db.rawQuery("SELECT note_id FROM pending_audio_deletions", null).use { c ->
