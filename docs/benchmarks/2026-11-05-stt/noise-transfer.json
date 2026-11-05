@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "scope": "Two detector-only host calls on exact archived Android seeded-noise chunks; counterfactual text suppression, not an Android feature or adoption result.",
+  "status": "DIAGNOSTIC_COMPLETE",
+  "completion": {
+    "planned_detector_calls": 2,
+    "completed_detector_calls": 2,
+    "asr_calls": 0,
+    "new_speech_control_calls": 0,
+    "held_out_inputs": 0,
+    "retries": 0
+  },
+  "method": {
+    "source": "Previously consumed synthetic 30-second seeded-noise control; same PCM as the completed Android framing comparison.",
+    "sample_rate": 16000,
+    "source_frames": 480000,
+    "source_pcm_sha256": "ad2b113944de388f9dc3fdb45cba385d76472f8fbd685552edb87f14e9c0b491",
+    "ranges": "Both archived SpeechGate chunks, including their 500 ms overlap; each detector call starts with fresh state.",
+    "conditioning": {
+      "mode": "causal-rms-cap30",
+      "sample_rate": 16000,
+      "frame_samples": 512,
+      "target_rms": 0.03,
+      "min_gain": 1.0,
+      "max_gain": 30.0,
+      "release_seconds": 0.5,
+      "initial_envelope": 0.0,
+      "rms": "float64 sqrt(mean(square(PCM16 / 32768))); DC included",
+      "envelope": "max(current_frame_rms, previous_envelope * exp(-frame_samples / 16000 / 0.5))",
+      "gain": "min(30, max(1, 0.03 / max(envelope, 1e-12)))",
+      "partial_tail": "Use actual remaining samples for RMS and release; no added samples",
+      "pcm": "Signed little-endian PCM16; float64 numpy.rint ties-to-even; reject clipping",
+      "state": "Reset once per source stream; no lookahead beyond the current 512-sample frame",
+      "numpy_version": "2.4.6",
+      "asr_input": "Original prepared PCM, unchanged"
+    },
+    "settings": {
+      "use_gpu": false,
+      "threads": 1,
+      "threshold": 0.5,
+      "min_speech_ms": 250,
+      "min_silence_ms": 600,
+      "max_speech_seconds": 15,
+      "pad_ms": 500,
+      "samples_overlap_seconds": 0
+    },
+    "baseline": "Forty inserted words from the archived Android gated Transcriber result; no decoder was rerun.",
+    "cached_controls": "The prior 28 positive controls were not rerun. Preflight additionally checked the two archived quiet French/Portuguese short-answer receipts and conditioned PCM identities."
+  },
+  "model": {
+    "repository": "ggml-org/whisper-vad",
+    "revision": "9ffd54a1e1ee413ddf265af9913beaf518d1639b",
+    "filename": "ggml-silero-v5.1.2.bin",
+    "bytes": 885098,
+    "sha256": "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf",
+    "provenance_sha256": "d71d735a27a18e0b38b5465f8e9b6f40dbc8bd2a3460a65e1b519d0191c7061a"
+  },
+  "ranges": [
+    {
+      "start_frame": 0,
+      "end_frame": 256000,
+      "overlap": false,
+      "pcm_sha256": "328a746f901de1ff15a81bb212d5a80e41dcd96b0edb969072689bdc94bc0e4e",
+      "conditioned_pcm_sha256": "8ca170034565c15742668872aae9e7f1ee3bf5942b852baca32115d31ddf7e09",
+      "status": "PASS",
+      "probability_windows": 500,
+      "speech_detected": false,
+      "native_range_count": 0,
+      "detector_seconds": 0.050731804,
+      "process_peak_rss_bytes": 24723456,
+      "raw_result_sha256": "0fcea3c954815f9321599d8dfb8c5c518289b55f79a7044759cdb712bcfc91f2",
+      "receipt_sha256": "4069d0a883639cfe0b8c0c13e999b130aea5a30de9151463d680384e65d8a6a5"
+    },
+    {
+      "start_frame": 248000,
+      "end_frame": 480000,
+      "overlap": true,
+      "pcm_sha256": "c16f29d52b7a2abb16167d711f4925fda1a9476cfc861abc25be726708380fbc",
+      "conditioned_pcm_sha256": "061996027b806e69826c3b5129edc6b93dc3920acb91af31892ba39a88e366f4",
+      "status": "PASS",
+      "probability_windows": 454,
+      "speech_detected": false,
+      "native_range_count": 0,
+      "detector_seconds": 0.046506301,
+      "process_peak_rss_bytes": 24731648,
+      "raw_result_sha256": "b490db69bdd05f410a1e059554f02b9efaac9143a31c49563ee83a34e4fdd407",
+      "receipt_sha256": "45c154680f7ec5ca30deb4c2d2ba0bbed3f6affa5f025b163db617f644c8e251"
+    }
+  ],
+  "counterfactual": {
+    "baseline_inserted_words": 40,
+    "both_chunks_classified_without_speech": true,
+    "inserted_words_if_both_outputs_were_hidden": 0,
+    "live_text_modified": false,
+    "interpretation": "Both full chunk outputs would be hidden by the fixed presence rule. This is a display-only counterfactual over preserved ASR, not a new recognition result or proof of safe automatic deletion."
+  },
+  "limits": {
+    "per_detector_call_seconds": 15,
+    "detector_loop_budget_seconds": 35,
+    "loop_budget_excludes_preflight_and_final_dependency_check": true,
+    "declared_outer_service_seconds": 60,
+    "child_address_space_bytes": 536870912,
+    "child_output_file_bytes": 262144
+  },
+  "host_resources": {
+    "detector_loop_and_final_check_seconds": 0.2772879889998876,
+    "service_seconds_including_preflight": 0.48,
+    "service_cpu_seconds": 0.355,
+    "service_peak_memory_mib_approx": 29.9,
+    "service_swap_peak_bytes": 0,
+    "memory_source": "Rounded systemd service summary; includes parent/preflight and detector processes, not model-only memory."
+  },
+  "identity": {
+    "runner_sha256": "438b8aad2ffb2345c2f91be09028934548db5165addccfebd2bb6d259f1ae6c5",
+    "frozen_plan_sha256": "fbb235964979230dca96fe690aca042014f2da6254b177e1353c5f57c93595d0",
+    "result_sha256": "fd39bb1f8c7f08e0821d5e7133e0f5fa578d05590bb1186f8f4eac83872c7fd9",
+    "source_android_gated_receipt_sha256": "60af964fcbd4567f7390fb308e2305cd8a53250becb644b8847a05e42e044dbd",
+    "source_android_scores_sha256": "6a625ad2bb9ed39749cf6fd972bb20de62db02634bd2978cd362b1b10c0bfbf4",
+    "probe_sha256": "6bebd1811af35e5da39f5609b7f779bb44d35112f108d976e763080434e2791b",
+    "prior_presence_source_sha256": "719c296e65fc3c3ba4a8baf28ee7fd40846b2bd3f40e8de8246015aecad5eb54",
+    "prior_launch_plan_sha256": "df270453e8d0980cc68428f67a2715773f2a42a7b6eabc99ebb131b4d4fe3aea",
+    "prior_result_binding_sha256": "3bba7b879125003a4756ff9b8ea8b142fdf8c0b4b7818573125be63fec69c638",
+    "prior_public_aggregate_sha256": "b0b4747b475a72409f9b9000a388d9ad0ba7cff357830059742e9ff38aa5eece",
+    "loaded_runtime_sha256": "3cacc2668f08e4bdd22061f4f04f47b2958df0bc1e7c77dfa9681d7f180f21ba",
+    "loaded_dependency_count": 11
+  },
+  "decision": "The narrow host transfer diagnostic completed successfully. It supports testing an explicit, reversible review proposal; it does not authorize automatic suppression.",
+  "limitations": [
+    "Two correlated chunks of one synthetic noise source, not a noise population or seven-language evaluation.",
+    "No fresh quiet-speech safety evidence, acoustic adjudication, Android detector run, end-to-end speed, phone energy or thermal measurement.",
+    "The prior 185-request result and its limitations are unchanged. Original audio and ASR remain intact; held-out evaluation remains unopened."
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "scope": "One host synthetic sampler microbenchmark; no audio, model inference, production probability vectors or phone measurements.",
+  "result": "PASS for synthetic output and RNG parity; below predeclared cost threshold for full-ASR follow-up.",
+  "experiment": {
+    "vocabulary_size": 51865,
+    "beam_width": 3,
+    "rng_histories": 3,
+    "history_steps_each": 24,
+    "scenarios": 5,
+    "timing_order": "ABBA",
+    "calls_per_block": 64,
+    "threads": 1,
+    "compiled_optimization": "O3",
+    "compiler": "GCC 16.2.1",
+    "timestamp_token_begin": 50364,
+    "warm_calls_per_variant_per_scenario": 6,
+    "total_sampler_calls_including_checks_and_warmup": 2060,
+    "actual_cpu_affinity": [
+      0
+    ]
+  },
+  "parity": "All returned token metadata fields and full RNG state matched after every checked call.",
+  "results": [
+    {
+      "scenario": "finite",
+      "parity": true,
+      "baseline_mean_us_per_call": 245.9857735,
+      "candidate_mean_us_per_call": 130.7745235,
+      "saved_us_per_call": 115.21124999999999
+    },
+    {
+      "scenario": "masked",
+      "parity": true,
+      "baseline_mean_us_per_call": 248.5142735,
+      "candidate_mean_us_per_call": 127.473406,
+      "saved_us_per_call": 121.04086750000002
+    },
+    {
+      "scenario": "timestamp",
+      "parity": true,
+      "baseline_mean_us_per_call": 235.681922,
+      "candidate_mean_us_per_call": 128.676,
+      "saved_us_per_call": 107.00592199999998
+    },
+    {
+      "scenario": "flat",
+      "parity": true,
+      "baseline_mean_us_per_call": 244.8115625,
+      "candidate_mean_us_per_call": 127.704758,
+      "saved_us_per_call": 117.10680450000001
+    },
+    {
+      "scenario": "peaked",
+      "parity": true,
+      "baseline_mean_us_per_call": 245.69440600000001,
+      "candidate_mean_us_per_call": 127.3708285,
+      "saved_us_per_call": 118.32357750000003
+    }
+  ],
+  "median_saved_us_per_call": 117.10680450000001,
+  "predeclared_threshold_us_per_call": 500,
+  "threshold_met": false,
+  "decision": "No engine change and no full-ASR follow-up from this screen.",
+  "service": {
+    "exit_status": "success",
+    "total_seconds_including_compilation": 2.063,
+    "memory_peak_reported_mib_approx": 178.1,
+    "swap_peak_bytes": 0
+  },
+  "identity": {
+    "upstream_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+    "upstream_cpp_sha256": "02566a39137a14e0798ec0d88e78bd626f21e7549bc27d1cb5e4a30b101a0f7e",
+    "upstream_header_sha256": "0525b758571ab71c00ddd8ea2845f74af7c62dfa5100c5586655f75bdc5ef4be",
+    "frozen_plan_sha256": "2e15a24ee5f45fb612fa1d5a61e4fc9c9f978a9c4abbc271a98b8bf1ea94643d",
+    "generated_cpp_sha256": "03ba70798bb985861d4f137fc4a546be580a69c6e8a9dea6e115765e9af1d861",
+    "binary_sha256": "c99115a9684a672d0a2a4a176ea21ffc16b7b99d46f672e0b395a54ea280bf87",
+    "result_sha256": "fcdfff53faf04eae24ace03d48bc3a44e52cab7794331999933ebb3722d24295",
+    "removed_block_sha256": "9e0c691d136ce0f679718211f70af3bf079a51362dfacfc4c01619bfacee843a",
+    "source_aggregate_sha256": "1fc8fe3ceb4f0674fb0590b6e253c954ee4afb5cbeeb86c2f5e11d8ec0483b63",
+    "protocol_text_sha256": "ddf40bcef65c2adad290fdb3a1fc412b282c3f9546642c811b4572b5e1c8f944",
+    "generator_sha256": "fa59ba5580a1ab0e3b046fa64a363a070fe0238d76371cbf673074acce80318c",
+    "template_sha256": "da138400b2fd44b8023868749a9186b42fbe53ed95d4155eb78f8e673432d0a5"
+  },
+  "limitations": [
+    "Synthetic inputs and isolated sampler only; no claim about real decoder distributions or recognition quality.",
+    "Host timings are not end-to-end latency, device performance, thermal or battery evidence.",
+    "One bounded run; no general statistical or cross-platform claim."
+  ],
+  "candidate": "Remove only the unused logits_id fill and partial_sort from a standalone copy of the pinned beam sampler; language detection and the production engine remain unchanged.",
+  "screen_criterion": {
+    "all_synthetic_parity_checks_required": true,
+    "minimum_median_saved_us_per_call": 500,
+    "minimum_positive_scenarios": 4,
+    "observed_positive_scenarios": 5,
+    "near_threshold_rule": "inconclusive"
+  },
+  "limits": {
+    "internal_budget_seconds": 15,
+    "external_process_timeout_seconds": 18,
+    "timeout_kill_grace_seconds": 1
+  }
+}

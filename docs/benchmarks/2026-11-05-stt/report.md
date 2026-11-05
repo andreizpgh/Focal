@@ -415,3 +415,45 @@ nonempty. Both original stopped screens remain separate rejected attempts;
 completing coverage does not retroactively pass their criteria. No further
 context sweep or model download is justified by this checkpoint. The existing
 backend, automatic-correction setting and unopened held-out cohort are unchanged.
+
+## Background-sound detection: two exact Android noise chunks
+
+A bounded host check applied the existing Silero presence policy to the two
+archived SpeechGate chunks of the 30-second seeded-noise control above. It used
+the same PCM, including the 500 ms overlap, verified runtime/model bytes and
+fixed conditioning and detector settings. **No ASR ran.** Both detector calls
+completed, covered all 954 probability windows and returned no speech ranges.
+The 40 words previously emitted by Android would therefore become **40 → 0**
+if both chunk outputs were hidden. This is a counterfactual over preserved ASR,
+not a new transcription score or evidence that automatic deletion is safe.
+[Audited counts, limits and artifact hashes](noise-transfer.json).
+
+Detection took 0.0507 and 0.0465 seconds on the host. The whole service took
+0.480 seconds and its rounded peak memory was 29.9 MiB, with zero swap. Each
+child had a 15-second timeout and 512 MiB address-space limit; the outer service
+had a 60-second cap. These are host-job measurements, not Android or phone
+latency, battery or thermal evidence. The previous positive controls were
+reused as archived evidence, not rerun; this check adds no quiet-speech safety
+result. It supports trying an explicit, reversible background-sound review
+proposal. Automatic suppression remains disabled and held-out inputs remain
+unopened.
+
+## Sampler cost: parity passed, follow-up threshold not met
+
+One synthetic host microbenchmark compared the pinned beam sampler with a
+standalone copy that omits its unused `logits_id` fill and `partial_sort`.
+Across five constructed distributions, three RNG histories and 24 successive
+steps, every checked token metadata field and the full RNG state matched.
+The timing blocks used fixed ABBA order, 64 calls per block, one CPU and an
+optimized build. No audio, model inference or recorded decoder probability
+vectors were used. [Protocol identities and per-scenario results](sampler-cost.json).
+
+Median saved time across the five scenarios was **117.107 microseconds per
+sampler call**, below the predeclared **500-microsecond** threshold for a
+separate full-ASR follow-up. All five differences were positive; that does not
+override the failed cost threshold. The job, including compilation, took
+2.063 seconds and reported approximately 178.1 MiB peak memory with zero swap.
+The sampler process had an 18-second external timeout. **No production engine
+change or full-ASR follow-up follows from this screen.** Synthetic sampler
+parity does not establish decoder equivalence, recognition quality or
+end-to-end speed, and host timing does not establish phone performance.
