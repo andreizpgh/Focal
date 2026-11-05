@@ -20,7 +20,7 @@ ARM phone performance and full application acceptance remain open.
 
 ## Current checkpoint · 2026-11-05
 
-Alpha 7 is prepared from clean `4ac250d322849e4cc2ee29c034b4c8b28330a78c`:
+[Alpha 7 is published](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-7) from clean `4ac250d322849e4cc2ee29c034b4c8b28330a78c`:
 **129/0/0**, ten required real-model checks, 186.980s JUnit / 187.992s runner wall.
 Both lints, core/JVM and debug/test/unsigned R8 builds passed. Exact APK identity
 is in [ux-alpha-7.json](../releases/ux-alpha-7.json). The archived debug APK equals
@@ -32,8 +32,10 @@ remain unchanged. Original oversized-draft and capture/storage assertions passed
 Source, actual screenshots and artifact checks were reviewed independently.
 The dedicated AVD and all heavy jobs are stopped. Phone and all-language
 quality/speed/mixed-term gates remain open; see [device-validation](device-validation.md).
-PR #9 is the delivery PR; PR #1–8 are already merged. Before any upload, inspect
-GitHub for `ux-alpha-7` and the private current-work file. Never replace an asset.
+PR #9 is the delivery PR; PR #1–8 are already merged. The remote digest and
+HTTP 200 download filename match `Focal-0.1.0-alpha.7.apk`; signing matches
+Alpha 2–6. Do not upload it again or replace any asset. The next step is owner
+UX acceptance, then the owner-present Pixel 10 plan. See GitHub for PR merge state.
 
 ## Earlier research and QA checkpoints
 

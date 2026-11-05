@@ -24,8 +24,10 @@ source/реальные кадры, Terra упаковку, Sol controller/stora
 Sharepreview, light/dark, крупный шрифт, landscape/IME. Нет проверки слышимого
 playback или реального микрофона. Модели повторно не скачивались; ledger прежний.
 
-Alpha7 подготовлена к публикации через PR#9; проверь фактический статус GitHub
-и `build/local-diagnostics/current-android-delivery-work.json` до любых действий.
+Alpha7 опубликована: https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-7 .
+Прямая ссылка проверена: HTTP200, имя Focal-0.1.0-alpha.7.apk, серверный SHA256
+совпадает с локальным APK. PR#9 содержит доставку; проверь его merge-status
+и `build/local-diagnostics/current-android-delivery-work.json` до новых действий.
 Никогда не перезаписывай assets. Дальше пользовательская UX-проверка APK, затем
 подключение Pixel10 при владельце по docs/device-validation.md. Отсутствие
 телефона не объявлять общей блокировкой; не выдавать emulator timing за phone.

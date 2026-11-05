@@ -21,8 +21,9 @@ The combined KVM/Gradle job used a 4 GiB hard limit, 150% CPU quota and no cgrou
 swap. A saved instrumentation-time sample recorded a 3,758,620,672-byte peak,
 64 memory-high events and zero max/OOM/kill events. The service finished
 successfully and stopped its dedicated AVD. Other projects were untouched.
-No models were downloaded. Alpha 7 is prepared for publication; the handoff
-records actual publication status. Physical-phone and seven-language quality,
+No models were downloaded. Alpha 7 is [published](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-7).
+The remote asset digest matches the verified APK; its direct URL returns HTTP 200
+and the filename `Focal-0.1.0-alpha.7.apk`. Full-history Gitleaks passed on 115 commits. Physical-phone and seven-language quality,
 speed and mixed-term requirements remain open.
 
 ## Background-sound decisions · focused verification 2026-11-05
@@ -45,8 +46,10 @@ clean-source QA is recorded above.
 
 Manual checks on the dedicated KVM emulator covered the synthetic three-part
 note (silence / public JFK speech / silence): only the two silent ranges were
-proposed. Contextual Edit, Keep, Exclude, Undo, persistent Restore, Copy feedback,
-and the native Share preview behaved as expected. Original text remained in
+proposed. Contextual Edit, Exclude, Undo, persistent Restore, Copy feedback,
+and the native Share preview behaved as expected. Keep was visually inspected;
+its persistence is covered by automated storage tests, not a separately recorded
+manual tap. Original text remained in
 the excluded passage editor after recreation. Light/dark settings and the
 editor were inspected, including 200% font, landscape and the actual keyboard.
 Host audio was disabled; audible playback and real microphone input were not
