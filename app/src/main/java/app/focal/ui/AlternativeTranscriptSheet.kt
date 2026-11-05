@@ -45,7 +45,9 @@ import app.focal.speech.PreviewState
     ModalBottomSheet(onDismissRequest = stop, sheetState = sheet,
         containerColor = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
         DialogSystemBars()
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+        Column(Modifier.fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp).padding(bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
