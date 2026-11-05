@@ -5,6 +5,7 @@ import android.os.Build
 import android.system.Os
 import android.system.OsConstants
 import app.focal.BuildConfig
+import app.focal.recording.StorageReserve
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -114,8 +115,9 @@ internal object UltraModel {
         // Free space occupied by a corrupt copy of this exact version before checking capacity.
         checkCancelled()
         removeOwnedDirectory(active, expected)
-        val required = expected.sumOf { it.bytes } + 32L * 1024 * 1024
-        check(usableSpace(parent) >= required) { "Not enough free storage to prepare the speech model." }
+        // Leave room to start a recording after the copy (recording may already run while it copies).
+        val required = expected.sumOf { it.bytes } + StorageReserve.START_BYTES
+        check(usableSpace(parent) >= required) { "Free up space to prepare the speech model." }
 
         checkCancelled()
         check(partial.mkdir()) { "Could not prepare private storage for the speech model." }

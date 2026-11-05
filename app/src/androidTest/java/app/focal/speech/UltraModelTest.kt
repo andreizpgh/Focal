@@ -2,6 +2,7 @@ package app.focal.speech
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import app.focal.recording.StorageReserve
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
@@ -30,9 +31,15 @@ class UltraModelTest {
     @Test fun insufficientStorageOpensNoAssetAndLeavesNoPartial() = isolated { fixture ->
         assertThrows(IllegalStateException::class.java) {
             fixture.install(space = 0) { error("Insufficient storage should be detected before copying.") }
-        }.also { assertTrue(it.message.orEmpty().contains("free storage")) }
+        }.also { assertTrue(it.message.orEmpty().contains("Free up space")) }
         assertFalse(fixture.active.exists())
         assertFalse(fixture.partial.exists())
+        // The copy leaves room to start a recording: the model's size alone is not enough.
+        val model = fixture.payloads.values.sumOf { it.size.toLong() }
+        assertThrows(IllegalStateException::class.java) {
+            fixture.install(space = model + StorageReserve.START_BYTES - 1) { error("Too little space for a recording after the copy.") }
+        }
+        fixture.assertInstalled(fixture.install(space = model + StorageReserve.START_BYTES))
     }
 
     @Test fun shortLongAndWrongChecksumAssetsNeverActivate() = isolated { fixture ->
