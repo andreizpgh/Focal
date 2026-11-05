@@ -214,7 +214,8 @@ class RecordingService : Service() {
                 captureFailure = captureFailure ?: "Recording metadata could not be saved. Original audio is kept for recovery."
                 stopping.set(true); interruptInput()
                 events.close()
-                while (events.tryReceive().isSuccess) Unit
+                // Drop queued scalar updates; the synced file length is the durable duration.
+                while (events.tryReceive().isSuccess) continue
             }
         }
 

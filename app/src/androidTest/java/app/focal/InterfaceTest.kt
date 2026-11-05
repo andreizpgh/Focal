@@ -261,7 +261,7 @@ class InterfaceTest {
             val id = try {
                 val created = readySession(store, "$query $index", listOf("Synthetic library row.")).also(ids::add)
                 // Publish each fixture at its assigned day and unique sort position in one transaction.
-                db.execSQL("UPDATE notes SET created=? WHERE id=?", arrayOf(timestamp, created))
+                db.execSQL("UPDATE notes SET created=? WHERE id=?", arrayOf<Any>(timestamp, created))
                 db.setTransactionSuccessful()
                 created
             } finally { db.endTransaction() }
@@ -1312,7 +1312,7 @@ class InterfaceTest {
         val legacy = "Legacy start🙂\r\n" + "a".repeat(2_100_000) + "\r\nLegacy end🙂"
         try {
             val passage = app.store.passages(id).single()
-            app.store.writableDatabase.execSQL("UPDATE passages SET text=? WHERE id=?", arrayOf(legacy, passage.id))
+            app.store.writableDatabase.execSQL("UPDATE passages SET text=? WHERE id=?", arrayOf<Any>(legacy, passage.id))
             app.store.rename(id, "Large legacy fixture")
             waitForTitle("Large legacy fixture")
             compose.onNodeWithText("Large legacy fixture").performClick()

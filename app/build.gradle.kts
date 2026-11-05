@@ -1,11 +1,12 @@
 import java.io.File
 import java.nio.file.Files
 import java.security.MessageDigest
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+// AGP 9 compiles Kotlin itself (built-in Kotlin); only the Compose compiler plugin is applied.
 plugins {
-    id("com.android.application")
-    kotlin("android")
-    id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
 }
 
 fun sha256(file: File): String {
@@ -29,11 +30,13 @@ val ultraModelDirectory = rootProject.file("build/stt/parakeet-ultra-20261105/mo
 
 android {
     namespace = "app.focal"
-    compileSdk = 35
+    // The pinned AndroidX set (Compose BOM 2026.09.00) requires compiling against API 37.
+    // Runtime behaviour follows targetSdk, deliberately raised from 35 to 36 with this toolchain.
+    compileSdk = 37
     defaultConfig {
         applicationId = "app.focal"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 9
         versionName = "0.1.0-alpha.9"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
@@ -41,10 +44,9 @@ android {
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    kotlinOptions { jvmTarget = "17" }
     // The recognizer streams its model out of the APK once; keep the ONNX files stored.
     androidResources { noCompress += "onnx" }
-    sourceSets.getByName("main").assets.srcDir(ultraModelDirectory)
+    sourceSets.getByName("main").assets.directories.add(ultraModelDirectory.path)
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -55,28 +57,30 @@ android {
     lint { abortOnError = true }
 }
 
+kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
+
 dependencies {
     implementation(project(":core"))
     implementation(files(speechRuntime))
-    implementation(platform("androidx.compose:compose-bom:2025.04.01"))
-    implementation("androidx.core:core-ktx:1.16.0")
-    implementation("androidx.activity:activity-compose:1.10.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2025.04.01"))
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    implementation(platform(libs.compose.bom))
+    implementation(libs.core.ktx)
+    implementation(libs.activity.compose)
+    implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.lifecycle.viewmodel.compose)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+    implementation(libs.coroutines.android)
+    debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
 }
 
-val verifyUltraModel by tasks.registering {
+val verifyUltraModel = tasks.register("verifyUltraModel") {
     group = "verification"
     description = "APKs must contain exactly the four pinned Parakeet Ultra files."
     val folder = ultraModelDirectory
