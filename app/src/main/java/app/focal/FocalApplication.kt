@@ -3,6 +3,7 @@ package app.focal
 import android.app.Application
 import app.focal.data.NoteStore
 import app.focal.data.Preferences
+import app.focal.data.RetiredFiles
 import kotlinx.coroutines.*
 
 class FocalApplication : Application() {
@@ -17,6 +18,8 @@ class FocalApplication : Application() {
         super.onCreate()
         store = NoteStore(this); preferences = Preferences(this)
         storageReady = scope.async { store.recover() }
+        // After recovery, whatever its result: drop model files that Whisper-era builds left behind.
+        scope.launch { storageReady.join(); RetiredFiles.remove(filesDir) }
     }
 
     /** Retry only a failed recovery; never run recovery over an active recording. */
