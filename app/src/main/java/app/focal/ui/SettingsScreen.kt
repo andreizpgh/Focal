@@ -27,7 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 @Composable internal fun SettingsScreen(
-    theme: String, setTheme: (String) -> Unit, openModel: () -> Unit, notify: (String) -> Unit,
+    theme: String, setTheme: (String) -> Unit, modelBundled: Boolean, openModel: () -> Unit, notify: (String) -> Unit,
 ) {
     var help by rememberSaveable { mutableStateOf(false) }
     var licenses by rememberSaveable { mutableStateOf(false) }
@@ -39,7 +39,7 @@ import kotlinx.coroutines.withContext
         Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer,
             contentColor = MaterialTheme.colorScheme.onSurface) {
             Column {
-                SettingsRow("Speech model", "Ultra · Automatic language", click = openModel)
+                SettingsRow("Speech model", if (modelBundled) "Ultra · Automatic language" else "Missing from this build", click = openModel)
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp)) {
                     Text("Appearance", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })

@@ -43,7 +43,12 @@ class UltraUiTest {
             compose.onNodeWithText("Record").assertIsDisplayed().assertIsEnabled()
             compose.onNodeWithContentDescription("Settings").performClick()
             compose.onNodeWithText("Speech model").performClick()
-            compose.onNodeWithText("Ultra works offline and selects the language automatically.", substring = true).assertIsDisplayed()
+            // Debug builds may be made without the model; the dialog must say which build this is.
+            compose.onNodeWithText(
+                if (model.speechModelBundled) "Ultra works offline and selects the language automatically."
+                else "This build was made without the speech model.",
+                substring = true,
+            ).assertIsDisplayed()
             compose.onNodeWithText("Choose Whisper model").assertDoesNotExist()
             compose.onNodeWithText("Choose model").assertDoesNotExist()
             compose.onNodeWithText("Done").performClick()

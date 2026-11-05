@@ -1,26 +1,18 @@
 name: Publish alpha
+# TODO(release rework): publishing is disabled during the single-engine rebuild. The previous flow
+# promoted a CI-built debug APK that bundled the Whisper model (scripts/publish-alpha.py, removed).
+# CI now builds without the speech model, so a release workflow must build the verified release APK
+# with scripts/fetch-model.py, sign it outside Git and attach its provenance before it returns.
 on:
-  push:
-    tags: ['v*']
+  workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
 jobs:
-  publish:
+  disabled:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: write
-      actions: read
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Publish the verified APK
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: python3 scripts/publish-alpha.py
+      - name: Publishing is disabled
+        run: |
+          echo "::error::Publishing is disabled until the release workflow is rebuilt for the single-engine app."
+          exit 1

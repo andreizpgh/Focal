@@ -2,6 +2,7 @@ package app.focal.speech
 
 import android.content.Context
 import android.content.res.AssetManager
+import app.focal.BuildConfig
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
@@ -20,13 +21,14 @@ internal object UltraEngine {
     fun open(context: Context, threads: Int, checkCancelled: () -> Unit): SpeechDecoder {
         try {
             require(threads in 1..2) { "Choose one or two inference threads." }
+            check(UltraModel.isBundled(context)) { MODEL_MISSING }
             val files = UltraModel.install(
                 File(context.noBackupFilesDir, UltraModel.directoryName),
                 openAsset = { name ->
                     try {
                         context.assets.open(name, AssetManager.ACCESS_STREAMING)
                     } catch (error: FileNotFoundException) {
-                        throw IllegalStateException("The speech model is missing from this build.", error)
+                        throw IllegalStateException(MODEL_MISSING, error)
                     }
                 },
                 checkCancelled = checkCancelled,
@@ -40,8 +42,10 @@ internal object UltraEngine {
     private fun openChecked(files: Map<String, File>, threads: Int, checkCancelled: () -> Unit): SpeechDecoder {
         checkCancelled()
         val revision = VersionInfo.gitSha1
-        check(VersionInfo.version == "2.0.1" && revision.length >= 8 && SHERPA_REVISION.startsWith(revision) &&
-            VersionInfo.onnxruntimeVersion == "1.28.2") { "Unexpected speech runtime." }
+        // The runtime identity comes from models/sherpa-onnx.json, the lock the build verified.
+        check(VersionInfo.version == BuildConfig.SPEECH_RUNTIME_VERSION && revision.length >= 8 &&
+            BuildConfig.SPEECH_RUNTIME_REVISION.startsWith(revision) &&
+            VersionInfo.onnxruntimeVersion == BuildConfig.ONNXRUNTIME_VERSION) { "Unexpected speech runtime." }
         val config = OfflineRecognizerConfig(
             featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80, dither = 0f),
             modelConfig = OfflineModelConfig(
@@ -105,4 +109,4 @@ private class UltraDecoder(private val recognizer: OfflineRecognizer) : SpeechDe
 }
 
 private const val SAMPLE_RATE = 16_000
-private const val SHERPA_REVISION = "af2d8d81dbfa61c4cea4c568da78f3982edca005"
+internal const val MODEL_MISSING = "The speech model is missing from this build. Recordings are saved; transcribe them with a complete build."

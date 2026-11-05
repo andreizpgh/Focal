@@ -433,6 +433,11 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                                     if (live.processing) "Open transcript" else "Open recording", Symbol.Audio
                                 ) { open(live.noteId) }
                                 destination == Destination.Sessions -> {
+                                    if (!model.speechModelBundled) Text(
+                                        "Speech model missing from this build. Recordings are saved but not transcribed.",
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                    )
                                     LibraryCaptureDock(library.loaded && library.error == null, record = ::start)
                                 }
                             }
@@ -449,7 +454,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 }) {
                     when (destination) {
                         Destination.Settings -> SettingsScreen(
-                            settings.theme, model.app.preferences::theme, ::openModel, ::notify,
+                            settings.theme, model.app.preferences::theme, model.speechModelBundled, ::openModel, ::notify,
                         )
                         Destination.Sessions -> LibraryScreen(
                             library.notes, library.loaded, live, ::open, searchValue, {
@@ -487,7 +492,8 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         }
         if (dialog == "model") AlertDialog(
             onDismissRequest = ::closeDialog, title = { Text("Speech model") },
-            text = { Text("Ultra works offline and selects the language automatically. Your original audio stays on this device.") },
+            text = { Text(if (model.speechModelBundled) "Ultra works offline and selects the language automatically. Your original audio stays on this device."
+                else "This build was made without the speech model. Recordings are saved on this device and can be transcribed by a complete build.") },
             confirmButton = { TextButton(onClick = ::closeDialog) { Text("Done") } },
         )
         editing?.let { passage ->

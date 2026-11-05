@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import app.focal.data.*
 import app.focal.recording.*
 import app.focal.speech.SpeechPlayer
+import app.focal.speech.UltraModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -31,6 +32,8 @@ class FocalViewModel internal constructor(
     val live = RecordingState.live
     val errors = MutableSharedFlow<String>(extraBufferCapacity = 3)
     val player = SpeechPlayer(app, app.store, viewModelScope)
+    /** False only for checks-only debug builds made without the model (see scripts/fetch-model.py). */
+    val speechModelBundled = UltraModel.isBundled(app)
     val library: StateFlow<LibraryState> = libraryState.asStateFlow()
     init {
         viewModelScope.launch {

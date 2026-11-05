@@ -10,50 +10,29 @@ concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  # Fast checks without the 670 MB speech model: debug builds, unit tests, lint, the device-test APK
+  # and R8 shrinking of the release code all work without it. Device tests run locally
+  # (./gradlew :app:connectedDebugAndroidTest) until an emulator job returns.
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          submodules: recursive
           persist-credentials: false
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
-      - name: Install Android tooling
-        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.0.13004108' 'cmake;3.22.1'"
-      - name: Test host evaluation tooling
-        run: |
-          python3 -m venv build/host-tools
-          build/host-tools/bin/python -m pip install --require-hashes --only-binary=:all: -r scripts/requirements-host.txt
-          build/host-tools/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
-      - name: Fetch and verify offline model
-        run: python3 scripts/fetch-model.py
-      - name: Fetch and verify speech presence model
-        run: python3 scripts/fetch-vad-model.py
-      - name: Recognize a real speech fixture
-        run: bash scripts/smoke-stt.sh
+      - name: Test the model fetch script
+        run: python3 -m unittest discover -s scripts/tests
+      - name: Fetch and verify the speech runtime
+        run: python3 scripts/fetch-model.py --runtime-only
       - name: Test, lint, and build
-        run: ./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain
-      - name: Android device tests
-        timeout-minutes: 25
-        run: bash scripts/test-android-ci.sh
-      - name: Summarize checks
-        if: always()
-        run: python3 scripts/test-summary.py --require-model-tests
-      - name: Prepare APK download
-        run: |
-          mkdir -p build/download
-          cp app/build/outputs/apk/debug/app-debug.apk build/download/Focal.apk
-          cp app/src/main/assets/model-provenance.json build/download/model-provenance.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: Focal-debug
-          path: build/download/
-          if-no-files-found: error
+        run: >-
+          ./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+          :app:assembleDebugAndroidTest :app:minifyReleaseWithR8 --console=plain
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -62,8 +41,3 @@ jobs:
             core/build/reports/tests/
             app/build/reports/tests/
             app/build/reports/lint-results-debug.html
-            build/jfk.txt
-            app/build/reports/androidTests/
-            app/build/outputs/androidTest-results/
-            build/emulator.log
-            build/android-device-tests.log

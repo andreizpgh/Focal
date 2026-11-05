@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.system.Os
 import android.system.OsConstants
+import app.focal.BuildConfig
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -14,17 +15,16 @@ import java.security.MessageDigest
 
 /** The four pinned Parakeet Ultra INT8 files, installed once from the APK into no-backup storage. */
 internal object UltraModel {
-    const val directoryName = "parakeet-ultra-v1-7ef3ca4f"
-
     data class ModelFile(val name: String, val bytes: Long, val sha256: String)
 
-    // Marmalade Parakeet Ultra INT8 v1. The tokenizer is unchanged from v3.
-    private val models = listOf(
-        ModelFile("encoder.int8.onnx", 652_282_526, "7ef3ca4ffb49d60d4faa757b2930c8cec9927e73c24f6155d5b23a00229a7ed6"),
-        ModelFile("decoder.int8.onnx", 11_845_274, "1fab98fe6c12aded87d2da66272cc9e148d0a0044ce3850a12fe56302ec4a922"),
-        ModelFile("joiner.int8.onnx", 6_355_277, "8ba94c6919c17a6bd27368fb89533628a72ffc81d4acedebf3cdcb2cae331dbb"),
-        ModelFile("tokens.txt", 93_939, "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
-    )
+    // Marmalade Parakeet Ultra INT8 v1, generated from models/parakeet-ultra.json at build time.
+    private val models = BuildConfig.ULTRA_MODEL_FILES.split(';').map { entry ->
+        val (name, bytes, sha256) = entry.split(':')
+        ModelFile(name, bytes.toLong(), sha256)
+    }
+
+    /** Named by the encoder digest: an app update with the same model reuses the installed copy. */
+    val directoryName = "parakeet-ultra-v1-" + models.single { it.name == "encoder.int8.onnx" }.sha256.take(8)
 
     /** Whether this APK carries the model files. Release builds always do. */
     fun isBundled(context: Context): Boolean =

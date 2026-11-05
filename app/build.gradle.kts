@@ -1,3 +1,4 @@
+import groovy.json.JsonSlurper
 import java.io.File
 import java.nio.file.Files
 import java.security.MessageDigest
@@ -18,15 +19,45 @@ fun sha256(file: File): String {
     return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
-// The pinned speech runtime: sherpa-onnx 2.0.1 with ONNX Runtime 1.28.2. Verified before it is compiled in.
-val speechRuntime = rootProject.file("build/dependencies/sherpa-onnx-2.0.1.aar")
-require(speechRuntime.isFile) { "Missing the pinned speech runtime: ${speechRuntime.path}" }
-check(sha256(speechRuntime) == "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7") {
-    "Speech runtime checksum mismatch: ${speechRuntime.path}"
+// models/*.json pin the speech runtime and model. scripts/fetch-model.py reads the same files,
+// so paths, sizes and digests live in one place.
+data class Pinned(val name: String, val bytes: Long, val sha256: String)
+
+@Suppress("UNCHECKED_CAST")
+fun lock(name: String) = JsonSlurper().parse(rootProject.file("models/$name.json")) as Map<String, Any>
+val runtimeLock = lock("sherpa-onnx")
+val modelLock = lock("parakeet-ultra")
+@Suppress("UNCHECKED_CAST")
+val modelFiles = (modelLock.getValue("files") as List<Map<String, Any>>).map {
+    Pinned(it.getValue("name") as String, (it.getValue("bytes") as Number).toLong(), it.getValue("sha256") as String)
+}
+
+// sherpa-onnx (Kotlin API, JNI and ONNX Runtime): every build compiles against it, so it is verified first.
+val speechRuntime = rootProject.file(runtimeLock.getValue("path") as String)
+require(speechRuntime.isFile) {
+    "Missing the speech runtime ${speechRuntime.path}. Run: python3 scripts/fetch-model.py --runtime-only"
+}
+check(speechRuntime.length() == (runtimeLock.getValue("bytes") as Number).toLong() &&
+    sha256(speechRuntime) == runtimeLock.getValue("sha256")) {
+    "The speech runtime ${speechRuntime.path} does not match models/sherpa-onnx.json."
 }
 
 // Parakeet Ultra INT8 is packaged straight from this ignored directory; no extra 670 MB staging copy.
-val ultraModelDirectory = rootProject.file("build/stt/parakeet-ultra-20261105/model")
+// Release builds always need it. Debug, unit-test and lint builds work without it, so checks can run
+// without the download; such an APK records but says it cannot transcribe.
+val ultraModelDirectory = rootProject.file(modelLock.getValue("directory") as String)
+// Any locked file means a model is meant to be packaged, and verifyUltraModel then requires all of them.
+// Stray files alone (.DS_Store, an interrupted copy) leave a model-less debug build working.
+val modelPresent = modelFiles.any { ultraModelDirectory.resolve(it.name).exists() }
+val requireModel = when (val value = providers.gradleProperty("focal.requireModel").orNull) {
+    null, "false" -> false
+    "true" -> true
+    else -> error("focal.requireModel must be true or false, not $value")
+}
+if (!modelPresent) logger.lifecycle(
+    "Speech model not found in ${ultraModelDirectory.path}: debug APKs will record but not transcribe. " +
+        "Run python3 scripts/fetch-model.py for a complete build."
+)
 
 android {
     namespace = "app.focal"
@@ -40,13 +71,19 @@ android {
         versionCode = 9
         versionName = "0.1.0-alpha.9"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        // The app verifies its installed model copy against the same lock the build used.
+        buildConfigField("String", "ULTRA_MODEL_FILES",
+            "\"" + modelFiles.joinToString(";") { "${it.name}:${it.bytes}:${it.sha256}" } + "\"")
+        buildConfigField("String", "SPEECH_RUNTIME_VERSION", "\"${runtimeLock.getValue("version")}\"")
+        buildConfigField("String", "SPEECH_RUNTIME_REVISION", "\"${runtimeLock.getValue("revision")}\"")
+        buildConfigField("String", "ONNXRUNTIME_VERSION", "\"${runtimeLock.getValue("onnxruntime")}\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     // The recognizer streams its model out of the APK once; keep the ONNX files stored.
     androidResources { noCompress += "onnx" }
-    sourceSets.getByName("main").assets.directories.add(ultraModelDirectory.path)
+    if (modelPresent) sourceSets.getByName("main").assets.directories.add(ultraModelDirectory.path)
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -82,26 +119,56 @@ dependencies {
 
 val verifyUltraModel = tasks.register("verifyUltraModel") {
     group = "verification"
-    description = "APKs must contain exactly the four pinned Parakeet Ultra files."
+    description = "The packaged model directory must hold exactly the files in models/parakeet-ultra.json."
     val folder = ultraModelDirectory
-    val expected = mapOf(
-        "encoder.int8.onnx" to (652_282_526L to "7ef3ca4ffb49d60d4faa757b2930c8cec9927e73c24f6155d5b23a00229a7ed6"),
-        "decoder.int8.onnx" to (11_845_274L to "1fab98fe6c12aded87d2da66272cc9e148d0a0044ce3850a12fe56302ec4a922"),
-        "joiner.int8.onnx" to (6_355_277L to "8ba94c6919c17a6bd27368fb89533628a72ffc81d4acedebf3cdcb2cae331dbb"),
-        "tokens.txt" to (93_939L to "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
-    )
+    val expected = modelFiles
+    val stamp = layout.buildDirectory.file("verified-model/parakeet-ultra.txt")
+    inputs.files(fileTree(folder)).withPropertyName("model")
+    inputs.property("lock", expected.toString())
+    outputs.file(stamp)
     doLast {
-        check(folder.isDirectory && !Files.isSymbolicLink(folder.toPath()) &&
-            folder.listFiles()?.map { it.name }?.toSet() == expected.keys) {
-            "The Ultra model directory must contain exactly the four pinned model files: ${folder.path}"
+        check(folder.isDirectory && !Files.isSymbolicLink(folder.toPath())) {
+            "Missing speech model in ${folder.path}. Release builds (and -Pfocal.requireModel=true) need it. " +
+                "Run: python3 scripts/fetch-model.py"
         }
-        expected.forEach { (name, identity) ->
-            val model = folder.resolve(name)
-            check(model.isFile && !Files.isSymbolicLink(model.toPath()) && model.length() == identity.first) {
-                "Missing or invalid Ultra file: $name"
+        val fix = "Run: python3 scripts/fetch-model.py"
+        val found = folder.list().orEmpty().toSet()
+        val names = expected.map { it.name }.toSet()
+        check(found == names) {
+            "${folder.path} must hold exactly the files in models/parakeet-ultra.json" +
+                (names - found).sorted().let { if (it.isEmpty()) "" else "; missing: ${it.joinToString()}" } +
+                (found - names).sorted().let { if (it.isEmpty()) "" else "; unexpected: ${it.joinToString()}" } +
+                ". Remove unexpected files and run: python3 scripts/fetch-model.py"
+        }
+        expected.forEach { file ->
+            val model = folder.resolve(file.name)
+            check(model.isFile && !Files.isSymbolicLink(model.toPath()) && model.length() == file.bytes) {
+                "Missing or invalid model file: ${model.path}. $fix"
             }
-            check(sha256(model) == identity.second) { "Ultra file checksum mismatch: $name" }
+            check(sha256(model) == file.sha256) { "Model file checksum mismatch: ${model.path}. $fix" }
+        }
+        stamp.get().asFile.apply { parentFile.mkdirs(); writeText(expected.joinToString("\n", postfix = "\n")) }
+    }
+}
+// src/main/assets is AGP's default asset directory, and Whisper-era fetch scripts put model files
+// there. They are ignored by Git, so only this check keeps them out of the APK.
+val verifyAppAssets = tasks.register("verifyAppAssets") {
+    group = "verification"
+    description = "src/main/assets may hold only the bundled licence texts."
+    val folder = file("src/main/assets")
+    val shipped = setOf("licenses.txt", "ultra-licenses.txt")
+    doLast {
+        val unexpected = folder.list().orEmpty().filterNot { it in shipped }.sorted()
+        check(unexpected.isEmpty()) {
+            "${folder.path} holds files that must not ship: ${unexpected.joinToString()}. " +
+                "Older Focal builds placed model files there; move them out of the project."
         }
     }
 }
-tasks.matching { it.name in setOf("mergeDebugAssets", "mergeReleaseAssets") }.configureEach { dependsOn(verifyUltraModel) }
+// Every packaged model is verified; release builds and -Pfocal.requireModel=true require one.
+val verifiedAssetMerges = buildSet {
+    add("mergeReleaseAssets")
+    if (modelPresent || requireModel) add("mergeDebugAssets")
+}
+tasks.matching { it.name in verifiedAssetMerges }.configureEach { dependsOn(verifyUltraModel) }
+tasks.matching { it.name in setOf("mergeDebugAssets", "mergeReleaseAssets") }.configureEach { dependsOn(verifyAppAssets) }
