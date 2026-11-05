@@ -13,16 +13,19 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Construct, transcribe and close on the service's single speech worker. */
+/**
+ * Construct, transcribe and close on the service's single speech worker. Accepts any saved
+ * range of at most 30 s, including PENDING ranges of notes recorded before Ultra.
+ */
 internal class UltraTranscriber(
-    private val openDecoder: (threads: Int, checkCancelled: () -> Unit) -> SavedAudioPreview.Decoder,
+    private val openDecoder: (threads: Int, checkCancelled: () -> Unit) -> SpeechDecoder,
 ) : RecordingDecoder {
     private val owner = Thread.currentThread()
     private val cancelled = AtomicBoolean(false)
-    private var decoder: SavedAudioPreview.Decoder? = null
+    private var decoder: SpeechDecoder? = null
     private var closed = false
 
-    override suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int) {
+    override suspend fun transcribe(store: NoteStore, chunk: Chunk, threads: Int) {
         checkOwner()
         check(!closed) { "Speech engine is not open." }
         val context = currentCoroutineContext()

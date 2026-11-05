@@ -15,14 +15,15 @@ import app.focal.FocalApplication
 import app.focal.MainActivity
 import app.focal.R
 import app.focal.core.DecodePolicy
-import app.focal.core.SpeechGate
+import app.focal.core.LevelMeter
 import app.focal.core.Transcript
+import app.focal.data.AUTOMATIC_LANGUAGE
 import app.focal.data.Chunk
 import app.focal.data.NoteStore
-import app.focal.speech.Transcriber
+import app.focal.data.ULTRA_ENGINE
+import app.focal.speech.UltraEngine
 import app.focal.speech.UltraTranscriber
 import app.focal.speech.UltraWindowPlanner
-import app.focal.speech.PreviewEngineFactory
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +32,6 @@ import java.io.BufferedOutputStream
 import java.io.FileOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 
 data class LiveSession(val noteId: String? = null, val paused: Boolean = false, val processing: Boolean = false,
                        val duration: Long = 0, val level: Float = 0f, val message: String = "", val pending: Int = 0)
@@ -46,7 +46,7 @@ internal interface RecordingInput : AutoCloseable {
     fun read(samples: ShortArray, offset: Int, count: Int): Int
 }
 internal interface RecordingDecoder : AutoCloseable {
-    suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int)
+    suspend fun transcribe(store: NoteStore, chunk: Chunk, threads: Int)
     fun cancel()
 }
 
@@ -144,10 +144,8 @@ class RecordingService : Service() {
         try {
             app.storageReady.await()
             if (stopping.get()) { stopSelf(); return }
-            val newEngine = (if (BuildConfig.DEBUG) speechEngineForTests else null)
-                ?: if (BuildConfig.FOCAL_ULTRA_BUNDLED) "ultra-v1" else "whisper"
             val id = recover?.also { checkNotNull(store.note(it)) { "This note is no longer available." } }
-                ?: store.create(if (newEngine == "ultra-v1") "auto" else app.preferences.settings.value.language, newEngine)
+                ?: store.create(AUTOMATIC_LANGUAGE, ULTRA_ENGINE)
             noteId = id
             ownership?.bindNote(id)
             val note = checkNotNull(store.note(id))
@@ -163,8 +161,8 @@ class RecordingService : Service() {
                 RecordingState.live.update { if (it.noteId == id) it.copy(duration = duration) else it }
                 store.state(id, "PROCESSING")
             }
-            else capture = scope.launch(captureDispatcher) { captureAudio(id, note.speechEngine == "ultra-v1") }
-            worker = scope.launch(speechDispatcher) { processQueue(id, note.language, note.speechEngine) }
+            else capture = scope.launch(captureDispatcher) { captureAudio(id) }
+            worker = scope.launch(speechDispatcher) { processQueue(id, note.speechEngine) }
             scope.launch {
                 var ticks = 0
                 while (isActive && RecordingState.live.value.noteId == id) {
@@ -193,8 +191,6 @@ class RecordingService : Service() {
     }
 
     private sealed interface CaptureEvent {
-        data class Begin(val startMs: Long, val overlap: Boolean) : CaptureEvent
-        data class End(val endMs: Long) : CaptureEvent
         data class Duration(val ms: Long) : CaptureEvent
         data class State(val name: String) : CaptureEvent
     }
@@ -204,77 +200,47 @@ class RecordingService : Service() {
         private val events = Channel<CaptureEvent>(
             if (BuildConfig.DEBUG) metadataCapacityForTests?.coerceIn(1, METADATA_CAPACITY) ?: METADATA_CAPACITY else METADATA_CAPACITY
         )
-        private val failed = AtomicBoolean(false)
-        private val unpublishedFrom = AtomicLong(Long.MAX_VALUE)
-        @Volatile private var lastPublishedEndMs = 0L
+        private val rejected = AtomicBoolean(false)
         private val job = app.scope.launch(Dispatchers.IO) {
-            var chunkId: String? = null
-            var activeStart: Long? = null
             try {
                 for (event in events) {
                     when (event) {
-                        is CaptureEvent.Begin -> {
-                            activeStart = event.startMs
-                            chunkId = store.beginChunk(id, event.startMs, event.overlap)
-                        }
-                        is CaptureEvent.End -> {
-                            store.finishChunk(checkNotNull(chunkId) { "Missing audio range metadata." }, event.endMs)
-                            lastPublishedEndMs = maxOf(lastPublishedEndMs, event.endMs)
-                            chunkId = null; activeStart = null
-                        }
                         is CaptureEvent.Duration -> store.duration(id, event.ms)
                         is CaptureEvent.State -> store.state(id, event.name)
                     }
                 }
             } catch (_: Exception) {
-                failed.set(true)
-                activeStart?.let { start -> unpublishedFrom.accumulateAndGet(start, { a, b -> minOf(a, b) }) }
+                rejected.set(true)
                 captureFailure = captureFailure ?: "Recording metadata could not be saved. Original audio is kept for recovery."
                 stopping.set(true); interruptInput()
                 events.close()
-                while (true) {
-                    val event = events.tryReceive().getOrNull() ?: break
-                    if (event is CaptureEvent.Begin) unpublishedFrom.accumulateAndGet(event.startMs, { a, b -> minOf(a, b) })
-                }
+                while (events.tryReceive().isSuccess) Unit
             }
         }
 
+        /** The durable duration is rebuilt from the synced file, so a dropped update loses no audio. */
+        val failed get() = rejected.get()
+
         fun enqueue(event: CaptureEvent) {
             if (events.trySend(event).isFailure) {
-                failed.set(true)
-                // A rejected scalar update is not a rejected audio range. Use the final
-                // published watermark after drain; only an unqueued Begin pins an earlier offset.
-                if (event is CaptureEvent.Begin) unpublishedFrom.accumulateAndGet(event.startMs, { a, b -> minOf(a, b) })
+                rejected.set(true)
                 error("Recording stopped because saved-audio metadata could not keep up. Original audio is kept for recovery.")
             }
         }
 
         suspend fun finish() { events.close(); job.join() }
-        fun recoveryFromMs(): Long? = if (failed.get()) minOf(lastPublishedEndMs, unpublishedFrom.get()) else null
     }
 
     @Suppress("MissingPermission", "UsableSpace")
-    private suspend fun captureAudio(id: String, ultra: Boolean) {
+    private suspend fun captureAudio(id: String) {
         var device: RecordingInput? = null
         var stream: BufferedOutputStream? = null
         var fileStream: FileOutputStream? = null
         var samplesWritten = 0L
-        val frame = ShortArray(SpeechGate.FRAME_SAMPLES)
-        var filled = 0
+        val frame = ShortArray(LevelMeter.FRAME_SAMPLES)
+        // The speech worker frames the complete synced original; the meter only feeds the UI.
+        val meter = LevelMeter()
         val metadata = CaptureMetadata(id)
-        val gate = SpeechGate(object : SpeechGate.Sink {
-            override fun begin(startSample: Long, overlap: Boolean) {
-                if (!ultra) metadata.enqueue(CaptureEvent.Begin(startSample / 16, overlap))
-            }
-            override fun audio(samples: ShortArray) = Unit
-            override fun end(endSample: Long) {
-                // Ultra frames the complete original on the speech worker from synced duration.
-                // The gate only supplies the microphone level; it must not discard quiet speech.
-                if (ultra) return
-                stream?.flush(); fileStream?.fd?.sync()
-                metadata.enqueue(CaptureEvent.End(endSample / 16))
-            }
-        })
         try {
             check(filesDir.usableSpace > MIN_FREE_BYTES) { "Storage is almost full. Free some space before recording." }
             check(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { "Microphone access is required." }
@@ -298,8 +264,7 @@ class RecordingService : Service() {
                 if (paused.get()) {
                     if (!acknowledgedPause) {
                         synchronized(inputLock) { current.stop(); inputRunning = false }
-                        if (filled > 0) { gate.acceptPartial(frame, filled); filled = 0 }
-                        gate.flush(); syncAudio()
+                        syncAudio()
                         captureAwake.set(false); reconcileWake()
                         metadata.enqueue(CaptureEvent.State("PAUSED"))
                         RecordingState.live.update { if (it.noteId == id) it.copy(paused = true, duration = samplesWritten / 16, level = 0f, message = "Paused") else it }
@@ -320,26 +285,25 @@ class RecordingService : Service() {
                     updateNotification()
                 }
                 check(!current.silenced) { "Android muted the microphone, possibly because of a call or another app. Saved audio is safe." }
-                val count = current.read(frame, filled, frame.size - filled)
+                val count = current.read(frame, 0, frame.size)
                 if (count <= 0) {
                     if (stopping.get() || paused.get() || !inputRunning) continue
                     error("Microphone disconnected. Saved audio is safe.")
                 }
-                check(count <= frame.size - filled) { "The microphone returned an invalid audio buffer." }
+                check(count <= frame.size) { "The microphone returned an invalid audio buffer." }
                 repeat(count) { index ->
-                    val sample = frame[filled + index].toInt()
+                    val sample = frame[index].toInt()
                     bytes[index * 2] = sample.toByte(); bytes[index * 2 + 1] = (sample shr 8).toByte()
                 }
                 buffered.write(bytes, 0, count * 2)
                 samplesWritten += count
-                filled += count
-                if (filled == frame.size) { gate.accept(frame); filled = 0 }
+                meter.accept(frame, count)
                 // A successful read belongs to the original, even if Android silenced
                 // the microphone while that read was in flight. Persist it before stopping.
                 check(!current.silenced) { "Android muted the microphone, possibly because of a call or another app. Saved audio is safe." }
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastUi >= 100) {
-                    RecordingState.live.update { if (it.noteId == id) it.copy(duration = samplesWritten / 16, level = gate.level) else it }
+                    RecordingState.live.update { if (it.noteId == id) it.copy(duration = samplesWritten / 16, level = meter.level) else it }
                     lastUi = now
                 }
                 if (now - lastSync >= 1000) {
@@ -356,11 +320,6 @@ class RecordingService : Service() {
                 runCatching { device?.close() }
                 if (input === device) { input = null; inputRunning = false }
             }
-            // Finish the gate using exactly the real partial tail; no zero padding or lost samples.
-            try {
-                if (filled in 1 until frame.size) { gate.acceptPartial(frame, filled); filled = 0 }
-                gate.flush()
-            } catch (error: Exception) { captureFailure = error.message ?: "Could not finish saving audio." }
             try { stream?.flush(); fileStream?.fd?.sync() }
             catch (error: Exception) { captureFailure = error.message ?: "Could not finish saving audio." }
             try { stream?.close() }
@@ -376,8 +335,7 @@ class RecordingService : Service() {
                         stopSelf()
                     }
                     metadata.finish()
-                    val recoveryFrom = metadata.recoveryFromMs()
-                    if (captureFailure != null || recoveryFrom != null) store.recover(id, tailFromMs = recoveryFrom)
+                    if (captureFailure != null || metadata.failed) store.recover(id)
                     val duration = store.audioFile(id).length() / 32
                     store.duration(id, duration)
                     store.state(id, "PROCESSING", captureFailure.orEmpty())
@@ -393,21 +351,22 @@ class RecordingService : Service() {
         }
     }
 
-    private suspend fun processQueue(id: String, language: String, speechEngine: String) {
+    private suspend fun processQueue(id: String, speechEngine: String) {
         try {
             try {
                 val testFactory = if (BuildConfig.DEBUG) decoderFactoryForTests else null
-                if (testFactory == null && speechEngine == "whisper") app.initialized.await()
                 decoderAwake.set(true); reconcileWake()
                 val engine = try {
-                    testFactory?.invoke() ?: deviceDecoder(speechEngine)
+                    testFactory?.invoke() ?: deviceDecoder()
                 } finally { decoderAwake.set(false); reconcileWake() }
                 transcriber = engine
                 engine.use {
                     while (currentCoroutineContext().isActive) {
                         val finished = recordingDone
                         var chunk = store.nextChunk(id)
-                        if (chunk == null && speechEngine == "ultra-v1") {
+                        // Legacy Whisper notes only drain the PENDING ranges that recovery published
+                        // (NoteStore.recover); planning from their null cursor would restart at 0.
+                        if (chunk == null && speechEngine == ULTRA_ENGINE) {
                             val saved = checkNotNull(store.note(id)) { "This note is no longer available." }
                             val previous = store.lastChunk(id)
                             // A final window can have nextStart=end; a hard cut retains its
@@ -432,10 +391,10 @@ class RecordingService : Service() {
                             val start = SystemClock.elapsedRealtime()
                             val warm = Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_MODERATE
                             val threads = DecodePolicy.threads(Runtime.getRuntime().availableProcessors(), power.isPowerSaveMode, warm)
-                            engine.transcribe(store, chunk, language, threads)
+                            engine.transcribe(store, chunk, threads)
                             RecordingState.live.update { if (it.noteId == id) it.copy(pending = store.pendingCount(id)) else it }
                             val cooldown = DecodePolicy.cooldownMs(SystemClock.elapsedRealtime() - start, power.isPowerSaveMode, warm)
-                            val savedTail = speechEngine == "ultra-v1" &&
+                            val savedTail = speechEngine == ULTRA_ENGINE &&
                                 (store.note(id)?.duration ?: 0L) > chunk.end
                             if (cooldown > 0 && (savedTail || store.nextChunk(id) != null)) delay(cooldown)
                         } finally { decoderAwake.set(false); reconcileWake() }
@@ -463,21 +422,8 @@ class RecordingService : Service() {
         }
     }
 
-    private fun deviceDecoder(speechEngine: String): RecordingDecoder {
-        if (speechEngine == "ultra-v1") {
-            check(BuildConfig.FOCAL_ULTRA_BUNDLED) { "This note needs the Focal APK with Ultra to continue transcription." }
-            return UltraTranscriber { threads, checkCancelled ->
-                PreviewEngineFactory.openBundled(app, threads.coerceIn(1, 2), checkCancelled)
-            }
-        }
-        check(speechEngine == "whisper") { "This note needs a newer speech engine." }
-        check(app.models.ready()) { "Audio is saved. Add the speech model to transcribe this note." }
-        val engine = Transcriber(app.models.model.absolutePath)
-        return object : RecordingDecoder {
-            override suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int) = engine.transcribe(store, chunk, language, threads)
-            override fun cancel() = engine.cancel()
-            override fun close() = engine.close()
-        }
+    private fun deviceDecoder(): RecordingDecoder = UltraTranscriber { threads, checkCancelled ->
+        UltraEngine.open(app, threads.coerceIn(1, 2), checkCancelled)
     }
 
     @Suppress("MissingPermission")
@@ -620,7 +566,6 @@ class RecordingService : Service() {
         @Volatile internal var inputFactoryForTests: (() -> RecordingInput)? = null
         @Volatile internal var decoderFactoryForTests: (() -> RecordingDecoder)? = null
         @Volatile internal var metadataCapacityForTests: Int? = null
-        @Volatile internal var speechEngineForTests: String? = null
         fun command(context: Context, action: String, id: String? = null) {
             require(action != RECOVER || !id.isNullOrBlank()) { "Choose an existing note to continue transcription." }
             if (action == START && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)

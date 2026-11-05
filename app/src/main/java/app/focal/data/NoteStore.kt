@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import androidx.annotation.VisibleForTesting
 import androidx.core.database.sqlite.transaction
 import app.focal.core.Transcript
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,9 +24,18 @@ internal fun fitsPassageDraftBudget(text: String): Boolean =
 
 class PassageSizeException(message: String) : IllegalStateException(message)
 
+/** Every new note is transcribed by Parakeet Ultra, which detects the language itself. */
+const val ULTRA_ENGINE = "ultra-v1"
+const val AUTOMATIC_LANGUAGE = "auto"
+/**
+ * Notes recorded before the single-engine rebuild. Their text, edits and audio stay as saved;
+ * any range they left PENDING is now transcribed by Ultra through the same chunk queue.
+ */
+const val LEGACY_WHISPER_ENGINE = "whisper"
+
 data class Note(val id: String, val title: String, val created: Long, val language: String,
                 val state: String, val duration: Long, val error: String, val preview: String = "", val reviewCount: Int = 0,
-                val speechEngine: String = "whisper")
+                val speechEngine: String = ULTRA_ENGINE)
 internal val Note.mayNeedRecovery: Boolean get() = state == "INTERRUPTED" || state == "ERROR"
 
 data class Chunk(val id: String, val noteId: String, val start: Long, val end: Long,
@@ -90,8 +100,8 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         db.execSQL("CREATE TABLE pending_audio_deletions(note_id TEXT PRIMARY KEY)")
     }
     private fun changed() { changes.update { it + 1 } }
-    fun create(language: String, speechEngine: String = "whisper"): String {
-        require(speechEngine in setOf("whisper", "ultra-v1")) { "Unknown speech engine." }
+    fun create(language: String, speechEngine: String): String {
+        require(speechEngine in setOf(ULTRA_ENGINE, LEGACY_WHISPER_ENGINE)) { "Unknown speech engine." }
         val id = UUID.randomUUID().toString()
         writableDatabase.insertOrThrow("notes", null, ContentValues().apply {
             put("id", id); put("title", "Untitled note"); put("created", System.currentTimeMillis())
@@ -147,14 +157,18 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
             ByteArray(size.toInt()).also { bytes -> file.seek(chunk.start * BYTES_PER_MS); file.readFully(bytes) }
         }
     }
-    fun beginChunk(note: String, start: Long, overlap: Boolean): String {
+    // Whisper-era capture published gated ranges with beginChunk/finishChunk. Ultra capture no
+    // longer does; tests use them to build the legacy notes that existing installs still hold.
+    @VisibleForTesting
+    internal fun beginChunk(note: String, start: Long, overlap: Boolean): String {
         require(start >= 0 && start <= Long.MAX_VALUE / BYTES_PER_MS) { "Invalid saved audio range." }
         val id = UUID.randomUUID().toString()
         writableDatabase.insertOrThrow("chunks", null, ContentValues().apply {
             put("id", id); put("note_id", note); put("start", start); put("end", start); put("overlap", if (overlap) 1 else 0); put("state", "WRITING")
         }); return id
     }
-    fun finishChunk(id: String, end: Long) {
+    @VisibleForTesting
+    internal fun finishChunk(id: String, end: Long) {
         val db = writableDatabase
         var updated = false
         db.transaction {
@@ -183,7 +197,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         var overlap = false
         writableDatabase.transaction {
             val note = checkNotNull(note(noteId))
-            check(note.speechEngine == "ultra-v1" && end <= note.duration) { "Audio is not durably saved yet." }
+            check(note.speechEngine == ULTRA_ENGINE && end <= note.duration) { "Audio is not durably saved yet." }
             val previous = lastChunk(noteId)
             check(start == (previous?.nextStart ?: 0L) && (previous == null || previous.state == "DONE")) {
                 "Saved audio window is already queued."
@@ -208,7 +222,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
 
     internal fun hasUnpublishedTail(note: Note): Boolean = note.mayNeedRecovery &&
         audioBytes(note.id) / BYTES_PER_MS - lastChunkEnd(readableDatabase, note.id) >=
-        if (note.speechEngine == "ultra-v1") 1L else MIN_RECOVERABLE_MS
+        if (note.speechEngine == ULTRA_ENGINE) 1L else MIN_RECOVERABLE_MS
 
     private fun lastChunkEnd(db: SQLiteDatabase, id: String): Long =
         db.rawQuery("SELECT COALESCE(MAX(end),0) FROM chunks WHERE note_id=? AND state!='WRITING'", arrayOf(id)).use {
@@ -222,17 +236,6 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     fun chunks(note: String): List<Chunk> = readableDatabase.rawQuery("SELECT * FROM chunks WHERE note_id=? ORDER BY start,rowid", arrayOf(note)).use { c -> buildList {
         while (c.moveToNext()) add(chunkFromCursor(c))
     } }
-    // The extra row lets the caller refuse a note beyond the cleanup work limit.
-    internal fun completedChunks(noteId: String): List<Chunk> = readableDatabase.rawQuery(
-        "SELECT * FROM chunks WHERE note_id=? AND state='DONE' ORDER BY start,rowid LIMIT 257", arrayOf(noteId)
-    ).use { c -> buildList { while (c.moveToNext()) add(chunkFromCursor(c)) } }
-
-    internal fun noiseCandidatePassages(noteId: String, chunkId: String): List<Passage> = readPassages(
-        """SELECT $PASSAGE_COLUMNS,$ORIGINAL_COLUMNS FROM passages WHERE note_id=? AND chunk_id=? AND reviewed=0
-            AND excluded=0 AND length(CAST(text AS BLOB)) BETWEEN 1 AND $MAX_PASSAGE_EDIT_BYTES
-            ORDER BY start,id LIMIT 257""", arrayOf(noteId, chunkId), includeOriginal = true,
-    ).filter { it.text.isNotBlank() }
-
     fun passages(note: String): List<Passage> = readPassages(
         "SELECT $PASSAGE_COLUMNS,$ORIGINAL_COLUMNS FROM passages WHERE note_id=? ORDER BY start,id", arrayOf(note),
         includeOriginal = true,
@@ -345,30 +348,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         }
         changed()
     }
-    fun excludePassage(expected: Passage): Boolean = recordNoiseDecision(expected, exclude = true)
-
-    fun keepPassage(expected: Passage): Boolean = recordNoiseDecision(expected, exclude = false)
-
-    private fun recordNoiseDecision(expected: Passage, exclude: Boolean): Boolean {
-        if (expected.reviewed || expected.excluded || expected.text.isBlank()) return false
-        val updated = writableDatabase.transaction {
-            val values = ContentValues().apply {
-                if (exclude) put("excluded", 1) else put("reviewed", 1)
-            }
-            val changed = update("passages", values, """
-                id=? AND note_id=? AND chunk_id=? AND start=? AND end=? AND text=? AND reviewed=0 AND excluded=0
-                AND EXISTS (SELECT 1 FROM notes WHERE id=passages.note_id AND state='READY')
-                AND NOT EXISTS (SELECT 1 FROM chunks WHERE note_id=passages.note_id AND state!='DONE')
-            """.trimIndent(),
-                arrayOf(expected.id.toString(), expected.noteId, expected.chunkId, expected.start.toString(),
-                    expected.end.toString(), expected.text)) == 1
-            if (changed && exclude) refreshAutomaticTitle(this, expected)
-            changed
-        }
-        if (updated) changed()
-        return updated
-    }
-
+    /** Notes checked by the retired background-sound feature can hold excluded passages; this brings one back. */
     fun restorePassage(passage: Passage): Boolean {
         val updated = writableDatabase.transaction {
             val changed = update("passages", ContentValues().apply {
@@ -394,19 +374,17 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
             "id=? AND automatic_title_chunk=?", identity)
     }
 
-    fun recover(noteId: String? = null, tailFromMs: Long? = null) {
-        require(tailFromMs == null || (noteId != null && tailFromMs >= 0)) { "A recovery tail needs a note and a valid source offset." }
+    fun recover(noteId: String? = null) {
         val db = writableDatabase
         db.transaction {
             val scope = if (noteId == null) "" else " AND n.id=?"
             val args = noteId?.let { arrayOf(it) }
-            // A queued Begin may never have reached SQLite before process death.
             // Only interrupted/error captures need conservative tail reconciliation;
-            // READY notes keep their intentional silence-gate gaps unchanged.
+            // READY legacy notes keep their intentional silence-gate gaps unchanged.
             val candidates = rawQuery("""SELECT n.id FROM notes n
-                WHERE (n.state IN ('RECORDING','PAUSED','PROCESSING','INTERRUPTED','ERROR')${if (tailFromMs == null) "" else " OR n.id=?"})
+                WHERE n.state IN ('RECORDING','PAUSED','PROCESSING','INTERRUPTED','ERROR')
                 AND NOT EXISTS(SELECT 1 FROM pending_audio_deletions d WHERE d.note_id=n.id)$scope""",
-                if (tailFromMs == null) args else arrayOf(noteId!!, noteId)).use { c ->
+                args).use { c ->
                 buildList { while (c.moveToNext()) add(c.getString(0)) }
             }
             val noteScope = if (noteId == null) "" else " AND id=?"
@@ -433,26 +411,22 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
                 val file = audioFile(id)
                 if (!file.isFile) return@forEach
                 val end = file.length() / BYTES_PER_MS
-                if (note(id)?.speechEngine == "ultra-v1") {
+                if (note(id)?.speechEngine == ULTRA_ENGINE) {
                     // The worker rebuilds its next pause-aware window from the saved cursor.
                     // Never replace committed text or pre-split its tail with Whisper framing.
                     syncOriginal(id)
                     update("notes", ContentValues().apply { put("duration", end) }, "id=?", arrayOf(id))
                     return@forEach
                 }
-                val lastEnd = lastChunkEnd(this, id)
-                val start = (if (id == noteId) tailFromMs else null)?.coerceAtMost(end) ?: lastEnd
-                val missing = uncoveredRanges(this, id, start, end).filter { it.end - it.start >= MIN_RECOVERABLE_MS }
+                // Legacy Whisper notes: publish their unpublished tail as <=30 s PENDING ranges,
+                // which the speech worker now drains with Ultra (it plans no new windows for them).
+                // TODO(coverage-map migration, DB v5): replace this with a coverage map built from
+                // all chunk states, so legacy notes resume exactly where coverage ends.
+                val missing = uncoveredRanges(this, id, lastChunkEnd(this, id), end)
+                    .filter { it.end - it.start >= MIN_RECOVERABLE_MS }
                 if (missing.isNotEmpty()) {
                     syncOriginal(id)
-                    missing.forEachIndexed { index, range ->
-                        // A precise rejected Begin can include the preceding hard-cut
-                        // overlap. A stale watermark must never replay covered chunks.
-                        val keepPrefix = index == 0 && tailFromMs != null && range.precedingStart != null &&
-                            start > range.precedingStart && range.start - start in 1..RECOVERY_OVERLAP_MS
-                        val from = if (keepPrefix) start else range.start
-                        publishRecoveredRange(this, id, from, range.end, overlap = keepPrefix)
-                    }
+                    missing.forEach { range -> publishRecoveredRange(this, id, range.start, range.end, overlap = false) }
                     update("notes", ContentValues().apply {
                         put("state", "INTERRUPTED")
                         put("error", "Recording was interrupted. Saved audio can still be transcribed.")
@@ -469,23 +443,22 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         deletions.forEach { try { deletePendingAudio(it) } catch (_: IOException) { /* Retry next launch. */ } }
         changed()
     }
-    private data class MissingRange(val start: Long, val end: Long, val precedingStart: Long?)
+    private data class MissingRange(val start: Long, val end: Long)
     private fun uncoveredRanges(db: SQLiteDatabase, note: String, start: Long, end: Long): List<MissingRange> {
         if (start >= end) return emptyList()
         val missing = mutableListOf<MissingRange>()
         var through = start
-        var precedingStart: Long? = null
         db.rawQuery("SELECT start,end FROM chunks WHERE note_id=? AND state IN ('DONE','PENDING') AND end>? AND start<? ORDER BY start,end",
             arrayOf(note, start.toString(), end.toString())).use { c ->
             while (c.moveToNext()) {
                 val coveredStart = c.getLong(0)
                 val coveredEnd = c.getLong(1)
-                if (coveredStart > through) missing += MissingRange(through, coveredStart, precedingStart)
-                if (coveredEnd > through) { through = coveredEnd; precedingStart = coveredStart }
+                if (coveredStart > through) missing += MissingRange(through, coveredStart)
+                if (coveredEnd > through) through = coveredEnd
                 if (through >= end) break
             }
         }
-        if (through < end) missing += MissingRange(through, end, precedingStart)
+        if (through < end) missing += MissingRange(through, end)
         return missing
     }
     private fun publishRecoveredRange(db: SQLiteDatabase, note: String, from: Long, end: Long,

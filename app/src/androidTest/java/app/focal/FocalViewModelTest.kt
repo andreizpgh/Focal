@@ -15,6 +15,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.Passage
 import app.focal.data.PassageSizeException
 import app.focal.data.transferableTranscript
@@ -39,7 +40,6 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class FocalViewModelTest {
@@ -50,7 +50,7 @@ class FocalViewModelTest {
 
     @Before fun setup() {
         app = ApplicationProvider.getApplicationContext()
-        runBlocking { app.storageReady.await(); app.initialized.await() }
+        runBlocking { app.storageReady.await() }
     }
 
     @After fun cleanup() {
@@ -109,7 +109,7 @@ class FocalViewModelTest {
     }
 
     @Test fun failedReadsKeepKnownDataAndRetryAfterInitialAndLaterErrors() {
-        val id = app.store.create("en").also { created += it }
+        val id = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
         app.store.rename(id, "Recoverable library")
         val failing = AtomicBoolean(true)
         val model = model(read = { if (failing.get()) throw IOException("Synthetic read failure") })
@@ -136,8 +136,8 @@ class FocalViewModelTest {
     }
 
     @Test fun delayedDeletionDoesNotClearTheNewSelection() {
-        val first = app.store.create("en").also { created += it }
-        val second = app.store.create("en").also { created += it }
+        val first = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
+        val second = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val model = model(delete = { id ->
@@ -164,7 +164,7 @@ class FocalViewModelTest {
     }
 
     @Test fun delayedDeletionExcludesRecoveryAcrossControllersUntilDiskWorkFinishes() {
-        val id = app.store.create("en").also { created += it }
+        val id = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
         app.store.audioFile(id).writeBytes(ByteArray(32_000))
         val chunk = app.store.beginChunk(id, 0, false)
         app.store.finishChunk(chunk, 1000)
@@ -199,7 +199,7 @@ class FocalViewModelTest {
     }
 
     @Test fun retryWhileRecoveryClaimIsStillHeldShowsBusyMessage() {
-        val id = app.store.create("en").also { created += it }
+        val id = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
         val pcm = ByteArray(32_000) { (it % 97).toByte() }
         app.store.audioFile(id).writeBytes(pcm)
         app.store.duration(id, 1000)
@@ -235,7 +235,7 @@ class FocalViewModelTest {
         val unreadable = model(read = { throw PassageSizeException(sizeMessage) })
         assertEquals(sizeMessage, await(unreadable) { it.error != null }.error)
 
-        val id = app.store.create("en").also { created += it }
+        val id = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
         val chunk = app.store.beginChunk(id, 0, false)
         app.store.finishChunk(chunk, 1000)
         app.store.complete(app.store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = chunk,
@@ -252,66 +252,65 @@ class FocalViewModelTest {
         assertEquals(passage, app.store.passages(id).single())
     }
 
-    @Test fun exclusionAndRestoreWaitForTheTransferSnapshot() = runBlocking {
-        val passage = completedPassage()
-        data class ReadGate(val excluded: Boolean, val entered: CountDownLatch = CountDownLatch(1),
-                            val release: CountDownLatch = CountDownLatch(1))
-        val next = AtomicReference<ReadGate?>()
+    @Test fun legacyRestoreWaitsForTheTransferSnapshot() = runBlocking {
+        val passage = excludedLegacyPassage()
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val gate = AtomicBoolean(false)
         val model = model(read = {
-            next.get()?.let { gate ->
-                if (app.store.passages(passage.noteId).single().excluded == gate.excluded) {
-                    gate.entered.countDown()
-                    check(gate.release.await(10, TimeUnit.SECONDS))
-                }
+            if (gate.get() && !app.store.passages(passage.noteId).single().excluded) {
+                entered.countDown()
+                check(release.await(10, TimeUnit.SECONDS))
             }
         })
         model.select(passage.noteId)
         await(model) { it.note?.id == passage.noteId && it.passages == listOf(passage) && it.error == null }
 
-        suspend fun verify(exclude: Boolean, decide: suspend () -> Boolean) {
-            val gate = ReadGate(exclude)
-            next.set(gate)
-            val decision = async(Dispatchers.Main.immediate) { decide() }
-            try {
-                assertTrue("The database committed before the synthetic read stalled", gate.entered.await(10, TimeUnit.SECONDS))
-                assertEquals(exclude, app.store.passages(passage.noteId).single().excluded)
-                assertEquals(!exclude, model.library.value.passages.single().excluded)
-                assertNull(model.latestTransferSnapshot(passage.noteId))
-                assertNull("The action reported success with stale copy text", withTimeoutOrNull(200) { decision.await() })
-            } finally {
-                next.set(null)
-                gate.release.countDown()
-            }
-            assertTrue(withTimeout(10_000) { decision.await() })
-            val published = checkNotNull(model.latestTransferSnapshot(passage.noteId))
-            assertEquals(if (exclude) "" else passage.text, transferableTranscript(published.passages))
+        gate.set(true)
+        val restore = async(Dispatchers.Main.immediate) { model.restorePassage(passage) }
+        try {
+            assertTrue("The database committed before the synthetic read stalled", entered.await(10, TimeUnit.SECONDS))
+            assertFalse(app.store.passages(passage.noteId).single().excluded)
+            assertTrue(model.library.value.passages.single().excluded)
+            assertNull(model.latestTransferSnapshot(passage.noteId))
+            assertNull("The action reported success with stale copy text", withTimeoutOrNull(200) { restore.await() })
+        } finally {
+            gate.set(false)
+            release.countDown()
         }
-
-        verify(exclude = true) { model.decideBackgroundSound(passage, exclude = true) }
-        verify(exclude = false) { model.restorePassage(app.store.passages(passage.noteId).single()) }
+        assertTrue(withTimeout(10_000) { restore.await() })
+        val published = checkNotNull(model.latestTransferSnapshot(passage.noteId))
+        assertEquals(passage.text, transferableTranscript(published.passages))
     }
 
-    @Test fun refreshFailureKeepsTheCommittedDecisionAndDisablesTransfer() = runBlocking {
-        val passage = completedPassage()
+    @Test fun refreshFailureKeepsTheRestoredPassageAndDisablesTransfer() = runBlocking {
+        val passage = excludedLegacyPassage()
         val failing = AtomicBoolean(false)
         val model = model(read = { if (failing.get()) throw IOException("Synthetic post-commit read failure") })
         model.select(passage.noteId)
         await(model) { it.note?.id == passage.noteId && it.passages == listOf(passage) && it.error == null }
 
         failing.set(true)
-        assertTrue(withTimeout(10_000) { model.decideBackgroundSound(passage, exclude = true) })
-        assertTrue(app.store.passages(passage.noteId).single().excluded)
+        assertTrue(withTimeout(10_000) { model.restorePassage(passage) })
+        assertFalse(app.store.passages(passage.noteId).single().excluded)
         assertNotNull(model.library.value.error)
         assertNull(model.latestTransferSnapshot(passage.noteId))
 
         failing.set(false)
         model.retryLibrary()
-        await(model) { it.note?.id == passage.noteId && it.passages.singleOrNull()?.excluded == true && it.error == null }
-        assertEquals("", transferableTranscript(checkNotNull(model.latestTransferSnapshot(passage.noteId)).passages))
+        await(model) { it.note?.id == passage.noteId && it.passages.singleOrNull()?.excluded == false && it.error == null }
+        assertEquals(passage.text, transferableTranscript(checkNotNull(model.latestTransferSnapshot(passage.noteId)).passages))
+    }
+
+    /** The retired background-sound check left passages like this in existing notes. */
+    private fun excludedLegacyPassage(): Passage {
+        val saved = completedPassage()
+        app.store.writableDatabase.execSQL("UPDATE passages SET excluded=1 WHERE id=?", arrayOf<Any>(saved.id))
+        return app.store.passages(saved.noteId).single().also { assertTrue(it.excluded) }
     }
 
     private fun completedPassage(): Passage {
-        val id = app.store.create("en").also { created += it }
+        val id = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
         val chunk = app.store.beginChunk(id, 0, false)
         app.store.finishChunk(chunk, 1000)
         app.store.complete(checkNotNull(app.store.nextChunk(id)), listOf(
@@ -322,8 +321,8 @@ class FocalViewModelTest {
     }
 
     @Test fun notificationLaunchIsNotReplayedOverSavedNavigation() {
-        val first = app.store.create("en").also { created += it }
-        val second = app.store.create("en").also { created += it }
+        val first = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
+        val second = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
         app.store.rename(first, "Notification session A")
         app.store.rename(second, "Notification session B")
         val intent = Intent(app, MainActivity::class.java).putExtra(RecordingService.NOTE, first)

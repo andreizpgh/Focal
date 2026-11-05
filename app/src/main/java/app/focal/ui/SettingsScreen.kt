@@ -27,8 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 @Composable internal fun SettingsScreen(
-    theme: String, setTheme: (String) -> Unit,
-    modelReady: Boolean, preparing: Boolean, setupError: String?, openModel: () -> Unit, notify: (String) -> Unit,
+    theme: String, setTheme: (String) -> Unit, openModel: () -> Unit, notify: (String) -> Unit,
 ) {
     var help by rememberSaveable { mutableStateOf(false) }
     var licenses by rememberSaveable { mutableStateOf(false) }
@@ -40,11 +39,7 @@ import kotlinx.coroutines.withContext
         Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer,
             contentColor = MaterialTheme.colorScheme.onSurface) {
             Column {
-                SettingsRow("Speech model", if (BuildConfig.FOCAL_ULTRA_BUNDLED) "Ultra · Automatic language"
-                    else when { preparing -> "Preparing…"; setupError != null -> "Needs attention"; modelReady -> "Ready"; else -> "Not installed" },
-                    enabled = BuildConfig.FOCAL_ULTRA_BUNDLED || !preparing, click = openModel)
-                if (setupError != null && !BuildConfig.FOCAL_ULTRA_BUNDLED) Text(setupError, style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp))
+                SettingsRow("Speech model", "Ultra · Automatic language", click = openModel)
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp)) {
                     Text("Appearance", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
@@ -89,13 +84,9 @@ import kotlinx.coroutines.withContext
         onDismissRequest = { help = false }, title = { Text("Using Focal") },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                HelpTopic("Recording", if (BuildConfig.FOCAL_ULTRA_BUNDLED)
-                    "Ultra detects the language automatically. Record, then finish to review and copy the text. If transcription cannot finish, the original audio stays available for retry."
-                else "Choose the speech language beside Record. Focal remembers your last choice for new recordings. Record, then finish to review and copy the text. Without a speech model, the audio is saved for transcription later.")
+                HelpTopic("Recording", "Ultra detects the language automatically. Record, then finish to review and copy the text. If transcription cannot finish, the original audio stays available for retry.")
                 HelpTopic("In the background", "Recording can continue with the screen off or in another app. Force-stopping Focal or restarting your phone ends it. Some phones restrict background apps.")
-                HelpTopic("Reviewing words", if (BuildConfig.FOCAL_ULTRA_BUNDLED)
-                    "Some uncertain or missing ranges are marked for review; the dots are not a grammar check or a confidence score. Tap any passage to listen and edit. Done confirms it; Next hint confirms it and moves on. Your original audio stays unchanged."
-                else "Dots are hints from the speech recognizer, not a grammar check. Tap any passage to listen and edit, including those without a dot. Done confirms it; Next hint confirms it and moves on. Your original audio stays unchanged.")
+                HelpTopic("Reviewing words", "Some uncertain or missing ranges are marked for review; the dots are not a grammar check or a confidence score. Tap any passage to listen and edit. Done confirms it; Next hint confirms it and moves on. Your original audio stays unchanged.")
                 HelpTopic("Keeping recordings", "Audio and text are stored on this device. Uninstalling Focal deletes them. Copy or share text you need before uninstalling.")
             }
         },
@@ -143,9 +134,7 @@ private val licenseParagraphBreak = Regex("\\r?\\n(?:[ \\t]*\\r?\\n)+")
         failed = false
         try {
             paragraphs = withContext(Dispatchers.IO) {
-                val names = if (BuildConfig.FOCAL_ULTRA_BUNDLED) listOf("licenses.txt", "ultra-licenses.txt")
-                else listOf("licenses.txt")
-                names.flatMap { name ->
+                listOf("licenses.txt", "ultra-licenses.txt").flatMap { name ->
                     context.assets.open(name).bufferedReader().use { reader ->
                         licenseParagraphBreak.split(reader.readText()).filter { it.isNotBlank() }
                     }

@@ -23,6 +23,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.Passage
 import app.focal.recording.RecordingService
 import app.focal.ui.FocalApp
@@ -42,10 +43,10 @@ class SessionActionsTest {
 
     @Test fun keepingContextualRenameAfterNotificationPreservesItsTargetAndDraft() {
         val app = ApplicationProvider.getApplicationContext<FocalApplication>()
-        runBlocking { app.initialized.await() }
+        runBlocking { app.storageReady.await() }
         val store = app.store
-        val other = store.create("en")
-        val target = store.create("en")
+        val other = store.create("en", LEGACY_WHISPER_ENGINE)
+        val target = store.create("en", LEGACY_WHISPER_ENGINE)
         val title = "Context action fixture"
         val renamed = "Renamed from the list"
         try {
@@ -83,10 +84,10 @@ class SessionActionsTest {
 
     @Test fun cancelDuringReadDoesNotExposeThePreviousSessionsActions() {
         val app = ApplicationProvider.getApplicationContext<FocalApplication>()
-        runBlocking { app.initialized.await() }
+        runBlocking { app.storageReady.await() }
         val store = app.store
-        val first = store.create("en")
-        val second = store.create("en")
+        val first = store.create("en", LEGACY_WHISPER_ENGINE)
+        val second = store.create("en", LEGACY_WHISPER_ENGINE)
         val firstTitle = "First context fixture"
         val secondTitle = "Second context fixture"
         val blockNextRead = AtomicBoolean(false)

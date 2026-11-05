@@ -1,6 +1,6 @@
-import groovy.json.JsonSlurper
-import java.security.MessageDigest
+import java.io.File
 import java.nio.file.Files
+import java.security.MessageDigest
 
 plugins {
     id("com.android.application")
@@ -8,133 +8,56 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val nativeFaultVariant = providers.gradleProperty("focalNativeFaultTests").orNull
-require(nativeFaultVariant == null || nativeFaultVariant in setOf("baseline", "patched")) {
-    "focalNativeFaultTests must be baseline or patched; omit it for a normal build."
-}
-val parakeetTestOption = providers.gradleProperty("focalParakeetTests").orNull
-require(parakeetTestOption == null || parakeetTestOption == "true") {
-    "focalParakeetTests must be true; omit it for a normal build."
-}
-val parakeetTests = parakeetTestOption == "true"
-val parakeetPreviewOption = providers.gradleProperty("focalParakeetPreview").orNull
-require(parakeetPreviewOption == null || parakeetPreviewOption == "true") {
-    "focalParakeetPreview must be true; omit it for a normal build."
-}
-val parakeetPreview = parakeetPreviewOption == "true"
-val ultraOption = providers.gradleProperty("focalUltra").orNull
-require(ultraOption == null || ultraOption == "true") {
-    "focalUltra must be true; omit it for a normal build."
-}
-val ultra = ultraOption == "true"
-val primaryProbe = providers.gradleProperty("focalPrimaryProbe").orNull.let {
-    require(it == null || it == "true") { "focalPrimaryProbe must be true or omitted." }
-    it == "true"
-}
-require(!primaryProbe || ultra) { "Primary pipeline probes require the bundled Ultra variant." }
-require(listOf(nativeFaultVariant != null, parakeetTests, parakeetPreview, ultra).count { it } <= 1) {
-    "Choose only one research build option."
-}
-val parakeetRuntime = rootProject.file("build/dependencies/sherpa-onnx-2.0.1.aar")
-if (parakeetTests || parakeetPreview || ultra) {
-    require(parakeetRuntime.isFile) { "Missing verified Parakeet test runtime. See docs/parakeet-android-probe.md." }
+fun sha256(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
-    parakeetRuntime.inputStream().use { input ->
-        val buffer = ByteArray(65536)
-        while (true) {
-            val count = input.read(buffer)
-            if (count < 0) break
-            digest.update(buffer, 0, count)
-        }
+    file.inputStream().use { input ->
+        val buffer = ByteArray(65_536)
+        while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
     }
-    check(digest.digest().joinToString("") { "%02x".format(it) } ==
-        "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7") {
-        "Parakeet test runtime checksum mismatch."
-    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
 }
+
+// The pinned speech runtime: sherpa-onnx 2.0.1 with ONNX Runtime 1.28.2. Verified before it is compiled in.
+val speechRuntime = rootProject.file("build/dependencies/sherpa-onnx-2.0.1.aar")
+require(speechRuntime.isFile) { "Missing the pinned speech runtime: ${speechRuntime.path}" }
+check(sha256(speechRuntime) == "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7") {
+    "Speech runtime checksum mismatch: ${speechRuntime.path}"
+}
+
+// Parakeet Ultra INT8 is packaged straight from this ignored directory; no extra 670 MB staging copy.
+val ultraModelDirectory = rootProject.file("build/stt/parakeet-ultra-20261105/model")
 
 android {
     namespace = "app.focal"
     compileSdk = 35
-    ndkVersion = "28.0.13004108"
     defaultConfig {
         applicationId = "app.focal"
         minSdk = 26
         targetSdk = 35
         versionCode = 9
         versionName = "0.1.0-alpha.9"
-        buildConfigField("boolean", "FOCAL_ULTRA_BUNDLED", ultra.toString())
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
-        externalNativeBuild {
-            cmake {
-                arguments += listOf("-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Release",
-                    "-DFOCAL_NATIVE_FAULT_TESTS=${if (nativeFaultVariant == null) "OFF" else "ON"}",
-                    "-DFOCAL_NATIVE_FAULT_VARIANT=${nativeFaultVariant.orEmpty()}")
-            }
-        }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
-    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
-    androidResources {
-        noCompress += "bin"
-        if (ultra) noCompress += "onnx"
-    }
+    // The recognizer streams its model out of the APK once; keep the ONNX files stored.
+    androidResources { noCompress += "onnx" }
+    sourceSets.getByName("main").assets.srcDir(ultraModelDirectory)
     buildTypes {
-        debug {
-            externalNativeBuild { cmake { arguments += "-DFOCAL_ANDROID_DEBUG_BUILD=ON" } }
-        }
         release {
-            externalNativeBuild { cmake { arguments += "-DFOCAL_ANDROID_DEBUG_BUILD=OFF" } }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            if (ultra) proguardFile("ultra-proguard-rules.pro")
         }
     }
-    if (nativeFaultVariant != null) {
-        sourceSets.getByName("debug").java.srcDir("src/nativeFault/java")
-        sourceSets.getByName("androidTest").java.setSrcDirs(listOf(
-            "src/nativeFaultTestSupport/java",
-            if (nativeFaultVariant == "baseline") "src/nativeFaultBaselineTest/java" else "src/nativeFaultTest/java"))
-    }
-    if (parakeetTests) {
-        sourceSets.getByName("androidTest").java.setSrcDirs(listOf("src/parakeetProbeTest/java"))
-    }
-    sourceSets.getByName("debug").java.srcDir(
-        if (parakeetPreview || ultra) "src/parakeetPreview/java" else "src/standard/java")
-    sourceSets.getByName("release").java.srcDir(
-        if (ultra) "src/parakeetPreview/java" else "src/standard/java")
-    if (ultra) {
-        sourceSets.getByName("main").assets.srcDir(rootProject.file("build/stt/parakeet-ultra-20261105/model"))
-        sourceSets.getByName("main").assets.srcDir("src/ultra/assets")
-    }
-    if (parakeetPreview) sourceSets.getByName("androidTest").java.srcDir("src/parakeetPreviewTest/java")
-    if (parakeetPreview || ultra) sourceSets.getByName("androidTest").java.srcDir("src/alternativeTest/java")
-    if (ultra) sourceSets.getByName("androidTest").java.srcDir("src/ultraTest/java")
-    if (primaryProbe) sourceSets.getByName("androidTest").java.srcDir("src/primaryProbeTest/java")
     lint { abortOnError = true }
-}
-
-gradle.taskGraph.whenReady {
-    // Native optimization is Release for both Android variants in this project.
-    val releaseTasks = allTasks.filter {
-        it.project.path == project.path && it.name.contains("release", ignoreCase = true) &&
-            !it.name.startsWith("configureCMakeRelease[") && !it.name.startsWith("buildCMakeRelease[")
-    }
-    check(nativeFaultVariant == null || releaseTasks.isEmpty()) {
-        "Native fault tests are debug-only. Omit focalNativeFaultTests for ${releaseTasks.joinToString { it.path }}."
-    }
-    check(!(parakeetTests || parakeetPreview) || releaseTasks.isEmpty()) {
-        "Parakeet research is debug-only. Omit focalParakeetTests/focalParakeetPreview for ${releaseTasks.joinToString { it.path }}."
-    }
-    check(!primaryProbe || releaseTasks.isEmpty()) { "Primary batch probes are debug-only." }
 }
 
 dependencies {
     implementation(project(":core"))
+    implementation(files(speechRuntime))
     implementation(platform("androidx.compose:compose-bom:2025.04.01"))
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.activity:activity-compose:1.10.1")
@@ -150,89 +73,31 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.04.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    if (parakeetTests) androidTestImplementation(files(parakeetRuntime))
-    if (parakeetPreview) debugImplementation(files(parakeetRuntime))
-    if (ultra) implementation(files(parakeetRuntime))
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
-val verifyBundledModel by tasks.registering {
+val verifyUltraModel by tasks.registering {
     group = "verification"
-    description = "Release APKs must contain the verified offline speech model."
+    description = "APKs must contain exactly the four pinned Parakeet Ultra files."
+    val folder = ultraModelDirectory
+    val expected = mapOf(
+        "encoder.int8.onnx" to (652_282_526L to "7ef3ca4ffb49d60d4faa757b2930c8cec9927e73c24f6155d5b23a00229a7ed6"),
+        "decoder.int8.onnx" to (11_845_274L to "1fab98fe6c12aded87d2da66272cc9e148d0a0044ce3850a12fe56302ec4a922"),
+        "joiner.int8.onnx" to (6_355_277L to "8ba94c6919c17a6bd27368fb89533628a72ffc81d4acedebf3cdcb2cae331dbb"),
+        "tokens.txt" to (93_939L to "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
+    )
     doLast {
-        val model = file("src/main/assets/ggml-base-q5_1.bin")
-        val provenance = file("src/main/assets/model-provenance.json")
-        check(model.isFile && provenance.isFile) {
-            "Missing speech model. Run python3 scripts/fetch-model.py before making a release."
+        check(folder.isDirectory && !Files.isSymbolicLink(folder.toPath()) &&
+            folder.listFiles()?.map { it.name }?.toSet() == expected.keys) {
+            "The Ultra model directory must contain exactly the four pinned model files: ${folder.path}"
         }
-        val metadata = JsonSlurper().parse(provenance) as Map<*, *>
-        val digest = MessageDigest.getInstance("SHA-256")
-        model.inputStream().use { input ->
-            val buffer = ByteArray(65536)
-            while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) }
-        }
-        val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        check(actual == metadata["sha256"]) { "Bundled model checksum mismatch; run the verified downloader." }
-    }
-}
-tasks.matching { it.name in setOf("packageRelease", "bundleRelease") }.configureEach { dependsOn(verifyBundledModel) }
-
-val verifyBundledSpeechPresenceModel by tasks.registering {
-    group = "verification"
-    description = "Debug and release builds require the pinned speech presence model."
-    doLast {
-        val model = file("src/main/assets/ggml-silero-v5.1.2.bin")
-        val expectedSize = 885_098L
-        val expectedSha256 = "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf"
-        check(model.isFile && model.length() == expectedSize) {
-            "Missing or incomplete speech presence model. Run python3 scripts/fetch-vad-model.py."
-        }
-        val digest = MessageDigest.getInstance("SHA-256")
-        model.inputStream().use { input ->
-            val buffer = ByteArray(65_536)
-            while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
-        }
-        val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        check(actual == expectedSha256) { "Bundled speech presence model checksum mismatch; run the verified downloader." }
-    }
-}
-tasks.matching { it.name in setOf("preDebugBuild", "preReleaseBuild") }.configureEach {
-    dependsOn(verifyBundledSpeechPresenceModel)
-}
-
-// Opt-in only: source files remain in ignored local cache; no extra 670 MB staging copy.
-if (ultra) {
-    val verifyBundledUltraModel by tasks.registering {
-        group = "verification"
-        val folder = rootProject.file("build/stt/parakeet-ultra-20261105/model")
-        val expected = mapOf(
-            "encoder.int8.onnx" to (652_282_526L to "7ef3ca4ffb49d60d4faa757b2930c8cec9927e73c24f6155d5b23a00229a7ed6"),
-            "decoder.int8.onnx" to (11_845_274L to "1fab98fe6c12aded87d2da66272cc9e148d0a0044ce3850a12fe56302ec4a922"),
-            "joiner.int8.onnx" to (6_355_277L to "8ba94c6919c17a6bd27368fb89533628a72ffc81d4acedebf3cdcb2cae331dbb"),
-            "tokens.txt" to (93_939L to "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
-        )
-        doLast {
-            check(folder.isDirectory && !Files.isSymbolicLink(folder.toPath()) &&
-                folder.listFiles()?.map { it.name }?.toSet() == expected.keys) {
-                "Ultra asset directory must contain exactly the four pinned model files."
+        expected.forEach { (name, identity) ->
+            val model = folder.resolve(name)
+            check(model.isFile && !Files.isSymbolicLink(model.toPath()) && model.length() == identity.first) {
+                "Missing or invalid Ultra file: $name"
             }
-            expected.forEach { (name, identity) ->
-                val model = folder.resolve(name)
-                check(model.isFile && !Files.isSymbolicLink(model.toPath()) && model.length() == identity.first) {
-                    "Missing or invalid Ultra file: $name"
-                }
-                val digest = MessageDigest.getInstance("SHA-256")
-                model.inputStream().use { input ->
-                    val buffer = ByteArray(65_536)
-                    while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
-                }
-                check(digest.digest().joinToString("") { "%02x".format(it) } == identity.second) {
-                    "Ultra file checksum mismatch: $name"
-                }
-            }
+            check(sha256(model) == identity.second) { "Ultra file checksum mismatch: $name" }
         }
     }
-    tasks.matching { it.name in setOf("preDebugBuild", "preReleaseBuild", "mergeDebugAssets", "mergeReleaseAssets") }.configureEach {
-        dependsOn(verifyBundledUltraModel)
-    }
 }
+tasks.matching { it.name in setOf("mergeDebugAssets", "mergeReleaseAssets") }.configureEach { dependsOn(verifyUltraModel) }

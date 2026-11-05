@@ -25,6 +25,7 @@ import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ApplicationProvider
+import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.NoteStore
 import app.focal.data.Passage
 import java.time.LocalDate
@@ -39,7 +40,7 @@ class RecordingDatesTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
     private fun recording(store: NoteStore, title: String, day: LocalDate, flagged: Boolean): String {
-        val id = store.create("en")
+        val id = store.create("en", LEGACY_WHISPER_ENGINE)
         try {
             store.rename(id, title)
             store.audioFile(id).writeBytes(ByteArray(32_000))
@@ -67,7 +68,7 @@ class RecordingDatesTest {
 
     @Test fun browsingDaysPreservesSearchAndReviewWhileOpeningARecording() {
         val app = ApplicationProvider.getApplicationContext<FocalApplication>()
-        runBlocking { app.initialized.await() }
+        runBlocking { app.storageReady.await() }
         val store = app.store
         val ids = mutableListOf<String>()
         val today = LocalDate.now()

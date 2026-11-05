@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -28,10 +27,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.core.Transcript
+import app.focal.data.AUTOMATIC_LANGUAGE
 import app.focal.data.Chunk
+import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.NoteStore
 import app.focal.data.Passage
-import app.focal.data.Preferences
+import app.focal.data.ULTRA_ENGINE
 import app.focal.recording.LiveSession
 import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingService
@@ -60,14 +61,15 @@ class InterfaceTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
     private fun application(): FocalApplication = ApplicationProvider.getApplicationContext<FocalApplication>().also {
-        kotlinx.coroutines.runBlocking { it.initialized.await() }
+        kotlinx.coroutines.runBlocking { it.storageReady.await() }
     }
 
     private fun readySession(
         store: NoteStore, title: String, texts: List<String>, language: String = "en",
         uncertain: Set<Int> = emptySet(), duration: Long = texts.size * 1_000L,
     ): String {
-        val id = store.create(language)
+        // Fixtures use the Whisper-era range API, so they are legacy notes.
+        val id = store.create(language, LEGACY_WHISPER_ENGINE)
         store.audioFile(id).writeBytes(ByteArray((duration * 32).toInt()))
         val interval = duration / texts.size
         require(interval in 1..30_000L) { "Fixture passages must fit the recording chunk limit." }
@@ -132,10 +134,6 @@ class InterfaceTest {
         hasText(label) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected)
     )
 
-    private fun languageOption(label: String) = compose.onNode(
-        hasText(label) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
-    )
-
     private fun assertAutomaticLanguage() {
         compose.onNodeWithContentDescription("Speech language: Automatic").assertIsDisplayed().assert(!hasClickAction())
     }
@@ -161,7 +159,7 @@ class InterfaceTest {
         val app = application()
         val original = RecordingState.live.value
         org.junit.Assume.assumeTrue(original.noteId == null)
-        val id = app.store.create("ru")
+        val id = app.store.create(AUTOMATIC_LANGUAGE, ULTRA_ENGINE)
         try {
             // Synthetic presentation state; microphone and STT behavior are tested separately.
             RecordingState.live.value = LiveSession(noteId = id, duration = 73_000, level = .65f,
@@ -216,27 +214,12 @@ class InterfaceTest {
         }
     }
 
-    @Test fun everySpeechLanguageIsAccessibleBeforeRecording() {
-        val app = application()
-        val initial = app.preferences.settings.value.language
-        try {
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("Record").fetchSemanticsNodes().isNotEmpty() }
-            capture("empty")
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) {
-                assertAutomaticLanguage()
-                compose.onNodeWithText("Record").assertIsDisplayed().assertIsEnabled()
-                assertEquals(initial, app.preferences.settings.value.language)
-                return
-            }
-            Preferences.languages.forEach { (id, label) ->
-                val current = Preferences.languages[app.preferences.settings.value.language]
-                compose.onNodeWithContentDescription("Speech language: $current").performClick()
-                languageOption(label).performScrollTo().performClick()
-                compose.onNodeWithContentDescription("Speech language: $label").assertIsDisplayed()
-                compose.onNodeWithText("Record").assertIsDisplayed()
-                assertEquals(id, app.preferences.settings.value.language)
-            }
-        } finally { app.preferences.language(initial) }
+    @Test fun speechLanguageIsAutomaticBeforeRecording() {
+        application()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Record").fetchSemanticsNodes().isNotEmpty() }
+        capture("empty")
+        assertAutomaticLanguage()
+        compose.onNodeWithText("Record").assertIsDisplayed().assertIsEnabled()
     }
 
     @Test fun sessionsHeaderAndRecordingFooterStayCompact() {
@@ -255,11 +238,7 @@ class InterfaceTest {
             compose.onNode(hasSetTextAction()).assertIsDisplayed()
             compose.onNodeWithContentDescription("Close search").performClick()
             compose.onNode(hasSetTextAction()).assertDoesNotExist()
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
-            else {
-                val language = Preferences.languages[app.preferences.settings.value.language]
-                compose.onNodeWithContentDescription("Speech language: $language").assertIsDisplayed()
-            }
+            assertAutomaticLanguage()
             compose.onNodeWithText("Record").assertIsDisplayed()
             capture("sessions-clean")
         } finally { app.store.delete(id) }
@@ -718,7 +697,6 @@ class InterfaceTest {
         val previousDecoderFactory = RecordingService.decoderFactoryForTests
         val id = readySession(app.store, title, listOf("Original text"), uncertain = setOf(0))
         try {
-            assertTrue("The bundled model must be ready to offer direct recovery", app.models.ready())
             val original = ByteArray(2000 * 32) { (it % 101).toByte() }
             app.store.audioFile(id).writeBytes(original)
             app.store.edit(app.store.passages(id).single(), correction)
@@ -732,7 +710,7 @@ class InterfaceTest {
             }
             RecordingService.decoderFactoryForTests = {
                 object : RecordingDecoder {
-                    override suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int) {
+                    override suspend fun transcribe(store: NoteStore, chunk: Chunk, threads: Int) {
                         decoded += chunk
                         store.complete(chunk, listOf(Passage(noteId = chunk.noteId, chunkId = chunk.id,
                             start = chunk.start, end = chunk.end, text = recoveredText, uncertain = false)))
@@ -834,34 +812,21 @@ class InterfaceTest {
         } finally { app.store.delete(id) }
     }
 
-    @Test fun languageAndAppearanceCanBeChangedWithoutLeavingTheApp() {
+    @Test fun appearanceCanBeChangedWithoutLeavingTheApp() {
         val app = application()
         val initial = app.preferences.settings.value
         try {
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
-            else {
-                val currentLanguage = Preferences.languages[initial.language]
-                compose.onNodeWithContentDescription("Speech language: $currentLanguage").performClick()
-                languageOption("Русский").performScrollTo().performClick()
-            }
+            assertAutomaticLanguage()
             compose.onNodeWithContentDescription("Settings").performClick()
             compose.onNodeWithText("Speech language").assertDoesNotExist()
             compose.onNodeWithText("Dark").performClick()
             compose.onNodeWithText("Light").performClick()
             capture("settings-brand")
             compose.onNodeWithContentDescription("Back to recordings").performClick()
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
-            else {
-                compose.onNodeWithContentDescription("Speech language: Русский").assertIsDisplayed().performClick()
-                languageOption("English").performScrollTo().performClick()
-            }
+            assertAutomaticLanguage()
             compose.activityRule.scenario.recreate()
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) {
-                assertAutomaticLanguage()
-                assertEquals(initial.language, app.preferences.settings.value.language)
-            } else compose.onNodeWithContentDescription("Speech language: English").assertIsDisplayed()
+            assertAutomaticLanguage()
         } finally {
-            app.preferences.language(initial.language)
             app.preferences.theme(initial.theme)
         }
     }
@@ -922,42 +887,12 @@ class InterfaceTest {
         }
     }
 
-    @Test fun selectedLanguageIsVisibleWhenPickerOpensAtLargeFont() {
-        val app = application()
-        val originalLanguage = app.preferences.settings.value.language
-        val model = ViewModelProvider(compose.activity)[FocalViewModel::class.java]
-        try {
-            app.preferences.language("pt")
-            val density = compose.activity.resources.displayMetrics.density
-            val opened = MutableStateFlow<Pair<String?, Long>>(null to 0)
-            compose.runOnUiThread {
-                compose.activity.setContent {
-                    CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 2f)) {
-                        Box(Modifier.requiredSize(320.dp, 560.dp)) { FocalApp(model, opened) }
-                    }
-                }
-            }
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) {
-                assertAutomaticLanguage()
-                compose.onNodeWithText("Record").assertIsDisplayed().assertIsEnabled()
-                assertEquals("pt", app.preferences.settings.value.language)
-            } else {
-                compose.onNodeWithContentDescription("Speech language: Português").performClick()
-                languageOption("Português").assertIsDisplayed().assertIsSelected()
-            }
-        } finally {
-            app.preferences.language(originalLanguage)
-        }
-    }
-
     @Test fun largeFontInSmallWindowKeepsCaptureAndSessionControlsReachable() {
         val app = application()
         val originalLive = RecordingState.live.value
         org.junit.Assume.assumeTrue(originalLive.noteId == null)
         val id = readySession(app.store, "Accessible session", listOf("Readable text with its original audio."))
         val model = ViewModelProvider(compose.activity)[FocalViewModel::class.java]
-        val originalReady = model.modelReady.value
-        val originalPreparing = model.preparing.value
         try {
             // Exercise Compose's actual responsive branches without changing the device's global font settings.
             val density = compose.activity.resources.displayMetrics.density
@@ -969,17 +904,10 @@ class InterfaceTest {
                     }
                 }
             }
-            // Missing/preparing transcription must not block the independent audio capture affordance.
-            model.modelReady.value = false
-            model.preparing.value = true
             compose.waitUntil(10_000) {
                 compose.onAllNodes(hasText("Record") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
             }
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
-            else {
-                val language = Preferences.languages[app.preferences.settings.value.language]
-                compose.onNodeWithContentDescription("Speech language: $language").assertIsDisplayed()
-            }
+            assertAutomaticLanguage()
             compose.onNodeWithText("Record").assertIsDisplayed().assertIsEnabled()
             waitForTitle("Accessible session")
             compose.onNodeWithText("Accessible session").performClick()
@@ -1001,8 +929,6 @@ class InterfaceTest {
             compose.onNodeWithContentDescription("Finish recording").assertIsDisplayed()
             capture("small-window-large-font")
         } finally {
-            model.modelReady.value = originalReady
-            model.preparing.value = originalPreparing
             RecordingState.live.value = originalLive
             app.store.delete(id)
         }
@@ -1171,30 +1097,23 @@ class InterfaceTest {
         } finally { app.store.delete(id) }
     }
 
-    @Test fun backgroundSoundDecisionKeepsSourceAndCanBeRestoredAfterRecreation() {
+    @Test fun legacyExcludedPassageStaysOutOfCopyAndCanBeRestoredAfterRecreation() {
         val app = application()
         val texts = listOf("Synthetic noise words.", "Keep these words.")
-        val title = "Background sound fixture"
+        val title = "Legacy background sound fixture"
         val id = readySession(app.store, title, texts)
+        // The retired background-sound check stored its decisions this way.
+        app.store.writableDatabase.execSQL("UPDATE passages SET excluded=1 WHERE id=?",
+            arrayOf<Any>(app.store.passages(id).first().id))
         val originalAudio = app.store.audioFile(id).readBytes()
         val clipboard = app.getSystemService(ClipboardManager::class.java)
         try {
             waitForTitle(title)
             compose.onNodeWithText(title).performClick()
-            waitForSessionReady(title, texts.first())
+            waitForSessionReady(title, "Excluded background sound")
             compose.onNodeWithContentDescription("Recording options").performClick()
-            compose.onNodeWithText("Check background sound").performScrollTo().performClick()
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithText("Exclude text").fetchSemanticsNodes().isNotEmpty()
-            }
-            assertEquals(texts, app.store.passages(id).map { it.text })
-            assertTrue(app.store.passages(id).none { it.excluded })
-            capture("background-sound-proposal")
-            compose.onNodeWithText("Exclude text").performScrollTo().performClick()
-            compose.waitUntil(10_000) { app.store.passages(id).first().excluded }
-            compose.onNodeWithText("Keep text").performScrollTo().performClick()
-            compose.waitUntil(10_000) { app.store.passages(id).last().reviewed }
-            compose.onNodeWithText("Done").performScrollTo().performClick()
+            compose.onNodeWithText("Check background sound").assertDoesNotExist()
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
             compose.onNodeWithText("Copy text").performClick()
             compose.runOnIdle { assertEquals(texts.last(), clipboard.primaryClip!!.getItemAt(0).text.toString()) }
 

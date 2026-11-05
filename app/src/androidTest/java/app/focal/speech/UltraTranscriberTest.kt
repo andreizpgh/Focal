@@ -3,6 +3,7 @@ package app.focal.speech
 import androidx.test.core.app.ApplicationProvider
 import app.focal.FocalApplication
 import app.focal.data.Chunk
+import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.NoteStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
@@ -45,14 +46,14 @@ class UltraTranscriberTest {
                     if (calls++ == 0) "Original words repeated" else "repeated then new words"
                 }, onClose = { assertSame(owner, Thread.currentThread()); closes++ })
             }.use { engine ->
-                runBlocking { engine.transcribe(store, first, "ru", 4) }
+                runBlocking { engine.transcribe(store, first, 4) }
                 val passage = store.passages(id).single()
                 assertEquals(0L, passage.start)
                 assertEquals(1_000L, passage.end)
                 assertFalse(passage.uncertain)
                 assertEquals("Original words repeated", passage.originalTranscriptText)
                 store.edit(passage, "Manually edited words repeated")
-                runBlocking { engine.transcribe(store, next, "ru", 2) }
+                runBlocking { engine.transcribe(store, next, 2) }
             }
             val passages = store.passages(id)
             assertEquals(listOf("Manually edited words repeated", "repeated then new words"), passages.map { it.text })
@@ -80,10 +81,10 @@ class UltraTranscriberTest {
                 opens++
                 fakeDecoder(decodeBlock = { "  " })
             }.use { engine ->
-                runBlocking { engine.transcribe(store, constant, "ru", 2) }
+                runBlocking { engine.transcribe(store, constant, 2) }
                 assertEquals(0, opens)
                 assertTrue(store.passages(id).isEmpty())
-                runBlocking { engine.transcribe(store, varying, "ru", 2) }
+                runBlocking { engine.transcribe(store, varying, 2) }
             }
             val cue = store.passages(id).single()
             assertEquals(1, opens)
@@ -124,7 +125,7 @@ class UltraTranscriberTest {
                         })
                     }.use { engine ->
                         adapter.set(engine)
-                        runBlocking { engine.transcribe(store, chunk, "ru", 2) }
+                        runBlocking { engine.transcribe(store, chunk, 2) }
                     }
                 }
                 assertTrue(entered.await(10, TimeUnit.SECONDS))
@@ -147,7 +148,7 @@ class UltraTranscriberTest {
     }
 
     private fun fakeDecoder(decodeBlock: (FloatArray) -> String, onClose: () -> Unit = {}) =
-        object : SavedAudioPreview.Decoder {
+        object : SpeechDecoder {
             override fun decode(samples: FloatArray): String = decodeBlock(samples)
             override fun close() = onClose()
         }
@@ -155,7 +156,7 @@ class UltraTranscriberTest {
     private fun withAudio(pcm: ByteArray, block: (NoteStore, String) -> Unit) {
         val app = ApplicationProvider.getApplicationContext<FocalApplication>()
         runBlocking { app.storageReady.await() }
-        val id = app.store.create("ru")
+        val id = app.store.create("ru", LEGACY_WHISPER_ENGINE)
         try {
             app.store.audioFile(id).writeBytes(pcm)
             block(app.store, id)

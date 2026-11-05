@@ -6,11 +6,11 @@ import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.Passage
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
-import app.focal.speech.NativeWhisper
-import org.json.JSONArray
+import app.focal.speech.UltraModel
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -20,41 +20,13 @@ import java.security.MessageDigest
 
 class SpeechWorkflowTest {
     private val app get() = ApplicationProvider.getApplicationContext<FocalApplication>()
-    private fun ready() {
-        kotlinx.coroutines.runBlocking { app.initialized.await() }
-        assumeTrue("A real bundled model is required for this check", app.models.ready())
-    }
-    @Test fun realModelRecognizesSpeechThroughAndroidJni() {
-        ready()
-        val wav = InstrumentationRegistry.getInstrumentation().context.assets.open("jfk.wav").use { it.readBytes() }
-        // Public-domain JFK fixture: PCM16, mono, 16 kHz, standard 44-byte WAV header.
-        val pcm = ByteBuffer.wrap(wav, 44, wav.size - 44).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
-        val samples = FloatArray(pcm.remaining()) { pcm.get() / 32768f }
-        val handle = NativeWhisper.open(app.models.model.absolutePath)
-        try {
-            val segments = JSONArray(NativeWhisper.decode(handle, samples, "en", 2).decodeToString())
-            val text = (0 until segments.length()).joinToString(" ") { segments.getJSONObject(it).getString("text") }.lowercase()
-            assertTrue(text, "ask not" in text && "country" in text)
-        } finally { NativeWhisper.close(handle) }
-    }
-    @Test fun quietVaryingSpeechStillReachesTheDecoder() {
-        ready()
-        val wav = InstrumentationRegistry.getInstrumentation().context.assets.open("jfk.wav").use { it.readBytes() }
-        val pcm = ByteBuffer.wrap(wav, 44, wav.size - 44).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
-        val samples = FloatArray(pcm.remaining()) { pcm.get() / 32768f * .01f }
-        assertTrue(samples.any { it != samples[0] })
-        val handle = NativeWhisper.open(app.models.model.absolutePath)
-        try {
-            val segments = JSONArray(NativeWhisper.decode(handle, samples, "en", 2).decodeToString())
-            val text = (0 until segments.length()).joinToString(" ") { segments.getJSONObject(it).getString("text") }.lowercase()
-            assertTrue(text, "ask not" in text && "country" in text)
-        } finally { NativeWhisper.close(handle) }
-    }
-    @Test fun recoveryOfConstantAudioKeepsOriginalAndManualEditsWithoutAddingPassages() {
-        ready()
+
+    /** Constant PCM never reaches the recognizer, so this legacy recovery needs no model. */
+    @Test fun legacyRecoveryOfConstantAudioKeepsOriginalAndManualEditsWithoutAddingPassages() {
+        kotlinx.coroutines.runBlocking { app.storageReady.await() }
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             for (value in listOf(0.toShort(), 8192.toShort())) {
-                val id = app.store.create("ru")
+                val id = app.store.create("ru", LEGACY_WHISPER_ENGINE)
                 try {
                     val original = ByteBuffer.allocate(3000 * 32).order(ByteOrder.LITTLE_ENDIAN).apply {
                         repeat(16000) { putShort(((it % 200) - 100).toShort()) }
@@ -69,7 +41,7 @@ class SpeechWorkflowTest {
                     app.store.edit(app.store.passages(id).single(), "Keep this manual correction.")
                     val savedPassages = app.store.passages(id)
                     val savedChunk = app.store.chunks(id).single()
-                    // The constant tail has durable PCM but no Begin metadata after interruption.
+                    // The constant tail has durable PCM but no published range after interruption.
                     app.store.state(id, "INTERRUPTED", "Synthetic interrupted capture")
                     scenario.onActivity { RecordingService.command(it, RecordingService.RECOVER, id) }
                     await { app.store.note(id)?.state == "READY" && RecordingState.live.value.noteId == null }
@@ -95,8 +67,10 @@ class SpeechWorkflowTest {
             }
         }
     }
+
     @Test fun captureContinuesWithoutAnActivityAndCanPauseAndFinish() {
-        ready()
+        kotlinx.coroutines.runBlocking { app.storageReady.await() }
+        assumeTrue("The bundled speech model is required for this check", UltraModel.isBundled(app))
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         automation.grantRuntimePermission(app.packageName, Manifest.permission.RECORD_AUDIO)
         if (android.os.Build.VERSION.SDK_INT >= 33)
@@ -132,6 +106,7 @@ class SpeechWorkflowTest {
             id?.let { app.store.delete(it) }
         }
     }
+
     private fun await(condition: () -> Boolean) {
         val end = SystemClock.elapsedRealtime() + 120_000
         while (!condition() && SystemClock.elapsedRealtime() < end) SystemClock.sleep(100)

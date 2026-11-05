@@ -14,6 +14,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.Note
 import app.focal.data.Chunk
 import app.focal.data.NoteStore
@@ -61,10 +62,8 @@ class RecordingServiceTest {
         if (Build.VERSION.SDK_INT >= 33) automation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
         originalIds = app.store.notes().map { it.id }.toSet()
         await { RecordingState.live.value.noteId == null && !serviceRunning() }
-        // Explicit decoder failure tests pending-queue behavior; it never supplies fake text.
+        // Explicit decoder failure keeps every saved second untranscribed; it never supplies fake text.
         RecordingService.metadataCapacityForTests = null
-        // These tests protect legacy gate/metadata recovery; Ultra has full-PCM coverage tests.
-        RecordingService.speechEngineForTests = "whisper"
         RecordingService.decoderFactoryForTests = { error("Synthetic decoder unavailable for capture-only test") }
         RecordingService.inputFactoryForTests = { SyntheticInput().also { inputs += it } }
         activity = ActivityScenario.launch(MainActivity::class.java)
@@ -77,7 +76,6 @@ class RecordingServiceTest {
         RecordingService.inputFactoryForTests = null
         RecordingService.decoderFactoryForTests = null
         RecordingService.metadataCapacityForTests = null
-        RecordingService.speechEngineForTests = null
         if (::activity.isInitialized) activity.close()
         originalIds?.let { baseline -> app.store.notes().filter { it.id !in baseline }.forEach { app.store.delete(it.id) } }
     }
@@ -96,7 +94,6 @@ class RecordingServiceTest {
         assertTrue(pausedBytes > 0)
         assertEquals("Pause must sync every delivered partial read", source.samples.get() * 2, pausedBytes)
         assertEquals(pausedBytes / 32, app.store.note(id)!!.duration)
-        await { app.store.chunks(id).lastOrNull()?.end == pausedBytes / 32 }
         send(RecordingService.PAUSE)
         send(RecordingService.PAUSE)
         SystemClock.sleep(180)
@@ -114,9 +111,7 @@ class RecordingServiceTest {
         assertOriginalMatchesDeliveredSamples(id, source)
         assertEquals("INTERRUPTED", app.store.note(id)!!.state)
         assertTrue(app.store.note(id)!!.error.contains("Synthetic decoder"))
-        assertTrue("Final voiced audio must remain queued", app.store.pendingCount(id) > 0)
-        assertEquals("The partial final frame must be queued", app.store.note(id)!!.duration, app.store.chunks(id).maxOf { it.end })
-        assertFalse(app.store.chunks(id).any { it.state == "WRITING" })
+        assertTrue("Every saved second must remain available to transcribe", app.store.hasUnpublishedTail(app.store.note(id)!!))
         assertTrue("Capture-only checks must not invent a transcript", app.store.passages(id).isEmpty())
     }
 
@@ -136,8 +131,7 @@ class RecordingServiceTest {
         }
         finish(id)
         assertOriginalMatchesDeliveredSamples(id, inputs.single())
-        assertFalse(app.store.chunks(id).any { it.state == "WRITING" })
-        assertEquals(app.store.note(id)!!.duration, app.store.chunks(id).maxOf { it.end })
+        assertTrue(app.store.hasUnpublishedTail(app.store.note(id)!!))
     }
 
     @Test fun boundedMetadataOverflowStopsVisiblyAndRecoversPersistedAudio() {
@@ -167,9 +161,7 @@ class RecordingServiceTest {
         assertEquals("INTERRUPTED", note.state)
         assertTrue(note.error, note.error.contains("metadata"))
         assertOriginalMatchesDeliveredSamples(id, inputs.single())
-        assertFalse(app.store.chunks(id).any { it.state == "WRITING" })
-        assertEquals(note.duration, app.store.chunks(id).maxOf { it.end })
-        assertNoDuplicateSourceRanges(id)
+        assertTrue(app.store.hasUnpublishedTail(note))
     }
 
     @Test fun immediateStopAndRepeatedStartCannotLeaveAnOrphanRecording() {
@@ -202,7 +194,6 @@ class RecordingServiceTest {
         finish(id)
         assertOriginalMatchesDeliveredSamples(id, inputs.single())
         assertEquals("INTERRUPTED", app.store.note(id)!!.state)
-        assertFalse(app.store.chunks(id).any { it.state == "WRITING" })
         assertTrue(inputs.single().closed)
     }
 
@@ -216,8 +207,7 @@ class RecordingServiceTest {
         assertTrue(note.error, note.error.contains("muted"))
         assertTrue(app.store.audioBytes(id) > 0)
         assertEquals(app.store.audioBytes(id) / 32, note.duration)
-        assertFalse(app.store.chunks(id).any { it.state == "WRITING" })
-        assertTrue(app.store.pendingCount(id) > 0)
+        assertTrue(app.store.hasUnpublishedTail(note))
     }
 
     @Test fun positiveReadIsKeptWhenSilencingArrivesDuringThatRead() {
@@ -231,11 +221,10 @@ class RecordingServiceTest {
         val note = app.store.note(id)!!
         assertEquals("INTERRUPTED", note.state)
         assertTrue(note.error, note.error.contains("muted"))
-        assertEquals(note.duration, app.store.chunks(id).maxOf { it.end })
-        assertFalse(app.store.chunks(id).any { it.state == "WRITING" })
+        assertTrue(app.store.hasUnpublishedTail(note))
     }
 
-    @Test fun disconnectedMicrophoneDoesNotLoseTheFinalQueuedRange() {
+    @Test fun disconnectedMicrophoneKeepsTheFinalSavedAudio() {
         val id = start()
         await { RecordingState.live.value.duration >= 240 }
         inputs.single().disconnected = true
@@ -244,8 +233,7 @@ class RecordingServiceTest {
         assertEquals("INTERRUPTED", note.state)
         assertTrue(note.error, note.error.contains("disconnected"))
         assertOriginalMatchesDeliveredSamples(id, inputs.single())
-        assertFalse(app.store.chunks(id).any { it.state == "WRITING" })
-        assertTrue(app.store.pendingCount(id) > 0)
+        assertTrue(app.store.hasUnpublishedTail(note))
     }
 
     @Test fun staleControlsAndInvalidRecoveryNeverOpenAMicrophone() {
@@ -288,8 +276,9 @@ class RecordingServiceTest {
         assertOriginalMatchesDeliveredSamples(id, inputs.single())
     }
 
+    // A legacy note's PENDING range is drained by the Ultra worker; the decoder here is unavailable.
     @Test fun recoveryDoesNotReopenMicrophoneOrAlterOriginalAudioWhenDecoderIsUnavailable() {
-        val id = app.store.create("en")
+        val id = app.store.create("en", LEGACY_WHISPER_ENGINE)
         val pcm = ByteArray(1200 * 32) { index -> (index % 97).toByte() }
         app.store.audioFile(id).writeBytes(pcm)
         app.store.duration(id, 1200)
@@ -310,7 +299,7 @@ class RecordingServiceTest {
     }
 
     @Test fun stoppingRecoveryKeepsInFlightResultPending() {
-        val id = app.store.create("en")
+        val id = app.store.create("en", LEGACY_WHISPER_ENGINE)
         val pcm = ByteArray(1200 * 32) { (it % 97).toByte() }
         app.store.audioFile(id).writeBytes(pcm)
         app.store.duration(id, 1200)
@@ -330,7 +319,7 @@ class RecordingServiceTest {
         val closes = AtomicInteger()
         RecordingService.decoderFactoryForTests = {
             object : RecordingDecoder {
-                override suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int) {
+                override suspend fun transcribe(store: NoteStore, chunk: Chunk, threads: Int) {
                     decoding.countDown()
                     try {
                         check(releaseResult.await(10, TimeUnit.SECONDS)) { "Test decode was not released." }
@@ -363,7 +352,7 @@ class RecordingServiceTest {
     }
 
     @Test fun startingCaptureExcludesPlaybackBeforeServicePublishesItsNote() {
-        val playbackId = app.store.create("en")
+        val playbackId = app.store.create("en", LEGACY_WHISPER_ENGINE)
         app.store.audioFile(playbackId).writeBytes(ByteArray(32_000))
         app.store.state(playbackId, "READY")
         val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -388,7 +377,7 @@ class RecordingServiceTest {
     }
 
     @Test fun sameProcessRecoverySealsWritingRangesBeforeDecodingAndCanRetryAFailedSeal() {
-        val id = app.store.create("en")
+        val id = app.store.create("en", LEGACY_WHISPER_ENGINE)
         val original = ByteArray(1500 * 32) { (it % 97).toByte() }
         app.store.audioFile(id).writeBytes(original)
         app.store.beginChunk(id, 0, false)
@@ -417,7 +406,7 @@ class RecordingServiceTest {
     }
 
     @Test fun sameProcessRecoveryFindsUnpublishedTailAndPreservesCompletedEdits() {
-        val id = app.store.create("en")
+        val id = app.store.create("en", LEGACY_WHISPER_ENGINE)
         val original = ByteArray(2000 * 32) { (it % 101).toByte() }
         app.store.audioFile(id).writeBytes(original)
         val first = app.store.beginChunk(id, 0, false)
@@ -443,7 +432,7 @@ class RecordingServiceTest {
     private fun completingDecoder(decoded: MutableList<Chunk>) {
         RecordingService.decoderFactoryForTests = {
             object : RecordingDecoder {
-                override suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int) {
+                override suspend fun transcribe(store: NoteStore, chunk: Chunk, threads: Int) {
                     decoded += chunk
                     store.complete(chunk, emptyList())
                 }
@@ -495,13 +484,6 @@ class RecordingServiceTest {
         val values = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
         var index = 0L
         while (values.hasRemaining()) assertEquals("PCM differs at sample $index", value(index++).toInt(), values.get().toInt())
-    }
-    private fun assertNoDuplicateSourceRanges(id: String) {
-        val ordered = app.store.chunks(id).sortedWith(compareBy({ it.start }, { it.end }))
-        ordered.zipWithNext().forEach { (previous, next) ->
-            val overlap = previous.end - next.start
-            assertTrue("Unexpected duplicate audio ranges: $previous / $next", overlap <= 0 || (next.overlap && overlap <= 500 && next.end > previous.end))
-        }
     }
     @Suppress("DEPRECATION")
     private fun serviceRunning() = app.getSystemService(ActivityManager::class.java).getRunningServices(100)

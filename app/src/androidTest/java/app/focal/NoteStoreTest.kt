@@ -3,9 +3,9 @@ package app.focal
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.content.Context
+import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.NoteStore
 import app.focal.data.Passage
-import app.focal.speech.NativeWhisper
 import org.junit.*
 import org.junit.Assert.*
 import org.junit.runner.RunWith
@@ -18,11 +18,12 @@ class NoteStoreTest {
     private val created = mutableListOf<String>()
     @Before fun setup() {
         val app = ApplicationProvider.getApplicationContext<FocalApplication>()
-        kotlinx.coroutines.runBlocking { app.initialized.await() }
+        kotlinx.coroutines.runBlocking { app.storageReady.await() }
         store = app.store
     }
     @After fun cleanup() { created.forEach { store.delete(it) } }
-    private fun note() = store.create("ru").also { created += it }
+    // These notes use the Whisper-era range API, so they are legacy notes.
+    private fun note() = store.create("ru", LEGACY_WHISPER_ENGINE).also { created += it }
 
     @Test fun savedAudioSurvivesInterruptionAndCanBeCommittedExactlyOnce() {
         val id = note()
@@ -55,14 +56,6 @@ class NoteStoreTest {
         store.complete(store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = chunk, start = 0, end = 1000, text = "Keep me", uncertain = false)))
         store.removeAudio(id)
         assertEquals(0L, store.audioBytes(id)); assertEquals("Keep me", store.passages(id).single().text)
-    }
-    @Test fun nativeEngineRejectsAnInvalidModelWithoutCrashing() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val file = File(context.cacheDir, "invalid-model.bin").apply { writeBytes(ByteArray(32)) }
-        try {
-            try { NativeWhisper.open(file.absolutePath); fail("Invalid model was accepted") }
-            catch (_: IllegalStateException) { }
-        } finally { file.delete() }
     }
     @Test fun durableQueueAndContextAreOrderedAndIsolatedBetweenNotes() {
         val id = note()
@@ -347,23 +340,6 @@ class NoteStoreTest {
         assertArrayEquals(original, store.audioFile(id).readBytes())
     }
 
-    @Test fun explicitRejectedBeginKeepsRealOverlapAndRepeatedRecoveryIsIdempotent() {
-        val id = note()
-        store.audioFile(id).writeBytes(ByteArray(32_000 * 32))
-        val chunk = store.beginChunk(id, 0, false)
-        store.finishChunk(chunk, 16_000)
-        store.complete(store.nextChunk(id)!!, emptyList())
-        store.recover(id, tailFromMs = 15_500)
-        val chunks = store.chunks(id)
-        assertEquals(2, chunks.size)
-        assertEquals(15_500L, chunks.last().start)
-        assertEquals(32_000L, chunks.last().end)
-        assertTrue(chunks.last().overlap)
-        assertEquals(16_000L, store.previousChunkEnd(chunks.last()))
-        store.recover(id, tailFromMs = 15_500)
-        assertEquals(chunks, store.chunks(id))
-    }
-
     @Test fun tailRecoveryKeepsCompletedSessionsAndEarlierSilenceGapsUnchanged() {
         val id = note()
         store.audioFile(id).writeBytes(ByteArray(5000 * 32))
@@ -384,35 +360,6 @@ class NoteStoreTest {
         assertFalse(recovered.last().overlap)
     }
 
-    @Test fun staleRecoveryWatermarkOnlyAddsGapsAndNeverRequeuesExistingSources() {
-        val id = note()
-        val original = ByteArray(80_000 * 32) { (it % 127).toByte() }
-        store.audioFile(id).writeBytes(original)
-        val done = store.beginChunk(id, 0, false)
-        store.finishChunk(done, 10_000)
-        store.complete(store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = done,
-            start = 0, end = 10_000, text = "Original", uncertain = true)))
-        store.edit(store.passages(id).single(), "Keep this correction")
-        val pending = store.beginChunk(id, 20_000, false)
-        store.finishChunk(pending, 40_000)
-        val existing = store.chunks(id)
-        val correction = store.passages(id).single()
-        // The actor has now drained: the original overflow snapshot at0 is stale.
-        store.recover(id, tailFromMs = 0)
-        val recovered = store.chunks(id)
-        assertEquals(existing, recovered.filter { it.id == done || it.id == pending })
-        val added = recovered.filter { it.id != done && it.id != pending }
-        assertEquals(listOf(10_000L, 40_000L, 69_500L), added.map { it.start })
-        assertEquals(listOf(20_000L, 70_000L, 80_000L), added.map { it.end })
-        assertEquals(listOf(false, false, true), added.map { it.overlap })
-        assertTrue(added.all { it.end - it.start <= 30_000 })
-        assertEquals(correction, store.passages(id).single())
-        assertArrayEquals(original, store.audioFile(id).readBytes())
-        store.recover(id, tailFromMs = 0)
-        assertEquals(recovered, store.chunks(id))
-        assertEquals(correction, store.passages(id).single())
-    }
-
     @Test fun oversizedEditsAreRejectedAndLegacyTextCanBeReadAndSearched() {
         val id = note(); val chunk = store.beginChunk(id, 0, false)
         store.finishChunk(chunk, 1000)
@@ -430,6 +377,30 @@ class NoteStoreTest {
         assertTrue(store.notes("МаРкЕр🙂").any { it.id == id })
         store.edit(original, "Shortened safely")
         assertEquals("Shortened safely", store.passages(id).single().text)
+    }
+
+    @Test fun legacyExcludedPassageStaysOutOfCopyAndSearchUntilRestored() {
+        val id = note()
+        store.audioFile(id).writeBytes(ByteArray(2000 * 32))
+        listOf(Triple(0L, 1000L, "Retired background chatter"), Triple(1000L, 2000L, "Keep these words")).forEach { (start, end, text) ->
+            val chunk = store.beginChunk(id, start, false)
+            store.finishChunk(chunk, end)
+            store.complete(store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = chunk, start = start, end = end,
+                text = text, uncertain = false)))
+        }
+        store.rename(id, "Legacy note")
+        store.state(id, "READY")
+        // The retired background-sound check stored its decisions this way.
+        store.writableDatabase.execSQL("UPDATE passages SET excluded=1 WHERE id=?", arrayOf<Any>(store.passages(id).first().id))
+        assertEquals("Keep these words", app.focal.data.transferableTranscript(store.passages(id)))
+        assertTrue(store.notes("chatter").none { it.id == id })
+        val excluded = store.passages(id).first()
+        assertTrue(excluded.excluded)
+        assertTrue(store.restorePassage(excluded))
+        assertFalse(store.restorePassage(excluded))
+        assertFalse(store.passages(id).first().excluded)
+        assertEquals("Retired background chatter\n\nKeep these words", app.focal.data.transferableTranscript(store.passages(id)))
+        assertTrue(store.notes("chatter").any { it.id == id })
     }
 
     private fun pendingDeletion(id: String): Long = store.readableDatabase.rawQuery(

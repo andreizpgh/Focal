@@ -6,9 +6,12 @@ import android.database.DatabaseErrorHandler
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.focal.data.AUTOMATIC_LANGUAGE
 import app.focal.data.Chunk
+import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.NoteStore
 import app.focal.data.Passage
+import app.focal.data.ULTRA_ENGINE
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -76,7 +79,7 @@ class UltraQueueStoreTest {
         NoteStore(context).use { store ->
             assertEquals(4, store.readableDatabase.version)
             val note = checkNotNull(store.note("legacy"))
-            assertEquals("whisper", note.speechEngine)
+            assertEquals(LEGACY_WHISPER_ENGINE, note.speechEngine)
             assertEquals("ru", note.language)
             assertEquals("Manual title", note.title)
             assertEquals("INTERRUPTED", note.state)
@@ -96,7 +99,7 @@ class UltraQueueStoreTest {
         lateinit var pending: Chunk
         lateinit var edited: Passage
         val id = NoteStore(context).use { store ->
-            val note = store.create("auto", "ultra-v1")
+            val note = store.create(AUTOMATIC_LANGUAGE, ULTRA_ENGINE)
             FileOutputStream(store.audioFile(note)).use { it.write(audio); it.fd.sync() }
             store.duration(note, 29_999)
             assertThrows(IllegalStateException::class.java) { store.enqueueUltraWindow(note, 0, 30_000, 29_500) }
@@ -120,8 +123,8 @@ class UltraQueueStoreTest {
 
         NoteStore(context).use { store ->
             val note = checkNotNull(store.note(id))
-            assertEquals("ultra-v1", note.speechEngine)
-            assertEquals("auto", note.language)
+            assertEquals(ULTRA_ENGINE, note.speechEngine)
+            assertEquals(AUTOMATIC_LANGUAGE, note.language)
             assertEquals(59_500L, note.duration)
             assertEquals(pending, store.nextChunk(id))
             assertTrue(store.hasUnpublishedTail(note))

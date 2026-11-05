@@ -26,10 +26,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -47,18 +43,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
@@ -69,7 +57,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
@@ -78,7 +65,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
-import app.focal.BuildConfig
 import app.focal.FocalViewModel
 import app.focal.core.Transcript
 import app.focal.data.Passage
@@ -92,7 +78,6 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.roundToInt
 
 private sealed interface Destination {
     data object Sessions : Destination
@@ -114,21 +99,15 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     val settings by model.settings.collectAsStateWithLifecycle()
     val library by model.library.collectAsStateWithLifecycle()
     val live by model.live.collectAsStateWithLifecycle()
-    val ready by model.modelReady.collectAsStateWithLifecycle()
-    val preparing by model.preparing.collectAsStateWithLifecycle()
-    val setupError by model.app.startupError.collectAsStateWithLifecycle()
     val playing by model.player.playing.collectAsStateWithLifecycle()
     val playback by model.player.playback.collectAsStateWithLifecycle()
     val requested by openedNote.collectAsStateWithLifecycle()
-    val alternative by model.alternativePreview.state.collectAsStateWithLifecycle()
-    val noiseReview by model.noiseReview.state.collectAsStateWithLifecycle()
     val view = LocalView.current
     var destination by rememberSaveable(stateSaver = destinationSaver) { mutableStateOf<Destination>(Destination.Sessions) }
     val selected = (destination as? Destination.Session)?.id
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     var contextualNoteId by rememberSaveable { mutableStateOf<String?>(null) }
     val detailId = selected ?: contextualNoteId
-    var modelRetryId by rememberSaveable { mutableStateOf<String?>(null) }
     var searchValue by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     val searchQuery = searchValue.text
     var searchOpen by rememberSaveable { mutableStateOf(false) }
@@ -218,8 +197,6 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         dialog = "actions"
     }
     fun performOpen(id: String?) {
-        model.noiseReview.stop()
-        model.alternativePreview.stop()
         dismissInput(); editingId = null; closeDialog(); pendingOpenTarget = null
         editorDirty = false; renameDirty = false; formSaving = false
         model.select(id)
@@ -291,11 +268,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri()))
         }
     }
-    val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { model.importModel(it, retryId = modelRetryId) }
-        modelRetryId = null
-    }
-    fun openModel(retryId: String? = null) { modelRetryId = retryId; dismissInput(); dialog = "model" }
+    fun openModel() { dismissInput(); dialog = "model" }
     fun start() {
         if (!library.loaded || library.error != null) return
         // Cancelling this request removes its displayed or queued notice without
@@ -460,11 +433,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                                     if (live.processing) "Open transcript" else "Open recording", Symbol.Audio
                                 ) { open(live.noteId) }
                                 destination == Destination.Sessions -> {
-                                    LibraryCaptureDock(
-                                        settings.language, library.loaded && library.error == null,
-                                        selectLanguage = model.app.preferences::language,
-                                        dismissInput = ::dismissInput, record = ::start,
-                                    )
+                                    LibraryCaptureDock(library.loaded && library.error == null, record = ::start)
                                 }
                             }
                         }
@@ -480,7 +449,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 }) {
                     when (destination) {
                         Destination.Settings -> SettingsScreen(
-                            settings.theme, model.app.preferences::theme, ready, preparing, setupError, { openModel() }, ::notify,
+                            settings.theme, model.app.preferences::theme, ::openModel, ::notify,
                         )
                         Destination.Sessions -> LibraryScreen(
                             library.notes, library.loaded, live, ::open, searchValue, {
@@ -494,7 +463,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                             recordingDay = recordingDay, clearRecordingDay = { recordingDayEpoch = null },
                         )
                         is Destination.Session -> if (note != null) NoteScreen(
-                            note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { if (library.error == null) editingId = it.id else notify("Reload this recording before editing.") }, { if (note.speechEngine == "ultra-v1" || ready) model.retry(note.id) else openModel(note.id) },
+                            note, library, live.takeIf { active }, reviewOnly, { reviewOnly = !reviewOnly }, { if (library.error == null) editingId = it.id else notify("Reload this recording before editing.") }, { model.retry(note.id) },
                             playback.isPlaying && playback.noteId == note.id, audioAvailable, { model.playNote(note) }, { dialog = "rename" },
                             seek = { model.seekNote(note, it) }, playbackPosition = playback.takeIf { it.noteId == note.id }?.positionMs,
                             retryLoad = model::retryLibrary, notificationsEnabled = notificationsEnabled,
@@ -516,27 +485,10 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 libraryListState.requestScrollToItem(0)
             }
         }
-        if (dialog == "model" && BuildConfig.FOCAL_ULTRA_BUNDLED && modelRetryId == null) AlertDialog(
+        if (dialog == "model") AlertDialog(
             onDismissRequest = ::closeDialog, title = { Text("Speech model") },
             text = { Text("Ultra works offline and selects the language automatically. Your original audio stays on this device.") },
             confirmButton = { TextButton(onClick = ::closeDialog) { Text("Done") } },
-        ) else if (dialog == "model") AlertDialog(
-            onDismissRequest = { dialog = null; modelRetryId = null }, title = { Text("Speech model") },
-            text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                Text(if (BuildConfig.FOCAL_ULTRA_BUNDLED) when {
-                    preparing -> "Preparing the Whisper model for this older recording…"
-                    ready -> "Whisper is available for this older recording. You can choose a replacement model."
-                    else -> "Choose a Whisper model to continue transcription of this older recording."
-                } else when {
-                    preparing -> "Preparing the speech model…"
-                    ready -> "The multilingual speech model is installed. You can choose a replacement file."
-                    else -> "Import ggml-base-q5_1.bin to transcribe saved and new recordings. You can record audio without it."
-                })
-                if (setupError != null) Text(if (BuildConfig.FOCAL_ULTRA_BUNDLED) "Whisper: $setupError" else setupError.orEmpty(), style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
-            } },
-            confirmButton = { TextButton(onClick = { dialog = null; import.launch(arrayOf("*/*")) }, enabled = !preparing) { Text(if (BuildConfig.FOCAL_ULTRA_BUNDLED) "Choose Whisper model" else "Choose model") } },
-            dismissButton = { TextButton(onClick = { dialog = null; modelRetryId = null }) { Text("Cancel") } }
         )
         editing?.let { passage ->
             val ordered = library.passages.sortedWith(compareBy<Passage> { it.start }.thenBy { it.id })
@@ -586,38 +538,10 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 shareReason = shareReason.takeUnless { loading }, audioReason = audioReason.takeUnless { loading },
                 deleteReason = activeReason.takeUnless { loading },
                 onDismiss = ::closeDialog,
-                alternativeAvailable = model.alternativeAvailable && actionNote?.speechEngine != "ultra-v1",
-                backgroundReason = (audioReason ?: when {
-                    actionNote?.state != "READY" -> "Finish transcription first"
-                    library.audioBytes > app.focal.speech.NoiseReviewController.MAX_DURATION_MS * 32 -> "Available for recordings up to 15 minutes"
-                    else -> null
-                }).takeUnless { loading },
-                alternativeReason = (audioReason ?: when {
-                    preparing && !BuildConfig.FOCAL_ULTRA_BUNDLED -> "Wait for the speech model to finish preparing"
-                    actionNote?.state != "READY" -> "Finish the original transcription first"
-                    library.audioBytes > 180L * 16_000 * 2 -> "Available for recordings up to three minutes"
-                    else -> null
-                }).takeUnless { loading },
             ) { action ->
                 when (action) {
                     SessionAction.Rename -> if (actionNote != null) dialog = "rename" else closeDialog()
                     SessionAction.Share -> { closeDialog(); if (canShare) shareTranscript() }
-                    SessionAction.CheckBackground -> {
-                        val id = actionNote?.id
-                        closeDialog()
-                        if (id != null) {
-                            open(id)
-                            if (!model.noiseReview.start(id)) notify("Finish the current operation first.")
-                        }
-                    }
-                    SessionAction.Alternative -> {
-                        val id = actionNote?.id
-                        closeDialog()
-                        if (id != null && actionNote?.speechEngine != "ultra-v1") {
-                            if (model.preparing.value && !BuildConfig.FOCAL_ULTRA_BUNDLED) notify("Wait for the speech model to finish preparing.")
-                            else if (!model.alternativePreview.start(id)) notify("Finish the current operation first.")
-                        }
-                    }
                     SessionAction.RemoveAudio -> if (canRemoveAudio) dialog = "audio" else closeDialog()
                     SessionAction.Delete -> if (actionNote != null && !actionActive) dialog = "delete" else closeDialog()
                 }
@@ -647,18 +571,6 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 closeDialog()
             }) { Text(if (dialog == "delete") "Delete" else "Remove audio", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = ::closeDialog) { Text("Cancel") } }
-        )
-        AlternativeTranscriptSheet(alternative, model.alternativePreview::stop)
-        BackgroundSoundSheet(noiseReview, playing,
-            dismiss = { model.player.pause(); model.noiseReview.stop() },
-            play = model::play,
-            edit = { passage ->
-                model.noiseReview.stop()
-                open(passage.noteId)
-                editingId = passage.id
-            },
-            decide = model::decideBackgroundSound,
-            restore = model::restorePassage,
         )
     }
 }
@@ -705,9 +617,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
 }
 
-@Composable private fun LibraryCaptureDock(
-    language: String, loaded: Boolean, selectLanguage: (String) -> Unit, dismissInput: () -> Unit, record: () -> Unit,
-) {
+@Composable private fun LibraryCaptureDock(loaded: Boolean, record: () -> Unit) {
     val fontScale = LocalDensity.current.fontScale
     @Composable fun RecordAction(modifier: Modifier) {
         Button(onClick = record, enabled = loaded, shape = CircleShape,
@@ -718,105 +628,23 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         if (fontScale >= 1.5f || maxWidth < 280.dp) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            CaptureLanguageControl(language, selectLanguage, dismissInput)
+            AutomaticLanguageLabel()
             RecordAction(Modifier.fillMaxWidth())
         } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            CaptureLanguageControl(language, selectLanguage, dismissInput)
+            AutomaticLanguageLabel()
             RecordAction(Modifier.weight(1f))
         }
     }
 }
 
-@Composable private fun CaptureLanguageControl(language: String, select: (String) -> Unit, dismissInput: () -> Unit) {
-    if (BuildConfig.FOCAL_ULTRA_BUNDLED) {
-        Row(Modifier.heightIn(min = 48.dp).semantics(mergeDescendants = true) {
-            contentDescription = "Speech language: Automatic"
-        }.padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            LanguageGlobe()
-            Text("Automatic", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
-        }
-    } else CaptureLanguagePicker(language, select, dismissInput)
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable private fun CaptureLanguagePicker(language: String, select: (String) -> Unit, dismissInput: () -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    var anchorTop by remember { mutableIntStateOf(0) }
-    val label = Preferences.languages.getValue(language)
-    val density = LocalDensity.current
-    val direction = LocalLayoutDirection.current
-    val insets = WindowInsets.safeDrawing
-    val gap = with(density) { 8.dp.roundToPx() }
-    val top = insets.getTop(density) + gap
-    val left = insets.getLeft(density, direction) + gap
-    val right = insets.getRight(density, direction) + gap
-    val color = MaterialTheme.colorScheme.onSurfaceVariant
-    Box(Modifier.onGloballyPositioned { anchorTop = it.boundsInWindow().top.roundToInt() }) {
-        OutlinedButton(
-            onClick = { dismissInput(); expanded = true },
-            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Speech language: $label" },
-            shape = CircleShape, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
-            contentPadding = PaddingValues(horizontal = 13.dp, vertical = 8.dp),
-        ) {
-            LanguageGlobe()
-            Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp))
-            Glyph(Symbol.Chevron, Modifier.size(13.dp).rotate(if (expanded) 90f else -90f), color)
-        }
-        if (expanded) {
-            val position = remember(top, left, right, gap) {
-                object : PopupPositionProvider {
-                    override fun calculatePosition(
-                        anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize,
-                    ): IntOffset {
-                        val start = if (layoutDirection == LayoutDirection.Ltr) anchorBounds.left else anchorBounds.right - popupContentSize.width
-                        val end = (windowSize.width - right - popupContentSize.width).coerceAtLeast(left)
-                        return IntOffset(start.coerceIn(left, end),
-                            (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(top))
-                    }
-                }
-            }
-            val available = with(density) { (anchorTop - top - gap).coerceAtLeast(1).toDp() }
-            Popup(popupPositionProvider = position, onDismissRequest = { expanded = false },
-                properties = PopupProperties(focusable = true)) {
-                val selectedRequester = remember(language) { BringIntoViewRequester() }
-                var selectedLaidOut by remember(language) { mutableStateOf(false) }
-                LaunchedEffect(language, selectedLaidOut, available) {
-                    if (selectedLaidOut) {
-                        withFrameNanos { }
-                        selectedRequester.bringIntoView()
-                    }
-                }
-                Surface(
-                    modifier = Modifier.width(212.dp).heightIn(max = minOf(360.dp, available))
-                        .semantics { paneTitle = "Speech language" },
-                    shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                ) {
-                    Column(Modifier.verticalScroll(rememberScrollState()).padding(6.dp).selectableGroup()) {
-                        Preferences.languages.forEach { (id, name) ->
-                            val selected = id == language
-                            Row(
-                                Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
-                                    .then(if (selected) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh) else Modifier)
-                                    .then(if (selected) Modifier.bringIntoViewRequester(selectedRequester)
-                                        .onGloballyPositioned { coordinates ->
-                                            if (coordinates.isAttached && coordinates.size.width > 0 && coordinates.size.height > 0)
-                                                selectedLaidOut = true
-                                        } else Modifier)
-                                    .selectable(selected, role = Role.RadioButton, onClick = { select(id); expanded = false })
-                                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                                if (selected) Glyph(Symbol.Check, Modifier.size(17.dp), color)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+/** Ultra detects the language itself; there is nothing to choose. */
+@Composable private fun AutomaticLanguageLabel() {
+    Row(Modifier.heightIn(min = 48.dp).semantics(mergeDescendants = true) {
+        contentDescription = "Speech language: Automatic"
+    }.padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        LanguageGlobe()
+        Text("Automatic", style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
