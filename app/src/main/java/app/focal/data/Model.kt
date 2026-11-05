@@ -72,7 +72,8 @@ val Note.displayTitle: String get() = title.ifBlank { "Untitled note" }
 
 /**
  * One paragraph of a note. [text] is what the user sees; [sourceText] is the formatted recognizer text it
- * was materialised from (null = unknown, for text saved before schema 5) and [wordsJson] holds the timed
+ * was materialised from (null = unknown, for text saved before schema 5; "" = none, for a paragraph the user
+ * split off without recognizer words, which has nothing to restore) and [wordsJson] holds the timed
  * source words ([sourceWords]; null when there are no word times). [revision] changes with every write, so
  * an editor can detect that its copy is stale. [hidden] paragraphs (legacy background-sound exclusions) stay
  * stored but are left out of the body, search and copy. Only the speech worker extends an [open] paragraph.
@@ -92,7 +93,7 @@ data class Paragraph(
     val revision: Long,
 ) {
     val visible: Boolean get() = !hidden && text.isNotBlank()
-    val canRestore: Boolean get() = sourceText != null && sourceText != text
+    val canRestore: Boolean get() = !sourceText.isNullOrEmpty() && sourceText != text
     fun sourceWords(): List<Word>? = wordsJson?.let(TranscriptJson::decodeWords)
 }
 
@@ -184,7 +185,7 @@ sealed interface EditResult {
     /** The note is recording or transcribing; edits are accepted only when it is ready. */
     data object NotEditable : EditResult
     data object TooLarge : EditResult
-    /** The paragraph has no recognizer text to restore (saved before schema 5 without one). */
+    /** The paragraph has no recognizer text to restore (saved before schema 5 without one, or added by the user). */
     data object NoOriginal : EditResult
 }
 

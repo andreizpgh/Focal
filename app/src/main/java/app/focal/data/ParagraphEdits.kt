@@ -6,8 +6,9 @@ import app.focal.core.Word
 
 /**
  * The stored content of a paragraph that Split and Merge redistribute: current text, its source (the
- * formatted recognizer text; null = unknown) and the timed source words (null = no word times). Times are
- * never invented: a part without source words keeps the time range of the paragraph it came from.
+ * formatted recognizer text; null = unknown, "" = the recognizer produced none of this part, e.g. text the
+ * user added) and the timed source words (null = no word times). Times are never invented: a part without
+ * source words keeps the time range of the paragraph it came from.
  */
 internal data class ParagraphContent(
     val text: String,
@@ -44,7 +45,8 @@ internal object ParagraphEdits {
             }
         }
         fun part(text: String, partSource: String?, partWords: List<Word>?): ParagraphContent {
-            val known = partSource?.takeIf { it.isNotEmpty() }
+            // A known source stays known when this part got none of it (""), so a later merge restores it.
+            val known = if (source != null) partSource.orEmpty() else null
             val timed = partWords?.takeIf { it.isNotEmpty() }
             return ParagraphContent(
                 text, known, timed,
@@ -56,7 +58,7 @@ internal object ParagraphEdits {
             part(rightText, rightSource, words?.subList(wordCut!!, words.size))
     }
 
-    /** Joins two adjacent paragraphs with one space. */
+    /** Joins two adjacent paragraphs with one space. The source stays known only if both sides know theirs. */
     fun merge(first: ParagraphContent, second: ParagraphContent): ParagraphContent {
         val text = listOf(first.text.trim(), second.text.trim()).filter { it.isNotEmpty() }.joinToString(" ")
         val source = if (first.sourceText != null && second.sourceText != null)

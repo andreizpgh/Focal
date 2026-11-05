@@ -607,7 +607,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     fun restoreOriginal(id: Long, revision: Long): EditResult = edit {
         val paragraph = paragraphsIn(this, "id=?", listOf(id.toString())).firstOrNull()
         editable(this, paragraph, revision)?.let { return@edit it }
-        val source = paragraph!!.sourceText ?: return@edit EditResult.NoOriginal
+        val source = paragraph!!.sourceText?.takeIf { it.isNotEmpty() } ?: return@edit EditResult.NoOriginal
         writeText(this, paragraph.id, source, edited = false)
         refreshTitle(this, paragraph.noteId)
         EditResult.Saved(paragraphsIn(this, "id=?", listOf(id.toString())))

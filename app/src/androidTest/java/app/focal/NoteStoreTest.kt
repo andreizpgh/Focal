@@ -201,6 +201,33 @@ class NoteStoreTest {
         assertSearchIndexIntact(store)
     }
 
+    @Test fun splittingOffAddedTextAndMergingBackKeepsRestoreOriginal() {
+        val id = transcribedNote()
+        store.markReady(id)
+        val first = store.paragraphs(id).first()
+        // Enter at the end, type into the new paragraph, then Backspace at its start.
+        val (kept, empty) = (store.splitParagraph(first.id, first.revision, first.text.length) as EditResult.Saved).paragraphs
+        assertEquals("", empty.sourceText)
+        assertFalse(empty.canRestore)
+        assertEquals(EditResult.NoOriginal, store.restoreOriginal(empty.id, empty.revision))
+        val typed = (store.editParagraph(empty.id, empty.revision, "My addition") as EditResult.Saved).paragraphs.single()
+        assertTrue(typed.edited)
+        val merged = (store.mergeParagraphs(kept.id, kept.revision, typed.id, typed.revision) as EditResult.Saved).paragraphs.single()
+        assertEquals("${first.text} My addition", merged.text)
+        assertEquals(first.sourceText, merged.sourceText)
+        assertTrue(merged.canRestore)
+        // Split before the added words, then undo the split with a merge.
+        val (left, right) = (store.splitParagraph(merged.id, merged.revision, merged.text.indexOf("My")) as EditResult.Saved).paragraphs
+        assertEquals(first.sourceText to "", left.sourceText to right.sourceText)
+        val again = (store.mergeParagraphs(left.id, left.revision, right.id, right.revision) as EditResult.Saved).paragraphs.single()
+        assertEquals(first.sourceText, again.sourceText)
+        assertTrue(again.canRestore)
+        val restored = (store.restoreOriginal(again.id, again.revision) as EditResult.Saved).paragraphs.single()
+        assertEquals(first.text, restored.text)
+        assertFalse(restored.edited)
+        assertSearchIndexIntact(store)
+    }
+
     @Test fun findAndReplaceAllIgnoreCaseAndYoAndCanBeUndone() {
         val id = store.insertNoteForTests(listOf("Ёлка стоит. Елка растёт.", "No tree here.", "ЕЛКА"))
         assertEquals(3, store.findInNote(id, "елка").size)

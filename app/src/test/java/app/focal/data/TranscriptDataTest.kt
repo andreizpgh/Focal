@@ -133,7 +133,33 @@ class ParagraphEditsTest {
         assertEquals("One two.", left.text)
         assertEquals("", right.text)
         assertNull(right.words)
-        assertNull(right.sourceText)
+        // Known provenance stays known: the new paragraph has no recognizer text, which is not "unknown".
+        assertEquals("", right.sourceText)
+        assertEquals(false, right.edited)
+    }
+
+    @Test fun enterTypeAndBackspaceKeepsTheSource() {
+        val source = words("Hello", "world.")
+        val whole = content("Hello world.", source)
+        val (left, empty) = ParagraphEdits.split(whole, whole.text.length)
+        val typed = empty.copy(text = "My addition", edited = true)
+        val merged = ParagraphEdits.merge(left, typed)
+        assertEquals("Hello world. My addition", merged.text)
+        assertEquals("Hello world.", merged.sourceText)
+        assertEquals(source, merged.words)
+        assertEquals(true, merged.edited)
+    }
+
+    @Test fun splittingOffAddedWordsAndMergingBackKeepsTheSource() {
+        val source = words("Hello", "world.")
+        val added = ParagraphContent("Hello world. My addition", "Hello world.", source, 0, 1_800, true)
+        val (left, right) = ParagraphEdits.split(added, added.text.indexOf("My"))
+        assertEquals("Hello world." to "", left.sourceText to right.sourceText)
+        assertEquals(false to true, left.edited to right.edited)
+        val merged = ParagraphEdits.merge(left, right)
+        assertEquals(added.text, merged.text)
+        assertEquals("Hello world.", merged.sourceText)
+        assertEquals(true, merged.edited)
     }
 
     @Test fun mergeRestoresWhatSplitDivided() {
