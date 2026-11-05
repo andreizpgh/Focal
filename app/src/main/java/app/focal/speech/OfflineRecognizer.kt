@@ -126,10 +126,7 @@ internal class OfflineRecognizer private constructor(private var handle: Long) :
                 decoder = config.decoder.path,
                 joiner = config.joiner.path,
                 tokens = config.tokens.path,
-                modelType = "nemo_transducer",
-                decodingMethod = "greedy_search",
                 numThreads = config.threads,
-                provider = "cpu",
                 providerConfig = sessionConfig?.path,
             )
             check(handle != 0L) { "The speech recognizer could not be created." }

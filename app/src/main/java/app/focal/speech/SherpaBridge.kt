@@ -17,10 +17,14 @@ internal object SherpaBridge {
     /** sherpa-onnx version, git revision, git date and ONNX Runtime version. */
     @JvmStatic external fun runtimeInfo(): Array<String>
 
+    /**
+     * Parakeet TDT (sherpa-onnx "nemo_transducer"), greedy search, on the CPU: the bridge fixes those, because
+     * sherpa-onnx exits the process on an unknown decoding method or a mismatched model type.
+     * [providerConfig] names an ONNX Runtime session options file, or null.
+     */
     @JvmStatic external fun createRecognizer(
         encoder: String, decoder: String, joiner: String, tokens: String,
-        modelType: String, decodingMethod: String, numThreads: Int,
-        provider: String, providerConfig: String?,
+        numThreads: Int, providerConfig: String?,
     ): Long
 
     @JvmStatic external fun destroyRecognizer(handle: Long)

@@ -10,7 +10,9 @@
 // - Every native object is released on every path (RAII guards).
 // - Inputs that make sherpa-onnx terminate the process instead of returning an error are rejected
 //   here first: an unreadable provider config file, a sample rate other than 16 kHz and a voice
-//   activity window of the wrong length.
+//   activity window of the wrong length. The model type, decoding method and execution provider are
+//   fixed here, not taken from the caller: an unknown decoding method or a model type that does not
+//   match the model makes sherpa-onnx 2.0.1 call exit() (SHERPA_ONNX_EXIT).
 // - Strings from the runtime cross as UTF-8 bytes, never through NewStringUTF, so a malformed
 //   token cannot abort the VM; Kotlin decodes them with replacement characters.
 
@@ -31,6 +33,11 @@ namespace {
 constexpr int32_t kSampleRate = 16000;
 constexpr int32_t kFeatureDim = 80;
 constexpr jint kMaxThreads = 16;
+// Parakeet TDT through sherpa-onnx's NeMo transducer, greedy, on the CPU: the only configuration Focal
+// ships. Never pass caller strings here (see the header comment).
+constexpr const char *kModelType = "nemo_transducer";
+constexpr const char *kDecodingMethod = "greedy_search";
+constexpr const char *kProvider = "cpu";
 // Silero VAD v4 at 16 kHz, exactly as in Focal's segmentation experiments.
 constexpr jint kVadWindow = 512;
 // The detector keeps at most one window plus its pre-roll, because Focal flushes and clears its
@@ -203,16 +210,14 @@ JNIEXPORT jobjectArray JNICALL Java_app_focal_speech_SherpaBridge_runtimeInfo(JN
 
 JNIEXPORT jlong JNICALL Java_app_focal_speech_SherpaBridge_createRecognizer(
     JNIEnv *env, jclass, jstring encoder, jstring decoder, jstring joiner, jstring tokens,
-    jstring model_type, jstring decoding_method, jint num_threads, jstring provider,
-    jstring provider_config) {
+    jint num_threads, jstring provider_config) {
   try {
     JavaUtf encoder_path(env, encoder), decoder_path(env, decoder), joiner_path(env, joiner),
-        tokens_path(env, tokens), type(env, model_type), method(env, decoding_method),
-        provider_name(env, provider), config_path(env, provider_config);
+        tokens_path(env, tokens), config_path(env, provider_config);
     if (env->ExceptionCheck()) return 0;
     if (!encoder_path.nonEmpty() || !decoder_path.nonEmpty() || !joiner_path.nonEmpty() ||
-        !tokens_path.nonEmpty() || !type.nonEmpty() || !method.nonEmpty() || !provider_name.nonEmpty()) {
-      ThrowArgument(env, "Every recognizer path and option is required.");
+        !tokens_path.nonEmpty()) {
+      ThrowArgument(env, "Every recognizer path is required.");
       return 0;
     }
     if (num_threads < 1 || num_threads > kMaxThreads) {
@@ -225,11 +230,7 @@ JNIEXPORT jlong JNICALL Java_app_focal_speech_SherpaBridge_createRecognizer(
         return 0;
       }
     }
-    std::string provider_string = provider_name.get();
-    if (provider_string.find(':') != std::string::npos) {
-      ThrowArgument(env, "Pass the provider config file separately.");
-      return 0;
-    }
+    std::string provider_string = kProvider;
     if (provider_config != nullptr) {
       // sherpa-onnx exits the process when "provider:path" names a file it cannot open.
       if (!config_path.nonEmpty() || !Readable(config_path.get())) {
@@ -251,8 +252,8 @@ JNIEXPORT jlong JNICALL Java_app_focal_speech_SherpaBridge_createRecognizer(
     config.model_config.num_threads = num_threads;
     config.model_config.debug = 0;
     config.model_config.provider = provider_string.c_str();
-    config.model_config.model_type = type.get();
-    config.decoding_method = method.get();
+    config.model_config.model_type = kModelType;
+    config.decoding_method = kDecodingMethod;
 
     const SherpaOnnxOfflineRecognizer *recognizer = SherpaOnnxCreateOfflineRecognizer(&config);
     if (recognizer == nullptr) {
