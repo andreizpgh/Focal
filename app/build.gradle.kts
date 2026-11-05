@@ -70,7 +70,6 @@ android {
         targetSdk = 36
         versionCode = 9
         versionName = "0.1.0-alpha.9"
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         // The app verifies its installed model copy against the same lock the build used.
         buildConfigField("String", "ULTRA_MODEL_FILES",
             "\"" + modelFiles.joinToString(";") { "${it.name}:${it.bytes}:${it.sha256}" } + "\"")
@@ -84,8 +83,13 @@ android {
     // The recognizer streams its model out of the APK once; keep the ONNX files stored.
     androidResources { noCompress += "onnx" }
     if (modelPresent) sourceSets.getByName("main").assets.directories.add(ultraModelDirectory.path)
+    // ABI filters are set per build type only: AGP unions them with defaultConfig's.
     buildTypes {
+        // x86_64 serves the emulator for debug builds and device tests.
+        debug { ndk { abiFilters += listOf("arm64-v8a", "x86_64") } }
         release {
+            // Phones are arm64; the release APK carries no x86_64 runtime libraries.
+            ndk { abiFilters += "arm64-v8a" }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
