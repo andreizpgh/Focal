@@ -1,5 +1,30 @@
 # Product verification · 2026-11-05
 
+## Alpha 7 candidate · full verification 2026-11-05
+
+Clean `4ac250d322849e4cc2ee29c034b4c8b28330a78c` passed the complete local
+`qa-local.py --release-checks` run: **129/0/0**, all ten required real-model
+checks, including the original oversized-editor rotation regression. JUnit:
+186.980s; runner wall: 187.992s. Both lint variants, 36 core and six app JVM
+checks (cached unchanged results), and debug/test/unsigned R8 builds passed in
+3m52s. Report: `20261105T051956.322657Z`.
+[Exact artifact identity](../releases/ux-alpha-7.json).
+
+The exact debug APK (77,396,931 bytes, SHA-256
+`5ba36437c0cd54ec446ab6890f8896ddfb8ff68b51ac1392a93984addb8d66ff`)
+and test APK match the earlier manual/focused build byte for byte. No rebuild or
+resigning is needed for delivery. The unsigned R8 build passed packaging/lint;
+it was not the instrumented APK. Exact APKs and diagnostics are archived under
+`build/local-diagnostics/noise-review-20261105/` (ignored).
+
+The combined KVM/Gradle job used a 4 GiB hard limit, 150% CPU quota and no cgroup
+swap. A saved instrumentation-time sample recorded a 3,758,620,672-byte peak,
+64 memory-high events and zero max/OOM/kill events. The service finished
+successfully and stopped its dedicated AVD. Other projects were untouched.
+No models were downloaded. Alpha 7 is prepared for publication; the handoff
+records actual publication status. Physical-phone and seven-language quality,
+speed and mixed-term requirements remain open.
+
 ## Background-sound decisions · focused verification 2026-11-05
 
 The optional check for finished recordings now proposes passages whose saved
@@ -15,8 +40,8 @@ tests, debug/test APKs and the unsigned R8 build in 14m08s. A focused Android
 run passed **21/0/0** in 9.685s instrumentation / 12.110s runner wall, including
 real Silero speech/reset and graph-abort failure handling, storage migration,
 cancellation/ownership, fresh Copy snapshots, and exclusion/restore across
-Activity recreation. Nineteen Python runner/summary checks passed. Complete
-129-test clean-source QA is still required before publication.
+Activity recreation. Nineteen Python runner/summary checks passed. The subsequent complete
+clean-source QA is recorded above.
 
 Manual checks on the dedicated KVM emulator covered the synthetic three-part
 note (silence / public JFK speech / silence): only the two silent ranges were
@@ -37,7 +62,7 @@ Two bounded research follow-ups are recorded in the
 [benchmark report](benchmarks/2026-11-05-stt/report.md): cached-noise display
 filtering is counterfactual, and the measured sampler saving was below its
 predeclared threshold. Neither justifies a seven-language accuracy/speed claim.
-Alpha 6 remains the latest public release pending complete candidate QA.
+The subsequent Alpha 7 verification and publication state are recorded above.
 
 ## ACFT comparison · completed 2026-11-05
 

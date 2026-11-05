@@ -98,8 +98,8 @@ Local UX previews use a distinct `ux-alpha-N` tag and a `local-emulator-qa`
 manifest in `releases/`. They promote the exact archived debug APK from a clean,
 successful `scripts/qa-local.py --release-checks` run, after focused review and
 manual checks. Publish through a new draft prerelease, verify the remote asset
-digest against the manifest, then publish the draft. Include `Focal.apk`,
-`SHA256SUMS`, model provenance and the public verification manifest; never attach
+digest against the manifest, then publish the draft. Include a versioned APK filename,
+checksums, model provenance and the public verification manifest; never attach
 private QA logs, recordings or signing keys. Do not rebuild or re-sign between QA
 and upload, overwrite an existing release, or infer Alpha 1 signing compatibility.
 The existing `v*` CI-artifact workflow and its verification requirements stay intact.

@@ -20,15 +20,22 @@ ARM phone performance and full application acceptance remain open.
 
 ## Current checkpoint · 2026-11-05
 
-The current unreleased candidate is Alpha 7. Optional background-sound checking
-is implemented with explicit Keep/Exclude, retained original audio/text and
-persistent Restore; automatic correction and ordinary decoding remain unchanged.
-Both lint/build variants and 21 focused Android tests passed, with manual
-synthetic-note Copy/Share, restoration, light/dark and large-font checks.
-Independent source, APK and screenshot reviews found no remaining blocker.
-The next required gate is clean-source full QA: 129 tests, including ten mandatory
-real-model checks. See the top of [quality-report](quality-report.md). No new
-model was downloaded. The current batch has not yet been publicly released.
+Alpha 7 is prepared from clean `4ac250d322849e4cc2ee29c034b4c8b28330a78c`:
+**129/0/0**, ten required real-model checks, 186.980s JUnit / 187.992s runner wall.
+Both lints, core/JVM and debug/test/unsigned R8 builds passed. Exact APK identity
+is in [ux-alpha-7.json](../releases/ux-alpha-7.json). The archived debug APK equals
+the focused/manual build byte for byte. No model was downloaded.
+
+Optional background-sound checking uses explicit Keep/Exclude, retained original
+audio/text and persistent Restore. Automatic correction and ordinary decoding
+remain unchanged. Original oversized-draft and capture/storage assertions passed.
+Source, actual screenshots and artifact checks were reviewed independently.
+The dedicated AVD and all heavy jobs are stopped. Phone and all-language
+quality/speed/mixed-term gates remain open; see [device-validation](device-validation.md).
+PR #9 is the delivery PR; PR #1–8 are already merged. Before any upload, inspect
+GitHub for `ux-alpha-7` and the private current-work file. Never replace an asset.
+
+## Earlier research and QA checkpoints
 
 The debug-only saved-audio preview passed 15 focused Android and six JVM tests,
 but its actual 18-input DEV quality screen rejects adoption: normal word errors

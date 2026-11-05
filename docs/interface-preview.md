@@ -1,3 +1,5 @@
+> These screenshots show Alpha 6. Alpha 7 adds the optional background-sound check and further library/settings polish; see its [release notes](releases/ux-alpha-7.md).
+
 # Interface preview
 
 ## UX Alpha 6 · 2026-11-04

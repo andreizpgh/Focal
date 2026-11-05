@@ -2,35 +2,34 @@
 
 Существующий checkout, ветка `codex/sessions-stt-handoff`. Прочитай AGENTS.md,
 development-handoff, quality-report, architecture, local-emulator-qa и device-validation.
-Новый worktree не нужен. PR #1–8 merged; доставка Alpha 6 —
-[PR #8](https://github.com/andreizpgh/Focal/pull/8). Перед продолжением проверь его
+Новый worktree не нужен. PR #1–8 merged; новая доставка —
+[PR #9](https://github.com/andreizpgh/Focal/pull/9). Перед продолжением проверь его
 статус и `build/local-diagnostics/current-android-delivery-work.json`.
 
-## Текущий незавершённый batch · ручная очистка шума
+## Последний проверенный batch · Alpha 7
 
-После `b62b611` реализована, но ещё не проверена полным Android QA, явная
-проверка фонового звука в готовой записи: Silero только предлагает, пользователь
-выбирает Keep/Exclude, оригинальные текст/аудио сохраняются, Restore доступен
-из таймлайна. ASR и автоматическая коррекция не менялись. DB v3 хранит исходный
-post-reconciliation текст новых passages; старый неизвестен. Native overlay
-исправляет частичный VAD graph failure, сохраняя прежний ownership patch.
-Astra проверила source; исправлены stale Copy после commit, случайный Restore
-по Done, contextual Edit и сохранение решения при rotation. Sol/Terra добавили
-проверки контроллера, БД, VM, настоящего детектора и ошибки внутри graph.
+Чистый `4ac250d322849e4cc2ee29c034b4c8b28330a78c`: полный QA **129/0/0**,
+десять real-model checks, 186.980s JUnit /187.992s wall. Обе lint/core/JVM,
+debug/test/R8 прошли за 3m52s; prebuild14m08s; focused21/0/0.
+Проверенный APK совпадает с ручным byte-for-byte. Артефакты и ручные кадры:
+`build/local-diagnostics/noise-review-20261105/`; publicidentity:
+`releases/ux-alpha-7.json`. Все тяжёлые jobs и выделенный AVD остановлены.
 
-Кандидат имеет versionCode 7 / alpha.7. Offline build-01 прошёл обе lint,
-core/JVM и debug/test/R8 за 14m08s. Focus-01: **21/0/0**, 9.685s JUnit,
-12.110s wall; реальные VAD speech/reset/graph abort и storage/VM/rotation.
-Ручной synthetic-note QA подтвердил предложения только на двух участках тишины,
-Edit из library, Exclude/Undo/Restore, Copy feedback и Share preview без
-исключённого текста; тёмную тему, 200% шрифт, landscape и клавиатуру.
-Astra просмотрела фактические кадры; Terra проверила упаковку APK.
-Два Python набора прошли: 14 + 5. Новых загрузок весов не было.
-**Нового APK-релиза пока нет.** Следом clean-source полный
-`qa-local.py --release-checks`: 129 tests и 10 real-model checks.
-Приватные результаты: `build/local-diagnostics/noise-review-20261105/`.
-Перед запуском убедись, что unit `focal-noise-focus-20261105` остановлен;
-full QA запускается отдельно с 4 GiB/150% CPU и MemoryHigh=3584M.
+Ручная проверка фонового звука предлагает Keep/Exclude; оригинальные текст/аудио
+сохранены, Restore доступен из таймлайна. Copy/Share ждут свежего снимка после
+сохранения. Автокоррекция и обычный ASR не менялись. DBv3 хранит исходный
+post-reconciliation текст новых passages; старый неизвестен. Astra проверила
+source/реальные кадры, Terra упаковку, Sol controller/storage/VM; все блокеры
+исправлены. Проверены synthetic silence/JFK/silence, Editизlibrary, Undo/Restore,
+Sharepreview, light/dark, крупный шрифт, landscape/IME. Нет проверки слышимого
+playback или реального микрофона. Модели повторно не скачивались; ledger прежний.
+
+Alpha7 подготовлена к публикации через PR#9; проверь фактический статус GitHub
+и `build/local-diagnostics/current-android-delivery-work.json` до любых действий.
+Никогда не перезаписывай assets. Дальше пользовательская UX-проверка APK, затем
+подключение Pixel10 при владельце по docs/device-validation.md. Отсутствие
+телефона не объявлять общей блокировкой; не выдавать emulator timing за phone.
+Улучшение всех семи языков/скорости/смешанных терминов и LLM пока НЕ закрыто.
 
 Два малых исследования завершены и независимо проверены; не повторять:
 `noise-transfer.json` — два старых seeded-noise диапазона дают no-speech,
@@ -39,7 +38,7 @@ full QA запускается отдельно с 4 GiB/150% CPU и MemoryHigh=
 Оба aggregates в `docs/benchmarks/2026-11-05-stt/`. Это не новое held-out,
 не улучшение каждого из семи языков и не результат телефона.
 
-## Текущий checkpoint
+## Предыдущие исследования и проверки
 
 Debug-only preview сохранённого аудио прошёл 15 целевых Android- и шесть JVM-тестов,
 но проверка качества на 18 входах отклонила его: ошибки обычной речи 25 → 53 / 210,

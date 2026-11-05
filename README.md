@@ -3,13 +3,13 @@
   <h1>Focal</h1>
   <p>Offline voice notes for Android. Record, review, and copy.</p>
   <p>
-    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/ux-alpha-6/Focal-0.1.0-alpha.6.apk">Download UX Alpha 6</a></strong>
+    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/ux-alpha-7/Focal-0.1.0-alpha.7.apk">Download Alpha 7</a></strong>
     &nbsp; · &nbsp;
     <a href="docs/install.md">Install guide</a>
     &nbsp; · &nbsp;
     <a href="https://github.com/andreizpgh/Focal/releases">Releases</a>
   </p>
-  <sub>Android 8.0+ · ARM64 · Version 0.1.0-alpha.6</sub>
+  <sub>Android 8.0+ · ARM64 · Version 0.1.0-alpha.7</sub>
 </div>
 
 <br>
@@ -17,6 +17,8 @@
 **Record at your pace.** Pause, resume, or leave the app while recording continues.
 
 **Review uncertain passages.** Listen to the original audio and edit the text.
+
+**Check background sound.** Listen to suggested ranges and choose which text to keep. Exclusions can be restored.
 
 **Copy and keep.** Copy or share your transcript. Remove audio when you’re finished.
 
