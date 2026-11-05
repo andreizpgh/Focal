@@ -127,22 +127,30 @@ also fail the run; avoid editing the checkout while it runs. The test discovery
 check deliberately fails closed if new test source syntax is unsupported.
 
 
-### Optional Ultra variant
+### Ultra variant
 
 Prepare the verified runtime and four model assets described in
-[Ultra transcription](ultra-transcription.md). To run the same full suite with
-the bundled alternative enabled, use the explicit variant flag:
+[Ultra transcription](ultra-transcription.md). In this build, new notes use
+Ultra with automatic language selection. To run the full suite for this build,
+use the explicit variant flag:
 
 ```sh
 python3 scripts/qa-local.py --serial emulator-5554 --dedicated-test-avd --ultra
 ```
 
 Add `--release-checks` to include release lint and the unsigned, minified Ultra
-APK. The Ultra option extends the ordinary source-discovered suite and mandatory
-real-model checks with the shared alternative and Ultra asset tests. The separate
-private research batch is not included. Preserve and verify the exact APK pair,
-variant, asset and source identities in the private QA record; a test build or
-emulator result does not establish physical-phone acceptance.
+APK. On a memory-constrained host, run the bounded prebuild and the separate
+minified build with the AVD closed, then start the AVD for the full runner.
+The prebuild commands use one Gradle worker and a 1,536 MiB heap.
+See [Ultra build commands](ultra-transcription.md#build-and-check).
+
+The primary Ultra source set expects 146 instrumentation tests, including the
+real JFK recording-service check, a synthetic long capture, saved-audio
+recovery, the Automatic language UI, and the shared preview and asset tests.
+The preview checks use existing Whisper notes. The separate private research
+batch is excluded from full QA. Preserve the exact APK pair, variant, asset
+and source identities in the private QA record. Physical-phone acceptance
+requires its own run.
 
 
 Each invocation writes a fresh private directory under

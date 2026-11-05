@@ -51,7 +51,7 @@ release evidence needs a midrange and an older ARM64 phone, including a 4 GB dev
 
 Use the exact debug/test APK hashes from a successful local QA manifest and keep
 the checkout unchanged during testing. Rebuild and repeat local QA if they differ.
-For the optional Alpha 8 Ultra APK, use the verified pair from the `--ultra` run
+For the primary Ultra build, use the verified pair from the `--ultra` run
 and confirm its manifest has `ultra_enabled` set to `true`. Before updating an
 existing installation, check that the prior and candidate APKs have the same
 signing certificate. On the dedicated test setup, keep a saved test recording with
@@ -67,7 +67,7 @@ adb -s "$FOCAL_PHONE_SERIAL" install -r app/build/outputs/apk/androidTest/debug/
 adb -s "$FOCAL_PHONE_SERIAL" shell am start -n app.focal/.MainActivity
 ```
 
-Wait for Whisper preparation to finish, then verify the installed file against
+For the full suite, wait for Whisper preparation to finish and verify the installed file against
 `models/model.json` and the local QA manifest. A startup error or mismatched
 imported model needs explicit resolution before testing. Preserve existing notes
 and the working model while resolving it.
@@ -96,10 +96,10 @@ adb -s "$FOCAL_PHONE_SERIAL" shell am instrument -r -w \
 An ADB exit code alone is insufficient. Require all source-discovered tests,
 including all ten required real-model checks, with zero failures/skips and a
 completed runner. These include speech detection, detector reset and graph-error
-recovery. At Alpha 8 the ordinary suite expects 129 tests. The bundled Ultra
-suite expects 137, with two real Ultra preview tests, five extraction tests and
-one import ownership test in addition to the ordinary suite. Use the verified
-APK pair's local QA manifest to select the expected test set.
+recovery. The primary Ultra source expects 146 tests, including default Ultra
+transcription of the public fixture, long capture, recovery, Automatic language
+UI, and the preview, extraction and import checks. Use the verified APK pair's
+local QA manifest to select the expected test set.
 
 ```sh
 python3 - "$FOCAL_PHONE_REPORT" "$FOCAL_PHONE_QA_MANIFEST" <<'PY'
@@ -152,7 +152,7 @@ manual and resource gates below.
 | Priority and scenario | Required observation |
 | --- | --- |
 | 1 · First launch offline; deny then grant microphone/notification permissions | Record is usable without networking/model downloads. Denials explain the action; permission changes do not silently claim continued capture. |
-| 1 · Record → pause/resume in app and notification → Finish → listen/edit → Copy/Share | Paused time is excluded; later audio is retained; saved edits and Unicode/paragraphs match the transferred text. All seven language choices persist for new sessions. |
+| 1 · Record → pause/resume in app and notification → Finish → listen/edit → Copy/Share | Paused time is excluded and later audio is retained. Saved edits and Unicode/paragraphs match the transferred text. In the standard build the selected language persists for new sessions. In the Ultra build new sessions show Automatic. |
 | 1 · Open editor with IME, reject an oversized paste, rotate portrait/landscape | Previous draft and visible warning survive; Save remains reachable. Save & next for an edited hint and Next hint for an unchanged one keep the sheet stable. Legacy large text remains selectable/paged; refused large transfers preserve clipboard/source. |
 | 1 · TalkBack, largest supported font, light/dark/system and reduced motion | Traverse and activate recording, language, review, seek, editor, large-text selection and dialogs. Labels/order/focus are useful; no trapped or unreachable control. Disabled animations stay static. |
 | 1 · Thirty minutes screen off; switch apps and swipe Focal's task away | Begin recording while Focal is visible, then leave/lock it. Use consented phrases before leaving, during the locked interval and before Finish, with ordinary pauses. Verify notification controls, duration, pending work and audible source continuity at each checkpoint. Report OEM restrictions explicitly. Task removal is separate from user force-stop. |
@@ -180,39 +180,36 @@ results belong to the tested setup; lack of a reproducible condition remains an
 open check, not a pass. Restore permissions, audio routes, animation/font/theme
 and battery settings with the owner when the session ends.
 
-### Optional Ultra Alpha 8 on Pixel 10
+### Primary Ultra on Pixel 10
 
-Use a completed test recording of up to three minutes with consented audio,
-a saved edit and an excluded passage. After the same-certificate update, finish
-a new recording through the ordinary Whisper flow, save an edit and verify its
-clipboard text. Then choose **Recording options → Transcribe with Ultra** on a
-completed recording while offline.
-
-1. On first use with no extracted model, allow the [private copy](ultra-transcription.md)
-   to finish and record the cold time and free space used. Repeat the action with
-   the verified copy present and record the warm time separately. Distinguish
-   extraction from a new recognizer load when measurements support it.
-2. Rotate during an active preview and verify that the same request completes.
-   On separate attempts, use **Stop** and press Home during active work. Verify
-   that the cancelled result stays closed and recording can start again after
-   the worker has returned. Retain any private preparation error.
-3. Verify **Ultra · Automatic language**, read the actual result and use **Copy
-   text**. Compare the clipboard with the visible alternative. Close it and
-   verify the original audio, saved transcript, selected language, manual edit
-   and exclusion decision. Ultra reprocesses the full original audio, including
-   audio from excluded passages.
+1. After the same-certificate update, verify that a saved Whisper test note
+   retains its language, audio, transcript, edit and exclusion. With the phone
+   offline, tap **Record**, confirm **Automatic**, speak and tap **Finish**.
+   Wait for text in the same note, then save an edit and compare **Copy text**
+   with the displayed text.
+2. On a dedicated setup without an extracted model, measure first-use latency
+   and free space used. Repeat with the verified copy present and record warm
+   latency separately. Distinguish extraction from recognizer load when
+   observable. Retain preparation failures and verify that original audio
+   remains available to continue transcription. See [Ultra model preparation](ultra-transcription.md).
+3. During a longer recording, rotate and press Home. Return, pause/resume and
+   finish. Verify continuous saved audio, eventual text and working notification
+   controls. In a separate controlled interruption, reopen the note and continue
+   transcription without reopening the microphone. Check that any saved edits
+   remain. For the separate copy-only preview on an existing Whisper note, check
+   rotation, Stop and Home, and compare audio and stored text before and after.
 4. Capture short natural clips in all seven languages, with quiet onsets and
    endings and a short negation. Include Russian speech with **HTML**, **API**
    and **guardrails**, and a noise-only control. Check omissions, changed
-   negation, wrong-language output and words invented during noise. Include one
-   natural recording over 30 seconds and check words around the joins.
+   negation, wrong-language output and words invented during noise. Include a
+   natural recording over three minutes and check the transcript around joins.
 
 ## Seven-language accuracy and phone resources
 
 For **English, Russian, German, French, Spanish, Italian and Portuguese**, obtain
 2–5 minutes of consented dictation per language as an initial screen, including
 quiet onset/endings, room noise, pauses, restarts, names, numbers and negation.
-Add continuous speech crossing real gate boundaries; include the owner's Russian
+Add continuous speech crossing real framing boundaries, including the owner's Russian
 dictation when consented. This small screen alone does not establish release accuracy.
 
 Compare baseline/candidate on identical immutable PCM and separate speaker/session
@@ -231,12 +228,12 @@ P50/P95 first-text and Finish-to-ready latency, model-load/queue/decode time whe
 observable, and wall time versus audio duration. Do not infer a component time
 from a total; mark unavailable measurements explicitly.
 
-Run the Pixel 10 trials sequentially. For Ultra, measure menu-action-to-ready
-latency for cold extraction and a cached repeat. Sample RAM during both, after
-Stop or Home and after cooldown. Separately verify foreground and background
-capture continuity and pending Whisper work, then measure thermal and battery
-behavior with the procedure below. Host and emulator figures are separate
-evidence from these phone measurements.
+Run the Pixel 10 trials sequentially. Measure Ultra's first text and
+Finish-to-ready latency for cold extraction and a cached repeat. Sample RAM
+during both, after Finish or interrupted recovery, and after cooldown.
+Verify foreground and background capture continuity and pending transcription,
+then measure thermal and battery behavior with the procedure below. Report
+phone measurements separately from host and emulator figures.
 
 During a 30-minute speech-plus-silence trial, sample app memory at start, after
 model load, every minute, after Finish and after cooldown; repeat sessions to check

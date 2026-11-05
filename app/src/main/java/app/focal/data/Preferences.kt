@@ -12,5 +12,7 @@ class Preferences(context: Context) {
     fun theme(value: String) { prefs.edit { putString("theme", value) }; settings.value = settings.value.copy(theme = value) }
     companion object {
         val languages = linkedMapOf("en" to "English", "ru" to "Русский", "de" to "Deutsch", "fr" to "Français", "es" to "Español", "it" to "Italiano", "pt" to "Português")
+        fun languageLabel(language: String, speechEngine: String): String =
+            if (speechEngine == "ultra-v1") "Automatic" else languages[language] ?: language
     }
 }

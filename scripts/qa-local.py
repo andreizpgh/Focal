@@ -32,6 +32,10 @@ MODEL_TESTS = {
     ("app.focal.speech.NoiseDetectorTest", "graphAbortIsAnErrorClearsStaleProbabilitiesAndContextCanBeReused"),
 }
 ULTRA_TESTS = {
+    ("app.focal.UltraPrimaryServiceTest", "defaultUltraAutomaticallyTranscribesPublicSpeechIntoTheNote"),
+    ("app.focal.UltraPrimaryServiceTest", "defaultUltraPersistsLongCaptureWhileFirstDecodeIsBlocked"),
+    ("app.focal.UltraPrimaryServiceTest", "recoveryUsesPendingCursorAndUnpublishedTailWithoutOpeningInput"),
+    ("app.focal.UltraPrimaryUiTest", "automaticPrimaryDoesNotOfferASecondUltraPass"),
     ("app.focal.speech.UltraModelImportTest", "importBlocksPreviewAndCaptureUntilValidationFinishes"),
     ("app.focal.speech.UltraModelFilesTest", "installsAllFilesTogetherAndReusesVerifiedCopy"),
     ("app.focal.speech.UltraModelFilesTest", "insufficientStorageOpensNoAssetAndLeavesNoPartial"),

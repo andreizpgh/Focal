@@ -141,7 +141,7 @@ class PassageNoiseDecisionStoreTest {
                 db.version = version
             }
             NoteStore(context).use { store ->
-                assertEquals(3, store.readableDatabase.version)
+                assertEquals(4, store.readableDatabase.version)
                 assertEquals("Saved title", store.note("legacy")?.title)
                 val (reviewed, unknown) = store.passages("legacy")
                 assertEquals("Saved manual edit", reviewed.text)

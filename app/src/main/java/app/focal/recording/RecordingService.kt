@@ -20,6 +20,9 @@ import app.focal.core.Transcript
 import app.focal.data.Chunk
 import app.focal.data.NoteStore
 import app.focal.speech.Transcriber
+import app.focal.speech.UltraTranscriber
+import app.focal.speech.UltraWindowPlanner
+import app.focal.speech.PreviewEngineFactory
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -141,8 +144,10 @@ class RecordingService : Service() {
         try {
             app.storageReady.await()
             if (stopping.get()) { stopSelf(); return }
+            val newEngine = (if (BuildConfig.DEBUG) speechEngineForTests else null)
+                ?: if (BuildConfig.FOCAL_ULTRA_BUNDLED) "ultra-v1" else "whisper"
             val id = recover?.also { checkNotNull(store.note(it)) { "This note is no longer available." } }
-                ?: store.create(app.preferences.settings.value.language)
+                ?: store.create(if (newEngine == "ultra-v1") "auto" else app.preferences.settings.value.language, newEngine)
             noteId = id
             ownership?.bindNote(id)
             val note = checkNotNull(store.note(id))
@@ -158,8 +163,8 @@ class RecordingService : Service() {
                 RecordingState.live.update { if (it.noteId == id) it.copy(duration = duration) else it }
                 store.state(id, "PROCESSING")
             }
-            else capture = scope.launch(captureDispatcher) { captureAudio(id) }
-            worker = scope.launch(speechDispatcher) { processQueue(id, note.language) }
+            else capture = scope.launch(captureDispatcher) { captureAudio(id, note.speechEngine == "ultra-v1") }
+            worker = scope.launch(speechDispatcher) { processQueue(id, note.language, note.speechEngine) }
             scope.launch {
                 var ticks = 0
                 while (isActive && RecordingState.live.value.noteId == id) {
@@ -249,7 +254,7 @@ class RecordingService : Service() {
     }
 
     @Suppress("MissingPermission", "UsableSpace")
-    private suspend fun captureAudio(id: String) {
+    private suspend fun captureAudio(id: String, ultra: Boolean) {
         var device: RecordingInput? = null
         var stream: BufferedOutputStream? = null
         var fileStream: FileOutputStream? = null
@@ -258,9 +263,14 @@ class RecordingService : Service() {
         var filled = 0
         val metadata = CaptureMetadata(id)
         val gate = SpeechGate(object : SpeechGate.Sink {
-            override fun begin(startSample: Long, overlap: Boolean) { metadata.enqueue(CaptureEvent.Begin(startSample / 16, overlap)) }
+            override fun begin(startSample: Long, overlap: Boolean) {
+                if (!ultra) metadata.enqueue(CaptureEvent.Begin(startSample / 16, overlap))
+            }
             override fun audio(samples: ShortArray) = Unit
             override fun end(endSample: Long) {
+                // Ultra frames the complete original on the speech worker from synced duration.
+                // The gate only supplies the microphone level; it must not discard quiet speech.
+                if (ultra) return
                 stream?.flush(); fileStream?.fd?.sync()
                 metadata.enqueue(CaptureEvent.End(endSample / 16))
             }
@@ -383,20 +393,33 @@ class RecordingService : Service() {
         }
     }
 
-    private suspend fun processQueue(id: String, language: String) {
+    private suspend fun processQueue(id: String, language: String, speechEngine: String) {
         try {
             try {
                 val testFactory = if (BuildConfig.DEBUG) decoderFactoryForTests else null
-                if (testFactory == null) app.initialized.await()
+                if (testFactory == null && speechEngine == "whisper") app.initialized.await()
                 decoderAwake.set(true); reconcileWake()
                 val engine = try {
-                    testFactory?.invoke() ?: deviceDecoder()
+                    testFactory?.invoke() ?: deviceDecoder(speechEngine)
                 } finally { decoderAwake.set(false); reconcileWake() }
                 transcriber = engine
                 engine.use {
                     while (currentCoroutineContext().isActive) {
                         val finished = recordingDone
-                        val chunk = store.nextChunk(id)
+                        var chunk = store.nextChunk(id)
+                        if (chunk == null && speechEngine == "ultra-v1") {
+                            val saved = checkNotNull(store.note(id)) { "This note is no longer available." }
+                            val previous = store.lastChunk(id)
+                            // A final window can have nextStart=end; a hard cut retains its
+                            // overlap cursor even across process death. Never decode only that overlap.
+                            if (saved.duration > (previous?.end ?: 0L)) {
+                                val window = UltraWindowPlanner.plan(store.audioFile(id),
+                                    previous?.nextStart ?: 0L, previous?.end, saved.duration,
+                                    finished = finished || saved.state == "PAUSED")
+                                if (window != null) chunk = store.enqueueUltraWindow(id,
+                                    window.startMs, window.endMs, window.nextStartMs)
+                            }
+                        }
                         if (chunk == null && finished) break
                         if (Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
                             RecordingState.live.update { if (it.noteId == id) it.copy(message = "Cooling down · audio is saved") else it }
@@ -412,7 +435,9 @@ class RecordingService : Service() {
                             engine.transcribe(store, chunk, language, threads)
                             RecordingState.live.update { if (it.noteId == id) it.copy(pending = store.pendingCount(id)) else it }
                             val cooldown = DecodePolicy.cooldownMs(SystemClock.elapsedRealtime() - start, power.isPowerSaveMode, warm)
-                            if (cooldown > 0 && store.nextChunk(id) != null) delay(cooldown)
+                            val savedTail = speechEngine == "ultra-v1" &&
+                                (store.note(id)?.duration ?: 0L) > chunk.end
+                            if (cooldown > 0 && (savedTail || store.nextChunk(id) != null)) delay(cooldown)
                         } finally { decoderAwake.set(false); reconcileWake() }
                     }
                 }
@@ -438,7 +463,14 @@ class RecordingService : Service() {
         }
     }
 
-    private fun deviceDecoder(): RecordingDecoder {
+    private fun deviceDecoder(speechEngine: String): RecordingDecoder {
+        if (speechEngine == "ultra-v1") {
+            check(BuildConfig.FOCAL_ULTRA_BUNDLED) { "This note needs the Focal APK with Ultra to continue transcription." }
+            return UltraTranscriber { threads, checkCancelled ->
+                PreviewEngineFactory.openBundled(app, threads.coerceIn(1, 2), checkCancelled)
+            }
+        }
+        check(speechEngine == "whisper") { "This note needs a newer speech engine." }
         check(app.models.ready()) { "Audio is saved. Add the speech model to transcribe this note." }
         val engine = Transcriber(app.models.model.absolutePath)
         return object : RecordingDecoder {
@@ -520,7 +552,8 @@ class RecordingService : Service() {
         if (destroyed) return@synchronized
         val live = RecordingState.live.value
         val text = when {
-            live.processing -> "Finishing transcript · ${live.pending} parts left"
+            // Ultra plans its next window on demand; queued windows are not a progress total.
+            live.processing -> if (live.message.startsWith("Cooling down")) live.message else "Finishing transcript…"
             live.paused -> "Paused · ${Transcript.time(live.duration)}"
             else -> "Recording · ${Transcript.time(live.duration)}"
         }
@@ -587,6 +620,7 @@ class RecordingService : Service() {
         @Volatile internal var inputFactoryForTests: (() -> RecordingInput)? = null
         @Volatile internal var decoderFactoryForTests: (() -> RecordingDecoder)? = null
         @Volatile internal var metadataCapacityForTests: Int? = null
+        @Volatile internal var speechEngineForTests: String? = null
         fun command(context: Context, action: String, id: String? = null) {
             require(action != RECOVER || !id.isNullOrBlank()) { "Choose an existing note to continue transcription." }
             if (action == START && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)

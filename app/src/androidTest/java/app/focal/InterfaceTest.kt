@@ -136,6 +136,10 @@ class InterfaceTest {
         hasText(label) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
     )
 
+    private fun assertAutomaticLanguage() {
+        compose.onNodeWithContentDescription("Speech language: Automatic").assertIsDisplayed().assert(!hasClickAction())
+    }
+
     private fun audioPositionFraction(): Float {
         val progress = compose.onNodeWithContentDescription("Audio position").fetchSemanticsNode()
             .config[SemanticsProperties.ProgressBarRangeInfo]
@@ -218,6 +222,12 @@ class InterfaceTest {
         try {
             compose.waitUntil(10_000) { compose.onAllNodesWithText("Record").fetchSemanticsNodes().isNotEmpty() }
             capture("empty")
+            if (BuildConfig.FOCAL_ULTRA_BUNDLED) {
+                assertAutomaticLanguage()
+                compose.onNodeWithText("Record").assertIsDisplayed().assertIsEnabled()
+                assertEquals(initial, app.preferences.settings.value.language)
+                return
+            }
             Preferences.languages.forEach { (id, label) ->
                 val current = Preferences.languages[app.preferences.settings.value.language]
                 compose.onNodeWithContentDescription("Speech language: $current").performClick()
@@ -245,8 +255,11 @@ class InterfaceTest {
             compose.onNode(hasSetTextAction()).assertIsDisplayed()
             compose.onNodeWithContentDescription("Close search").performClick()
             compose.onNode(hasSetTextAction()).assertDoesNotExist()
-            val language = Preferences.languages[app.preferences.settings.value.language]
-            compose.onNodeWithContentDescription("Speech language: $language").assertIsDisplayed()
+            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
+            else {
+                val language = Preferences.languages[app.preferences.settings.value.language]
+                compose.onNodeWithContentDescription("Speech language: $language").assertIsDisplayed()
+            }
             compose.onNodeWithText("Record").assertIsDisplayed()
             capture("sessions-clean")
         } finally { app.store.delete(id) }
@@ -825,19 +838,28 @@ class InterfaceTest {
         val app = application()
         val initial = app.preferences.settings.value
         try {
-            val currentLanguage = Preferences.languages[initial.language]
-            compose.onNodeWithContentDescription("Speech language: $currentLanguage").performClick()
-            languageOption("Русский").performScrollTo().performClick()
+            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
+            else {
+                val currentLanguage = Preferences.languages[initial.language]
+                compose.onNodeWithContentDescription("Speech language: $currentLanguage").performClick()
+                languageOption("Русский").performScrollTo().performClick()
+            }
             compose.onNodeWithContentDescription("Settings").performClick()
             compose.onNodeWithText("Speech language").assertDoesNotExist()
             compose.onNodeWithText("Dark").performClick()
             compose.onNodeWithText("Light").performClick()
             capture("settings-brand")
             compose.onNodeWithContentDescription("Back to recordings").performClick()
-            compose.onNodeWithContentDescription("Speech language: Русский").assertIsDisplayed().performClick()
-            languageOption("English").performScrollTo().performClick()
+            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
+            else {
+                compose.onNodeWithContentDescription("Speech language: Русский").assertIsDisplayed().performClick()
+                languageOption("English").performScrollTo().performClick()
+            }
             compose.activityRule.scenario.recreate()
-            compose.onNodeWithContentDescription("Speech language: English").assertIsDisplayed()
+            if (BuildConfig.FOCAL_ULTRA_BUNDLED) {
+                assertAutomaticLanguage()
+                assertEquals(initial.language, app.preferences.settings.value.language)
+            } else compose.onNodeWithContentDescription("Speech language: English").assertIsDisplayed()
         } finally {
             app.preferences.language(initial.language)
             app.preferences.theme(initial.theme)
@@ -915,8 +937,14 @@ class InterfaceTest {
                     }
                 }
             }
-            compose.onNodeWithContentDescription("Speech language: Português").performClick()
-            languageOption("Português").assertIsDisplayed().assertIsSelected()
+            if (BuildConfig.FOCAL_ULTRA_BUNDLED) {
+                assertAutomaticLanguage()
+                compose.onNodeWithText("Record").assertIsDisplayed().assertIsEnabled()
+                assertEquals("pt", app.preferences.settings.value.language)
+            } else {
+                compose.onNodeWithContentDescription("Speech language: Português").performClick()
+                languageOption("Português").assertIsDisplayed().assertIsSelected()
+            }
         } finally {
             app.preferences.language(originalLanguage)
         }
@@ -947,8 +975,11 @@ class InterfaceTest {
             compose.waitUntil(10_000) {
                 compose.onAllNodes(hasText("Record") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
             }
-            val language = Preferences.languages[app.preferences.settings.value.language]
-            compose.onNodeWithContentDescription("Speech language: $language").assertIsDisplayed()
+            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
+            else {
+                val language = Preferences.languages[app.preferences.settings.value.language]
+                compose.onNodeWithContentDescription("Speech language: $language").assertIsDisplayed()
+            }
             compose.onNodeWithText("Record").assertIsDisplayed().assertIsEnabled()
             waitForTitle("Accessible session")
             compose.onNodeWithText("Accessible session").performClick()

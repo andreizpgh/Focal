@@ -266,7 +266,7 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
                 Text(sessionTime(note.created), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 DurationLabel(note.duration)
-                Text(Preferences.languages[note.language] ?: note.language,
+                Text(Preferences.languageLabel(note.language, note.speechEngine),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (note.preview.isNotBlank()) Text(
@@ -372,7 +372,7 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             DurationLabel(note.duration, Modifier.align(Alignment.CenterVertically))
-                            Text(Preferences.languages[note.language] ?: note.language,
+                            Text(Preferences.languageLabel(note.language, note.speechEngine),
                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.align(Alignment.CenterVertically))
                             if (review > 0 || reviewOnly) ReviewFilter()
