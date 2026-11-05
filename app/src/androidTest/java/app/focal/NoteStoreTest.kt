@@ -357,6 +357,26 @@ class NoteStoreTest {
         assertEquals(2_000L, store.progress(id).remainingMs)
     }
 
+    @Test fun recoveryDiscardsRecordingsThatHoldNothing() {
+        // The process died before the first second was synced: no bytes, or exactly constant samples.
+        val empty = store.create()
+        store.audioFile(empty).writeBytes(ByteArray(0))
+        val constant = store.create()
+        savedAudio(store, constant, 500) { if (it % 2 == 0) 0x10 else 0x00 }
+        store.state(constant, NoteState.PROCESSING)
+        val sound = store.create()
+        savedAudio(store, sound, 500)
+        store.recover()
+        assertNull(store.note(empty))
+        assertNull(store.note(constant))
+        assertFalse(store.audioFile(constant).exists())
+        assertEquals(NoteState.INTERRUPTED, store.note(sound)!!.state)
+        // A note with text is never discarded, whatever its audio.
+        val withText = store.insertNoteForTests(listOf("Kept words."), state = NoteState.INTERRUPTED)
+        assertFalse(store.discardIfEmpty(withText))
+        assertSearchIndexIntact(store)
+    }
+
     @Test fun durationTicksAreNotLibraryChanges() {
         val id = store.create()
         val before = store.changes.value

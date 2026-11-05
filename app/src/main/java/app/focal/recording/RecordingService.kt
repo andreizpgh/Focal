@@ -664,9 +664,8 @@ class RecordingService : Service() {
                 val duration = store.audioFile(id).length() / 32
                 store.duration(id, duration)
                 session.endReason?.let { store.endReason(id, it) }
-                if (store.audioIsEmpty(id) && store.paragraphs(id).isEmpty()) {
+                if (store.discardIfEmpty(id)) {
                     // No bytes, or exactly constant samples: nothing was recorded.
-                    store.delete(id)
                     RecordingState.events.tryEmit(ServiceEvent.NothingRecorded)
                     RecordingState.live.update { if (it.noteId == id) LiveSession(message = "Nothing was recorded.") else it }
                 } else {
@@ -871,6 +870,8 @@ class RecordingService : Service() {
             if (saved.state == NoteState.READY && !store.hasUntranscribedAudio(saved)) return Outcome.Done
             // A failed live finalization or process death can leave a durable tail: the file is the duration.
             store.recover(id)
+            // Process death before the first sync can leave nothing at all: discarded, as Finish would.
+            if (store.discardIfEmpty(id)) return Outcome.Done
             store.state(id, NoteState.PROCESSING)
             processingNote = id
             decoderAwake.set(true); reconcileWake()

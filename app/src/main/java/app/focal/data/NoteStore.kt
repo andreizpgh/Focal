@@ -846,7 +846,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
      */
     fun recover(noteId: String? = null) {
         val db = writableDatabase
-        db.transaction {
+        val interrupted = db.transaction {
             val scope = if (noteId == null) "" else " AND id=?"
             val args = noteId?.let { arrayOf(it) }
             val active = rawQuery("""SELECT id,state FROM notes WHERE state IN ('${NoteState.ACTIVE.joinToString("','")}')
@@ -872,7 +872,11 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
                 RandomAccessFile(file, "rw").use { it.fd.sync() }
                 update("notes", ContentValues().apply { put("duration", file.length() / BYTES_PER_MS) }, "id=?", arrayOf(id))
             }
+            active.map { it.first }
         }
+        // A recording the process lost before its first second was synced holds nothing: discard it, as
+        // Finish would have.
+        if (noteId == null) interrupted.forEach { id -> try { discardIfEmpty(id) } catch (_: IOException) { } }
         // A deletion that was not undone before the process ended is final. Its rows go now; a failed
         // file deletion stays in the journal and is retried below and at the next start.
         if (noteId == null) trashed(null).forEach { id -> try { delete(id, onlyTrashed = true) } catch (_: IOException) { } }
@@ -883,6 +887,17 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         }
         deletions.forEach { try { deletePendingAudio(it) } catch (_: IOException) { /* Retry next launch. */ } }
         changed()
+    }
+
+    /**
+     * Deletes a recording that holds nothing: no saved bytes or exactly constant samples, and no text.
+     * Notes from older versions are never discarded. True when it was deleted.
+     */
+    fun discardIfEmpty(id: String): Boolean {
+        val note = note(id) ?: return false
+        if (note.legacy || paragraphs(id).isNotEmpty() || !audioIsEmpty(id)) return false
+        delete(id)
+        return true
     }
 
     /** Notes waiting for transcription, oldest first: the drain resumes them from a foreground start. */
