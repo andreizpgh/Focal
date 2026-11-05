@@ -31,6 +31,8 @@ class TranscriptVectorsTest {
         assertEquals(SpeechTuning.TITLE_MAX_CHARS, constants["TITLE_MAX"].long().toInt())
         assertEquals(SpeechTuning.TITLE_MIN_CHARS, constants["MIN_TITLE_CHARS"].long().toInt())
         assertEquals(SpeechTuning.DOUBT_THRESHOLD, constants["FLAG_THRESHOLD"].double())
+        val seg = constants["segmenter"].obj()
+        assertEquals(SegmenterConfig(), segmenterConfig(seg))
     }
 
     @Test
@@ -89,6 +91,86 @@ class TranscriptVectorsTest {
         val all = if (open.isEmpty()) closed else closed + listOf(open)
         assertEquals(batch.paragraphs.map { r -> r.map { batch.words[it] } }, all, "$id incremental")
     }
+
+    @Test
+    fun segmenterCases() {
+        val cases = vectors["segmenter_cases"].list()
+        assertEquals(17, cases.size)
+        for (c in cases.map { it.obj() }) {
+            val id = c["id"] as String
+            val input = c["input"].obj()
+            val total = input["total_ms"].long()
+            val quiet = ArrayList<Boolean>()
+            val peaks = ArrayList<Int>()
+            val energies = ArrayList<Long>()
+            for (s in input["segments"].list().map { it.obj() }) {
+                val ms = s["ms"].long().toInt()
+                repeat(ms / 10) { quiet += s["quiet"] as Boolean; peaks += s["peak"].long().toInt() }
+                repeat(ms / 20) { energies += s["energy"].long() }
+            }
+            val planner = CutPlanner(segmenterConfig(input), SegmenterStart.BEGINNING, 0, 0)
+            val out = ArrayList<WindowPlan>()
+            var frame = 0
+            var slot = 0
+            fun feedSlots(until: Int) {
+                while (slot < until) {
+                    while (frame < energies.size && frame <= slot / 2) planner.addFrame(energies[frame++])
+                    planner.addSlot(quiet[slot], peaks[slot])
+                    slot++
+                }
+                out += planner.takeReady()
+            }
+            for (b in input["breaks_ms"].list().map { it.long() }) {
+                feedSlots((b / 10).toInt())
+                planner.close(EndKind.BREAK, b, 0)
+                out += planner.takeReady()
+            }
+            feedSlots(minOf(quiet.size.toLong(), total / 10).toInt())
+            planner.close(EndKind.FINAL, total, 0)
+            out += planner.takeReady()
+
+            val expected = c["expected"].obj()["windows"].list().map { it.obj() }
+            assertEquals(expected.size, out.size, "$id window count")
+            expected.zip(out).forEachIndexed { i, (e, w) ->
+                val actual = mapOf(
+                    "own_start_ms" to w.ownStartMs, "own_end_ms" to w.ownEndMs,
+                    "audio_start_ms" to w.audioStartMs, "audio_end_ms" to w.audioEndMs,
+                    "keep_lo_ms" to w.keepLoMs, "keep_hi_ms" to w.keepHiMs,
+                    "end_kind" to w.endKind.name.lowercase(), "decide_at_ms" to w.decideAtMs,
+                    "speech_ms" to w.speechMs, "peak" to w.peak.toLong(),
+                )
+                assertEquals(e, actual, "$id window $i")
+                assertEquals(i, w.index, "$id window $i index")
+            }
+        }
+    }
+
+    @Test
+    fun vadHysteresisCases() {
+        val cases = vectors["vad_hysteresis_cases"].list()
+        assertEquals(6, cases.size)
+        for (c in cases.map { it.obj() }) {
+            val input = c["input"].obj()
+            val vad = SileroHysteresis(
+                threshold = input["threshold"].double().toFloat(),
+                minSpeechSamples = input["min_speech_samples"].long().toInt(),
+                minSilenceSamples = input["min_silence_samples"].long().toInt(),
+                windowSamples = input["window"].long().toInt(),
+            )
+            val actual = input["probs"].list().map { vad.accept(it.double().toFloat()) }
+            assertEquals(c["expected"].obj()["speech"].list(), actual, c["id"] as String)
+        }
+    }
+
+    private fun segmenterConfig(m: Map<String, Any?>) = SegmenterConfig(
+        minMs = m["min_ms"].long(),
+        maxMs = m["max_ms"].long(),
+        pauseMs = m["pause_ms"].long(),
+        overlapMs = m["overlap_ms"].long(),
+        hardCutMinRunMs = m["fallback_run_ms"].long(),
+        rightContextMs = m["rctx_ms"].long(),
+        pauseLeadInMs = m["pause_lead_in_ms"].long(),
+    )
 
     private fun window(raw: Any?): DecodedWindow {
         val w = raw.obj()

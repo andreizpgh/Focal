@@ -1,6 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-// Pure Kotlin/JVM: transcript reconciliation, decode policy and the level meter. No Android.
+// Pure Kotlin/JVM: segmentation, transcript formatting, decode policy and the level meter. No Android.
 plugins { alias(libs.plugins.kotlin.jvm) }
 
 java {
