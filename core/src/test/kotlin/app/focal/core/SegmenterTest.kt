@@ -180,6 +180,23 @@ class SegmenterTest {
     }
 
     @Test
+    fun recoveryReplaysABreakThatEndsTheLastWindowOffTheSlotGrid() {
+        // The break at 8 432 samples splits a 10 ms slot: its earlier samples belong to the window before.
+        val pcm = Pcm().apply { speech(527, amplitude = 9_000); breakHere(); silence(700, amplitude = 10) }
+        assertTrue(pcm.breaks[0] % 160 != 0L)
+        val all = run(pcm, Segmenter(detector))
+        val brk = all.first()
+        assertEquals(EndKind.BREAK, brk.endKind)
+        assertEquals(pcm.breaks[0], brk.ownEndMs * 16)
+        assertTrue(all[1].peak <= 10)
+        // Replaying the break at the checkpoint itself (as WindowFeed must) reproduces the next window.
+        assertEquals(all.drop(1), run(pcm, Segmenter(detector, SegmenterStart.after(brk))))
+        // Without it the straddling slot's loud samples leak into the next window's peak.
+        pcm.breaks.clear()
+        assertTrue(run(pcm, Segmenter(detector, SegmenterStart.after(brk)))[0].peak > 1_000)
+    }
+
+    @Test
     fun aRangeOfAnOldRecordingStartsLikeABreak() {
         val pcm = Pcm().apply { speech(3_000); silence(1_000); speech(8_000) }
         val segmenter = Segmenter(detector, SegmenterStart.range(5, 4_000))

@@ -47,7 +47,9 @@ internal class WindowFeed(
         // A recording that ends exactly at a cut has no FINAL window: its segmenter is finished all the same.
         if (current.isFinished) { complete = true; return false }
         val checkpoint = (last?.ownEndMs ?: 0L) * SAMPLES_PER_MS
-        val breaks = store.breaks(noteId).filter { it > checkpoint && it !in marked }
+        // A Pause exactly at the checkpoint is replayed too: it plans no window, but the slot it splits
+        // must count only its later samples in the next window, as it did before the process died.
+        val breaks = store.breaks(noteId).filter { it >= checkpoint && it !in marked }
         val end = if (finished) fileSamples() else maxOf(durableMs * SAMPLES_PER_MS, breaks.lastOrNull() ?: 0L)
         for (pause in breaks) {
             // Audio already fed past a Pause cannot be closed there; that can only follow a lost break.

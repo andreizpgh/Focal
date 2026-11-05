@@ -111,6 +111,26 @@ class WindowFeedTest {
         assertTiles(store.windows(continuous), 47_000)
     }
 
+    @Test fun aPauseAtTheCheckpointIsReplayedAfterProcessDeath() {
+        // The Pause at 8 027 ms is not on the 10 ms slot grid: the slot it splits is loud before it and
+        // silent after it, so the window after the Pause must not see the loud part.
+        val audio = pcm(9_027) { it < 8_027 }
+        val pause = 8_027L * 16
+        val continuous = recording(audio)
+        store.addBreak(continuous, pause)
+        drain(WindowFeed(store, continuous) { null }, 9_027, finished = true)
+
+        val resumed = recording(audio)
+        store.addBreak(resumed, pause)
+        drain(WindowFeed(store, resumed) { null }, 8_027, finished = false)
+        assertEquals(8_027L, store.lastWindow(resumed)!!.ownEndMs)
+        // A new process resumes after the window that ends exactly at the Pause.
+        drain(WindowFeed(store, resumed) { null }, 9_027, finished = true)
+        val expected = store.windows(continuous)
+        assertEquals(WindowState.SILENT, expected.last().state)
+        assertEquals(expected.map { it.plan() to it.state }, store.windows(resumed).map { it.plan() to it.state })
+    }
+
     @Test fun migratedNotesAreSegmentedOnlyInsideTheirGaps() {
         val audio = pcm(30_000) { it % 4_000 < 3_000L }
         File(root, "files/audio").mkdirs()
