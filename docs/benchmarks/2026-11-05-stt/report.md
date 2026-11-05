@@ -265,15 +265,59 @@ unchanged. This fails the proposed simple fix before expensive ASR; no decoder
 calls or production changes were made. Independent review reproduced the
 aggregates. The broader quiet-speech problem remains open.
 
-## Next functional step
+## Functional experiment and adoption decision
 
-Keep the unused 42 held-out clips closed until a real processing path is frozen.
-The narrow candidate is explicit alternative transcription of a saved recording
-with **Parakeet · Auto**, showing a preview while preserving the original transcript,
-audio and manual edits. This is a development plan, not an implemented feature.
-The standard Whisper/manual-language capture path should remain intact; never
-silently ignore its selected language. Start with the verified local model files,
-a bounded serial worker and no capture changes. Verify cancellation, original-data
-preservation, process recovery and overlap before any public trial. A physical
-Pixel 10 check must then establish memory, latency and background behavior. No
-automatic LLM correction has passed its acceptance gate.
+The [opt-in debug preview](../../saved-audio-preview.md) now runs on saved audio,
+preserving the original transcript and manual edits. Fifteen focused Android
+tests cover the controller and real menu, rotation, Copy and Home cancellation;
+six JVM tests cover bounded processing. The exact-path quality screen below
+rejects promotion despite those functional passes. Ordinary APKs retain the
+Whisper/manual-language path. No automatic LLM correction passed its gate.
+
+Keep the unused 42 held-out clips closed. The next bounded comparison uses the
+existing Android Whisper Transcriber on identical source PCM, contrasting its
+production gate ranges with complete short fragments. This isolates framing
+without changing models. Prior full-audio noise hallucinations remain a rejection
+criterion; bypassing the gate is not an established fix. Physical Pixel 10
+quality, latency, memory and background checks remain separate requirements.
+
+## Saved-audio preview: bounded Android DEV screen
+
+The actual opt-in Android preview completed 18 inputs on an API 35 x86_64
+emulator: one previously consumed DEV read-speech clip in each of seven
+languages at normal gain and 0.1 digital gain, plus four no-speech controls.
+Its 16-second windows overlap by 0.5 seconds. Whisper comparisons use the same
+PCM, but full-WAV decoding on Linux with explicit language: normal results are
+cached, while the seven attenuated results were newly measured. Android preview
+uses automatic language and different segmentation. This is a quality screen,
+not a matched speed comparison or a phone test.
+
+| Language | Reference words | Normal word errors: Whisper → preview | Attenuated word errors: Whisper → preview | Reference lexical characters | Normal character errors: Whisper → preview | Attenuated character errors: Whisper → preview |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| English | 28 | 2 → 1 | 6 → 1 | 120 | 5 → 4 | 19 → 4 |
+| Russian | 26 | 8 → 6 | 8 → 8 | 141 | 13 → 12 | 12 → 15 |
+| German | 19 | 1 → 0 | 0 → 0 | 118 | 1 → 0 | 0 → 0 |
+| French | 32 | 2 → 0 | 5 → 0 | 160 | 5 → 0 | 9 → 0 |
+| Spanish | 59 | 4 → 39 | 4 → 38 | 279 | 3 → 106 | 3 → 101 |
+| Italian | 25 | 3 → 1 | 3 → 1 | 141 | 2 → 10 | 2 → 10 |
+| Portuguese | 21 | 5 → 6 | 5 → 4 | 91 | 18 → 20 | 18 → 18 |
+| **Total** | **210** | **25 → 53** | **31 → 52** | **1,050** | **47 → 152** | **63 → 148** |
+
+The Spanish high-error example remains included; these results do not establish
+why the output differs. An Italian overlap also differs from its reference.
+Neither was acoustically adjudicated. Four controls yielded blank text; the
+zero and DC controls did not open a decoder. Digital attenuation and synthetic
+noise do not represent the full range of real recordings. One correlated pair
+per language cannot establish population accuracy.
+
+The instrumentation test took 146.391 seconds, with 23 decodes and 16
+recognizer opens. Peak process-lifetime RSS was 870.7 MiB; post-process RSS,
+after recognizer release, ranged from 101.03 to 134.91 MiB. These are emulator
+process measurements, including other process activity; the elapsed time includes
+model hashing, loading and receipt I/O. No timing comparison is claimed.
+
+An independent audit passed for the evidence and aggregate. The frozen manifest,
+lock, test source and both APK hashes are recorded in the [aggregate result](saved-audio-preview.json).
+This screen does not support promoting the alternative backend. The unused
+held-out cohort, acoustic review and real-phone quality and resource gates remain
+open; automatic correction remains disabled.

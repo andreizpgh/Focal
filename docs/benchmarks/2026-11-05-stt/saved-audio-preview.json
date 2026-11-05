@@ -1,0 +1,198 @@
+{
+  "schema": 1,
+  "scope": "Exploratory seven previously consumed DEV read-speech clips, each at normal and digital 0.1 gain, plus four no-speech controls; held-out clips not used.",
+  "result": "No promotion; phone and broad quality acceptance remain open.",
+  "methods": {
+    "candidate": "Actual Android saved-audio preview with 16-second windows and 0.5-second overlap, automatic language; x86_64 API 35 emulator.",
+    "baseline": "Linux Whisper full WAV with explicit language; cached normal receipts and fresh quiet calls on matching PCM.",
+    "scoring": "Reference-based WER and lexical CER; no acoustic adjudication; one clip per language."
+  },
+  "summary": {
+    "normal": {
+      "candidate_metrics": {
+        "words": 210,
+        "word_errors": 53,
+        "characters": 1050,
+        "character_errors": 152
+      },
+      "whisper_baseline": {
+        "words": 210,
+        "word_errors": 25,
+        "characters": 1050,
+        "character_errors": 47
+      }
+    },
+    "quiet": {
+      "candidate_metrics": {
+        "words": 210,
+        "word_errors": 52,
+        "characters": 1050,
+        "character_errors": 148
+      },
+      "whisper_baseline": {
+        "words": 210,
+        "word_errors": 31,
+        "characters": 1050,
+        "character_errors": 63
+      }
+    }
+  },
+  "by_language": {
+    "en": {
+      "normal": {
+        "reference_words": 28,
+        "whisper_word_errors": 2,
+        "preview_word_errors": 1,
+        "reference_lexical_characters": 120,
+        "whisper_character_errors": 5,
+        "preview_character_errors": 4
+      },
+      "quiet": {
+        "reference_words": 28,
+        "whisper_word_errors": 6,
+        "preview_word_errors": 1,
+        "reference_lexical_characters": 120,
+        "whisper_character_errors": 19,
+        "preview_character_errors": 4
+      }
+    },
+    "ru": {
+      "normal": {
+        "reference_words": 26,
+        "whisper_word_errors": 8,
+        "preview_word_errors": 6,
+        "reference_lexical_characters": 141,
+        "whisper_character_errors": 13,
+        "preview_character_errors": 12
+      },
+      "quiet": {
+        "reference_words": 26,
+        "whisper_word_errors": 8,
+        "preview_word_errors": 8,
+        "reference_lexical_characters": 141,
+        "whisper_character_errors": 12,
+        "preview_character_errors": 15
+      }
+    },
+    "de": {
+      "normal": {
+        "reference_words": 19,
+        "whisper_word_errors": 1,
+        "preview_word_errors": 0,
+        "reference_lexical_characters": 118,
+        "whisper_character_errors": 1,
+        "preview_character_errors": 0
+      },
+      "quiet": {
+        "reference_words": 19,
+        "whisper_word_errors": 0,
+        "preview_word_errors": 0,
+        "reference_lexical_characters": 118,
+        "whisper_character_errors": 0,
+        "preview_character_errors": 0
+      }
+    },
+    "fr": {
+      "normal": {
+        "reference_words": 32,
+        "whisper_word_errors": 2,
+        "preview_word_errors": 0,
+        "reference_lexical_characters": 160,
+        "whisper_character_errors": 5,
+        "preview_character_errors": 0
+      },
+      "quiet": {
+        "reference_words": 32,
+        "whisper_word_errors": 5,
+        "preview_word_errors": 0,
+        "reference_lexical_characters": 160,
+        "whisper_character_errors": 9,
+        "preview_character_errors": 0
+      }
+    },
+    "es": {
+      "normal": {
+        "reference_words": 59,
+        "whisper_word_errors": 4,
+        "preview_word_errors": 39,
+        "reference_lexical_characters": 279,
+        "whisper_character_errors": 3,
+        "preview_character_errors": 106
+      },
+      "quiet": {
+        "reference_words": 59,
+        "whisper_word_errors": 4,
+        "preview_word_errors": 38,
+        "reference_lexical_characters": 279,
+        "whisper_character_errors": 3,
+        "preview_character_errors": 101
+      }
+    },
+    "it": {
+      "normal": {
+        "reference_words": 25,
+        "whisper_word_errors": 3,
+        "preview_word_errors": 1,
+        "reference_lexical_characters": 141,
+        "whisper_character_errors": 2,
+        "preview_character_errors": 10
+      },
+      "quiet": {
+        "reference_words": 25,
+        "whisper_word_errors": 3,
+        "preview_word_errors": 1,
+        "reference_lexical_characters": 141,
+        "whisper_character_errors": 2,
+        "preview_character_errors": 10
+      }
+    },
+    "pt": {
+      "normal": {
+        "reference_words": 21,
+        "whisper_word_errors": 5,
+        "preview_word_errors": 6,
+        "reference_lexical_characters": 91,
+        "whisper_character_errors": 18,
+        "preview_character_errors": 20
+      },
+      "quiet": {
+        "reference_words": 21,
+        "whisper_word_errors": 5,
+        "preview_word_errors": 4,
+        "reference_lexical_characters": 91,
+        "whisper_character_errors": 18,
+        "preview_character_errors": 18
+      }
+    }
+  },
+  "controls": {
+    "total": 4,
+    "blank": 4,
+    "zero_and_dc_decoder_opens": 0
+  },
+  "execution": {
+    "instrumentation_test_seconds": 146.391,
+    "candidate_decodes": 23,
+    "recognizer_opens": 16,
+    "process_peak_rss_kib": 891600,
+    "post_process_rss_kib_min": 103456,
+    "post_process_rss_kib_max": 138152,
+    "timing_scope": "Instrumentation duration, not a matched speed comparison; includes hashing, load, decoding and receipt I/O."
+  },
+  "provenance": {
+    "independent_evidence_audit": "PASS",
+    "frozen_manifest_sha256": "2268b8394e8cad292a23cd974e76aff8dee7afc2a6024e08d9476f01613f64ad",
+    "frozen_lock_sha256": "3f8bf04db0a8d269613aa6898bdf8a1836f6e7937ff0c2e8f73ff2eef46ef04e",
+    "app_apk_sha256": "0317680064553effff99cc102a9a8a42037bf83ccfbfc40c1971ad1bed2b2da8",
+    "test_apk_sha256": "d46fa3b47fe1679cf10b0aa12d691ca803eb68a7275e35c3c15e691dbc5435c0",
+    "test_source_sha256": "aee7025371dd4d8e1913d761f0525d75b04f605661b703a40e1c673f2bcc36b6"
+  },
+  "limitations": [
+    "No acoustic adjudication, phone performance, or broad language-quality conclusion.",
+    "Matching input PCM does not mean matching segmentation or language conditioning.",
+    "Quiet gain is digital attenuation, not an acoustic quiet-speech test.",
+    "Italian overlap output differs from the reference; its spoken content was not adjudicated.",
+    "Spanish high-error case remains included; no causal conclusion about translation.",
+    "Normal comparator is cached; fresh quiet comparator runs on Linux. Timing is not comparable."
+  ]
+}

@@ -35,9 +35,12 @@ ranges; this does not prove a fix. Astra reviewed all 131 raw outputs and replay
 The isolated Android prototype passed one test / three inputs in 25.844s; see
 [the probe guide](parakeet-android-probe.md). The app backend is unchanged;
 a 43-case gate-only audit rejected a global floor reduction because it activates
-more noise. The next development plan is an explicit alternative-transcript
-preview preserving originals, with automatic language clearly identified. It is
-not implemented and must not silently replace the manual-language capture path.
+more noise. The explicit alternative-transcript preview is now an opt-in debug
+experiment with original-data, rotation, Copy and cancellation checks. Its actual
+16s/500ms path failed the 18-input DEV screen: normal word errors 25 → 53 / 210,
+attenuated 31 → 52 / 210, dominated by the retained Spanish outlier. All four
+no-speech controls were blank. It is not promoted and does not replace the
+manual-language capture path. See [the exact-path report](benchmarks/2026-11-05-stt/report.md).
 The 42 unused held-out clips remain closed. Heavy work runs serially with an
 explicit memory/CPU limit after an unexpected host reboot of unverified cause.
 

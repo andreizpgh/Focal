@@ -1,5 +1,42 @@
 # Product verification · 2026-11-05
 
+## Saved-audio preview · experimental Android checkpoint
+
+The opt-in debug [alternative transcript](saved-audio-preview.md) passed **15/15
+focused Android tests**, no failures/skips, in 18.252s (20.243s runner wall).
+Seven existing ViewModel tests, six new controller tests and two real UI tests
+covered Main-thread publication, blocked-call cancellation/ownership, unchanged
+source audio and manual edits, rotation, exact Clipboard content and Home cancellation.
+The six JVM processor tests passed in 0.893s; subsequent unchanged checks were
+cached. First offline build: 5m33s; test synchronization/Home-test update: 2m37s.
+Debug lint passed. The preview release dry-run was rejected as intended.
+
+The public 11s JFK fixture produced substantive English with the selected original
+note language still `ru`. Menu action to ready UI was **9,280ms**, including sheet
+animation, model checksum verification/load, decoding, Activity recreation and
+publication. Process lifetime VmHWM was **1,038,360 KiB** when the first UI test
+finished, before the later Home test; this is neither isolated model RAM nor the
+whole batch's peak. The Home test proves foreground cancellation, not native abort.
+Astra independently verified raw status counts, both APK hashes, all 52 bound
+source files, fixture identity, receipt and the actual screenshot.
+
+Private evidence: `build/local-diagnostics/parakeet-preview-20261105/`.
+Experimental app SHA-256:
+`0317680064553effff99cc102a9a8a42037bf83ccfbfc40c1971ad1bed2b2da8`;
+test APK: `b19ff2508e27c2b8d7e46c5e4650b2c93140be843b56103b003f9cfbf63efd5f`.
+The AVD was stopped. All heavy checks ran sequentially with the documented limits;
+no model was downloaded. The actual saved-audio path subsequently completed an
+18-input DEV screen (seven languages at normal/0.1 gain and four controls): normal
+word errors **25 → 53 / 210**, attenuated **31 → 52 / 210** against matching-PCM
+Linux Whisper baselines. The screen rejects promotion; four blank controls and
+functional passes do not override the speech regressions. Candidate and baseline
+timings are not comparable. [Full results and artifact identities](benchmarks/2026-11-05-stt/saved-audio-preview.json).
+The normal offline build passed in 11m15s: 36 core tests (cached), six app JVM
+tests (0.993s), both lint variants and debug/test/unsigned R8 APKs. Eighteen
+Python runner/summary checks also passed. Normal full-app Android QA is pending.
+Ordinary/release builds do not expose the experiment. No new release, default
+backend change, automatic correction or phone-performance claim is made.
+
 ## Library insertion regression · verified 2026-11-05
 
 Clean `e6f4ca41e87ac0fa87d00e5c0b642472837d79a3` passed the full local runner:

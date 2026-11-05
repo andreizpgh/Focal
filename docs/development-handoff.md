@@ -20,6 +20,20 @@ ARM phone performance and full application acceptance remain open.
 
 ## Current checkpoint · 2026-11-05
 
+The debug-only saved-audio preview passed 15 focused Android and six JVM tests,
+but its actual 18-input DEV quality screen rejects adoption: normal word errors
+25 → 53 / 210, attenuated 31 → 52 / 210 against matching-PCM Linux Whisper.
+Four no-speech controls were blank; the Spanish outlier and Italian overlap
+problem remain included. These are not matched timing measurements. See
+[quality-report](quality-report.md) and the linked aggregate. Ordinary full QA
+of the integration is pending; the normal build passed both lints, 36 core and
+six app JVM tests, debug/test/R8 APKs in 11m15s with bounded resources.
+Next is a private paired framing check using the existing Android Whisper
+Transcriber on the same 18 inputs. No new model or public backend is enabled.
+Keep the 42 held-out clips unopened and all cached models. Alpha 6 remains latest.
+
+
+
 Latest ordinary-app checkpoint `e6f4ca4` passed full local QA: **109/0/0**, eight
 real-model checks, JUnit 180.147s / wall 181.166s. A new-note visibility regression
 introduced by removing the first date header was reproduced on screen and fixed
@@ -28,8 +42,8 @@ regression test APK: RED, then 15-test GREEN. Both lints, core (cached) and R8
 passed; exact artifacts and prior failed attempts are in [quality-report](quality-report.md).
 The dedicated AVD is stopped. Combined emulator/build QA uses MemoryHigh=3584M
 with the existing 4GiB hard limit; model-only/build-only jobs keep MemoryHigh=3G.
-No new release has been made. A saved-audio Parakeet preview is being prepared
-as an opt-in debug experiment; private drafts are not verified app functionality.
+No new release has been made. The saved-audio Parakeet preview is an opt-in
+debug experiment; the failed quality screen above supersedes its earlier plan.
 
 
 Unreleased UI commit `5f290bc` removes the duplicate first library date,
@@ -81,9 +95,9 @@ See [the probe guide](parakeet-android-probe.md) and linked aggregate. Model loa
 was 1.874s and process-lifetime peak RSS 1,299,664 KiB on the emulator, not a phone
 measurement. The AVD is stopped. A subsequent 43-case gate-only replay rejected the global
 threshold reduction: 0.001 recovers only one normal omitted clip and opens four
-additional noise controls. No production threshold changed. Next plan: an explicit
-Parakeet Auto alternative-transcript preview for saved audio, preserving originals;
-it is not implemented. Keep capture/manual language intact and validate ownership,
+additional noise controls. No production threshold changed. The implemented Parakeet Auto alternative
+preview preserves originals; its focused UI checks and rejected quality screen
+are described above. Keep capture/manual language intact and validate ownership,
 cancellation, recovery and overlap before a public trial. The separate 42 held-out clips remain
 closed. The production backend and published APK remain unchanged.
 
