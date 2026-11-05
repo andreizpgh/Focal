@@ -1,5 +1,46 @@
 # Product verification · 2026-11-05
 
+## Library insertion regression · verified 2026-11-05
+
+Clean `e6f4ca41e87ac0fa87d00e5c0b642472837d79a3` passed the full local runner:
+**109 Android tests, zero failures/skips**, including all eight mandatory real-model
+checks. JUnit: 180.147s; runner wall: 181.166s. Core tests (cached), both lint
+variants and debug/test/unsigned R8 builds passed; the prebuild took 11m03s and
+the runner's build/check stage 3m23s. Report: `20261105T015043.322971Z`.
+
+Removing the duplicate first date heading had exposed Compose's first-note key
+as the scroll anchor. When a new Today note arrived above Yesterday, the old
+first note moved to index 2 and remained at the top; the newly loaded note was
+hidden above it. Actual timeout screenshots, matching database/ViewModel rows,
+and scroll semantics confirmed this. A permanent keyed 4dp spacer now anchors
+the very top, replacing the former 4dp content padding. Readers farther down
+still keep their note's position. No duplicate date heading was restored.
+
+A new regression failed on the preceding app in 14.807s. The identical test APK
+then passed all 15 selected tests in 20.080s on the fix, including insertion,
+manual reading position, original layout/editor and contextual-action checks.
+The full suite also passed the original oversized-editor rotation assertions.
+Sol and Astra independently reviewed the cause and fix; actual fixed UI captures
+were inspected. Private evidence is under `build/local-diagnostics/library-insertion-20261105/`.
+
+The earlier full attempt `20261104T212244.904185Z` lost its emulator before
+instrumentation; `20261104T212832.915156Z` passed 106/108 with two new-title waits
+failing. Neither is a PASS. Their evidence remains preserved. The final run used
+KVM, two emulator vCPUs, a 4GiB hard cgroup limit and 3.5GiB memory-high threshold;
+a saved sample recorded zero high/max/OOM events and a 3,650,195,456-byte peak.
+The AVD was stopped after QA. This does not identify the laptop reboot's cause
+or establish physical-phone performance.
+
+Verified ordinary APK SHA-256:
+
+- App: `892b08753913c8601807d5d5bd9b1074726e4ef5e681117e8884825c9aabd363`.
+- Test: `ae0a59b6a80502321cca0f3b880b26bd2336e6d56071e2631f875d97058a9880`.
+- RED/GREEN test: `eefc60f554d81a9f320a71183be49be37059557bd08b38a8aa792ca9bf45fe2a`.
+
+No new APK release or production speech-engine change is claimed. Alpha 6 remains
+the published release; STT acceptance, owner UX review and physical-phone gates
+remain open.
+
 ## Local STT research checkpoint · 2026-11-05
 
 The Parakeet host comparison completed 42 previously used DEV clips: word errors

@@ -8,6 +8,21 @@ development-handoff, quality-report, architecture, local-emulator-qa и device-v
 
 ## Текущий checkpoint
 
+Последний обычный APK: чистый `e6f4ca4`, полный local QA **109/0/0**, восемь
+real-model checks, 180.147 с JUnit / 181.166 с wall. Два сбоя новых заголовков
+из предыдущего full объяснены наблюдением UI: после вставки Today над Yesterday
+Compose сохранял старую первую заметку на index 2. Постоянный keyed Spacer 4 dp
+исправил верхний якорь; ручная прокрутка сохраняется. Новый тест дал RED, затем
+тот же test APK дал GREEN 15/0/0. Подробности, хэши и сохранённые failed runs —
+в начале quality-report. AVD остановлен. Для совместного AVD/QA MemoryHigh=3584M,
+MemoryMax=4G; для одиночных сборок/моделей остаётся MemoryHigh=3G.
+Новый Parakeet preview полного сохранённого PCM пока только в приватных черновиках
+`build/stt/parakeet-preview-draft/`; не выдавать их за проверенную функцию.
+Обычный backend и Alpha 6 не изменены. Следом интегрировать ограниченный debug-only
+preview с сохранением оригиналов и безопасной отменой, проверить настоящий путь
+на эмуляторе; не строить установщик модели и новый Review заранее.
+
+
 UI commit `5f290bc` в опубликованной ветке / PR #9: первая дата не дублируется, Speech model
 и Appearance объединены в одну группу, переход страницы 4 dp / 220 ms ease-out.
 Пять целевых проверок прошли за 13.717 с; core, debug lint и app/test build —

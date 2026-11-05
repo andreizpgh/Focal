@@ -20,6 +20,18 @@ ARM phone performance and full application acceptance remain open.
 
 ## Current checkpoint · 2026-11-05
 
+Latest ordinary-app checkpoint `e6f4ca4` passed full local QA: **109/0/0**, eight
+real-model checks, JUnit 180.147s / wall 181.166s. A new-note visibility regression
+introduced by removing the first date header was reproduced on screen and fixed
+with a permanent 4dp start anchor, retaining manual scroll position. Identical
+regression test APK: RED, then 15-test GREEN. Both lints, core (cached) and R8
+passed; exact artifacts and prior failed attempts are in [quality-report](quality-report.md).
+The dedicated AVD is stopped. Combined emulator/build QA uses MemoryHigh=3584M
+with the existing 4GiB hard limit; model-only/build-only jobs keep MemoryHigh=3G.
+No new release has been made. A saved-audio Parakeet preview is being prepared
+as an opt-in debug experiment; private drafts are not verified app functionality.
+
+
 Unreleased UI commit `5f290bc` removes the duplicate first library date,
 groups Speech model and Appearance together, and uses a 4 dp / 220 ms ease-out
 page transition. Five focused checks passed in 13.717 s; core, debug lint and
