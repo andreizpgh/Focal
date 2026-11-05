@@ -36,6 +36,9 @@ object NoteState {
 
 /** Why a recording was paused or ended automatically. */
 object CaptureReason {
+    /** A phone or VoIP call took the microphone (auto-pause). */
+    const val CALL = "CALL"
+    /** Android or another app silenced the microphone, or it stopped delivering audio (auto-pause). */
     const val MICROPHONE = "MICROPHONE"
     const val STORAGE = "STORAGE"
     const val PERMISSION = "PERMISSION"

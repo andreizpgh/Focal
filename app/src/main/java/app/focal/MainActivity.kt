@@ -26,7 +26,18 @@ class MainActivity : ComponentActivity() {
         openFromIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Transcription that waits (process death, Android's background limit) continues only from here.
+        (application as FocalApplication).resumeWaitingTranscription(this)
+    }
+
     private fun openFromIntent(intent: Intent) {
         openedNote.value = intent.getStringExtra(RecordingService.NOTE) to (openedNote.value.second + 1)
+    }
+
+    companion object {
+        /** The recording notification: show the recording screen. */
+        const val ACTION_SHOW_RECORDING = "app.focal.action.SHOW_RECORDING"
     }
 }

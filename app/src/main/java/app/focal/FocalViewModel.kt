@@ -82,14 +82,16 @@ class FocalViewModel internal constructor(
     fun search(query: String) { search.value = query.take(200) }
     fun record() {
         player.stop()
-        if (!library.value.loaded || library.value.error != null || live.value.noteId != null) return
+        // A running transcription does not block Record: the new recording preempts it.
+        if (!library.value.loaded || library.value.error != null || live.value.capturing) return
         try { RecordingService.command(app, RecordingService.START) }
         catch (e: Exception) { errors.tryEmit(e.message ?: "Could not start recording.") }
     }
     fun pause() { RecordingService.command(app, if (live.value.paused) RecordingService.RESUME else RecordingService.PAUSE) }
     fun finish() { RecordingService.command(app, RecordingService.STOP) }
     fun retry(id: String) {
-        if (live.value.noteId != null || SessionOperations.matchesSession(capture = false, noteId = id)) {
+        // Another recording does not block Retry: the note is transcribed after it.
+        if (live.value.noteId == id || SessionOperations.matchesSession(capture = false, noteId = id)) {
             errors.tryEmit("Finish the current recording or transcription first.")
             return
         }

@@ -14,6 +14,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.focal.data.CaptureReason
 import app.focal.data.Note
 import app.focal.core.EndKind
 import app.focal.data.RawAsr
@@ -25,6 +26,8 @@ import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingInput
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
+import app.focal.recording.ServiceEvent
+import app.focal.recording.ServiceNotifications
 import app.focal.recording.SessionOperations
 import app.focal.speech.SpeechPlayer
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +36,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
@@ -63,6 +67,8 @@ class RecordingServiceTest {
         automation.grantRuntimePermission(app.packageName, Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) automation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
         originalIds = app.store.library().map { it.id }.toSet()
+        // Notes staged here must not be picked up by the automatic foreground resume.
+        app.autoResumeTranscription = false
         await { RecordingState.live.value.noteId == null && !serviceRunning() }
         // Explicit decoder failure keeps every saved second untranscribed; it never supplies fake text.
         RecordingService.metadataCapacityForTests = null
@@ -78,6 +84,7 @@ class RecordingServiceTest {
         RecordingService.inputFactoryForTests = null
         RecordingService.decoderFactoryForTests = null
         RecordingService.metadataCapacityForTests = null
+        app.autoResumeTranscription = true
         if (::activity.isInitialized) activity.close()
         originalIds?.let { baseline -> app.store.library().filter { it.id !in baseline }.forEach { app.store.delete(it.id) } }
     }
@@ -154,14 +161,14 @@ class RecordingServiceTest {
                     }
                 }
             }
-            await { inputs.single().closed && RecordingState.live.value.message.contains("metadata") }
-            assertTrue(RecordingState.live.value.message, RecordingState.live.value.message.contains("metadata"))
+            // Capture stops on its own (no STOP was sent) and keeps every delivered sample.
+            await { inputs.single().closed }
             assertOriginalBytesMatchDeliveredSamples(id, inputs.single())
         }
         finish(id)
         val note = app.store.note(id)!!
+        // The recording then waits for transcription (the synthetic decoder is unavailable).
         assertEquals("INTERRUPTED", note.state)
-        assertTrue(note.error, note.error.contains("metadata"))
         assertOriginalMatchesDeliveredSamples(id, inputs.single())
         assertTrue(app.store.hasUntranscribedAudio(note))
     }
@@ -199,17 +206,26 @@ class RecordingServiceTest {
         assertTrue(inputs.single().closed)
     }
 
-    @Test fun microphoneSilencingStopsSafelyWithRecoverablePendingAudio() {
+    @Test fun microphoneSilencingPausesAutomaticallyAndResumesWhenAllowed() {
         val id = start()
         await { RecordingState.live.value.duration >= 240 }
-        inputs.single().silenced = true
+        val source = inputs.single()
+        source.silenced = true
+        await { RecordingState.live.value.paused && app.store.note(id)?.state == "PAUSED" }
+        assertEquals(CaptureReason.MICROPHONE, RecordingState.live.value.pauseReason)
+        assertEquals(CaptureReason.MICROPHONE, app.store.note(id)!!.pauseReason)
+        val pausedBytes = app.store.audioBytes(id)
+        assertTrue(pausedBytes > 0)
+        assertEquals(source.samples.get() * 2, pausedBytes)
+        source.silenced = false
+        send(RecordingService.RESUME)
+        await { !RecordingState.live.value.paused && app.store.audioBytes(id) > pausedBytes }
+        assertNull(RecordingState.live.value.pauseReason)
+        send(RecordingService.STOP)
         finish(id)
-        val note = app.store.note(id)!!
-        assertEquals("INTERRUPTED", note.state)
-        assertTrue(note.error, note.error.contains("muted"))
-        assertTrue(app.store.audioBytes(id) > 0)
-        assertEquals(app.store.audioBytes(id) / 32, note.duration)
-        assertTrue(app.store.hasUntranscribedAudio(note))
+        assertEquals(1, inputs.size)
+        assertOriginalMatchesDeliveredSamples(id, source)
+        assertTrue(app.store.hasUntranscribedAudio(app.store.note(id)!!))
     }
 
     @Test fun positiveReadIsKeptWhenSilencingArrivesDuringThatRead() {
@@ -217,25 +233,47 @@ class RecordingServiceTest {
         await { RecordingState.live.value.duration >= 240 }
         val source = inputs.single()
         source.silenceOnNextRead = true
-        finish(id)
+        await { RecordingState.live.value.paused }
         assertTrue(source.silenced)
+        send(RecordingService.STOP)
+        finish(id)
         assertOriginalMatchesDeliveredSamples(id, source)
-        val note = app.store.note(id)!!
-        assertEquals("INTERRUPTED", note.state)
-        assertTrue(note.error, note.error.contains("muted"))
-        assertTrue(app.store.hasUntranscribedAudio(note))
+        assertTrue(app.store.hasUntranscribedAudio(app.store.note(id)!!))
     }
 
-    @Test fun disconnectedMicrophoneKeepsTheFinalSavedAudio() {
+    @Test fun disconnectedMicrophonePausesAndResumeReopensIt() {
         val id = start()
         await { RecordingState.live.value.duration >= 240 }
-        inputs.single().disconnected = true
+        val first = inputs.single()
+        first.disconnected = true
+        await { RecordingState.live.value.paused && RecordingState.live.value.pauseReason == CaptureReason.MICROPHONE }
+        val pausedBytes = app.store.audioBytes(id)
+        assertEquals(first.samples.get() * 2, pausedBytes)
+        send(RecordingService.RESUME)
+        await { inputs.size == 2 && !RecordingState.live.value.paused }
+        assertTrue("The failed microphone is released before a new one opens", first.closed)
+        await { app.store.audioBytes(id) > pausedBytes }
+        send(RecordingService.STOP)
         finish(id)
-        val note = app.store.note(id)!!
-        assertEquals("INTERRUPTED", note.state)
-        assertTrue(note.error, note.error.contains("disconnected"))
-        assertOriginalMatchesDeliveredSamples(id, inputs.single())
-        assertTrue(app.store.hasUntranscribedAudio(note))
+        assertTrue(inputs.all { it.closed })
+        assertTrue(app.store.hasUntranscribedAudio(app.store.note(id)!!))
+    }
+
+    @Test fun constantRecordingIsDiscardedAsNothingRecorded() {
+        RecordingService.inputFactoryForTests = { SyntheticInput(constant = true).also { inputs += it } }
+        val events = CopyOnWriteArrayList<ServiceEvent>()
+        val collector = CoroutineScope(SupervisorJob() + Dispatchers.Default).apply {
+            launch { RecordingState.events.collect { events += it } }
+        }
+        try {
+            val id = start()
+            await { RecordingState.live.value.duration >= 240 }
+            send(RecordingService.STOP)
+            await { RecordingState.live.value.noteId == null && !serviceRunning() }
+            assertNull("A recording without any sound is not kept", app.store.note(id))
+            assertFalse(app.store.audioFile(id).exists())
+            await { ServiceEvent.NothingRecorded in events }
+        } finally { collector.cancel() }
     }
 
     @Test fun staleControlsAndInvalidRecoveryNeverOpenAMicrophone() {
@@ -429,12 +467,15 @@ class RecordingServiceTest {
         }
         awaitNoNotifications()
     }
+    /** The service's own notifications are gone; "Note ready" outlives the service on purpose and is cleared. */
     private fun awaitNoNotifications() {
         val manager = app.getSystemService(NotificationManager::class.java)
+        fun serviceNotifications() = manager.activeNotifications.filter { it.notification.channelId !in ServiceNotifications.LASTING_CHANNELS }
         val deadline = SystemClock.elapsedRealtime() + 5000
-        while (manager.activeNotifications.isNotEmpty() && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(20)
-        assertTrue("Recording notification survived service teardown: ${manager.activeNotifications.map { it.id to it.notification.flags }}",
-            manager.activeNotifications.isEmpty())
+        while (serviceNotifications().isNotEmpty() && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(20)
+        assertTrue("Recording notification survived service teardown: ${serviceNotifications().map { it.id to it.notification.flags }}",
+            serviceNotifications().isEmpty())
+        manager.cancelAll()
     }
     private fun createdNotes(): List<Note> = originalIds?.let { baseline -> app.store.library().filter { it.id !in baseline } }.orEmpty()
     private fun assertOriginalMatchesDeliveredSamples(id: String, source: SyntheticInput) {
@@ -484,7 +525,7 @@ class RecordingServiceTest {
             failure.get()?.let { throw AssertionError("Test SQLite writer failed", it) }
         }
     }
-    private class SyntheticInput : RecordingInput {
+    private class SyntheticInput(private val constant: Boolean = false) : RecordingInput {
         val samples = AtomicLong()
         @Volatile private var running = false
         @Volatile override var silenced = false
@@ -501,7 +542,7 @@ class RecordingServiceTest {
             // Deliberately partial 73-sample reads exercise frame boundaries around pause/finish.
             val delivered = minOf(73, count)
             val start = this.samples.getAndAdd(delivered.toLong())
-            repeat(delivered) { samples[offset + it] = value(start + it) }
+            repeat(delivered) { samples[offset + it] = if (constant) 7 else value(start + it) }
             if (silenceOnNextRead) { silenceOnNextRead = false; silenced = true }
             return delivered
         }

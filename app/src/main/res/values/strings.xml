@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings used outside Compose: notifications and their channels. -->
+<resources>
+    <string name="app_name" translatable="false">Focal</string>
+
+    <string name="ch_recording">Recording</string>
+    <string name="ch_paused">Recording paused</string>
+    <string name="ch_transcription">Transcription</string>
+    <string name="ch_ready">Finished notes</string>
+    <string name="ch_recording_desc">Recording controls while the microphone is in use.</string>
+    <string name="ch_paused_desc">Alerts when a recording pauses on its own.</string>
+    <string name="ch_transcription_desc">Progress while recorded speech becomes text.</string>
+    <string name="ch_ready_desc">A note finished transcribing.</string>
+
+    <string name="n_recording">Recording</string>
+    <string name="n_paused">Paused · %s</string>
+    <string name="n_starting">Starting recording</string>
+    <string name="n_transcribing">Transcribing</string>
+    <string name="n_preparing">Preparing speech model</string>
+    <string name="n_timeout_title">Transcription paused</string>
+    <string name="n_timeout_text">Open Focal to continue.</string>
+    <string name="n_ready">Note ready</string>
+    <string name="n_partial">Part of a note couldn’t be transcribed</string>
+    <string name="n_public_recording">Recording</string>
+    <string name="n_public_paused">Paused</string>
+    <string name="n_public_transcribing">Transcribing</string>
+    <string name="n_public_ready">Note ready</string>
+    <string name="n_saved">Everything so far is saved.</string>
+    <string name="n_note_fallback">Note at %s</string>
+
+    <string name="pause_call">A call is using the microphone.</string>
+    <string name="pause_silenced">Android or another app silenced the microphone.</string>
+    <string name="pause_storage">Storage is almost full.</string>
+
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="action_finish">Finish</string>
+</resources>

@@ -23,6 +23,8 @@ internal class WindowFeed(
 ) {
     private var segmenter: Segmenter? = null
     private var gapStartMs: Long? = null
+    /** Pause positions (samples) this feed has closed a window at, or skipped. */
+    private val marked = HashSet<Long>()
     private val block = ShortArray(BLOCK_SAMPLES)
     private val bytes = ByteArray(BLOCK_SAMPLES * 2)
 
@@ -42,23 +44,26 @@ internal class WindowFeed(
         if (last?.endKind == EndKind.FINAL) { complete = true; return false }
         val current = segmenter ?: Segmenter(detector(), last?.let { SegmenterStart.after(it.plan()) } ?: SegmenterStart.BEGINNING)
             .also { segmenter = it }
+        // A recording that ends exactly at a cut has no FINAL window: its segmenter is finished all the same.
+        if (current.isFinished) { complete = true; return false }
         val checkpoint = (last?.ownEndMs ?: 0L) * SAMPLES_PER_MS
-        val breaks = store.breaks(noteId).filter { it > checkpoint }
+        val breaks = store.breaks(noteId).filter { it > checkpoint && it !in marked }
         val end = if (finished) fileSamples() else maxOf(durableMs * SAMPLES_PER_MS, breaks.lastOrNull() ?: 0L)
-        var saved = false
-        while (current.fedSamples < end) {
-            val nextBreak = breaks.firstOrNull { it > current.fedSamples }
-            val target = minOf(end, nextBreak ?: end)
-            saved = feed(current, target) or saved
-            if (current.fedSamples == nextBreak) saved = persist(current.markBreak()) or saved
-            if (saved) return true
+        for (pause in breaks) {
+            // Audio already fed past a Pause cannot be closed there; that can only follow a lost break.
+            if (pause < current.fedSamples) { marked += pause; continue }
+            // Each saved window is the checkpoint: return after it and continue on the next call.
+            if (feed(current, pause)) return true
+            marked += pause
+            if (persist(current.markBreak())) return true
         }
-        if (finished) {
+        if (current.fedSamples < end && feed(current, end)) return true
+        if (finished && current.fedSamples >= end) {
             persist(current.finish())
             complete = true
             return true
         }
-        return saved
+        return false
     }
 
     private fun advanceGap(): Boolean {

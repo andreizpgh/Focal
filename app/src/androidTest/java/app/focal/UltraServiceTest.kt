@@ -62,6 +62,8 @@ class UltraServiceTest {
         }
         RecordingService.decoderFactoryForTests = null
         RecordingService.inputFactoryForTests = null
+        // Staged waiting notes are transcribed by explicit commands only.
+        app.autoResumeTranscription = false
         activity = ActivityScenario.launch(MainActivity::class.java)
     }
 
@@ -78,6 +80,7 @@ class UltraServiceTest {
         } finally {
             RecordingService.inputFactoryForTests = null
             RecordingService.decoderFactoryForTests = null
+            app.autoResumeTranscription = true
             activity.close()
         }
     }

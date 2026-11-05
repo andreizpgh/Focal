@@ -12,7 +12,9 @@ import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
 import app.focal.speech.UltraModel
 import org.junit.Assert.*
+import org.junit.After
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -20,6 +22,10 @@ import java.security.MessageDigest
 
 class SpeechWorkflowTest {
     private val app get() = ApplicationProvider.getApplicationContext<FocalApplication>()
+
+    // Staged waiting notes are transcribed by explicit commands only.
+    @Before fun noAutomaticResume() { app.autoResumeTranscription = false }
+    @After fun restoreAutomaticResume() { app.autoResumeTranscription = true }
 
     /** A digitally silent tail is recorded as silent without decoding, so this recovery needs no model. */
     @Test fun recoveryOfASilentTailKeepsTextAndOriginalWithoutAddingParagraphs() {

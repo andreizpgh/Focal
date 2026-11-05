@@ -219,11 +219,18 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             requested.first?.let { open(it) }
         }
     }
-    LaunchedEffect(live.noteId) {
-        if (live.noteId != observedLiveId) {
-            observedLiveId = live.noteId
-            live.noteId?.let { open(it) }
+    // Only a recording opens on its own; a transcription resumed in the background does not navigate.
+    val capturingId = live.noteId.takeIf { live.capturing }
+    LaunchedEffect(capturingId) {
+        if (capturingId != observedLiveId) {
+            observedLiveId = capturingId
+            capturingId?.let { open(it) }
         }
+    }
+    // "Note ready" is not posted for the note on screen.
+    DisposableEffect(selected) {
+        app.focal.recording.AppPresence.shownNote.value = selected
+        onDispose { if (app.focal.recording.AppPresence.shownNote.value == selected) app.focal.recording.AppPresence.shownNote.value = null }
     }
     LaunchedEffect(pendingOpenTarget, editorDirty, renameDirty, formSaving) {
         val target = pendingOpenTarget
