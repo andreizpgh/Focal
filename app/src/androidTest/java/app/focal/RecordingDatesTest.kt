@@ -107,8 +107,8 @@ class RecordingDatesTest {
             waitForDay("Today")
             compose.onAllNodesWithText("Today").assertCountEquals(1)
             val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
-            // Eight today recordings precede the Yesterday group boundary.
-            list.performScrollToIndex(8)
+            // The stable top spacer and eight today recordings precede Yesterday.
+            list.performScrollToIndex(9)
             waitForDay("Yesterday")
             compose.onNode(hasText("Yesterday") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertIsDisplayed()
 

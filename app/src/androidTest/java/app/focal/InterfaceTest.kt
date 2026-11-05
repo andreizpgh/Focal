@@ -44,6 +44,9 @@ import app.focal.ui.passageTextPart
 import app.focal.ui.passageTextPartCount
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertArrayEquals
@@ -83,7 +86,32 @@ class InterfaceTest {
     }
 
     private fun waitForTitle(title: String) {
-        compose.waitUntil(10_000) { compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
+        try {
+            compose.waitUntil(10_000) { compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
+        } catch (failure: ComposeTimeoutException) {
+            runCatching { capture("title-wait-timeout-${System.currentTimeMillis()}") }
+            runCatching {
+                val model = compose.runOnUiThread { ViewModelProvider(compose.activity)[FocalViewModel::class.java] }
+                val state = model.library.value
+                val nodes = compose.onAllNodes(
+                    SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
+                ).fetchSemanticsNodes()
+                val scroll = compose.runOnUiThread {
+                    nodes.map {
+                        val range = it.config[SemanticsProperties.VerticalScrollAxisRange]
+                        range.value() to range.maxValue()
+                    }
+                }
+                val unmergedMatches = compose.onAllNodesWithText(title, useUnmergedTree = true).fetchSemanticsNodes().size
+                failure.addSuppressed(AssertionError(
+                    "Title diagnostics: libraryLoaded=${state.loaded}, libraryError=${state.error != null}, " +
+                        "notes=${state.notes.size}, publishedMatches=${state.notes.count { it.title == title }}, " +
+                        "detailSelected=${state.selectedId != null}, liveActive=${model.live.value.noteId != null}, " +
+                        "unmergedMatches=$unmergedMatches, scroll=$scroll"
+                ))
+            }
+            throw failure
+        }
     }
 
     private fun waitForSessionReady(title: String, passage: String? = null, audioAvailable: Boolean = true) {
@@ -222,6 +250,88 @@ class InterfaceTest {
             compose.onNodeWithText("Record").assertIsDisplayed()
             capture("sessions-clean")
         } finally { app.store.delete(id) }
+    }
+
+    @Test fun prependingASessionShowsItAtTheTopAndPreservesAReaderFurtherDown() {
+        val store = application().store
+        val model = compose.runOnUiThread { ViewModelProvider(compose.activity)[FocalViewModel::class.java] }
+        val query = "Library prepend ${UUID.randomUUID().toString().take(8)}"
+        val ids = mutableListOf<String>()
+        val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val yesterdayStart = today.minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val todayStart = today.atStartOfDay(zone).toInstant().toEpochMilli()
+
+        fun addSession(index: Int, timestamp: Long): String {
+            val db = store.writableDatabase
+            db.beginTransactionNonExclusive()
+            val id = try {
+                val created = readySession(store, "$query $index", listOf("Synthetic library row.")).also(ids::add)
+                // Publish each fixture at its assigned day and unique sort position in one transaction.
+                db.execSQL("UPDATE notes SET created=? WHERE id=?", arrayOf(timestamp, created))
+                db.setTransactionSuccessful()
+                created
+            } finally { db.endTransaction() }
+            // Publish again after the entire fixture row is visible to the library's IO reader.
+            store.state(id, "READY")
+            return id
+        }
+
+        fun row(title: String) = compose.onNode(hasText(title) and hasClickAction() and !hasSetTextAction())
+        fun rowOffset(title: String): Float {
+            val listNode = list.fetchSemanticsNode()
+            val rowNode = row(title).fetchSemanticsNode()
+            return compose.runOnUiThread { rowNode.boundsInRoot.top - listNode.boundsInRoot.top }
+        }
+
+        try {
+            repeat(20) { addSession(it, yesterdayStart + it) }
+            compose.waitUntil(10_000) { model.library.value.notes.any { it.id == ids.last() } }
+            compose.onNodeWithContentDescription("Search recordings").performClick()
+            val search = compose.onNode(hasSetTextAction())
+            search.performTextReplacement(query)
+            search.performImeAction()
+            compose.waitUntil(10_000) { model.library.value.notes.map { it.id } == ids.asReversed() }
+            compose.onNodeWithText("$query 19", useUnmergedTree = true).assertIsDisplayed()
+            val listNode = list.fetchSemanticsNode()
+            assertEquals("The library should start at the top without a scroll request", 0f,
+                compose.runOnUiThread { listNode.config[SemanticsProperties.VerticalScrollAxisRange].value() }, .001f)
+            compose.waitForIdle()
+
+            addSession(20, todayStart)
+            waitForTitle("$query 20")
+            compose.onNodeWithText("$query 20", useUnmergedTree = true).assertIsDisplayed()
+
+            val reader = "$query 8"
+            list.performScrollToNode(hasText(reader))
+            row(reader).assertIsDisplayed()
+            row("$query 20").assertIsNotDisplayed()
+            val offset = rowOffset(reader)
+            val newest = addSession(21, todayStart + 1)
+            compose.waitUntil(10_000) { model.library.value.notes.firstOrNull()?.id == newest }
+            compose.waitForIdle()
+            row(reader).assertIsDisplayed()
+            row("$query 21").assertIsNotDisplayed()
+            assertEquals("Prepending moved the reader's row within the library viewport", offset, rowOffset(reader), 1f)
+        } catch (failure: Throwable) {
+            if (failure !is ComposeTimeoutException && failure !is AssertionError) throw failure
+            runCatching { capture("library-prepend-timeout") }
+            val visibleFixtures = runCatching {
+                compose.onRoot(useUnmergedTree = true).printToString().lineSequence()
+                    .filter { query in it }.take(20).joinToString("\n")
+            }.getOrDefault("")
+            val state = model.library.value
+            val published = state.notes.map { ids.indexOf(it.id) }
+            val stored = runCatching { store.notes(query).map { ids.indexOf(it.id) } }.getOrNull()
+            // Fixture ranks preserve ordering without exposing unrelated titles or IDs. -1 is an outside row.
+            failure.addSuppressed(AssertionError(
+                "Fixture rows=${ids.size}, loaded=${state.loaded}, error=${state.error != null}, " +
+                    "publishedTotal=${published.size}, publishedRanks=${published.take(24)}, " +
+                    "storedTotal=${stored?.size}, storedRanks=${stored?.take(24)}\n$visibleFixtures"
+            ))
+            throw failure
+        } finally { ids.asReversed().forEach(store::delete) }
     }
 
     @Test fun searchFindsMiddlePassagesInEnglishAndRussianAndSurvivesRotation() {

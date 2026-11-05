@@ -175,8 +175,10 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
         }
         LazyColumn(
             Modifier.fillMaxWidth().weight(1f), state = listState,
-            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
         ) {
+            // Keep the top anchored before new recordings; readers below retain their note's key.
+            item(key = "library-start") { Spacer(Modifier.height(4.dp)) }
             if (error != null) item { DataReadError(if (loaded) "Couldn't refresh recordings" else "Couldn't load recordings", error, retryLoad) }
             if (!loaded && error == null) item {
                 LinearProgressIndicator(
