@@ -84,7 +84,8 @@ object NotePhases {
 /**
  * A library row. [title] is empty until the transcript has words: show the fallback "Note at 14:32" from
  * [created]. [preview] is the start of the first visible paragraph. [progress] (0..1) is set while
- * [phase] is [NotePhase.TRANSCRIBING].
+ * [phase] is [NotePhase.TRANSCRIBING]. [audioPresent] is already false while a removal waits for its Undo
+ * snackbar. [canRemoveAudio] offers Remove audio (a ready note without failed parts).
  */
 @Immutable
 data class NoteRow(
@@ -98,6 +99,7 @@ data class NoteRow(
     val progress: Float?,
     val audioPresent: Boolean,
     val failedParts: Int,
+    val canRemoveAudio: Boolean = false,
 )
 
 /** Rows of one local calendar day ([epochDay] in the device time zone), newest first. */
@@ -246,7 +248,9 @@ data class GapUi(val startMs: Long, val endMs: Long, val afterParagraphId: Long?
  * A note screen. [title] empty = fallback ("Note at 14:32" from [created], muted). [progress] (0..1) is the
  * transcribed share while not READY. [editable] gates Edit, Find and Replace (READY only). [canPlay] is false
  * without audio or while any recording is live (the speaker must not leak into it). [noSpeech]: a ready note
- * with sound but no recognized words ("No speech was recognized.").
+ * with sound but no recognized words ("No speech was recognized."). [canRemoveAudio]: Remove audio is offered
+ * (ready, audio kept, no failed part that Retry still needs). [canRetry]: Retry / Try again can work (the
+ * audio is still there); without audio a failed part stays a gap for good.
  */
 @Immutable
 data class NoteUiState(
@@ -271,6 +275,8 @@ data class NoteUiState(
     val endReason: EndReason? = null,
     val noSpeech: Boolean = false,
     val legacy: Boolean = false,
+    val canRemoveAudio: Boolean = false,
+    val canRetry: Boolean = false,
 )
 
 /** Coarse playback state: changes on start, pause, stop and note change only (never with the position). */

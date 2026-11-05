@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.focal.FocalApplication
 import app.focal.data.Note
+import app.focal.data.NoteState
 import app.focal.data.SearchResult
 import app.focal.recording.LiveSession
 import app.focal.recording.RecordingState
@@ -80,12 +81,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }.flowOn(Dispatchers.IO)
 
-    val state: StateFlow<LibraryUiState> = combine(notes, live, speech, loadError) { list, liveRows, model, error ->
+    val state: StateFlow<LibraryUiState> = combine(notes, live, speech, loadError, UndoableActions.audioRemovalsPending) {
+            list, liveRows, model, error, removals ->
         if (list == null) return@combine LibraryUiState(loaded = true, error = error)
         val session = RecordingState.live.value
         val liveId = liveRows.noteId?.takeIf { liveRows.capturing }
         val zone = ZoneId.systemDefault()
-        val days = list.asSequence().filter { it.id != liveId }.map { row(it, session, model) }
+        val days = list.asSequence().filter { it.id != liveId }.map { row(it, session, model, removals) }
             .groupBy { Instant.ofEpochMilli(it.created).atZone(zone).toLocalDate().toEpochDay() }
             .map { (day, rows) -> LibraryDay(day, rows) }
         LibraryUiState(loaded = true, error = error, days = days, liveNoteId = liveId, empty = list.isEmpty() && liveId == null)
@@ -99,10 +101,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 emptyList()
             }
         },
-        live, speech, query,
-    ) { (resultsQuery, results), _, model, typed ->
+        live, speech, query, UndoableActions.audioRemovalsPending,
+    ) { (resultsQuery, results), _, model, typed, removals ->
         val session = RecordingState.live.value
-        SearchUiState(typed, resultsQuery, results.map { searchRow(it, session, model) }, searching = typed != resultsQuery)
+        SearchUiState(typed, resultsQuery, results.map { searchRow(it, session, model, removals) }, searching = typed != resultsQuery)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState())
 
     fun setQuery(text: String) { query.value = text.take(MAX_QUERY_CHARS) }
@@ -116,10 +118,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     fun undoDelete(noteId: String) = launch { UndoableActions.undoDelete(app, noteId) }
 
-    /** Schedules the audio removal; emits [LibraryEvent.AudioRemoved] for "Audio removed · Undo". */
-    fun removeAudio(noteId: String) {
-        UndoableActions.removeAudio(app, noteId) { eventFlow.tryEmit(LibraryEvent.Error(it)) }
-        eventFlow.tryEmit(LibraryEvent.AudioRemoved(noteId))
+    /**
+     * Schedules the audio removal; emits [LibraryEvent.AudioRemoved] for "Audio removed · Undo". Refused with
+     * [LibraryEvent.Error] unless the row [NoteRow.canRemoveAudio] (ready, no failed part to retry).
+     */
+    fun removeAudio(noteId: String) = launch {
+        if (UndoableActions.removeAudio(app, noteId) { eventFlow.tryEmit(LibraryEvent.Error(it)) })
+            eventFlow.emit(LibraryEvent.AudioRemoved(noteId))
     }
 
     fun undoRemoveAudio(noteId: String) { UndoableActions.undoRemoveAudio(noteId) }
@@ -141,18 +146,21 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         const val SEARCH_DEBOUNCE_MS = 120L
         private const val MAX_QUERY_CHARS = 200
 
-        internal fun row(note: Note, live: LiveSession, speech: SpeechAvailability): NoteRow {
+        internal fun row(note: Note, live: LiveSession, speech: SpeechAvailability, removals: Set<String> = emptySet()): NoteRow {
             val phase = NotePhases.of(note, live, speech)
+            // A removal waiting for its Undo snackbar already shows the note as text only.
+            val audio = note.audioPresent && note.id !in removals
             return NoteRow(
                 id = note.id, title = note.title, titleIsCustom = note.titleIsCustom, created = note.created,
                 durationMs = note.duration, preview = note.preview, phase = phase,
                 progress = live.progress.takeIf { live.noteId == note.id && phase == NotePhase.TRANSCRIBING },
-                audioPresent = note.audioPresent, failedParts = note.failedWindows,
+                audioPresent = audio, failedParts = note.failedWindows,
+                canRemoveAudio = audio && note.state == NoteState.READY && phase == NotePhase.READY,
             )
         }
 
-        private fun searchRow(result: SearchResult, live: LiveSession, speech: SpeechAvailability) = SearchRow(
-            row = row(result.note, live, speech), paragraphId = result.paragraphId,
+        private fun searchRow(result: SearchResult, live: LiveSession, speech: SpeechAvailability, removals: Set<String>) = SearchRow(
+            row = row(result.note, live, speech, removals), paragraphId = result.paragraphId,
             hitStart = result.hitStart, hitEnd = result.hitEnd, snippet = result.snippet,
             snippetHit = if (result.snippetHitStart < 0) null
             else result.snippetHitStart until result.snippetHitStart + (result.hitEnd - result.hitStart),

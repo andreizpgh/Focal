@@ -128,6 +128,10 @@ class NoteStoreTest {
         assertEquals(listOf("First part is here.", "and the last part."), store.paragraphs(id).map { it.text })
         assertTrue(store.markReady(id))
         assertEquals(1, store.note(id)!!.failedWindows)
+        // Retry still needs the audio of the failed part: it cannot be removed now.
+        assertThrows(IllegalStateException::class.java) { store.removeAudio(id) }
+        assertTrue(store.note(id)!!.audioPresent)
+        assertTrue(store.audioFile(id).isFile)
 
         assertEquals(1, store.retryFailed(id))
         assertEquals(NoteState.INTERRUPTED, store.note(id)!!.state)

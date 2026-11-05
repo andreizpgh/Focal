@@ -132,6 +132,8 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
             audioPresent = audio,
             canPlay = audio && !liveKey.capturing,
             editable = note.state == NoteState.READY && (phase == NotePhase.READY || phase == NotePhase.PARTIAL_FAILURE),
+            canRemoveAudio = audio && note.state == NoteState.READY && phase == NotePhase.READY,
+            canRetry = note.audioPresent && (phase == NotePhase.PARTIAL_FAILURE || phase == NotePhase.WAITING),
             paragraphs = data.paragraphs, gaps = data.gaps, failedParts = note.failedWindows,
             endReason = EndReason.of(note.endReason),
             noSpeech = note.state == NoteState.READY && data.paragraphs.isEmpty(),
@@ -196,7 +198,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
 
     /** "Retry" (failed parts) and "Try again" (the model could not load): transcribes what is missing. */
     fun retry() {
-        if (SessionOperations.matchesSession(capture = false, noteId = noteId)) return
+        if (!state.value.canRetry || SessionOperations.matchesSession(capture = false, noteId = noteId)) return
         try { RecordingService.command(app, RecordingService.RECOVER, noteId, retryFailed = true) }
         catch (error: Exception) {
             if (error is CancellationException) throw error
@@ -210,11 +212,12 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
 
     fun undoDelete() = launch { UndoableActions.undoDelete(app, noteId) }
 
-    /** Schedules the audio removal (the text stays); emits [NoteEvent.AudioRemoved] for "Audio removed · Undo". */
-    fun removeAudio() {
-        if (!state.value.editable) { eventFlow.tryEmit(NoteEvent.Error("Finish transcription before removing its source audio.")); return }
-        UndoableActions.removeAudio(app, noteId) { eventFlow.tryEmit(NoteEvent.Error(it)) }
-        eventFlow.tryEmit(NoteEvent.AudioRemoved)
+    /**
+     * Schedules the audio removal (the text stays); emits [NoteEvent.AudioRemoved] for "Audio removed · Undo".
+     * Only when [NoteUiState.canRemoveAudio]: never while transcribing or with a failed part to retry.
+     */
+    fun removeAudio() = launch {
+        if (UndoableActions.removeAudio(app, noteId) { eventFlow.tryEmit(NoteEvent.Error(it)) }) eventFlow.emit(NoteEvent.AudioRemoved)
     }
 
     fun undoRemoveAudio() { UndoableActions.undoRemoveAudio(noteId) }

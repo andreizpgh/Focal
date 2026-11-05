@@ -807,14 +807,18 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         try { deletePendingAudio(id) } finally { changed() }
     }
 
-    /** Keeps the text and deletes the audio. Only once nothing is left to transcribe. */
+    /**
+     * Keeps the text and deletes the audio. Only for a ready note with nothing left to transcribe and no
+     * failed part: Retry needs the audio of a failed part, which would otherwise be lost for good.
+     */
     fun removeAudio(id: String) {
         writableDatabase.transaction {
             val note = checkNotNull(note(id)) { "This note is no longer available." }
             val progress = progress(id)
-            check(note.state !in NoteState.ACTIVE && progress.pendingWindows == 0 && progress.gaps == 0 && progress.remainingMs == 0L) {
+            check(note.state == NoteState.READY && progress.pendingWindows == 0 && progress.gaps == 0 && progress.remainingMs == 0L) {
                 "Finish transcription before removing its source audio."
             }
+            check(progress.failedWindows == 0) { "Part of this note couldn't be transcribed. Retry it before removing the audio." }
             insertWithOnConflict("pending_audio_deletions", null, ContentValues().apply { put("note_id", id) }, SQLiteDatabase.CONFLICT_IGNORE)
             update("notes", ContentValues().apply { put("audio_present", 0) }, "id=?", arrayOf(id))
         }

@@ -2,8 +2,10 @@ package app.focal.ui.state
 
 import app.focal.FocalApplication
 import app.focal.data.NoteState
+import app.focal.recording.RecordingState
 import app.focal.recording.SessionOperations
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Delete and Remove audio with Undo ("Note deleted · Undo", "Audio removed · Undo"). Delete moves the note
@@ -55,8 +58,17 @@ object UndoableActions {
         return app.store.undoDelete(noteId)
     }
 
-    /** Schedules the removal of [noteId]'s audio (text stays). Only for a ready note with nothing left to transcribe. */
-    fun removeAudio(app: FocalApplication, noteId: String, onError: (String) -> Unit) {
+    /**
+     * Schedules the removal of [noteId]'s audio (the text stays). Refused (false, with [onError]) unless the
+     * note is ready with nothing left to transcribe and no failed part that Retry would still need it for.
+     */
+    suspend fun removeAudio(app: FocalApplication, noteId: String, onError: (String) -> Unit): Boolean {
+        val refusal = try { withContext(Dispatchers.IO) { removalRefusal(app, noteId) } }
+        catch (error: Exception) {
+            if (error is CancellationException) throw error
+            error.message ?: "Could not remove the audio."
+        }
+        if (refusal != null) { onError(refusal); return false }
         synchronized(this) {
             removals.remove(noteId)?.cancel()
             pendingRemovals.update { it + noteId }
@@ -70,6 +82,7 @@ object UndoableActions {
                 } finally { pendingRemovals.update { it - noteId } }
             }
         }
+        return true
     }
 
     fun undoRemoveAudio(noteId: String): Boolean = synchronized(this) {
@@ -77,6 +90,16 @@ object UndoableActions {
         job.cancel()
         pendingRemovals.update { it - noteId }
         true
+    }
+
+    /** Why the audio of [noteId] cannot be removed now, or null. */
+    private fun removalRefusal(app: FocalApplication, noteId: String): String? {
+        val note = app.store.note(noteId) ?: return "This note is no longer available."
+        if (!note.audioPresent) return "This note has no audio."
+        if (RecordingState.live.value.noteId == noteId || note.state != NoteState.READY || app.store.hasUntranscribedAudio(note))
+            return "Finish transcription before removing its source audio."
+        if (note.failedWindows > 0) return FAILED_PARTS_MESSAGE
+        return null
     }
 
     private fun commitRemoval(app: FocalApplication, noteId: String) {
@@ -87,4 +110,7 @@ object UndoableActions {
             app.store.removeAudio(noteId)
         } finally { claim.release() }
     }
+
+    internal const val FAILED_PARTS_MESSAGE =
+        "Part of this note couldn't be transcribed. Retry it before removing the audio."
 }
