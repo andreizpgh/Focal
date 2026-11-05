@@ -9,11 +9,12 @@ contains aggregate results only. The later held-out Android comparison is linked
 On 42 frozen held-out FLEURS clips, the same PCM produced Base host → Android
 Ultra word errors **184 → 51 / 961** and lexical character errors **369 → 94 /
 5,010**. Each of the seven language aggregates improved on both measures. An
-independent audit checked the raw outputs, source identities and scoring; no
-acoustic adjudication was performed. The research model was staged separately,
-so the bundled APK, complete application QA, release smoke and phone acceptance
-remain open. The earlier DEV long-Spanish seam failure and the targeted follow-up
-are both retained in the [Android evaluation](ultra-android-report.md).
+independent audit checked the raw outputs, source identities and scoring. This
+was a text-based comparison on a staged research build. The
+[bundled-app verification](../../quality-report.md#alpha-8-bundled-ultra--final-emulator-verification)
+records the separate emulator integration and minified smoke. Physical-phone
+validation remains open. The earlier DEV long-Spanish seam failure and the
+targeted follow-up are both retained in the [Android evaluation](ultra-android-report.md).
 
 ## Gemma 4 E2B audio · correction of the stronger Ultra draft
 

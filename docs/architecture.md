@@ -66,9 +66,9 @@ rewriting the saved source.
 
 ## Inference
 
-The intended bundled model is multilingual Whisper base Q5_1, approximately 57 MB.
-It includes Russian and the six other languages exposed in settings. No model
-download or network permission is needed by a fully bundled APK.
+Live transcription and recovery use bundled multilingual Whisper Base Q5_1,
+about 57 MiB. It includes Russian and the six other languages exposed in
+settings. A fully bundled APK runs inference offline.
 
 Every `NativeWhisper.open` validates the complete supported multilingual base
 structure before entering the private JNI loader: architecture, vocabulary and
@@ -121,6 +121,19 @@ comparison retains at most twelve word references on each side and refuses to us
 a token longer than 4,096 characters as evidence for deleting words. A NUL in a
 manual correction stops prompt carryover without changing that correction.
 
+The optional `focalUltra` build adds Sherpa ONNX and Parakeet Ultra INT8 for
+completed recordings up to three minutes. Ultra reads the full saved PCM in
+bounded windows up to 30 seconds and selects language automatically. The first
+eligible action extracts and verifies a private model copy. The preview stays
+in the ViewModel and Copy transfers its text. Original audio, stored ASR,
+manual edits and exclusion decisions remain with the recording.
+
+The preview reserves a process-wide session claim before starting, serializing
+it with capture, recovery and explicit model import. The same worker owns
+recognizer creation, synchronous decode and release. Stop or backgrounding
+discards the result and keeps ownership until native work returns and the
+recognizer closes. Rotation retains the preview through its ViewModel.
+
 The player seeks in the original PCM and reports the actual AudioTrack playback
 head. Pausing preserves position, navigation stops the previous session, and audio
 focus loss or an audio-becoming-noisy broadcast pauses playback. Receivers and
@@ -128,12 +141,10 @@ playback ownership are released on pause, replacement, completion and stop;
 generation checks reject stale callbacks. Delayed deletion or audio removal for
 one note cannot stop a newer selection's player.
 
-Qwen/Gemma rewriting is intentionally absent. A second large model would add RAM,
-latency, heat, and a risk of changing the speaker's meaning before the base capture
-and recognition path has been measured on phones.
-Bounded acoustic and local-correction candidates are documented in
-[speech-quality experiments](stt-quality-experiments.md); they remain disabled
-until accuracy and phone-cost evidence support enabling them.
+Automatic LLM rewriting remains disabled. A correction pass would add RAM,
+latency and heat, and could change the speaker's meaning. The tested candidates
+and acceptance criteria are recorded in the
+[speech-quality experiments](stt-quality-experiments.md).
 
 ## Review and navigation
 

@@ -56,11 +56,21 @@ the package includes ONNX Runtime 1.28.2. Do not substitute a different AAR.
 
 ## Build and check
 
-From the repository root, using provisioned Gradle dependencies:
+Close the AVD before prebuild. Use one Gradle worker and a 1,536 MiB heap.
+The initial combined build ran out of memory before release R8 completed.
+Building the minified APK in a separate JVM completed that stage.
 
 ```sh
-./gradlew --offline --no-daemon --max-workers=2 --no-parallel \
-  -PfocalUltra=true :core:test :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
+./gradlew --offline --no-daemon --max-workers=1 --no-parallel \
+  '-Dorg.gradle.jvmargs=-Xmx1536m -Dfile.encoding=UTF-8' \
+  -Pkotlin.compiler.execution.strategy=in-process -PfocalUltra=true \
+  :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug \
+  :app:assembleDebugAndroidTest :app:lintRelease
+
+# Optional minified release check in a fresh JVM.
+./gradlew --offline --no-daemon --max-workers=1 --no-parallel \
+  '-Dorg.gradle.jvmargs=-Xmx1536m -Dfile.encoding=UTF-8' \
+  -Pkotlin.compiler.execution.strategy=in-process -PfocalUltra=true :app:assembleRelease
 ```
 
 Omit `--offline` only if the required Gradle dependencies are not already

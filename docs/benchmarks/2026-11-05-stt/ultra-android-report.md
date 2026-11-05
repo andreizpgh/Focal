@@ -53,6 +53,8 @@ the flagged repeats or tail on text and boundary review. The earlier failure
 remains part of the evidence. The follow-up did not exercise hard fallback or
 prove boundary correctness on arbitrary recordings. [DEV aggregate](ultra-android-dev-framing.json).
 
-The bundled Ultra build, complete application QA, release/R8 smoke, physical
-phone resource and behavior checks, quiet speech and natural language-switching
-coverage remain separate gates. No automatic LLM correction was enabled.
+The separate
+[bundled-app verification](../../quality-report.md#alpha-8-bundled-ultra--final-emulator-verification)
+records full emulator QA and minified runtime smoke for Alpha 8. Physical-phone
+resources and behavior, quiet speech and natural language switching remain
+open. Automatic LLM correction stays disabled.

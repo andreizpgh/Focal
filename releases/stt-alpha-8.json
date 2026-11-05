@@ -1,0 +1,145 @@
+{
+  "schema": 1,
+  "tag": "stt-alpha-8",
+  "title": "Focal 0.1.0 · Alpha 8",
+  "provenance": "local-emulator-qa",
+  "source_commit": "db225cfcc171248ffd92e45ae64fae20aa03cdaa",
+  "source_clean": true,
+  "application_id": "app.focal",
+  "version_name": "0.1.0-alpha.8",
+  "version_code": 8,
+  "build_variant": "debug",
+  "build_flag": "focalUltra=true",
+  "apk_asset": "Focal-0.1.0-alpha.8.apk",
+  "apk_sha256": "9971b9a10e06ff3fc506d00b797cba1fb0b999ff98b55758ae7526a500be4a37",
+  "apk_bytes": 815300046,
+  "test_apk_sha256": "486187adca5b7d23ead4def78e8d9c3493b0ef985e4f374250db0c49d28d79f8",
+  "test_apk_bytes": 1935986,
+  "signing": {
+    "type": "development",
+    "certificate_sha256": "3e407a18880c9277982d6ad6222b39738484a3b768e4d268415eb795709aa3bc",
+    "alpha_7_certificate_matches": true,
+    "alpha_1_update_compatibility": "not verified"
+  },
+  "model": {
+    "repository": "ggerganov/whisper.cpp",
+    "filename": "ggml-base-q5_1.bin",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "license": "MIT"
+  },
+  "speech_presence_model": {
+    "repository": "ggml-org/whisper-vad",
+    "revision": "9ffd54a1e1ee413ddf265af9913beaf518d1639b",
+    "filename": "ggml-silero-v5.1.2.bin",
+    "bytes": 885098,
+    "sha256": "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf",
+    "license": "MIT",
+    "model_source": "https://github.com/snakers4/silero-vad/tree/v5.1.2",
+    "license_source": "https://github.com/snakers4/silero-vad/blob/v5.1.2/LICENSE"
+  },
+  "ultra_model": {
+    "model_files": {
+      "encoder.int8.onnx": {
+        "bytes": 652282526,
+        "sha256": "7ef3ca4ffb49d60d4faa757b2930c8cec9927e73c24f6155d5b23a00229a7ed6"
+      },
+      "decoder.int8.onnx": {
+        "bytes": 11845274,
+        "sha256": "1fab98fe6c12aded87d2da66272cc9e148d0a0044ce3850a12fe56302ec4a922"
+      },
+      "joiner.int8.onnx": {
+        "bytes": 6355277,
+        "sha256": "8ba94c6919c17a6bd27368fb89533628a72ffc81d4acedebf3cdcb2cae331dbb"
+      },
+      "tokens.txt": {
+        "bytes": 93939,
+        "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+      }
+    },
+    "aar_sha256": "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7",
+    "release": "v1",
+    "license": "CC-BY-4.0",
+    "publisher_release": "https://github.com/maxwhipw/marmalade-stt-engines/releases/tag/v1",
+    "attribution": "https://github.com/maxwhipw/marmalade-stt-engines/blob/beadd617a8c999476d6ae327cde78f3a59dfcc44/NOTICE",
+    "sherpa_onnx": "2.0.1",
+    "onnxruntime": "1.28.2",
+    "license_asset": {
+      "name": "ultra-licenses.txt",
+      "bytes": 357104,
+      "sha256": "9382a41d55759bf9276d8121011d891e64950bf0d71ea39652c89923e2f224e4"
+    }
+  },
+  "engine_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+  "qa": {
+    "runner": "scripts/qa-local.py --ultra --release-checks",
+    "run": "20261105T112021.908751Z",
+    "android_api": "35",
+    "android_abi": "x86_64",
+    "android_tests": 137,
+    "failures": 0,
+    "skips": 0,
+    "required_real_model_tests": 11,
+    "existing_required_real_model_tests": 10,
+    "ultra_tests": 8,
+    "instrumentation_seconds": 218.268,
+    "runner_instrumentation_wall_seconds": 219.51,
+    "build_seconds": 237,
+    "core_tests": 36,
+    "app_jvm_tests": 11,
+    "debug_lint": "passed",
+    "release_lint": "passed",
+    "unsigned_release_build": "Passed; the intended release and instrumented APK is the debug build",
+    "unsigned_release_sha256": "6420e2af65d58bcf199cb8458131d977742b4f3f87b55000ae2aafa7db026da9",
+    "zip_and_elf_alignment_bytes": 16384,
+    "manifest_sha256": "a19fa7e84b6c13beae4eda03e51ff5296e363e839dd48e15d56283e6435cd69b",
+    "summary_sha256": "07d078a86be83fe855e90a63d581ded99aa33134e35e45d21144f632b192f62b",
+    "prebuilt_sha256": "a0d620e75c1725adbd02000f5c2f0f12d134e8ba994659f1fca6fae7b4bd56fe",
+    "hardware_acceleration": "KVM",
+    "virtual_cpus": 2,
+    "core_execution": "Cached passing results for unchanged core source",
+    "cpu_quota_percent": 150,
+    "memory_hard_limit_bytes": 4294967296,
+    "swap_limit_bytes": 0,
+    "ultra_completed_real_inference_tests": 1,
+    "ultra_active_preview_cancellation_tests": 1,
+    "real_model_count_note": "Ten existing mandatory model tests plus one completed real Ultra inference test. The separate active-preview cancellation test uses real assets but may cancel before native loading and is not counted as guaranteed inference."
+  },
+  "heldout_quality": {
+    "aggregate": "docs/benchmarks/2026-11-05-stt/ultra-android-heldout-42.json",
+    "sha256": "a9afc38573fd4522e881bd75b6a886d1fda265cec9ad7ed27d14c5caf8f4364f",
+    "cases": 42,
+    "reference_words": 961,
+    "base_word_errors": 184,
+    "ultra_word_errors": 51,
+    "scope": "Separate staged Android emulator research build, paired quality only"
+  },
+  "scope": "Optional saved-audio Ultra preview and copy, up to three minutes. Live Whisper remains in place. Automatic LLM correction is disabled.",
+  "pending": "Physical phone installation, microphone quality, latency, RAM, battery, thermals and long background capture.",
+  "manual": {
+    "artifact_sha256": "9971b9a10e06ff3fc506d00b797cba1fb0b999ff98b55758ae7526a500be4a37",
+    "scope": "Synthetic note with public JFK speech. Actual light/dark, 200 percent font, landscape, full-result scroll, Copy feedback, Close, portrait return and license display inspected. Original note, passages, chunks and audio digest unchanged.",
+    "audio": "Host audio disabled; no microphone or audible-playback claim.",
+    "private_owner_screenshots_published": false
+  },
+  "minified_runtime_smoke": {
+    "unsigned_apk_sha256": "6420e2af65d58bcf199cb8458131d977742b4f3f87b55000ae2aafa7db026da9",
+    "private_signed_apk_sha256": "f5d87221a1c9fb5d00080babca52dafdc43ceabf0faa7a22a44c33b17c004401",
+    "status": "passed",
+    "debuggable": false,
+    "scope": "Separate private development-signed R8 copy installed on the dedicated emulator. Cold extraction matched all four pinned model hashes; public JFK audio produced text; Copy feedback and Close inspected; original DB rows and audio digest remained identical. Exact debug APK restored afterward. This is not the distributed APK or a full R8 instrumentation run."
+  },
+  "independent_review": [
+    "Sol: application integration, data ownership and dialog-focus fix",
+    "Terra: exact source/APK packaging, license/ABI checks and all 137 raw test outcomes",
+    "Astra: critical source and paired quality evidence, real debug/R8 UI frames and before/after data identities"
+  ],
+  "iteration_notes": "Earlier bundled 137/0/0 followed by manual landscape navigation overlap; inset fix then 136/137 with an editor timeout. Exact timeout cause not reproduced. A strengthened focus assertion independently failed before the dialog-local fix and passed afterward; final full suite passed. Initial combined R8 build hit memory limit; final prebuild used one worker and 1536 MiB heap, with R8 in a fresh JVM. Prior failures remain documented. Zero model downloads during integration and QA.",
+  "not_established": [
+    "Physical-phone microphone and audible playback quality",
+    "Natural mixed-language terms, quiet Portuguese and arbitrary long hard-cut boundaries",
+    "Phone latency, RAM, battery, thermals and background reliability",
+    "Safe automatic LLM correction",
+    "Stable production signing and owner UX acceptance"
+  ]
+}
