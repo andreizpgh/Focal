@@ -17,12 +17,11 @@ import app.focal.R
 import app.focal.core.DecodePolicy
 import app.focal.core.LevelMeter
 import app.focal.core.Transcript
-import app.focal.data.Chunk
+import app.focal.data.NoteState
 import app.focal.data.NoteStore
-import app.focal.data.ULTRA_ENGINE
+import app.focal.data.StoredWindow
 import app.focal.speech.UltraEngine
 import app.focal.speech.UltraTranscriber
-import app.focal.speech.UltraWindowPlanner
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,7 +44,8 @@ internal interface RecordingInput : AutoCloseable {
     fun read(samples: ShortArray, offset: Int, count: Int): Int
 }
 internal interface RecordingDecoder : AutoCloseable {
-    suspend fun transcribe(store: NoteStore, chunk: Chunk, threads: Int)
+    /** Decodes one persisted window and commits it with [NoteStore.commitDecoded]. */
+    suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int)
     fun cancel()
 }
 
@@ -122,7 +122,8 @@ class RecordingService : Service() {
                 }
                 ownership = claim
                 started = true
-                startup = scope.launch { begin(if (recovery) recoverId else null) }
+                val retryFailed = recovery && intent.getBooleanExtra(RETRY_FAILED, false)
+                startup = scope.launch { begin(if (recovery) recoverId else null, retryFailed) }
             }
             PAUSE, RESUME -> if (started && !recordingDone && !stopping.get() && !RecordingState.live.value.processing) {
                 paused.set(intent.action == PAUSE)
@@ -139,7 +140,7 @@ class RecordingService : Service() {
         return START_NOT_STICKY
     }
 
-    private suspend fun begin(recover: String?) {
+    private suspend fun begin(recover: String?, retryFailed: Boolean = false) {
         try {
             app.storageReady.await()
             if (stopping.get()) { stopSelf(); return }
@@ -153,15 +154,16 @@ class RecordingService : Service() {
             wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Focal:recording").apply { setReferenceCounted(false) }
             recordingDone = recover != null
             if (recover != null) {
-                // A failed live finalization can leave WRITING metadata or a
-                // durable tail even though application startup already recovered.
+                // Only the user's explicit retry gives failed windows new attempts.
+                if (retryFailed) store.retryFailed(id)
+                // A failed live finalization can leave a durable tail even though startup already recovered.
                 store.recover(id)
                 val duration = checkNotNull(store.note(id)).duration
                 RecordingState.live.update { if (it.noteId == id) it.copy(duration = duration) else it }
                 store.state(id, "PROCESSING")
             }
             else capture = scope.launch(captureDispatcher) { captureAudio(id) }
-            worker = scope.launch(speechDispatcher) { processQueue(id, note.speechEngine) }
+            worker = scope.launch(speechDispatcher) { processQueue(id) }
             scope.launch {
                 var ticks = 0
                 while (isActive && RecordingState.live.value.noteId == id) {
@@ -192,6 +194,8 @@ class RecordingService : Service() {
     private sealed interface CaptureEvent {
         data class Duration(val ms: Long) : CaptureEvent
         data class State(val name: String) : CaptureEvent
+        /** A Pause at this PCM sample, already synced: segmentation closes the open window there. */
+        data class Break(val sample: Long) : CaptureEvent
     }
 
     /** Scalar metadata only: capture never waits for SQLite or queues audio in memory. */
@@ -206,6 +210,7 @@ class RecordingService : Service() {
                     when (event) {
                         is CaptureEvent.Duration -> store.duration(id, event.ms)
                         is CaptureEvent.State -> store.state(id, event.name)
+                        is CaptureEvent.Break -> store.addBreak(id, event.sample)
                     }
                 }
             } catch (_: Exception) {
@@ -266,6 +271,7 @@ class RecordingService : Service() {
                         synchronized(inputLock) { current.stop(); inputRunning = false }
                         syncAudio()
                         captureAwake.set(false); reconcileWake()
+                        if (samplesWritten > 0) metadata.enqueue(CaptureEvent.Break(samplesWritten))
                         metadata.enqueue(CaptureEvent.State("PAUSED"))
                         RecordingState.live.update { if (it.noteId == id) it.copy(paused = true, duration = samplesWritten / 16, level = 0f, message = "Paused") else it }
                         updateNotification()
@@ -351,7 +357,7 @@ class RecordingService : Service() {
         }
     }
 
-    private suspend fun processQueue(id: String, speechEngine: String) {
+    private suspend fun processQueue(id: String) {
         try {
             try {
                 val testFactory = if (BuildConfig.DEBUG) decoderFactoryForTests else null
@@ -360,43 +366,35 @@ class RecordingService : Service() {
                     testFactory?.invoke() ?: deviceDecoder()
                 } finally { decoderAwake.set(false); reconcileWake() }
                 transcriber = engine
+                // Segmentation uses the relative-energy detector until a Silero detector is supplied here.
+                val feed = WindowFeed(store, id) { null }
                 engine.use {
                     while (currentCoroutineContext().isActive) {
                         val finished = recordingDone
-                        var chunk = store.nextChunk(id)
-                        // Legacy Whisper notes only drain the PENDING ranges that recovery published
-                        // (NoteStore.recover); planning from their null cursor would restart at 0.
-                        if (chunk == null && speechEngine == ULTRA_ENGINE) {
+                        val pending = store.pendingWindows(id).firstOrNull()
+                        if (pending == null) {
                             val saved = checkNotNull(store.note(id)) { "This note is no longer available." }
-                            val previous = store.lastChunk(id)
-                            // A final window can have nextStart=end; a hard cut retains its
-                            // overlap cursor even across process death. Never decode only that overlap.
-                            if (saved.duration > (previous?.end ?: 0L)) {
-                                val window = UltraWindowPlanner.plan(store.audioFile(id),
-                                    previous?.nextStart ?: 0L, previous?.end, saved.duration,
-                                    finished = finished || saved.state == "PAUSED")
-                                if (window != null) chunk = store.enqueueUltraWindow(id,
-                                    window.startMs, window.endMs, window.nextStartMs)
-                            }
+                            if (feed.advance(saved.duration, finished, saved.legacy)) continue
+                            if (finished && feed.complete) break
+                            delay(150); continue
                         }
-                        if (chunk == null && finished) break
                         if (Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
                             RecordingState.live.update { if (it.noteId == id) it.copy(message = "Cooling down · audio is saved") else it }
                             delay(3000); continue
                         }
-                        if (chunk == null) { delay(150); continue }
+                        // A window that already failed or killed the process twice is marked failed instead.
+                        val window = store.beginDecode(pending.id) ?: continue
                         decoderAwake.set(true); reconcileWake()
                         try {
                             RecordingState.live.update { if (it.noteId == id) it.copy(message = if (recordingDone) "Finishing transcript…" else "Recording · transcribing") else it }
                             val start = SystemClock.elapsedRealtime()
                             val warm = Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_MODERATE
                             val threads = DecodePolicy.threads(Runtime.getRuntime().availableProcessors(), power.isPowerSaveMode, warm)
-                            engine.transcribe(store, chunk, threads)
+                            try { engine.transcribe(store, window, threads) }
+                            catch (error: CancellationException) { runCatching { store.cancelDecode(window.id) }; throw error }
                             RecordingState.live.update { if (it.noteId == id) it.copy(pending = store.pendingCount(id)) else it }
                             val cooldown = DecodePolicy.cooldownMs(SystemClock.elapsedRealtime() - start, power.isPowerSaveMode, warm)
-                            val savedTail = speechEngine == ULTRA_ENGINE &&
-                                (store.note(id)?.duration ?: 0L) > chunk.end
-                            if (cooldown > 0 && (savedTail || store.nextChunk(id) != null)) delay(cooldown)
+                            if (cooldown > 0 && !feed.complete) delay(cooldown)
                         } finally { decoderAwake.set(false); reconcileWake() }
                     }
                 }
@@ -404,16 +402,17 @@ class RecordingService : Service() {
                 if (error is CancellationException) throw error
                 decodeFailure = error.message ?: "Transcription paused. Saved audio can be retried."
                 RecordingState.live.update { if (it.noteId == id) it.copy(message = "Transcription paused · audio is still being saved") else it }
-                // Decoder failure never ends healthy capture; chunks remain durable and pending.
+                // Decoder failure never ends healthy capture; windows remain durable and pending.
                 capture?.join()
             }
             val problem = captureFailure ?: decodeFailure
             decoderAwake.set(true); reconcileWake()
-            store.state(id, if (problem == null) "READY" else "INTERRUPTED", problem.orEmpty())
+            if (problem != null || !store.markReady(id))
+                store.state(id, NoteState.INTERRUPTED, problem ?: "Saved audio can still be transcribed.")
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             decodeFailure = error.message ?: "Saved audio can be transcribed when storage is available."
-            runCatching { store.state(id, "INTERRUPTED", captureFailure ?: decodeFailure!!) }
+            runCatching { store.state(id, NoteState.INTERRUPTED, captureFailure ?: decodeFailure!!) }
         } finally {
             transcriber = null
             decoderAwake.set(false); reconcileWake()
@@ -559,6 +558,7 @@ class RecordingService : Service() {
         const val RECOVER = "app.focal.RECOVER"
         const val NOTE = "note"
         private const val OPERATION = "operation"
+        private const val RETRY_FAILED = "retryFailed"
         private const val CHANNEL = "recording"
         private const val NOTIFICATION = 1
         private const val MIN_FREE_BYTES = 64L * 1024 * 1024
@@ -566,11 +566,13 @@ class RecordingService : Service() {
         @Volatile internal var inputFactoryForTests: (() -> RecordingInput)? = null
         @Volatile internal var decoderFactoryForTests: (() -> RecordingDecoder)? = null
         @Volatile internal var metadataCapacityForTests: Int? = null
-        fun command(context: Context, action: String, id: String? = null) {
+        /** [retryFailed] (RECOVER only): windows that failed get new attempts, at the user's request. */
+        fun command(context: Context, action: String, id: String? = null, retryFailed: Boolean = false) {
             require(action != RECOVER || !id.isNullOrBlank()) { "Choose an existing note to continue transcription." }
             if (action == START && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
                 throw SecurityException("Microphone access is required.")
             val intent = Intent(context, RecordingService::class.java).setAction(action).putExtra(NOTE, id)
+                .putExtra(RETRY_FAILED, retryFailed)
             if (action == START || action == RECOVER) {
                 val capture = action == START
                 val claim = SessionOperations.reserveSession(capture, if (capture) null else id)

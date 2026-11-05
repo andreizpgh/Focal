@@ -1,9 +1,14 @@
 package app.focal.speech
 
+import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import app.focal.FocalApplication
-import app.focal.data.Chunk
+import app.focal.IsolatedContext
+import app.focal.Synthetic
+import app.focal.core.EndKind
 import app.focal.data.NoteStore
+import app.focal.data.StoredWindow
+import app.focal.data.ULTRA_ENGINE
+import app.focal.data.WindowState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
@@ -13,8 +18,10 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
@@ -23,46 +30,40 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 class UltraTranscriberTest {
-    @Test fun commitsExactSpansAndKeepsManualTextAcrossAnOverlap() {
-        val pcm = pcm(1_500, ::sample)
+    @Test fun decodesEachWindowsAudioRangeAndCommitsItsTokens() {
+        val pcm = pcm(14_000, ::sample)
         withAudio(pcm) { store, id ->
-            val first = pending(store, id, 0, 1_000)
-            val next = pending(store, id, 500, 1_500, overlap = true)
+            val first = pending(store, id, Synthetic.plan(0, 0, 6_000, EndKind.PAUSE))
             val owner = Thread.currentThread()
             var opens = 0
             var calls = 0
             var closes = 0
             UltraTranscriber { threads, checkCancelled ->
                 assertSame(owner, Thread.currentThread())
-                assertEquals(2, threads)
+                assertEquals(4, threads)
                 checkCancelled()
                 opens++
                 fakeDecoder(decodeBlock = { samples ->
                     assertSame(owner, Thread.currentThread())
-                    assertEquals(16_000, samples.size)
-                    val start = if (calls == 0) 0 else 8_000
+                    // A pause-cut window is decoded with its right context; the next one with its lead-in.
+                    val start = if (calls == 0) 0 else 5_750 * 16
+                    assertEquals(if (calls == 0) 7_000 * 16 else 8_250 * 16, samples.size)
                     assertTrue(samples.indices.all { samples[it] == sample(start + it) / 32768f })
-                    if (calls++ == 0) "Original words repeated" else "repeated then new words"
+                    if (calls++ == 0) result(" Saved" to 0.5, " words." to 0.9, " Context" to 6.5)
+                    else result(" More" to 0.6, " text." to 1.0)
                 }, onClose = { assertSame(owner, Thread.currentThread()); closes++ })
             }.use { engine ->
                 runBlocking { engine.transcribe(store, first, 4) }
-                val passage = store.passages(id).single()
-                assertEquals(0L, passage.start)
-                assertEquals(1_000L, passage.end)
-                assertFalse(passage.uncertain)
-                assertEquals("Original words repeated", passage.originalTranscriptText)
-                store.edit(passage, "Manually edited words repeated")
-                runBlocking { engine.transcribe(store, next, 2) }
+                assertEquals(listOf("Saved words."), store.paragraphs(id).map { it.text })
+                val next = pending(store, id, Synthetic.plan(1, 6_000, 14_000, EndKind.FINAL, EndKind.PAUSE))
+                runBlocking { engine.transcribe(store, next, 4) }
             }
-            val passages = store.passages(id)
-            assertEquals(listOf("Manually edited words repeated", "repeated then new words"), passages.map { it.text })
-            assertEquals("Original words repeated", passages[0].originalTranscriptText)
-            assertTrue(passages[0].reviewed)
-            assertEquals(500L, passages[1].start)
-            assertEquals(1_500L, passages[1].end)
-            assertTrue("A possible overlap repeat remains visible for review.", passages[1].uncertain)
-            assertEquals(passages[1].text, passages[1].originalTranscriptText)
-            assertEquals(listOf("DONE", "DONE"), store.chunks(id).map { it.state })
+            val windows = store.windows(id)
+            assertTrue(windows.all { it.state == WindowState.DONE && it.engine == ULTRA_ENGINE })
+            assertEquals("Saved words. Context", windows[0].rawText)
+            assertEquals(3, store.windowTokens(windows[0].id)!!.size)
+            // The word in the right context belongs to the next window and is not kept twice.
+            assertEquals("Saved words. More text.", store.paragraphs(id).joinToString(" ") { it.text })
             assertArrayEquals(pcm, store.audioFile(id).readBytes())
             assertEquals(1, opens)
             assertEquals(2, calls)
@@ -70,36 +71,10 @@ class UltraTranscriberTest {
         }
     }
 
-    @Test fun constantPcmSkipsTheModelAndBlankVaryingPcmKeepsAMissingRangeCue() {
-        val pcm = pcm(2_000) { if (it < 16_000) (-151).toShort() else sample(it) }
-        withAudio(pcm) { store, id ->
-            val constant = pending(store, id, 0, 1_000)
-            val varying = pending(store, id, 1_000, 2_000)
-            var opens = 0
-            UltraTranscriber { _, _ ->
-                opens++
-                fakeDecoder(decodeBlock = { "  " })
-            }.use { engine ->
-                runBlocking { engine.transcribe(store, constant, 2) }
-                assertEquals(0, opens)
-                assertTrue(store.passages(id).isEmpty())
-                runBlocking { engine.transcribe(store, varying, 2) }
-            }
-            val cue = store.passages(id).single()
-            assertEquals(1, opens)
-            assertEquals(varying.id, cue.chunkId)
-            assertEquals(1_000L, cue.start)
-            assertEquals(2_000L, cue.end)
-            assertEquals("", cue.text)
-            assertTrue(cue.uncertain)
-            assertEquals(0, store.pendingCount(id))
-        }
-    }
-
-    @Test fun cancellationDuringDecodeKeepsChunkPendingAndClosesOnTheOwnerAfterReturn() {
+    @Test fun cancellationDuringDecodeKeepsTheWindowPendingAndClosesOnTheOwnerAfterReturn() {
         val pcm = pcm(1_000, ::sample)
         withAudio(pcm) { store, id ->
-            val chunk = pending(store, id, 0, 1_000)
+            val window = pending(store, id, Synthetic.plan(0, 0, 1_000, EndKind.FINAL))
             val worker = Executors.newSingleThreadExecutor()
             val entered = CountDownLatch(1)
             val release = CountDownLatch(1)
@@ -116,7 +91,7 @@ class UltraTranscriberTest {
                             entered.countDown()
                             check(release.await(10, TimeUnit.SECONDS))
                             returned.set(true)
-                            "Canceled words"
+                            result(" Canceled" to 0.1)
                         }, onClose = {
                             assertSame(owner, Thread.currentThread())
                             assertTrue(returned.get())
@@ -124,19 +99,18 @@ class UltraTranscriberTest {
                         })
                     }.use { engine ->
                         adapter.set(engine)
-                        runBlocking { engine.transcribe(store, chunk, 2) }
+                        runBlocking { engine.transcribe(store, window, 2) }
                     }
                 }
                 assertTrue(entered.await(10, TimeUnit.SECONDS))
                 adapter.get().cancel()
                 assertFalse(closed.get())
-                assertEquals(chunk, store.nextChunk(id))
                 release.countDown()
                 val failure = assertThrows(ExecutionException::class.java) { future.get(10, TimeUnit.SECONDS) }
                 assertTrue(failure.cause is CancellationException)
                 assertTrue(closed.get())
-                assertEquals(chunk, store.nextChunk(id))
-                assertTrue(store.passages(id).isEmpty())
+                assertEquals(listOf(window.id), store.pendingWindows(id).map { it.id })
+                assertTrue(store.paragraphs(id).isEmpty())
                 assertArrayEquals(pcm, store.audioFile(id).readBytes())
             } finally {
                 release.countDown()
@@ -146,29 +120,35 @@ class UltraTranscriberTest {
         }
     }
 
-    private fun fakeDecoder(decodeBlock: (FloatArray) -> String, onClose: () -> Unit = {}) =
+    private fun result(vararg tokens: Pair<String, Double>) = AsrResult(
+        tokens.joinToString("") { it.first }.trim(), tokens.map { it.first },
+        FloatArray(tokens.size) { tokens[it].second.toFloat() }, FloatArray(tokens.size) { 0.24f },
+        FloatArray(tokens.size) { -0.01f },
+    )
+
+    private fun fakeDecoder(decodeBlock: (FloatArray) -> AsrResult, onClose: () -> Unit = {}) =
         object : SpeechDecoder {
-            override fun decode(samples: FloatArray): AsrResult = AsrResult.textOnly(decodeBlock(samples))
+            override fun decode(samples: FloatArray): AsrResult = decodeBlock(samples)
             override fun close() = onClose()
         }
 
     private fun withAudio(pcm: ByteArray, block: (NoteStore, String) -> Unit) {
-        val app = ApplicationProvider.getApplicationContext<FocalApplication>()
-        runBlocking { app.storageReady.await() }
-        val id = app.store.createLegacy("ru")
+        val app = ApplicationProvider.getApplicationContext<Context>()
+        val root = Files.createTempDirectory(app.cacheDir.toPath(), "transcriber-").toFile()
         try {
-            app.store.audioFile(id).writeBytes(pcm)
-            block(app.store, id)
+            NoteStore(IsolatedContext(app, root)).use { store ->
+                val id = store.create()
+                File(store.audioDir, "$id.pcm").writeBytes(pcm)
+                store.duration(id, pcm.size / 32L)
+                block(store, id)
+            }
         } finally {
-            app.store.delete(id)
+            root.deleteRecursively()
         }
     }
 
-    private fun pending(store: NoteStore, id: String, start: Long, end: Long, overlap: Boolean = false): Chunk {
-        val chunk = store.beginChunk(id, start, overlap)
-        store.finishChunk(chunk, end)
-        return store.chunks(id).single { it.id == chunk }
-    }
+    private fun pending(store: NoteStore, id: String, plan: app.focal.core.WindowPlan): StoredWindow =
+        checkNotNull(store.beginDecode(store.addWindow(id, plan).id))
 
     private fun pcm(milliseconds: Int, sample: (Int) -> Short): ByteArray =
         ByteBuffer.allocate(milliseconds * 32).order(ByteOrder.LITTLE_ENDIAN).apply {

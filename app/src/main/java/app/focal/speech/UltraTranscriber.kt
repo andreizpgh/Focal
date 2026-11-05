@@ -1,21 +1,18 @@
 package app.focal.speech
 
-import app.focal.core.Transcript
-import app.focal.data.Chunk
 import app.focal.data.NoteStore
-import app.focal.data.Passage
-import app.focal.data.fitsPassageDraftBudget
+import app.focal.data.RawAsr
+import app.focal.data.StoredWindow
+import app.focal.data.ULTRA_ENGINE
 import app.focal.recording.RecordingDecoder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Construct, transcribe and close on the service's single speech worker. Accepts any saved
- * range of at most 30 s, including PENDING ranges of notes recorded before Ultra.
+ * Construct, transcribe and close on the service's single speech worker. Decodes the audio range of one
+ * persisted window and commits the raw result; the store turns it into paragraphs.
  */
 internal class UltraTranscriber(
     private val openDecoder: (threads: Int, checkCancelled: () -> Unit) -> SpeechDecoder,
@@ -25,7 +22,7 @@ internal class UltraTranscriber(
     private var decoder: SpeechDecoder? = null
     private var closed = false
 
-    override suspend fun transcribe(store: NoteStore, chunk: Chunk, threads: Int) {
+    override suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int) {
         checkOwner()
         check(!closed) { "Speech engine is not open." }
         val context = currentCoroutineContext()
@@ -35,36 +32,15 @@ internal class UltraTranscriber(
         }
 
         checkCancelled()
-        val pcm = store.readChunk(chunk)
-        check(pcm.size in 2..MAX_PCM_BYTES && pcm.size % 2 == 0) { "Saved audio is missing or damaged." }
-        val buffer = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
-        val samples = FloatArray(buffer.remaining()) { buffer.get() / 32768f }
-        checkCancelled()
-        if (samples.all { it == samples[0] }) {
-            checkCancelled()
-            store.complete(chunk, emptyList())
-            return
-        }
-
+        val pcm = store.readAudio(window.noteId, window.audioStartMs, window.audioEndMs)
+        check(pcm.isNotEmpty()) { "Saved audio is missing or damaged." }
+        val samples = FloatArray(pcm.size) { pcm[it] / 32768f }
         // The native thread count is fixed at recognizer creation. Keep one recognizer per session.
-        val engine = decoder ?: openDecoder(threads.coerceIn(1, 2), ::checkCancelled).also { decoder = it }
+        val engine = decoder ?: openDecoder(threads, ::checkCancelled).also { decoder = it }
         checkCancelled()
-        val text = engine.decode(samples).text
+        val result = engine.decode(samples)
         checkCancelled()
-        check(fitsPassageDraftBudget(text)) { "Ultra transcription is too long for one passage." }
-
-        val overlapEnd = if (chunk.overlap) store.previousChunkEnd(chunk) else null
-        val recent = if (overlapEnd == null) emptyList() else store.recentPassages(chunk.noteId, overlapEnd).map {
-            Transcript.Segment(it.start, it.end, it.text, it.uncertain && !it.reviewed)
-        }
-        // TDT token emission times do not give reliable word ends. Keep the exact source span.
-        val decoded = listOf(Transcript.Segment(chunk.start, chunk.end, text))
-        val passages = Transcript.reconcileBoundary(recent, decoded, chunk.start, chunk.end, overlapEnd).map {
-            Passage(noteId = chunk.noteId, chunkId = chunk.id, start = it.start,
-                end = it.end, text = it.text, uncertain = it.uncertain)
-        }
-        checkCancelled()
-        store.complete(chunk, passages)
+        store.commitDecoded(window.id, ULTRA_ENGINE, RawAsr(result.text, result.asrTokens()))
     }
 
     override fun cancel() { cancelled.set(true) }
@@ -80,9 +56,5 @@ internal class UltraTranscriber(
 
     private fun checkOwner() {
         check(Thread.currentThread() === owner) { "Use the speech engine on its owner thread." }
-    }
-
-    private companion object {
-        const val MAX_PCM_BYTES = 30 * 16_000 * 2
     }
 }

@@ -5,7 +5,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
-import app.focal.data.Passage
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
@@ -21,18 +20,9 @@ class UltraUiTest {
         runBlocking { withTimeout(15_000) { app.storageReady.await() } }
         val model = compose.runOnUiThread { ViewModelProvider(compose.activity)[FocalViewModel::class.java] }
         val title = "Ultra primary ${UUID.randomUUID()}"
-        val id = app.store.create()
+        val id = app.store.insertNoteForTests(listOf("Saved primary text."), 1_000, title)
         try {
             app.store.audioFile(id).writeBytes(ByteArray(32_000))
-            val chunk = app.store.beginChunk(id, 0, false)
-            app.store.finishChunk(chunk, 1_000)
-            app.store.complete(checkNotNull(app.store.nextChunk(id)), listOf(
-                Passage(noteId = id, chunkId = chunk, start = 0, end = 1_000,
-                    text = "Saved primary text.", uncertain = true),
-            ))
-            app.store.rename(id, title)
-            app.store.duration(id, 1_000)
-            app.store.state(id, "READY")
             compose.waitUntil(10_000) {
                 compose.onAllNodesWithContentDescription("Speech language: Automatic").fetchSemanticsNodes().isNotEmpty() &&
                     model.library.value.notes.any { it.id == id }

@@ -67,7 +67,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import app.focal.FocalViewModel
 import app.focal.core.Transcript
-import app.focal.data.Passage
+import app.focal.data.Paragraph
+import app.focal.data.displayTitle
 import app.focal.data.Preferences
 import app.focal.recording.LiveSession
 import kotlinx.coroutines.Job
@@ -148,7 +149,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
     var reviewOnly by rememberSaveable(selected) { mutableStateOf(false) }
     var editingId by rememberSaveable(selected) { mutableStateOf<Long?>(null) }
-    val editing = library.passages.firstOrNull { it.id == editingId }
+    val editing = library.paragraphs.firstOrNull { it.id == editingId }
     var editorDirty by rememberSaveable(selected, editingId) { mutableStateOf(false) }
     var renameDirty by rememberSaveable(selected) { mutableStateOf(false) }
     var formSaving by remember { mutableStateOf(false) }
@@ -298,9 +299,9 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     }
     val audioAvailable = library.audioBytes > 0 && (live.noteId == null || live.processing)
     val actionActive = detailId != null && live.noteId == detailId
-    val hasUnprocessedAudio = library.pending > 0 || library.hasUnpublishedTail
+    val hasUnprocessedAudio = library.pending > 0 || library.hasUntranscribedAudio
     val canRemoveAudio = actionNote != null && !actionActive && !hasUnprocessedAudio && library.audioBytes > 0 && library.error == null
-    val transcript = remember(library.passages) { app.focal.data.transferableTranscript(library.passages) }
+    val transcript = remember(library.paragraphs) { app.focal.data.transcriptText(library.paragraphs) }
     val canShare = actionNote != null && transcript.isNotBlank() && library.error == null
     fun textForTransfer(action: String): String? {
         // A tap can precede Compose rendering the newest committed snapshot.
@@ -309,7 +310,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             notify("Reload this recording before copying or sharing.")
             return null
         }
-        val text = app.focal.data.transferableTranscript(current.passages)
+        val text = app.focal.data.transcriptText(current.paragraphs)
         if (text.isBlank()) return null
         if (fitsTextTransferBudget(text)) return text
         notify("This transcript is too long to $action at once. Copy a smaller selection from the passage editor.")
@@ -497,9 +498,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             confirmButton = { TextButton(onClick = ::closeDialog) { Text("Done") } },
         )
         editing?.let { passage ->
-            val ordered = library.passages.sortedWith(compareBy<Passage> { it.start }.thenBy { it.id })
-            val index = ordered.indexOfFirst { it.id == passage.id }
-            val nextReview = (ordered.drop(index + 1) + ordered.take(index.coerceAtLeast(0))).firstOrNull { it.uncertain && !it.reviewed && !it.excluded && it.id != passage.id }
+            val nextReview: Paragraph? = null
             EditSheet(
                 passage, playing == passage.id, audioAvailable, { model.play(passage) }, { model.player.pause(); editingId = null },
                 hasNextReview = nextReview != null,
@@ -511,8 +510,8 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 if (saved) {
                     // Do not expose Copy/Share until the displayed transcript includes this commit.
                     val refreshed = model.library.first { refreshed ->
-                        refreshed.error != null || (refreshed.selectedId == passage.noteId && (refreshed.note == null || refreshed.passages.any {
-                            it.id == passage.id && it.text == text.trim() && it.reviewed
+                        refreshed.error != null || (refreshed.selectedId == passage.noteId && (refreshed.note == null || refreshed.paragraphs.any {
+                            it.id == passage.id && it.text == text.trim()
                         }))
                     }
                     model.player.pause()
@@ -539,7 +538,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 else -> null
             }
             SessionActionsSheet(
-                title = actionNote?.title ?: library.notes.firstOrNull { it.id == detailId }?.title ?: "Recording options",
+                title = actionNote?.displayTitle ?: library.notes.firstOrNull { it.id == detailId }?.displayTitle ?: "Recording options",
                 loading = loading, loaded = actionNote != null,
                 shareReason = shareReason.takeUnless { loading }, audioReason = audioReason.takeUnless { loading },
                 deleteReason = activeReason.takeUnless { loading },

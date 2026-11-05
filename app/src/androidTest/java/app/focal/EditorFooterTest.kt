@@ -19,7 +19,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
-import app.focal.data.Passage
 import app.focal.ui.EditSheet
 import app.focal.ui.FocalTheme
 import org.junit.Assert.assertEquals
@@ -32,10 +31,8 @@ class EditorFooterTest {
     @Test fun nextConfirmsAndFailedAdvanceKeepsDraftForSaveAndClose() {
         val calls = mutableListOf<Pair<String, Boolean>>()
         val passages = listOf(
-            Passage(id = 1, noteId = "note", chunkId = "chunk", start = 0, end = 1000,
-                text = "First hint", uncertain = true),
-            Passage(id = 2, noteId = "note", chunkId = "chunk", start = 1000, end = 2000,
-                text = "Second hint", uncertain = true),
+            testParagraph(1, "note", 0, 1000, "First hint"),
+            testParagraph(2, "note", 1000, 2000, "Second hint"),
         )
         compose.setContent {
             var selected by remember { mutableIntStateOf(0) }

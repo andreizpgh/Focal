@@ -14,7 +14,7 @@ import android.os.Looper
 import androidx.core.content.ContextCompat
 import app.focal.data.Note
 import app.focal.data.NoteStore
-import app.focal.data.Passage
+import app.focal.data.Paragraph
 import app.focal.recording.SessionOperations
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -98,15 +98,15 @@ class SpeechPlayer(private val context: Context, private val store: NoteStore, p
     /** Pauses without clearing the note, excerpt, or absolute playback position. */
     fun pause() = synchronized(lock) { pauseLocked() }
 
-    /** Repeating a passage pauses/resumes it without losing its absolute position. */
-    fun play(passage: Passage, onError: (String) -> Unit) {
-        if (passage.id == -1L) {
-            playWhole(passage.noteId, onError)
+    /** Repeating a paragraph pauses/resumes it without losing its absolute position. */
+    fun play(paragraph: Paragraph, onError: (String) -> Unit) {
+        if (paragraph.id == -1L) {
+            playWhole(paragraph.noteId, onError)
             return
         }
         synchronized(lock) {
-            val next = Source(passage.noteId, passage.id, (passage.start.coerceAtLeast(0) - 250).coerceAtLeast(0),
-                passage.end.coerceAtLeast(0).let { if (it > Long.MAX_VALUE - 350) Long.MAX_VALUE else it + 350 })
+            val next = Source(paragraph.noteId, paragraph.id, (paragraph.startMs.coerceAtLeast(0) - 250).coerceAtLeast(0),
+                paragraph.endMs.coerceAtLeast(0).let { if (it > Long.MAX_VALUE - 350) Long.MAX_VALUE else it + 350 })
             if (source == next && requestedPlaying) {
                 pauseLocked()
                 return

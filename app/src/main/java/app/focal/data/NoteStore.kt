@@ -7,442 +7,863 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import androidx.annotation.VisibleForTesting
 import androidx.core.database.sqlite.transaction
+import app.focal.core.AsrToken
+import app.focal.core.EndKind
+import app.focal.core.FormatConfig
+import app.focal.core.Title
 import app.focal.core.Transcript
+import app.focal.core.TranscriptAssembler
+import app.focal.core.WindowGate
+import app.focal.core.WindowMerge
+import app.focal.core.WindowPlan
+import app.focal.core.Word
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import java.io.File
 import java.io.IOException
-import java.io.InputStream
-import java.io.InputStreamReader
 import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.file.Files
 import java.util.UUID
 
-internal const val MAX_PASSAGE_EDIT_BYTES = 128 * 1024
-internal fun fitsPassageDraftBudget(text: String): Boolean =
-    text.length <= MAX_PASSAGE_EDIT_BYTES && text.toByteArray(Charsets.UTF_8).size <= MAX_PASSAGE_EDIT_BYTES
-
-class PassageSizeException(message: String) : IllegalStateException(message)
-
-/** Every new note is transcribed by Parakeet Ultra, which detects the language itself. */
-const val ULTRA_ENGINE = "ultra-v1"
-const val AUTOMATIC_LANGUAGE = "auto"
 /**
- * Notes recorded before the single-engine rebuild. Their text, edits and audio stay as saved;
- * any range they left PENDING is now transcribed by Ultra through the same chunk queue.
- * The app never creates such notes; only migration and recovery tests do (createLegacy).
+ * Notes, their transcription windows and their editable paragraphs (schema: [StoreSchema]).
+ *
+ * The speech worker persists each window before decoding it ([addWindow], [beginDecode]) and commits the
+ * result together with the paragraphs it changes ([commitDecoded]); only a note that is not READY is
+ * changed this way. The user edits only READY notes, and every edit checks the paragraph's revision.
+ * [changes] counts committed changes that the library shows; duration ticks of a live recording are not
+ * among them.
  */
-internal const val LEGACY_WHISPER_ENGINE = "whisper"
-
-data class Note(val id: String, val title: String, val created: Long, val language: String,
-                val state: String, val duration: Long, val error: String, val preview: String = "", val reviewCount: Int = 0,
-                val speechEngine: String = ULTRA_ENGINE)
-internal val Note.mayNeedRecovery: Boolean get() = state == "INTERRUPTED" || state == "ERROR"
-
-data class Chunk(val id: String, val noteId: String, val start: Long, val end: Long,
-                 val overlap: Boolean, val state: String, val nextStart: Long? = null)
-data class Passage(val id: Long = 0, val noteId: String, val chunkId: String, val start: Long,
-                   val end: Long, val text: String, val uncertain: Boolean, val reviewed: Boolean = false,
-                   val originalTranscriptText: String? = null, val excluded: Boolean = false)
-
-internal fun transferableTranscript(passages: List<Passage>): String = passages.asSequence()
-    .filter { !it.excluded && it.text.isNotBlank() }.joinToString("\n\n") { it.text }
-
-class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 4) {
+class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, StoreSchema.VERSION) {
     private companion object {
         const val BYTES_PER_MS = 32L
-        const val MIN_RECOVERABLE_MS = 20L
-        const val MAX_CHUNK_MS = 30_000L
-        const val RECOVERY_OVERLAP_MS = 500L
-        const val MAX_LEGACY_PASSAGE_BYTES = 16 * 1024 * 1024
-        const val TEXT_BLOCK_BYTES = 64 * 1024
-        const val PASSAGE_COLUMNS = "id,note_id,chunk_id,start,end,uncertain,reviewed,excluded," +
-            "CASE WHEN length(CAST(text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES THEN text END AS safe_text"
-        const val ORIGINAL_COLUMNS = "length(CAST(original_transcript_text AS BLOB)) AS original_size," +
-            "original_transcript_text=text AS original_matches_current," +
-            "CASE WHEN original_transcript_text!=text AND length(CAST(original_transcript_text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES " +
-            "THEN original_transcript_text END AS safe_original_text"
+        const val SAMPLES_PER_MS = 16L
+        const val INLINE_TEXT_BYTES = 256 * 1024
+        const val TEXT_BLOCK_CHARS = 100_000
+        const val MAX_LEGACY_PASSAGE_BYTES = 16L * 1024 * 1024
+        const val MAX_TITLE_CHARS = 120
+        const val PREVIEW_CHARS = 300
+        const val SEARCH_TEXT_CHARS = 20_000
+        /** A window whose decoding failed or was killed this many times is marked FAILED. */
+        const val MAX_DECODE_ATTEMPTS = 2
+        const val INTERRUPTED_MESSAGE = "Recording was interrupted. Saved audio can still be transcribed."
+        const val NOTE_COLUMNS = "n.id,n.title,n.created,n.language,n.state,n.duration,n.error,n.speech_engine," +
+            "n.title_is_custom,n.legacy,n.audio_present,n.pause_reason,n.end_reason," +
+            "(SELECT substr(text,1,$PREVIEW_CHARS) FROM paragraphs p WHERE p.note_id=n.id AND p.hidden=0 " +
+            "AND trim(p.text)!='' ORDER BY p.ord LIMIT 1) AS preview," +
+            "(SELECT count(*) FROM windows w WHERE w.note_id=n.id AND w.state='FAILED') AS failed"
+        const val PARAGRAPH_COLUMNS = "id,note_id,ord,start_ms,end_ms,edited,hidden,open,revision,words," +
+            "CASE WHEN length(CAST(text AS BLOB))<=$INLINE_TEXT_BYTES THEN text END AS inline_text," +
+            "length(CAST(text AS BLOB)) AS text_bytes," +
+            "CASE WHEN source_text IS NULL THEN 0 WHEN source_text=text THEN 1 " +
+            "WHEN length(CAST(source_text AS BLOB))<=$INLINE_TEXT_BYTES THEN 2 ELSE 3 END AS source_kind," +
+            "CASE WHEN source_text!=text AND length(CAST(source_text AS BLOB))<=$INLINE_TEXT_BYTES " +
+            "THEN source_text END AS inline_source"
+        const val WINDOW_COLUMNS = "id,note_id,idx,own_start,own_end,audio_start,audio_end,keep_lo,keep_hi," +
+            "end_kind,decide_at,speech_ms,peak,state,skip,hidden,engine,attempts,raw_text,error"
     }
+
     val changes = MutableStateFlow(0L)
     val audioDir = File(context.filesDir, "audio").apply { mkdirs() }
+    private val format = FormatConfig()
+
     init { setWriteAheadLoggingEnabled(true) }
-    override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
-    override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("""CREATE TABLE notes(id TEXT PRIMARY KEY,title TEXT NOT NULL,created INTEGER NOT NULL,
-            language TEXT NOT NULL,state TEXT NOT NULL,duration INTEGER NOT NULL DEFAULT 0,error TEXT NOT NULL DEFAULT '',
-            automatic_title_chunk TEXT,speech_engine TEXT NOT NULL DEFAULT 'whisper')""")
-        db.execSQL("""CREATE TABLE chunks(id TEXT PRIMARY KEY,note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-            start INTEGER NOT NULL,end INTEGER NOT NULL,overlap INTEGER NOT NULL,state TEXT NOT NULL,next_start INTEGER)""")
-        db.execSQL("""CREATE TABLE passages(id INTEGER PRIMARY KEY AUTOINCREMENT,note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-            chunk_id TEXT NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,start INTEGER NOT NULL,end INTEGER NOT NULL,
-            text TEXT NOT NULL,uncertain INTEGER NOT NULL,reviewed INTEGER NOT NULL DEFAULT 0,
-            original_transcript_text TEXT,excluded INTEGER NOT NULL DEFAULT 0)""")
-        db.execSQL("CREATE INDEX chunks_queue ON chunks(note_id,state,start)")
-        db.execSQL("CREATE INDEX passages_note ON passages(note_id,start,id)")
-        createDeletionJournal(db)
-    }
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        check(oldVersion in 1..3 && newVersion in (oldVersion + 1)..4) { "Missing database migration" }
-        if (oldVersion == 1) createDeletionJournal(db)
-        if (oldVersion < 3 && newVersion >= 3) {
-            // Older text may already include manual edits. Its original provenance is unknown.
-            db.execSQL("ALTER TABLE passages ADD COLUMN original_transcript_text TEXT")
-            db.execSQL("ALTER TABLE passages ADD COLUMN excluded INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE notes ADD COLUMN automatic_title_chunk TEXT")
-        }
-        if (oldVersion < 4 && newVersion >= 4) {
-            // Existing notes retain their original decoder, including unfinished audio.
-            db.execSQL("ALTER TABLE notes ADD COLUMN speech_engine TEXT NOT NULL DEFAULT 'whisper'")
-            db.execSQL("ALTER TABLE chunks ADD COLUMN next_start INTEGER")
-        }
-    }
-    private fun createDeletionJournal(db: SQLiteDatabase) {
-        // No foreign key: the intent must survive deleting the corresponding note.
-        db.execSQL("CREATE TABLE pending_audio_deletions(note_id TEXT PRIMARY KEY)")
-    }
+    override fun onCreate(db: SQLiteDatabase) = StoreSchema.create(db)
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) =
+        StoreSchema.upgrade(db, oldVersion, newVersion, audioDir)
+    // Upgrades rebuild tables, so foreign keys (and their cascades) are enabled only once the schema is current.
+    override fun onOpen(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
     private fun changed() { changes.update { it + 1 } }
-    /** Every new note is an Ultra note; Ultra detects the language itself. */
-    fun create(): String = insertNote(AUTOMATIC_LANGUAGE, ULTRA_ENGINE)
-    /**
-     * A note as Whisper-era builds saved it. Capture no longer publishes ranges for such a note,
-     * so only tests that build legacy fixtures (with beginChunk/finishChunk) may create one.
-     */
-    @VisibleForTesting
-    internal fun createLegacy(language: String): String = insertNote(language, LEGACY_WHISPER_ENGINE)
-    private fun insertNote(language: String, speechEngine: String): String {
-        val id = UUID.randomUUID().toString()
-        writableDatabase.insertOrThrow("notes", null, ContentValues().apply {
-            put("id", id); put("title", "Untitled note"); put("created", System.currentTimeMillis())
-            put("language", language); put("state", "RECORDING"); put("speech_engine", speechEngine)
-        }); changed(); return id
-    }
-    fun notes(query: String = ""): List<Note> {
-        val notes = readableDatabase.rawQuery("""SELECT n.*,
-        (SELECT substr(text,1,512) FROM passages WHERE note_id=n.id AND excluded=0 ORDER BY start,id LIMIT 1) preview,
-        (SELECT count(*) FROM passages WHERE note_id=n.id AND excluded=0 AND uncertain=1 AND reviewed=0) reviews
-        FROM notes n ORDER BY created DESC""", null).use { c -> buildList {
-        while (c.moveToNext()) add(note(c).copy(preview = c.string("preview"), reviewCount = c.int("reviews")))
-        } }
-        val term = query.trim()
-        if (term.isEmpty()) return notes
-        val matches = notes.filter { it.title.contains(term, ignoreCase = true) }.mapTo(mutableSetOf()) { it.id }
-        // Read in bounded byte chunks: legacy passages can exceed a CursorWindow.
-        // Search uses Unicode-aware Kotlin matching, including across chunk boundaries.
-        readableDatabase.rawQuery("SELECT id,note_id,CASE WHEN length(CAST(text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES THEN text END FROM passages WHERE excluded=0", null).use { cursor ->
-            while (cursor.moveToNext()) {
-                val id = cursor.getString(1)
-                if (id !in matches && (cursor.getString(2)?.contains(term, ignoreCase = true)
-                        ?: passageContains(cursor.getLong(0), term))) matches += id
-            }
-        }
-        return notes.filter { it.id in matches }
-    }
-    fun note(id: String): Note? = readableDatabase.rawQuery("SELECT * FROM notes WHERE id=?", arrayOf(id)).use {
-        if (it.moveToFirst()) note(it) else null
-    }
-    private fun note(c: Cursor) = Note(c.string("id"), c.string("title"), c.long("created"), c.string("language"),
-        c.string("state"), c.long("duration"), c.string("error"), speechEngine = c.string("speech_engine"))
-    fun state(id: String, state: String, error: String = "") {
-        writableDatabase.update("notes", ContentValues().apply { put("state", state); put("error", error) }, "id=?", arrayOf(id)); changed()
-    }
-    fun duration(id: String, ms: Long) {
-        writableDatabase.update("notes", ContentValues().apply { put("duration", ms) }, "id=?", arrayOf(id)); changed()
-    }
-    fun rename(id: String, title: String) {
-        writableDatabase.update("notes", ContentValues().apply {
-            put("title", Transcript.truncateUtf16(title.trim(), 120).ifBlank { "Untitled note" })
-            putNull("automatic_title_chunk")
-        }, "id=?", arrayOf(id)); changed()
-    }
-    fun audioFile(noteId: String) = File(audioDir, "$noteId.pcm")
-    fun readChunk(chunk: Chunk): ByteArray {
-        check(chunk.start >= 0 && chunk.end > chunk.start && chunk.end - chunk.start <= MAX_CHUNK_MS) {
-            "Invalid saved audio range."
-        }
-        val size = (chunk.end - chunk.start) * BYTES_PER_MS
-        return RandomAccessFile(audioFile(chunk.noteId), "r").use { file ->
-            check(chunk.end <= file.length() / BYTES_PER_MS) { "Saved audio is missing or damaged." }
-            ByteArray(size.toInt()).also { bytes -> file.seek(chunk.start * BYTES_PER_MS); file.readFully(bytes) }
-        }
-    }
-    // Whisper-era capture published gated ranges with beginChunk/finishChunk. Ultra capture no
-    // longer does; tests use them to build the legacy notes that existing installs still hold.
-    @VisibleForTesting
-    internal fun beginChunk(note: String, start: Long, overlap: Boolean): String {
-        require(start >= 0 && start <= Long.MAX_VALUE / BYTES_PER_MS) { "Invalid saved audio range." }
-        val id = UUID.randomUUID().toString()
-        writableDatabase.insertOrThrow("chunks", null, ContentValues().apply {
-            put("id", id); put("note_id", note); put("start", start); put("end", start); put("overlap", if (overlap) 1 else 0); put("state", "WRITING")
-        }); return id
-    }
-    @VisibleForTesting
-    internal fun finishChunk(id: String, end: Long) {
-        val db = writableDatabase
-        var updated = false
-        db.transaction {
-            val chunk = rawQuery("SELECT * FROM chunks WHERE id=?", arrayOf(id)).use { if (it.moveToFirst()) chunkFromCursor(it) else null }
-                ?: return@transaction
-            // Repeated capture/recovery callbacks must never requeue committed corrections.
-            if (chunk.state != "WRITING") return@transaction
-            require(end > chunk.start && end - chunk.start <= MAX_CHUNK_MS) { "Invalid saved audio range." }
-            update("chunks", ContentValues().apply { put("end", end); put("state", "PENDING") }, "id=? AND state='WRITING'", arrayOf(id))
-            updated = true
-        }
-        if (updated) changed()
-    }
-    fun nextChunk(note: String): Chunk? = readableDatabase.rawQuery(
-        "SELECT * FROM chunks WHERE note_id=? AND state='PENDING' ORDER BY start,rowid LIMIT 1", arrayOf(note)
-    ).use { c -> if (c.moveToFirst()) chunkFromCursor(c) else null }
 
-    internal fun lastChunk(note: String): Chunk? = readableDatabase.rawQuery(
-        "SELECT * FROM chunks WHERE note_id=? ORDER BY end DESC,rowid DESC LIMIT 1", arrayOf(note)
-    ).use { if (it.moveToFirst()) chunkFromCursor(it) else null }
+    // ---------------------------------------------------------------- notes
 
-    /** A window and its next cursor are published together, after the PCM watermark is synced. */
-    internal fun enqueueUltraWindow(noteId: String, start: Long, end: Long, nextStart: Long): Chunk {
-        require(start >= 0 && end > start && end - start <= MAX_CHUNK_MS && nextStart in (end - 500)..end && nextStart > start)
+    /** A new Ultra recording. Its title stays empty until the transcript has words. */
+    fun create(): String = insertNote(NoteState.RECORDING, legacy = false, created = System.currentTimeMillis())
+
+    private fun insertNote(state: String, legacy: Boolean, created: Long, language: String = AUTOMATIC_LANGUAGE,
+                           engine: String = ULTRA_ENGINE): String {
         val id = UUID.randomUUID().toString()
-        var overlap = false
         writableDatabase.transaction {
-            val note = checkNotNull(note(noteId))
-            check(note.speechEngine == ULTRA_ENGINE && end <= note.duration) { "Audio is not durably saved yet." }
-            val previous = lastChunk(noteId)
-            check(start == (previous?.nextStart ?: 0L) && (previous == null || previous.state == "DONE")) {
-                "Saved audio window is already queued."
+            execSQL("""INSERT INTO notes(id,title,created,language,state,speech_engine,legacy,seq)
+                VALUES(?,'',?,?,?,?,?,(SELECT COALESCE(MAX(seq),0)+1 FROM notes))""",
+                arrayOf<Any>(id, created, language, state, engine, if (legacy) 1 else 0))
+            indexTitle(noteSeq(this, id)!!)
+        }
+        changed()
+        return id
+    }
+
+    /** A note that is not in the trash, or null. */
+    fun note(id: String): Note? = readableDatabase.rawQuery(
+        "SELECT $NOTE_COLUMNS FROM notes n WHERE n.id=? AND n.deleted_at IS NULL", arrayOf(id),
+    ).use { if (it.moveToFirst()) note(it) else null }
+
+    /** Every note outside the trash, newest first, with a preview of its first paragraph. */
+    fun library(): List<Note> = readableDatabase.rawQuery(
+        "SELECT $NOTE_COLUMNS FROM notes n WHERE n.deleted_at IS NULL ORDER BY n.created DESC,n.seq DESC", null,
+    ).use { c -> buildList { while (c.moveToNext()) add(note(c)) } }
+
+    private fun note(c: Cursor) = Note(
+        id = c.string("id"), title = c.string("title"), created = c.long("created"), language = c.string("language"),
+        state = c.string("state"), duration = c.long("duration"), error = c.string("error"),
+        preview = c.string("preview"), speechEngine = c.string("speech_engine"),
+        titleIsCustom = c.int("title_is_custom") == 1, legacy = c.int("legacy") == 1,
+        audioPresent = c.int("audio_present") == 1, pauseReason = c.nullableString("pause_reason"),
+        endReason = c.nullableString("end_reason"), failedWindows = c.int("failed"),
+    )
+
+    /**
+     * Notes whose title or a visible paragraph contains every word of [query] (the last one as a prefix),
+     * in library order. Matching ignores case, Latin diacritics and ё/е.
+     */
+    fun search(query: String): List<SearchResult> {
+        val terms = SearchText.terms(query)
+        val match = SearchText.matchExpression(terms) ?: return emptyList()
+        val db = readableDatabase
+        data class Hit(val paragraphId: Long, val text: String)
+        val paragraphHits = HashMap<String, Hit>()
+        db.rawQuery("""SELECT p.note_id,p.id,MIN(p.ord),substr(p.text,1,$SEARCH_TEXT_CHARS) FROM paragraphs p
+            WHERE p.hidden=0 AND p.id IN (SELECT docid FROM paragraph_fts WHERE paragraph_fts MATCH ?)
+            GROUP BY p.note_id""", arrayOf(match)).use { c ->
+            while (c.moveToNext()) paragraphHits[c.getString(0)] = Hit(c.getLong(1), c.getString(3))
+        }
+        val titleHits = db.rawQuery(
+            "SELECT id FROM notes WHERE seq IN (SELECT docid FROM title_fts WHERE title_fts MATCH ?)", arrayOf(match),
+        ).use { c -> buildSet { while (c.moveToNext()) add(c.getString(0)) } }
+        return library().mapNotNull { note ->
+            val hit = paragraphHits[note.id]
+            when {
+                hit != null -> {
+                    val range = SearchText.firstHit(hit.text, terms)
+                    val (snippet, at) = SearchText.snippet(hit.text, range)
+                    SearchResult(note, hit.paragraphId, range?.first ?: 0, range?.let { it.last + 1 } ?: 0, snippet,
+                        if (range == null) -1 else at)
+                }
+                note.id in titleHits -> SearchResult(note, null, -1, -1, note.preview, -1)
+                else -> null
             }
-            check(previous == null || end > previous.end) { "Saved audio window must cover new audio." }
-            overlap = previous != null && start < previous.end
-            insertOrThrow("chunks", null, ContentValues().apply {
-                put("id", id); put("note_id", noteId); put("start", start); put("end", end)
-                put("overlap", if (overlap) 1 else 0); put("state", "PENDING"); put("next_start", nextStart)
+        }
+    }
+
+    fun state(id: String, state: String, error: String = "") {
+        writableDatabase.update("notes", ContentValues().apply {
+            put("state", state); put("error", error)
+            if (state != NoteState.PAUSED) putNull("pause_reason")
+        }, "id=?", arrayOf(id))
+        changed()
+    }
+
+    /** The recording was paused automatically ([CaptureReason]); the user resumes it. */
+    fun pauseAutomatically(id: String, reason: String) {
+        writableDatabase.update("notes", ContentValues().apply {
+            put("state", NoteState.PAUSED); put("pause_reason", reason)
+        }, "id=?", arrayOf(id))
+        changed()
+    }
+
+    /** Why capture ended other than by Finish ([CaptureReason]); null clears it. */
+    fun endReason(id: String, reason: String?) {
+        writableDatabase.update("notes", ContentValues().apply { put("end_reason", reason) }, "id=?", arrayOf(id))
+        changed()
+    }
+
+    /** The durable duration of a live recording. Not a library change: the live row has its own clock. */
+    fun duration(id: String, ms: Long) {
+        writableDatabase.update("notes", ContentValues().apply { put("duration", ms) }, "id=?", arrayOf(id))
+    }
+
+    /** A blank title returns the note to its automatic title. */
+    fun rename(id: String, title: String) {
+        val trimmed = Transcript.truncateUtf16(title.trim(), MAX_TITLE_CHARS)
+        writableDatabase.transaction {
+            val seq = noteSeq(this, id) ?: return@transaction
+            unindexTitle(seq)
+            if (trimmed.isBlank()) {
+                update("notes", ContentValues().apply {
+                    put("title_is_custom", 0); put("title", Title.of(StoreSchema.titleWords(this@transaction, id)))
+                }, "id=?", arrayOf(id))
+            } else {
+                update("notes", ContentValues().apply { put("title_is_custom", 1); put("title", trimmed) }, "id=?", arrayOf(id))
+            }
+            indexTitle(seq)
+        }
+        changed()
+    }
+
+    fun audioFile(noteId: String) = File(audioDir, "$noteId.pcm")
+    fun audioBytes(id: String) = audioFile(id).length()
+
+    /** PCM samples of [startMs, endMs), clamped to the saved file. Windows are at most a few tens of seconds. */
+    fun readAudio(noteId: String, startMs: Long, endMs: Long): ShortArray {
+        require(startMs >= 0 && endMs >= startMs && endMs - startMs <= 120_000) { "Invalid saved audio range." }
+        RandomAccessFile(audioFile(noteId), "r").use { file ->
+            val from = minOf(startMs * BYTES_PER_MS, file.length() and 1L.inv())
+            val to = minOf(endMs * BYTES_PER_MS, file.length() and 1L.inv())
+            val bytes = ByteArray((to - from).toInt())
+            file.seek(from)
+            file.readFully(bytes)
+            val samples = ShortArray(bytes.size / 2)
+            ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(samples)
+            return samples
+        }
+    }
+
+    /** True when the saved audio has no samples or every sample is the same: a recording to discard. */
+    fun audioIsEmpty(noteId: String): Boolean {
+        val file = audioFile(noteId)
+        if (!file.isFile || file.length() < 2) return true
+        file.inputStream().buffered(64 * 1024).use { input ->
+            val block = ByteArray(64 * 1024)
+            var first: Int? = null
+            var carry = -1
+            while (true) {
+                val count = input.read(block)
+                if (count < 0) return true
+                var i = 0
+                if (carry >= 0) {
+                    val sample = (block[0].toInt() shl 8) or carry
+                    if (first == null) first = sample.toShort().toInt() else if (sample.toShort().toInt() != first) return false
+                    carry = -1; i = 1
+                }
+                while (i + 1 < count) {
+                    val sample = ((block[i + 1].toInt() shl 8) or (block[i].toInt() and 0xff)).toShort().toInt()
+                    if (first == null) first = sample else if (sample != first) return false
+                    i += 2
+                }
+                if (i < count) carry = block[i].toInt() and 0xff
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- windows
+
+    /**
+     * Persists a planned window (the segmenter checkpoint) before it is decoded: PENDING, or SILENT when
+     * [WindowGate] skips it. A window of a migrated note must start at one of its [gaps], which shrinks.
+     */
+    fun addWindow(noteId: String, plan: WindowPlan, skip: WindowGate.Skip? = null): StoredWindow {
+        require(plan.ownEndMs > plan.ownStartMs && plan.audioStartMs <= plan.ownStartMs && plan.audioEndMs >= plan.ownEndMs) {
+            "Invalid window plan."
+        }
+        val id = writableDatabase.transaction {
+            val legacy = rawQuery("SELECT legacy,state FROM notes WHERE id=?", arrayOf(noteId)).use {
+                check(it.moveToFirst()) { "This note is no longer available." }
+                check(it.getString(1) != NoteState.READY) { "A ready note takes no new windows." }
+                it.getInt(0) == 1
+            }
+            check(plan.index == nextWindowIndex(this, noteId)) { "Windows must be saved in order." }
+            if (legacy) {
+                val gapEnd = rawQuery("SELECT end FROM gaps WHERE note_id=? AND start=?",
+                    arrayOf(noteId, plan.ownStartMs.toString())).use { if (it.moveToFirst()) it.getLong(0) else null }
+                checkNotNull(gapEnd) { "A migrated note takes windows only where no text exists." }
+                check(plan.ownEndMs <= gapEnd) { "The window reaches past the untranscribed range." }
+                delete("gaps", "note_id=? AND start=?", arrayOf(noteId, plan.ownStartMs.toString()))
+                if (plan.ownEndMs < gapEnd) insertOrThrow("gaps", null, ContentValues().apply {
+                    put("note_id", noteId); put("start", plan.ownEndMs); put("end", gapEnd)
+                })
+            } else {
+                val last = lastWindow(this, noteId)
+                check(last?.endKind != EndKind.FINAL) { "The recording is already complete." }
+                check(plan.ownStartMs == (last?.ownEndMs ?: 0L)) { "Windows must cover the recording without gaps." }
+            }
+            insertOrThrow("windows", null, ContentValues().apply {
+                put("note_id", noteId); put("idx", plan.index)
+                put("own_start", plan.ownStartMs); put("own_end", plan.ownEndMs)
+                put("audio_start", plan.audioStartMs); put("audio_end", plan.audioEndMs)
+                put("keep_lo", plan.keepLoMs); put("keep_hi", plan.keepHiMs)
+                put("end_kind", plan.endKind.name); put("decide_at", plan.decideAtMs)
+                put("speech_ms", plan.speechMs); put("peak", plan.peak)
+                put("state", if (skip == null) WindowState.PENDING.name else WindowState.SILENT.name)
+                put("skip", skip?.name)
             })
         }
         changed()
-        return Chunk(id, noteId, start, end, overlap, "PENDING", nextStart)
+        return checkNotNull(window(id))
     }
-    fun previousChunkEnd(chunk: Chunk): Long? = readableDatabase.rawQuery(
-        "SELECT end FROM chunks WHERE note_id=? AND state='DONE' AND start<? ORDER BY start DESC,rowid DESC LIMIT 1",
-        arrayOf(chunk.noteId, chunk.start.toString())
-    ).use { if (it.moveToFirst()) it.getLong(0) else null }
-    fun pendingCount(note: String): Int = readableDatabase.rawQuery(
-        "SELECT count(*) FROM chunks WHERE note_id=? AND state!='DONE'", arrayOf(note)
-    ).use { it.moveToFirst(); it.getInt(0) }
 
-    internal fun hasUnpublishedTail(note: Note): Boolean = note.mayNeedRecovery &&
-        audioBytes(note.id) / BYTES_PER_MS - lastChunkEnd(readableDatabase, note.id) >=
-        if (note.speechEngine == ULTRA_ENGINE) 1L else MIN_RECOVERABLE_MS
+    /**
+     * Counts a decoding attempt before the recognizer runs, so that a window that keeps killing the process
+     * cannot loop: a window that already used [MAX_DECODE_ATTEMPTS] is marked FAILED and null is returned.
+     */
+    fun beginDecode(windowId: Long): StoredWindow? {
+        var failed = false
+        val window = writableDatabase.transaction {
+            val window = window(this, windowId)?.takeIf { it.state == WindowState.PENDING } ?: return@transaction null
+            if (window.attempts >= MAX_DECODE_ATTEMPTS) {
+                fail(this, window, "This part could not be transcribed.")
+                failed = true
+                return@transaction null
+            }
+            execSQL("UPDATE windows SET attempts=attempts+1 WHERE id=?", arrayOf<Any>(windowId))
+            window.copy(attempts = window.attempts + 1)
+        }
+        if (failed) changed()
+        return window
+    }
 
-    private fun lastChunkEnd(db: SQLiteDatabase, id: String): Long =
-        db.rawQuery("SELECT COALESCE(MAX(end),0) FROM chunks WHERE note_id=? AND state!='WRITING'", arrayOf(id)).use {
-            it.moveToFirst(); it.getLong(0)
+    /** A decode that was cancelled cleanly (not a failure) does not count as an attempt. */
+    fun cancelDecode(windowId: Long) {
+        writableDatabase.execSQL("UPDATE windows SET attempts=max(0,attempts-1) WHERE id=? AND state='PENDING'",
+            arrayOf<Any>(windowId))
+    }
+
+    fun failWindow(windowId: Long, error: String) {
+        val failed = writableDatabase.transaction {
+            val window = window(this, windowId)?.takeIf { it.state == WindowState.PENDING } ?: return@transaction false
+            fail(this, window, error)
+            true
+        }
+        if (failed) changed()
+    }
+
+    private fun fail(db: SQLiteDatabase, window: StoredWindow, error: String) {
+        db.update("windows", ContentValues().apply { put("state", WindowState.FAILED.name); put("error", error) },
+            "id=?", arrayOf(window.id.toString()))
+        // Text after a failed window starts a new paragraph, so a later retry can be placed between them.
+        db.execSQL("UPDATE paragraphs SET open=0 WHERE note_id=? AND open=1 AND start_ms<?",
+            arrayOf<Any>(window.noteId, window.ownStartMs))
+    }
+
+    /**
+     * Stores a window's recognizer result and, unless the hallucination guard hides it, merges its words
+     * into the paragraphs at its place in the note: the open paragraph before it grows and new paragraphs
+     * follow. All in one transaction. Returns false when the window is gone or was already committed.
+     */
+    fun commitDecoded(windowId: Long, engine: String, result: RawAsr): Boolean {
+        val committed = writableDatabase.transaction {
+            val window = window(this, windowId)?.takeIf { it.state == WindowState.PENDING } ?: return@transaction false
+            val state = rawQuery("SELECT state FROM notes WHERE id=?", arrayOf(window.noteId)).use {
+                if (it.moveToFirst()) it.getString(0) else null
+            } ?: return@transaction false
+            check(state != NoteState.READY) { "Transcription never changes a ready note." }
+            val plan = window.plan()
+            val decoded = plan.toDecodedWindow(result.tokens)
+            val nextOrd = rawQuery("SELECT MIN(ord) FROM paragraphs WHERE note_id=? AND start_ms>=?",
+                arrayOf(window.noteId, plan.ownStartMs.toString())).use { if (it.moveToFirst() && !it.isNull(0)) it.getInt(0) else null }
+            val previous = paragraphsIn(this, if (nextOrd == null) "note_id=?" else "note_id=? AND ord<?",
+                listOfNotNull(window.noteId, nextOrd?.toString()), descending = true, limit = 1).firstOrNull()
+            val open = previous?.takeIf { it.open && !it.edited && !it.hidden && it.wordsJson != null }
+            val openWords = open?.sourceWords().orEmpty()
+            val kept = WindowMerge.keptWords(decoded, plan.index, openWords.lastOrNull(), format.dedupeMs, format.minWordEndMs)
+            val hidden = WindowGate.hidesResult(plan, kept.size)
+            update("windows", ContentValues().apply {
+                put("state", WindowState.DONE.name); put("engine", engine); put("raw_text", result.text)
+                put("tokens", TranscriptJson.encodeTokens(result.tokens)); put("hidden", if (hidden) 1 else 0)
+                putNull("error")
+            }, "id=?", arrayOf(windowId.toString()))
+            if (!hidden && kept.isNotEmpty()) {
+                val update = TranscriptAssembler(format, openWords).append(decoded, plan.index)
+                materialise(this, window.noteId, open, nextOrd ?: previous?.let { it.ord + 1 } ?: 0, update.paragraphs)
+                refreshTitle(this, window.noteId)
+            }
+            true
+        }
+        if (committed) changed()
+        return committed
+    }
+
+    /** Writes assembler paragraphs: the first replaces [open] (if any), the rest are inserted; the last stays open. */
+    private fun materialise(db: SQLiteDatabase, noteId: String, open: Paragraph?, insertOrd: Int, paragraphs: List<List<Word>>) {
+        if (paragraphs.isEmpty()) return
+        var fresh = paragraphs
+        var ord = insertOrd
+        if (open != null) {
+            writeWords(db, open.id, paragraphs[0], isOpen = paragraphs.size == 1)
+            fresh = paragraphs.drop(1)
+            ord = open.ord + 1
+        }
+        if (fresh.isEmpty()) return
+        db.execSQL("UPDATE paragraphs SET ord=ord+? WHERE note_id=? AND ord>=?", arrayOf<Any>(fresh.size, noteId, ord))
+        fresh.forEachIndexed { i, words ->
+            val text = words.joinToString(" ") { it.text }
+            val id = db.insertOrThrow("paragraphs", null, ContentValues().apply {
+                put("note_id", noteId); put("ord", ord + i)
+                put("start_ms", words.first().startMs); put("end_ms", words.last().endMs)
+                put("text", text); put("source_text", text); put("words", TranscriptJson.encodeWords(words))
+                put("open", if (i == fresh.lastIndex) 1 else 0)
+            })
+            db.indexParagraph(id)
+        }
+    }
+
+    private fun writeWords(db: SQLiteDatabase, id: Long, words: List<Word>, isOpen: Boolean) {
+        val text = words.joinToString(" ") { it.text }
+        db.unindexParagraph(id)
+        db.update("paragraphs", ContentValues().apply {
+            put("text", text); put("source_text", text); put("words", TranscriptJson.encodeWords(words))
+            put("start_ms", words.first().startMs); put("end_ms", words.last().endMs)
+            put("open", if (isOpen) 1 else 0); put("edited", 0)
+        }, "id=?", arrayOf(id.toString()))
+        db.execSQL("UPDATE paragraphs SET revision=revision+1 WHERE id=?", arrayOf<Any>(id))
+        db.indexParagraph(id)
+    }
+
+    /** Failed windows of a note become PENDING again (with fresh attempts); the note waits for transcription. */
+    fun retryFailed(noteId: String): Int {
+        val count = writableDatabase.transaction {
+            val note = note(noteId) ?: return@transaction 0
+            if (!note.audioPresent || note.state in NoteState.ACTIVE) return@transaction 0
+            val count = update("windows", ContentValues().apply {
+                put("state", WindowState.PENDING.name); put("attempts", 0); putNull("error")
+            }, "note_id=? AND state='FAILED'", arrayOf(noteId))
+            if (count > 0) update("notes", ContentValues().apply {
+                put("state", NoteState.INTERRUPTED); put("error", "")
+            }, "id=?", arrayOf(noteId))
+            count
+        }
+        if (count > 0) changed()
+        return count
+    }
+
+    fun window(id: Long): StoredWindow? = window(readableDatabase, id)
+    private fun window(db: SQLiteDatabase, id: Long): StoredWindow? =
+        db.rawQuery("SELECT $WINDOW_COLUMNS FROM windows WHERE id=?", arrayOf(id.toString())).use {
+            if (it.moveToFirst()) storedWindow(it) else null
         }
 
-    fun recentPassages(note: String, before: Long): List<Passage> = readPassages(
-        "SELECT $PASSAGE_COLUMNS FROM passages WHERE note_id=? AND start<? AND excluded=0 ORDER BY start DESC,id DESC LIMIT 6",
-        arrayOf(note, before.toString()),
-    ).asReversed()
-    fun chunks(note: String): List<Chunk> = readableDatabase.rawQuery("SELECT * FROM chunks WHERE note_id=? ORDER BY start,rowid", arrayOf(note)).use { c -> buildList {
-        while (c.moveToNext()) add(chunkFromCursor(c))
-    } }
-    fun passages(note: String): List<Passage> = readPassages(
-        "SELECT $PASSAGE_COLUMNS,$ORIGINAL_COLUMNS FROM passages WHERE note_id=? ORDER BY start,id", arrayOf(note),
-        includeOriginal = true,
+    /** All windows of a note by index (without their tokens). */
+    fun windows(noteId: String): List<StoredWindow> = readableDatabase.rawQuery(
+        "SELECT $WINDOW_COLUMNS FROM windows WHERE note_id=? ORDER BY idx", arrayOf(noteId),
+    ).use { c -> buildList { while (c.moveToNext()) add(storedWindow(c)) } }
+
+    /** Persisted windows still to decode, in index order. */
+    fun pendingWindows(noteId: String): List<StoredWindow> = readableDatabase.rawQuery(
+        "SELECT $WINDOW_COLUMNS FROM windows WHERE note_id=? AND state='PENDING' ORDER BY idx", arrayOf(noteId),
+    ).use { c -> buildList { while (c.moveToNext()) add(storedWindow(c)) } }
+
+    /** The window with the highest index: for a note recorded with schema 5, the segmenter checkpoint. */
+    fun lastWindow(noteId: String): StoredWindow? = lastWindow(readableDatabase, noteId)
+    private fun lastWindow(db: SQLiteDatabase, noteId: String): StoredWindow? = db.rawQuery(
+        "SELECT $WINDOW_COLUMNS FROM windows WHERE note_id=? ORDER BY idx DESC LIMIT 1", arrayOf(noteId),
+    ).use { if (it.moveToFirst()) storedWindow(it) else null }
+
+    /** A planned window ending exactly at [endMs], to continue a partly transcribed gap after it. */
+    fun windowEndingAt(noteId: String, endMs: Long): StoredWindow? = readableDatabase.rawQuery(
+        "SELECT $WINDOW_COLUMNS FROM windows WHERE note_id=? AND own_end=? AND end_kind IS NOT NULL ORDER BY idx DESC LIMIT 1",
+        arrayOf(noteId, endMs.toString()),
+    ).use { if (it.moveToFirst()) storedWindow(it) else null }
+
+    fun nextWindowIndex(noteId: String): Int = nextWindowIndex(readableDatabase, noteId)
+    private fun nextWindowIndex(db: SQLiteDatabase, noteId: String): Int =
+        db.rawQuery("SELECT COALESCE(MAX(idx)+1,0) FROM windows WHERE note_id=?", arrayOf(noteId)).use {
+            it.moveToFirst(); it.getInt(0)
+        }
+
+    /** The stored recognizer tokens of a decoded window. */
+    fun windowTokens(windowId: Long): List<AsrToken>? = readableDatabase.rawQuery(
+        "SELECT tokens FROM windows WHERE id=?", arrayOf(windowId.toString()),
+    ).use { if (it.moveToFirst() && !it.isNull(0)) TranscriptJson.decodeTokens(it.getString(0)) else null }
+
+    private fun storedWindow(c: Cursor) = StoredWindow(
+        id = c.long("id"), noteId = c.string("note_id"), index = c.int("idx"),
+        ownStartMs = c.long("own_start"), ownEndMs = c.long("own_end"),
+        audioStartMs = c.long("audio_start"), audioEndMs = c.long("audio_end"),
+        keepLoMs = c.nullableLong("keep_lo"), keepHiMs = c.nullableLong("keep_hi"),
+        endKind = c.nullableString("end_kind")?.let(EndKind::valueOf), decideAtMs = c.long("decide_at"),
+        speechMs = c.long("speech_ms"), peak = c.int("peak"), state = WindowState.valueOf(c.string("state")),
+        skip = c.nullableString("skip"), hidden = c.int("hidden") == 1, engine = c.nullableString("engine"),
+        attempts = c.int("attempts"), rawText = c.nullableString("raw_text"), error = c.nullableString("error"),
     )
-    private fun readPassages(sql: String, args: Array<String>, includeOriginal: Boolean = false): List<Passage> = readableDatabase.rawQuery(sql, args).use { c -> buildList {
-        while (c.moveToNext()) {
-            val id = c.long("id")
-            val text = c.getString(c.getColumnIndexOrThrow("safe_text")) ?: passageReader(id).use { it.readText() }
-            val original = when {
-                !includeOriginal || c.isNull(c.getColumnIndexOrThrow("original_size")) -> null
-                c.int("original_matches_current") == 1 -> text
-                else -> c.getString(c.getColumnIndexOrThrow("safe_original_text"))
-                    ?: passageReader(id, original = true).use { it.readText() }
-            }
-            add(Passage(id, c.string("note_id"), c.string("chunk_id"), c.long("start"), c.long("end"), text,
-                c.int("uncertain") == 1, c.int("reviewed") == 1, original, c.int("excluded") == 1))
+
+    /** Untranscribed ranges of a migrated note, in time order. */
+    fun gaps(noteId: String): List<Gap> = readableDatabase.rawQuery(
+        "SELECT start,end FROM gaps WHERE note_id=? ORDER BY start", arrayOf(noteId),
+    ).use { c -> buildList { while (c.moveToNext()) add(Gap(noteId, c.getLong(0), c.getLong(1))) } }
+
+    /** Records a Pause at PCM sample [sample]; segmentation after process death replays it as a break. */
+    fun addBreak(noteId: String, sample: Long) {
+        writableDatabase.insertWithOnConflict("breaks", null, ContentValues().apply {
+            put("note_id", noteId); put("sample", sample)
+        }, SQLiteDatabase.CONFLICT_IGNORE)
+    }
+
+    fun breaks(noteId: String): List<Long> = readableDatabase.rawQuery(
+        "SELECT sample FROM breaks WHERE note_id=? ORDER BY sample", arrayOf(noteId),
+    ).use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }
+
+    fun progress(noteId: String): TranscriptionProgress {
+        val db = readableDatabase
+        val (duration, legacy) = db.rawQuery("SELECT duration,legacy FROM notes WHERE id=?", arrayOf(noteId)).use {
+            if (it.moveToFirst()) it.getLong(0) to (it.getInt(1) == 1) else return TranscriptionProgress(0, 0, 0, 0, 0)
         }
-    } }
-    // One SQL statement holds a consistent snapshot while individual rows fit safely
-    // inside CursorWindow. The byte stream preserves UTF-8 across block boundaries.
-    private fun passageReader(id: Long, limit: Boolean = true, original: Boolean = false): InputStreamReader {
-        val column = if (original) "original_transcript_text" else "text"
-        val cursor = readableDatabase.rawQuery("""WITH RECURSIVE offsets(pos,size) AS (
-            SELECT 1,length(CAST($column AS BLOB)) FROM passages WHERE id=?
-            UNION ALL SELECT pos+$TEXT_BLOCK_BYTES,size FROM offsets WHERE pos+$TEXT_BLOCK_BYTES<=size
-        ) SELECT substr(CAST(p.$column AS BLOB),offsets.pos,$TEXT_BLOCK_BYTES), offsets.size
-          FROM offsets JOIN passages p ON p.id=?""", arrayOf(id.toString(), id.toString()))
-        val stream = object : InputStream() {
-            var bytes = ByteArray(0)
-            var position = 0
-            var checked = false
-            override fun read(): Int {
-                if (position == bytes.size) {
-                    if (!cursor.moveToNext()) return -1
-                    if (!checked) {
-                        checked = true
-                        if (limit && cursor.getLong(1) > MAX_LEGACY_PASSAGE_BYTES)
-                            throw PassageSizeException("This saved passage is too large to open. Its original text is still saved.")
+        fun pair(sql: String) = db.rawQuery(sql, arrayOf(noteId)).use { it.moveToFirst(); it.getInt(0) to it.getLong(1) }
+        val (pending, pendingMs) = pair("SELECT count(*),COALESCE(SUM(own_end-own_start),0) FROM windows WHERE note_id=? AND state='PENDING'")
+        val (gaps, gapMs) = pair("SELECT count(*),COALESCE(SUM(end-start),0) FROM gaps WHERE note_id=?")
+        val (failed, coveredEnd) = pair("SELECT (SELECT count(*) FROM windows WHERE note_id=?1 AND state='FAILED')," +
+            "(SELECT COALESCE(MAX(own_end),0) FROM windows WHERE note_id=?1 AND end_kind IS NOT NULL)")
+        val tail = if (legacy) 0L else (duration - coveredEnd).coerceAtLeast(0)
+        return TranscriptionProgress(duration, pendingMs + gapMs + tail, pending, gaps, failed)
+    }
+
+    /** Windows and migrated ranges still waiting for transcription. */
+    fun pendingCount(noteId: String): Int = progress(noteId).let { it.pendingWindows + it.gaps }
+
+    /** Saved audio that no committed window has transcribed yet. */
+    fun hasUntranscribedAudio(note: Note): Boolean = progress(note.id).let { it.remainingMs > 0 || it.pendingWindows > 0 }
+
+    /**
+     * Completes a transcription: all paragraphs close and the note becomes READY. Refused (false) while a
+     * window is pending, a migrated range is untranscribed or saved audio lies beyond the last window.
+     */
+    fun markReady(noteId: String): Boolean {
+        val ready = writableDatabase.transaction {
+            val progress = progress(noteId)
+            if (progress.pendingWindows > 0 || progress.gaps > 0 || progress.remainingMs > 0) return@transaction false
+            execSQL("UPDATE paragraphs SET open=0 WHERE note_id=? AND open=1", arrayOf<Any>(noteId))
+            update("notes", ContentValues().apply {
+                put("state", NoteState.READY); put("error", ""); putNull("pause_reason")
+            }, "id=? AND deleted_at IS NULL", arrayOf(noteId)) == 1
+        }
+        if (ready) changed()
+        return ready
+    }
+
+    // ---------------------------------------------------------------- paragraphs
+
+    /** Every paragraph of a note in order, hidden ones included ([Paragraph.visible] filters them). */
+    fun paragraphs(noteId: String): List<Paragraph> = paragraphsIn(readableDatabase, "note_id=?", listOf(noteId))
+
+    fun paragraph(id: Long): Paragraph? = paragraphsIn(readableDatabase, "id=?", listOf(id.toString())).firstOrNull()
+
+    private fun paragraphsIn(db: SQLiteDatabase, where: String, args: List<String>, descending: Boolean = false,
+                             limit: Int? = null): List<Paragraph> {
+        val order = if (descending) "ord DESC,id DESC" else "ord,id"
+        return db.rawQuery("SELECT $PARAGRAPH_COLUMNS FROM paragraphs WHERE $where ORDER BY $order" +
+            (limit?.let { " LIMIT $it" } ?: ""), args.toTypedArray()).use { c ->
+            buildList {
+                while (c.moveToNext()) {
+                    val id = c.long("id")
+                    if (c.long("text_bytes") > MAX_LEGACY_PASSAGE_BYTES)
+                        throw PassageSizeException("This saved paragraph is too large to open. Its text is still saved.")
+                    val text = c.nullableString("inline_text") ?: longText(db, id, "text")
+                    val source = when (c.int("source_kind")) {
+                        0 -> null
+                        1 -> text
+                        2 -> c.nullableString("inline_source")
+                        else -> longText(db, id, "source_text")
                     }
-                    bytes = cursor.getBlob(0) ?: ByteArray(0); position = 0
-                    if (bytes.isEmpty()) return -1
-                }
-                return bytes[position++].toInt() and 0xff
-            }
-            override fun read(b: ByteArray, off: Int, len: Int): Int {
-                if (len == 0) return 0
-                val first = read(); if (first < 0) return -1
-                b[off] = first.toByte()
-                val count = minOf(len - 1, bytes.size - position)
-                System.arraycopy(bytes, position, b, off + 1, count); position += count
-                return count + 1
-            }
-            override fun close() { cursor.close() }
-        }
-        return InputStreamReader(stream, Charsets.UTF_8)
-    }
-    private fun passageContains(id: Long, term: String): Boolean = passageReader(id, limit = false).use { reader ->
-        val buffer = CharArray(8192)
-        var carry = ""
-        while (true) {
-            val count = reader.read(buffer)
-            if (count < 0) break
-            val block = carry + String(buffer, 0, count)
-            if (block.contains(term, ignoreCase = true)) return@use true
-            carry = block.takeLast((term.length - 1).coerceAtLeast(0))
-        }
-        false
-    }
-    fun complete(chunk: Chunk, results: List<Passage>) {
-        val db = writableDatabase
-        db.transaction {
-            val saved = rawQuery("SELECT * FROM chunks WHERE id=?", arrayOf(chunk.id)).use { if (it.moveToFirst()) chunkFromCursor(it) else null }
-                ?: return@transaction // A note deleted while inference was in flight stays deleted.
-            if (saved.state == "DONE") return@transaction
-            check(saved.state == "PENDING") { "Audio has not finished saving." }
-            require(saved.noteId == chunk.noteId && saved.start == chunk.start && saved.end == chunk.end) { "The source audio range changed." }
-            results.forEach { p ->
-                require(p.noteId == saved.noteId && p.chunkId == saved.id && p.start >= saved.start && p.end >= p.start && p.end <= saved.end) {
-                    "A passage does not match its source audio."
+                    add(Paragraph(id, c.string("note_id"), c.int("ord"), c.long("start_ms"), c.long("end_ms"), text, source,
+                        c.nullableString("words"), c.int("edited") == 1, c.int("hidden") == 1, c.int("open") == 1,
+                        c.long("revision")))
                 }
             }
-            results.forEach { p -> db.insertOrThrow("passages", null, ContentValues().apply {
-                put("note_id", p.noteId); put("chunk_id", p.chunkId); put("start", p.start); put("end", p.end)
-                put("text", p.text); put("uncertain", if (p.uncertain) 1 else 0)
-                put("original_transcript_text", p.text)
-            }) }
-            db.update("chunks", ContentValues().apply { put("state", "DONE") }, "id=?", arrayOf(chunk.id))
-            if (note(chunk.noteId)?.title == "Untitled note") {
-                val title = results.joinToString(" ") { it.text }
-                if (title.isNotBlank()) db.update("notes", ContentValues().apply {
-                    put("title", Transcript.title(title)); put("automatic_title_chunk", chunk.id)
-                }, "id=? AND automatic_title_chunk IS NULL", arrayOf(chunk.noteId))
-            }
         }
-        changed()
     }
-    fun edit(passage: Passage, text: String) {
-        if (!fitsPassageDraftBudget(text))
-            throw PassageSizeException("This passage is too long to save. Shorten it and try again; your draft is still open.")
+
+    /** Text too large for one cursor window is read in blocks of characters. */
+    private fun longText(db: SQLiteDatabase, id: Long, column: String): String {
+        val length = db.rawQuery("SELECT length($column) FROM paragraphs WHERE id=?", arrayOf(id.toString())).use {
+            if (it.moveToFirst()) it.getLong(0) else 0L
+        }
+        val out = StringBuilder(length.toInt())
+        var position = 1L
+        while (position <= length) {
+            db.rawQuery("SELECT substr($column,?,$TEXT_BLOCK_CHARS) FROM paragraphs WHERE id=?",
+                arrayOf(position.toString(), id.toString())).use { if (it.moveToFirst()) out.append(it.getString(0)) }
+            position += TEXT_BLOCK_CHARS
+        }
+        return out.toString()
+    }
+
+    /** The note body for Copy and Share. */
+    fun transcript(noteId: String): String = transcriptText(paragraphs(noteId))
+
+    private fun editable(db: SQLiteDatabase, paragraph: Paragraph?, revision: Long): EditResult? = when {
+        paragraph == null -> EditResult.Missing
+        noteState(db, paragraph.noteId) != NoteState.READY -> EditResult.NotEditable
+        paragraph.revision != revision -> EditResult.Conflict
+        else -> null
+    }
+
+    private fun noteState(db: SQLiteDatabase, noteId: String): String? =
+        db.rawQuery("SELECT state FROM notes WHERE id=? AND deleted_at IS NULL", arrayOf(noteId)).use {
+            if (it.moveToFirst()) it.getString(0) else null
+        }
+
+    private inline fun edit(crossinline block: SQLiteDatabase.() -> EditResult): EditResult {
+        val result = writableDatabase.transaction { block() }
+        if (result is EditResult.Saved) changed()
+        return result
+    }
+
+    /** Replaces a paragraph's text; [revision] is the revision the editor started from. */
+    fun editParagraph(id: Long, revision: Long, text: String): EditResult {
+        if (!fitsPassageDraftBudget(text)) return EditResult.TooLarge
+        return edit {
+            val paragraph = paragraphsIn(this, "id=?", listOf(id.toString())).firstOrNull()
+            editable(this, paragraph, revision)?.let { return@edit it }
+            paragraph!!
+            val value = text.trim()
+            if (value == paragraph.text && !paragraph.hidden) return@edit EditResult.Saved(listOf(paragraph))
+            writeText(this, paragraph.id, value, edited = paragraph.sourceText == null || value != paragraph.sourceText)
+            refreshTitle(this, paragraph.noteId)
+            EditResult.Saved(paragraphsIn(this, "id=?", listOf(id.toString())))
+        }
+    }
+
+    /** Puts back the recognizer's text of an edited paragraph. */
+    fun restoreOriginal(id: Long, revision: Long): EditResult = edit {
+        val paragraph = paragraphsIn(this, "id=?", listOf(id.toString())).firstOrNull()
+        editable(this, paragraph, revision)?.let { return@edit it }
+        val source = paragraph!!.sourceText ?: return@edit EditResult.NoOriginal
+        writeText(this, paragraph.id, source, edited = false)
+        refreshTitle(this, paragraph.noteId)
+        EditResult.Saved(paragraphsIn(this, "id=?", listOf(id.toString())))
+    }
+
+    /** Shows a paragraph that the retired background-sound review had excluded. */
+    fun unhideParagraph(id: Long): Boolean {
+        val shown = writableDatabase.transaction {
+            val paragraph = paragraphsIn(this, "id=?", listOf(id.toString())).firstOrNull()
+            if (paragraph == null || !paragraph.hidden) return@transaction false
+            unindexParagraph(id)
+            execSQL("UPDATE paragraphs SET hidden=0,revision=revision+1 WHERE id=?", arrayOf<Any>(id))
+            indexParagraph(id)
+            refreshTitle(this, paragraph.noteId)
+            true
+        }
+        if (shown) changed()
+        return shown
+    }
+
+    private fun writeText(db: SQLiteDatabase, id: Long, text: String, edited: Boolean) {
+        db.unindexParagraph(id)
+        db.execSQL("UPDATE paragraphs SET text=?,edited=?,hidden=0,revision=revision+1 WHERE id=?",
+            arrayOf<Any>(text, if (edited) 1 else 0, id))
+        db.indexParagraph(id)
+    }
+
+    /** Splits a paragraph at char [offset] of its text (Enter in the editor). */
+    fun splitParagraph(id: Long, revision: Long, offset: Int): EditResult = edit {
+        val paragraph = paragraphsIn(this, "id=?", listOf(id.toString())).firstOrNull()
+        editable(this, paragraph, revision)?.let { return@edit it }
+        paragraph!!
+        require(offset in 0..paragraph.text.length) { "The split position is outside the paragraph." }
+        val (first, second) = ParagraphEdits.split(paragraph.content(), offset)
+        writeContent(this, paragraph.id, first)
+        execSQL("UPDATE paragraphs SET ord=ord+1 WHERE note_id=? AND ord>?", arrayOf<Any>(paragraph.noteId, paragraph.ord))
+        val added = insertOrThrow("paragraphs", null, ContentValues().apply {
+            put("note_id", paragraph.noteId); put("ord", paragraph.ord + 1)
+            put("start_ms", second.startMs); put("end_ms", second.endMs); put("text", second.text)
+            put("source_text", second.sourceText); put("words", second.words?.let(TranscriptJson::encodeWords))
+            put("edited", if (second.edited) 1 else 0); put("hidden", if (paragraph.hidden) 1 else 0)
+        })
+        indexParagraph(added)
+        refreshTitle(this, paragraph.noteId)
+        EditResult.Saved(paragraphsIn(this, "id IN (?,?)", listOf(id.toString(), added.toString())))
+    }
+
+    /** Joins a paragraph with the next visible one (Backspace at the start of [secondId]). */
+    fun mergeParagraphs(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditResult = edit {
+        val first = paragraphsIn(this, "id=?", listOf(firstId.toString())).firstOrNull()
+        val second = paragraphsIn(this, "id=?", listOf(secondId.toString())).firstOrNull()
+        editable(this, first, firstRevision)?.let { return@edit it }
+        editable(this, second, secondRevision)?.let { return@edit it }
+        first!!; second!!
+        if (first.noteId != second.noteId || first.ord >= second.ord) return@edit EditResult.Conflict
+        val between = rawQuery("""SELECT count(*) FROM paragraphs WHERE note_id=? AND ord>? AND ord<?
+            AND hidden=0 AND trim(text)!=''""", arrayOf(first.noteId, first.ord.toString(), second.ord.toString())).use {
+            it.moveToFirst(); it.getInt(0)
+        }
+        if (between > 0) return@edit EditResult.Conflict
+        val merged = ParagraphEdits.merge(first.content(), second.content())
+        if (!fitsPassageDraftBudget(merged.text)) return@edit EditResult.TooLarge
+        unindexParagraph(second.id)
+        delete("paragraphs", "id=?", arrayOf(second.id.toString()))
+        writeContent(this, first.id, merged, hidden = first.hidden && second.hidden)
+        refreshTitle(this, first.noteId)
+        EditResult.Saved(paragraphsIn(this, "id=?", listOf(firstId.toString())))
+    }
+
+    private fun Paragraph.content() = ParagraphContent(text, sourceText, sourceWords(), startMs, endMs, edited)
+
+    private fun writeContent(db: SQLiteDatabase, id: Long, content: ParagraphContent, hidden: Boolean? = null) {
+        db.unindexParagraph(id)
+        db.update("paragraphs", ContentValues().apply {
+            put("text", content.text); put("source_text", content.sourceText)
+            put("words", content.words?.let(TranscriptJson::encodeWords))
+            put("start_ms", content.startMs); put("end_ms", content.endMs); put("edited", if (content.edited) 1 else 0)
+            hidden?.let { put("hidden", if (it) 1 else 0) }
+        }, "id=?", arrayOf(id.toString()))
+        db.execSQL("UPDATE paragraphs SET revision=revision+1 WHERE id=?", arrayOf<Any>(id))
+        db.indexParagraph(id)
+    }
+
+    /** Find in note: every occurrence of [query] in the visible paragraphs, in reading order. */
+    fun findInNote(noteId: String, query: String): List<TextMatch> {
+        if (query.isEmpty()) return emptyList()
+        return paragraphs(noteId).filter { it.visible }.flatMap { paragraph ->
+            SearchText.occurrences(paragraph.text, query).map { TextMatch(paragraph.id, it.first, it.last + 1) }
+        }
+    }
+
+    /** Replaces every occurrence of [query] in the visible paragraphs of a ready note, all or nothing. */
+    fun replaceAll(noteId: String, query: String, replacement: String): ReplaceResult {
+        if (query.isEmpty()) return ReplaceResult(0, null, EditResult.Saved(emptyList()))
+        var count = 0
+        var undo: ReplaceUndo? = null
+        val outcome = edit {
+            if (noteState(this, noteId) != NoteState.READY) return@edit EditResult.NotEditable
+            val changes = paragraphsIn(this, "note_id=?", listOf(noteId)).filter { it.visible }.mapNotNull { paragraph ->
+                val ranges = SearchText.occurrences(paragraph.text, query)
+                if (ranges.isEmpty()) return@mapNotNull null
+                count += ranges.size
+                Triple(paragraph, SearchText.replace(paragraph.text, ranges, replacement), ranges.size)
+            }
+            if (changes.any { !fitsPassageDraftBudget(it.second) }) { count = 0; return@edit EditResult.TooLarge }
+            val written = changes.filter { (paragraph, text) -> text != paragraph.text }
+            written.forEach { (paragraph, text) ->
+                writeText(this, paragraph.id, text, edited = paragraph.sourceText == null || text != paragraph.sourceText)
+            }
+            if (written.isNotEmpty()) refreshTitle(this, noteId)
+            val saved = if (written.isEmpty()) emptyList() else paragraphsIn(this,
+                "id IN (${written.joinToString(",") { "?" }})", written.map { it.first.id.toString() })
+            undo = ReplaceUndo(noteId, saved.map { after ->
+                val before = written.first { it.first.id == after.id }.first
+                ReplaceUndo.Entry(after.id, before.text, before.edited, after.revision)
+            }).takeIf { it.entries.isNotEmpty() }
+            EditResult.Saved(saved)
+        }
+        return ReplaceResult(if (outcome is EditResult.Saved) count else 0, undo, outcome)
+    }
+
+    /** Undoes a Replace all, unless one of its paragraphs changed since. */
+    fun undoReplace(undo: ReplaceUndo): EditResult = edit {
+        if (noteState(this, undo.noteId) != NoteState.READY) return@edit EditResult.NotEditable
+        val current = undo.entries.map { entry ->
+            paragraphsIn(this, "id=?", listOf(entry.paragraphId.toString())).firstOrNull() ?: return@edit EditResult.Missing
+        }
+        if (current.zip(undo.entries).any { (paragraph, entry) -> paragraph.revision != entry.revision })
+            return@edit EditResult.Conflict
+        undo.entries.forEach { writeText(this, it.paragraphId, it.text, it.edited) }
+        refreshTitle(this, undo.noteId)
+        EditResult.Saved(undo.entries.flatMap { paragraphsIn(this, "id=?", listOf(it.paragraphId.toString())) })
+    }
+
+    /** An automatic title follows the first sentence of the current text. */
+    private fun refreshTitle(db: SQLiteDatabase, noteId: String) {
+        val (seq, current) = db.rawQuery("SELECT seq,title FROM notes WHERE id=? AND title_is_custom=0", arrayOf(noteId)).use {
+            if (it.moveToFirst()) it.getLong(0) to it.getString(1) else return
+        }
+        val title = Title.of(StoreSchema.titleWords(db, noteId))
+        if (title == current) return
+        db.unindexTitle(seq)
+        db.update("notes", ContentValues().apply { put("title", title) }, "id=?", arrayOf(noteId))
+        db.indexTitle(seq)
+    }
+
+    // ---------------------------------------------------------------- search index
+
+    private fun noteSeq(db: SQLiteDatabase, id: String): Long? =
+        db.rawQuery("SELECT seq FROM notes WHERE id=?", arrayOf(id)).use { if (it.moveToFirst()) it.getLong(0) else null }
+
+    private fun SQLiteDatabase.indexParagraph(id: Long) = execSQL(
+        "INSERT INTO paragraph_fts(docid,body) SELECT rowid,body FROM paragraph_search WHERE rowid=?", arrayOf<Any>(id))
+    private fun SQLiteDatabase.unindexParagraph(id: Long) =
+        execSQL("DELETE FROM paragraph_fts WHERE docid=?", arrayOf<Any>(id))
+    private fun SQLiteDatabase.indexTitle(seq: Long) = execSQL(
+        "INSERT INTO title_fts(docid,body) SELECT rowid,body FROM title_search WHERE rowid=?", arrayOf<Any>(seq))
+    private fun SQLiteDatabase.unindexTitle(seq: Long) =
+        execSQL("DELETE FROM title_fts WHERE docid=?", arrayOf<Any>(seq))
+
+    // ---------------------------------------------------------------- deletion and recovery
+
+    /** Moves a note to the trash so the deletion can be undone; [purgeDeleted] deletes it for good. */
+    fun deleteWithUndo(id: String): Boolean {
+        val deleted = writableDatabase.update("notes", ContentValues().apply { put("deleted_at", System.currentTimeMillis()) },
+            "id=? AND deleted_at IS NULL AND state NOT IN ('${NoteState.ACTIVE.joinToString("','")}')", arrayOf(id)) == 1
+        if (deleted) changed()
+        return deleted
+    }
+
+    fun undoDelete(id: String): Boolean {
+        val restored = writableDatabase.update("notes", ContentValues().apply { putNull("deleted_at") },
+            "id=? AND deleted_at IS NOT NULL", arrayOf(id)) == 1
+        if (restored) changed()
+        return restored
+    }
+
+    /** Permanently deletes a trashed note, or every trashed note. */
+    fun purgeDeleted(id: String? = null) = trashed(id).forEach(::delete)
+
+    private fun trashed(id: String?): List<String> = readableDatabase.rawQuery(
+        "SELECT id FROM notes WHERE deleted_at IS NOT NULL" + if (id == null) "" else " AND id=?",
+        id?.let { arrayOf(it) },
+    ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+
+    /** Permanently deletes a note, its text and its audio now. */
+    fun delete(id: String) {
         writableDatabase.transaction {
-            val identity = arrayOf(passage.id.toString(), passage.noteId, passage.chunkId)
-            val wasExcluded = rawQuery("SELECT excluded FROM passages WHERE id=? AND note_id=? AND chunk_id=?", identity).use {
-                it.moveToFirst() && it.getInt(0) == 1
+            insertWithOnConflict("pending_audio_deletions", null, ContentValues().apply { put("note_id", id) }, SQLiteDatabase.CONFLICT_IGNORE)
+            val paragraphIds = rawQuery("SELECT id FROM paragraphs WHERE note_id=?", arrayOf(id)).use { c ->
+                buildList { while (c.moveToNext()) add(c.getLong(0)) }
             }
-            val updated = update("passages", ContentValues().apply {
-                put("text", text.trim()); put("reviewed", 1); put("excluded", 0)
-            }, "id=? AND note_id=? AND chunk_id=?", identity)
-            check(updated == 1) { "This passage is no longer available. Your draft has not been saved." }
-            if (wasExcluded) refreshAutomaticTitle(this, passage)
+            paragraphIds.forEach { unindexParagraph(it) }
+            noteSeq(this, id)?.let { unindexTitle(it) }
+            delete("notes", "id=?", arrayOf(id))
         }
-        changed()
-    }
-    /** Notes checked by the retired background-sound feature can hold excluded passages; this brings one back. */
-    fun restorePassage(passage: Passage): Boolean {
-        val updated = writableDatabase.transaction {
-            val changed = update("passages", ContentValues().apply {
-                put("excluded", 0); put("reviewed", 1)
-            }, "id=? AND note_id=? AND chunk_id=? AND excluded=1",
-                arrayOf(passage.id.toString(), passage.noteId, passage.chunkId)) == 1
-            if (changed) refreshAutomaticTitle(this, passage)
-            changed
-        }
-        if (updated) changed()
-        return updated
+        try { deletePendingAudio(id) } finally { changed() }
     }
 
-    private fun refreshAutomaticTitle(db: SQLiteDatabase, passage: Passage) {
-        val identity = arrayOf(passage.noteId, passage.chunkId)
-        val titleSource = db.rawQuery("SELECT 1 FROM notes WHERE id=? AND automatic_title_chunk=?", identity).use { it.moveToFirst() }
-        if (!titleSource) return
-        val text = db.rawQuery(
-            "SELECT substr(ltrim(text),1,512) FROM passages WHERE note_id=? AND chunk_id=? AND excluded=0 ORDER BY start,id",
-            identity,
-        ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) }.joinToString(" ") }
-        db.update("notes", ContentValues().apply { put("title", Transcript.title(text)) },
-            "id=? AND automatic_title_chunk=?", identity)
+    /** Keeps the text and deletes the audio. Only once nothing is left to transcribe. */
+    fun removeAudio(id: String) {
+        writableDatabase.transaction {
+            val note = checkNotNull(note(id)) { "This note is no longer available." }
+            val progress = progress(id)
+            check(note.state !in NoteState.ACTIVE && progress.pendingWindows == 0 && progress.gaps == 0 && progress.remainingMs == 0L) {
+                "Finish transcription before removing its source audio."
+            }
+            insertWithOnConflict("pending_audio_deletions", null, ContentValues().apply { put("note_id", id) }, SQLiteDatabase.CONFLICT_IGNORE)
+            update("notes", ContentValues().apply { put("audio_present", 0) }, "id=?", arrayOf(id))
+        }
+        try { deletePendingAudio(id) } finally { changed() }
     }
 
+    private fun deletePendingAudio(id: String) {
+        try { Files.deleteIfExists(audioFile(id).toPath()) }
+        catch (e: IOException) { throw IOException("Could not remove saved audio. Focal will retry when it next opens.", e) }
+        writableDatabase.delete("pending_audio_deletions", "note_id=?", arrayOf(id))
+    }
+
+    /**
+     * After process death (all notes) or a failed capture (one note): a recording or transcription that was
+     * running waits for transcription, with its duration taken from the synced audio file. At startup the
+     * trash is emptied and interrupted audio deletions are retried.
+     */
     fun recover(noteId: String? = null) {
         val db = writableDatabase
         db.transaction {
-            val scope = if (noteId == null) "" else " AND n.id=?"
+            val scope = if (noteId == null) "" else " AND id=?"
             val args = noteId?.let { arrayOf(it) }
-            // Only interrupted/error captures need conservative tail reconciliation;
-            // READY legacy notes keep their intentional silence-gate gaps unchanged.
-            val candidates = rawQuery("""SELECT n.id FROM notes n
-                WHERE n.state IN ('RECORDING','PAUSED','PROCESSING','INTERRUPTED','ERROR')
-                AND NOT EXISTS(SELECT 1 FROM pending_audio_deletions d WHERE d.note_id=n.id)$scope""",
-                args).use { c ->
+            val active = rawQuery("""SELECT id,state FROM notes WHERE state IN ('${NoteState.ACTIVE.joinToString("','")}')
+                AND deleted_at IS NULL$scope""", args).use { c ->
+                buildList { while (c.moveToNext()) add(c.getString(0) to c.getString(1)) }
+            }
+            active.forEach { (id, state) ->
+                update("notes", ContentValues().apply {
+                    put("state", NoteState.INTERRUPTED); put("error", INTERRUPTED_MESSAGE); putNull("pause_reason")
+                }, "id=?", arrayOf(id))
+                if (noteId == null && state != NoteState.PROCESSING)
+                    execSQL("UPDATE notes SET end_reason=? WHERE id=? AND end_reason IS NULL",
+                        arrayOf<Any>(CaptureReason.PROCESS_ENDED, id))
+            }
+            // The synced file is the durable duration of every recording that may still need transcription.
+            val waiting = rawQuery("SELECT id FROM notes WHERE state IN ('${NoteState.INTERRUPTED}','${NoteState.ERROR}') " +
+                "AND audio_present=1 AND deleted_at IS NULL$scope", args).use { c ->
                 buildList { while (c.moveToNext()) add(c.getString(0)) }
             }
-            val noteScope = if (noteId == null) "" else " AND id=?"
-            execSQL("UPDATE notes SET state='INTERRUPTED',error='Recording was interrupted. Saved audio can still be transcribed.' WHERE state IN ('RECORDING','PAUSED','PROCESSING')$noteScope", args ?: emptyArray())
-            val synced = mutableSetOf<String>()
-            fun syncOriginal(id: String) {
-                if (synced.add(id)) RandomAccessFile(audioFile(id), "rw").use { it.fd.sync() }
-            }
-            val writing = rawQuery("SELECT * FROM chunks WHERE state='WRITING'" + if (noteId == null) "" else " AND note_id=?", args).use { c ->
-                buildList { while (c.moveToNext()) add(chunkFromCursor(c)) }
-            }
-            writing.forEach { saved ->
-                val end = audioFile(saved.noteId).length() / BYTES_PER_MS
-                if (saved.start < 0 || end - saved.start < MIN_RECOVERABLE_MS) {
-                    delete("chunks", "id=?", arrayOf(saved.id))
-                } else {
-                    // Live recovery can follow a failed capture sync. It must succeed
-                    // here before any recovered range becomes PENDING.
-                    syncOriginal(saved.noteId)
-                    publishRecoveredRange(this, saved.noteId, saved.start, end, saved.overlap, saved.id)
-                }
-            }
-            candidates.forEach { id ->
+            waiting.forEach { id ->
                 val file = audioFile(id)
                 if (!file.isFile) return@forEach
-                val end = file.length() / BYTES_PER_MS
-                if (note(id)?.speechEngine == ULTRA_ENGINE) {
-                    // The worker rebuilds its next pause-aware window from the saved cursor.
-                    // Never replace committed text or pre-split its tail with Whisper framing.
-                    syncOriginal(id)
-                    update("notes", ContentValues().apply { put("duration", end) }, "id=?", arrayOf(id))
-                    return@forEach
-                }
-                // Legacy Whisper notes: publish their unpublished tail as <=30 s PENDING ranges,
-                // which the speech worker now drains with Ultra (it plans no new windows for them).
-                // TODO(coverage-map migration, DB v5): replace this with a coverage map built from
-                // all chunk states, so legacy notes resume exactly where coverage ends.
-                val missing = uncoveredRanges(this, id, lastChunkEnd(this, id), end)
-                    .filter { it.end - it.start >= MIN_RECOVERABLE_MS }
-                if (missing.isNotEmpty()) {
-                    syncOriginal(id)
-                    missing.forEach { range -> publishRecoveredRange(this, id, range.start, range.end, overlap = false) }
-                    update("notes", ContentValues().apply {
-                        put("state", "INTERRUPTED")
-                        put("error", "Recording was interrupted. Saved audio can still be transcribed.")
-                    }, "id=?", arrayOf(id))
-                }
-                update("notes", ContentValues().apply { put("duration", end) }, "id=?", arrayOf(id))
+                RandomAccessFile(file, "rw").use { it.fd.sync() }
+                update("notes", ContentValues().apply { put("duration", file.length() / BYTES_PER_MS) }, "id=?", arrayOf(id))
             }
         }
+        // A deletion that was not undone before the process ended is final. Its rows go now; a failed
+        // file deletion stays in the journal and is retried below and at the next start.
+        if (noteId == null) trashed(null).forEach { id -> try { delete(id) } catch (_: IOException) { } }
         // Filesystem and SQLite cannot share a transaction. A committed intent makes
         // deletion retryable after process death or a transient filesystem failure.
         val deletions = db.rawQuery("SELECT note_id FROM pending_audio_deletions", null).use { c ->
@@ -451,68 +872,56 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         deletions.forEach { try { deletePendingAudio(it) } catch (_: IOException) { /* Retry next launch. */ } }
         changed()
     }
-    private data class MissingRange(val start: Long, val end: Long)
-    private fun uncoveredRanges(db: SQLiteDatabase, note: String, start: Long, end: Long): List<MissingRange> {
-        if (start >= end) return emptyList()
-        val missing = mutableListOf<MissingRange>()
-        var through = start
-        db.rawQuery("SELECT start,end FROM chunks WHERE note_id=? AND state IN ('DONE','PENDING') AND end>? AND start<? ORDER BY start,end",
-            arrayOf(note, start.toString(), end.toString())).use { c ->
-            while (c.moveToNext()) {
-                val coveredStart = c.getLong(0)
-                val coveredEnd = c.getLong(1)
-                if (coveredStart > through) missing += MissingRange(through, coveredStart)
-                if (coveredEnd > through) through = coveredEnd
-                if (through >= end) break
-            }
-        }
-        if (through < end) missing += MissingRange(through, end)
-        return missing
-    }
-    private fun publishRecoveredRange(db: SQLiteDatabase, note: String, from: Long, end: Long,
-                                      overlap: Boolean, writingId: String? = null) {
-        var start = from
-        var first = true
-        while (start < end) {
-            val nextEnd = minOf(end, start + MAX_CHUNK_MS)
-            if (first && writingId != null) {
-                db.update("chunks", ContentValues().apply { put("end", nextEnd); put("state", "PENDING") }, "id=?", arrayOf(writingId))
-            } else {
-                db.insertOrThrow("chunks", null, ContentValues().apply {
-                    put("id", UUID.randomUUID().toString()); put("note_id", note); put("start", start); put("end", nextEnd)
-                    put("overlap", if (overlap || !first) 1 else 0); put("state", "PENDING")
+
+    /** Notes waiting for transcription, oldest first: the drain resumes them from a foreground start. */
+    fun waitingNotes(): List<String> = readableDatabase.rawQuery(
+        "SELECT id FROM notes WHERE state='${NoteState.INTERRUPTED}' AND deleted_at IS NULL AND audio_present=1 ORDER BY created",
+        null,
+    ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+
+    /**
+     * A note with the given paragraphs, for UI and service tests. Paragraphs get no word times unless
+     * [timedWords] is set, in which case each word gets an even share of its paragraph. [hidden] lists the
+     * indices of paragraphs that a legacy background-sound review excluded.
+     */
+    @VisibleForTesting
+    internal fun insertNoteForTests(paragraphs: List<String>, durationMs: Long = 1_000L * paragraphs.size.coerceAtLeast(1),
+                                    title: String? = null, state: String = NoteState.READY, legacy: Boolean = false,
+                                    created: Long = System.currentTimeMillis(), timedWords: Boolean = false,
+                                    hidden: Set<Int> = emptySet()): String {
+        val id = insertNote(state, legacy, created, language = if (legacy) "en" else AUTOMATIC_LANGUAGE,
+            engine = if (legacy) LEGACY_WHISPER_ENGINE else ULTRA_ENGINE)
+        writableDatabase.transaction {
+            val span = durationMs / paragraphs.size.coerceAtLeast(1)
+            paragraphs.forEachIndexed { i, text ->
+                val start = i * span
+                val tokens = text.split(' ').filter { it.isNotEmpty() }
+                val words = if (!timedWords || tokens.isEmpty()) null else tokens.mapIndexed { k, word ->
+                    val step = span / tokens.size
+                    Word(word, start + k * step, start + (k + 1) * step, null, false, i)
+                }
+                val added = insertOrThrow("paragraphs", null, ContentValues().apply {
+                    put("note_id", id); put("ord", i); put("start_ms", start); put("end_ms", start + span)
+                    put("text", text); put("source_text", if (legacy) null else text)
+                    put("words", words?.let(TranscriptJson::encodeWords)); put("hidden", if (i in hidden) 1 else 0)
                 })
+                indexParagraph(added)
             }
-            if (nextEnd == end) break
-            start = nextEnd - RECOVERY_OVERLAP_MS
-            first = false
+            update("notes", ContentValues().apply { put("duration", durationMs) }, "id=?", arrayOf(id))
+            if (title != null) {
+                val seq = noteSeq(this, id)!!
+                unindexTitle(seq)
+                update("notes", ContentValues().apply { put("title", title); put("title_is_custom", 1) }, "id=?", arrayOf(id))
+                indexTitle(seq)
+            } else refreshTitle(this, id)
         }
+        changed()
+        return id
     }
-    fun delete(id: String) {
-        writableDatabase.transaction {
-            insertWithOnConflict("pending_audio_deletions", null, ContentValues().apply { put("note_id", id) }, SQLiteDatabase.CONFLICT_IGNORE)
-            delete("notes", "id=?", arrayOf(id))
-        }
-        try { deletePendingAudio(id) } finally { changed() }
-    }
-    fun removeAudio(id: String) {
-        writableDatabase.transaction {
-            check(pendingCount(id) == 0 && note(id)?.let(::hasUnpublishedTail) != true) {
-                "Finish transcription before removing its source audio."
-            }
-            insertWithOnConflict("pending_audio_deletions", null, ContentValues().apply { put("note_id", id) }, SQLiteDatabase.CONFLICT_IGNORE)
-        }
-        try { deletePendingAudio(id) } finally { changed() }
-    }
-    private fun deletePendingAudio(id: String) {
-        try { Files.deleteIfExists(audioFile(id).toPath()) }
-        catch (e: IOException) { throw IOException("Could not remove saved audio. Focal will retry when it next opens.", e) }
-        writableDatabase.delete("pending_audio_deletions", "note_id=?", arrayOf(id))
-    }
-    fun audioBytes(id: String) = audioFile(id).length()
-    private fun chunkFromCursor(c: Cursor) = Chunk(c.string("id"), c.string("note_id"), c.long("start"), c.long("end"), c.int("overlap") == 1, c.string("state"),
-        c.getColumnIndex("next_start").takeIf { it >= 0 && !c.isNull(it) }?.let(c::getLong))
+
     private fun Cursor.string(name: String) = getString(getColumnIndexOrThrow(name)) ?: ""
+    private fun Cursor.nullableString(name: String): String? = getColumnIndexOrThrow(name).let { if (isNull(it)) null else getString(it) }
     private fun Cursor.long(name: String) = getLong(getColumnIndexOrThrow(name))
+    private fun Cursor.nullableLong(name: String): Long? = getColumnIndexOrThrow(name).let { if (isNull(it)) null else getLong(it) }
     private fun Cursor.int(name: String) = getInt(getColumnIndexOrThrow(name))
 }

@@ -15,9 +15,9 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import app.focal.data.Passage
+import app.focal.data.Paragraph
 import app.focal.data.PassageSizeException
-import app.focal.data.transferableTranscript
+import app.focal.data.transcriptText
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
 import app.focal.recording.SessionOperations
@@ -108,7 +108,7 @@ class FocalViewModelTest {
     }
 
     @Test fun failedReadsKeepKnownDataAndRetryAfterInitialAndLaterErrors() {
-        val id = app.store.createLegacy("en").also { created += it }
+        val id = app.store.insertNoteForTests(emptyList(), 0, legacy = true).also { created += it }
         app.store.rename(id, "Recoverable library")
         val failing = AtomicBoolean(true)
         val model = model(read = { if (failing.get()) throw IOException("Synthetic read failure") })
@@ -135,8 +135,8 @@ class FocalViewModelTest {
     }
 
     @Test fun delayedDeletionDoesNotClearTheNewSelection() {
-        val first = app.store.createLegacy("en").also { created += it }
-        val second = app.store.createLegacy("en").also { created += it }
+        val first = app.store.insertNoteForTests(emptyList(), 0, legacy = true).also { created += it }
+        val second = app.store.insertNoteForTests(emptyList(), 0, legacy = true).also { created += it }
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val model = model(delete = { id ->
@@ -163,10 +163,8 @@ class FocalViewModelTest {
     }
 
     @Test fun delayedDeletionExcludesRecoveryAcrossControllersUntilDiskWorkFinishes() {
-        val id = app.store.createLegacy("en").also { created += it }
+        val id = app.store.insertNoteForTests(emptyList(), 0, legacy = true).also { created += it }
         app.store.audioFile(id).writeBytes(ByteArray(32_000))
-        val chunk = app.store.beginChunk(id, 0, false)
-        app.store.finishChunk(chunk, 1000)
         app.store.state(id, "INTERRUPTED")
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
@@ -198,14 +196,13 @@ class FocalViewModelTest {
     }
 
     @Test fun retryWhileRecoveryClaimIsStillHeldShowsBusyMessage() {
-        val id = app.store.createLegacy("en").also { created += it }
+        val id = app.store.insertNoteForTests(emptyList(), 0, legacy = true).also { created += it }
         val pcm = ByteArray(32_000) { (it % 97).toByte() }
         app.store.audioFile(id).writeBytes(pcm)
         app.store.duration(id, 1000)
-        app.store.finishChunk(app.store.beginChunk(id, 0, false), 1000)
         app.store.state(id, "INTERRUPTED", "Synthetic transcription error")
         val savedNote = app.store.note(id)
-        val savedChunks = app.store.chunks(id)
+        val savedChunks = app.store.windows(id)
         val recovering = model()
         val claim = checkNotNull(SessionOperations.reserveSession(capture = false, noteId = id))
         try {
@@ -220,7 +217,7 @@ class FocalViewModelTest {
                 assertEquals("Finish the current recording or transcription first.", feedback.await())
             }
             assertEquals(savedNote, app.store.note(id))
-            assertEquals(savedChunks, app.store.chunks(id))
+            assertEquals(savedChunks, app.store.windows(id))
             assertArrayEquals(pcm, app.store.audioFile(id).readBytes())
             assertTrue(SessionOperations.matchesSession(capture = false, noteId = id))
         } finally { claim.release() }
@@ -234,12 +231,8 @@ class FocalViewModelTest {
         val unreadable = model(read = { throw PassageSizeException(sizeMessage) })
         assertEquals(sizeMessage, await(unreadable) { it.error != null }.error)
 
-        val id = app.store.createLegacy("en").also { created += it }
-        val chunk = app.store.beginChunk(id, 0, false)
-        app.store.finishChunk(chunk, 1000)
-        app.store.complete(app.store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = chunk,
-            start = 0, end = 1000, text = "Keep the saved text", uncertain = false)))
-        val passage = app.store.passages(id).single()
+        val id = app.store.insertNoteForTests(listOf("Keep the saved text"), 1000, legacy = true).also { created += it }
+        val passage = app.store.paragraphs(id).single()
         val editing = model()
         runBlocking {
             val error = async(start = CoroutineStart.UNDISPATCHED) { withTimeout(10_000) { editing.errors.first() } }
@@ -248,7 +241,7 @@ class FocalViewModelTest {
             assertTrue(message.contains("Shorten"))
             assertTrue(message.contains("draft is still open"))
         }
-        assertEquals(passage, app.store.passages(id).single())
+        assertEquals(passage, app.store.paragraphs(id).single())
     }
 
     @Test fun legacyRestoreWaitsForTheTransferSnapshot() = runBlocking {
@@ -257,20 +250,20 @@ class FocalViewModelTest {
         val release = CountDownLatch(1)
         val gate = AtomicBoolean(false)
         val model = model(read = {
-            if (gate.get() && !app.store.passages(passage.noteId).single().excluded) {
+            if (gate.get() && !app.store.paragraphs(passage.noteId).single().hidden) {
                 entered.countDown()
                 check(release.await(10, TimeUnit.SECONDS))
             }
         })
         model.select(passage.noteId)
-        await(model) { it.note?.id == passage.noteId && it.passages == listOf(passage) && it.error == null }
+        await(model) { it.note?.id == passage.noteId && it.paragraphs == listOf(passage) && it.error == null }
 
         gate.set(true)
         val restore = async(Dispatchers.Main.immediate) { model.restorePassage(passage) }
         try {
             assertTrue("The database committed before the synthetic read stalled", entered.await(10, TimeUnit.SECONDS))
-            assertFalse(app.store.passages(passage.noteId).single().excluded)
-            assertTrue(model.library.value.passages.single().excluded)
+            assertFalse(app.store.paragraphs(passage.noteId).single().hidden)
+            assertTrue(model.library.value.paragraphs.single().hidden)
             assertNull(model.latestTransferSnapshot(passage.noteId))
             assertNull("The action reported success with stale copy text", withTimeoutOrNull(200) { restore.await() })
         } finally {
@@ -279,7 +272,7 @@ class FocalViewModelTest {
         }
         assertTrue(withTimeout(10_000) { restore.await() })
         val published = checkNotNull(model.latestTransferSnapshot(passage.noteId))
-        assertEquals(passage.text, transferableTranscript(published.passages))
+        assertEquals(passage.text, transcriptText(published.paragraphs))
     }
 
     @Test fun refreshFailureKeepsTheRestoredPassageAndDisablesTransfer() = runBlocking {
@@ -287,41 +280,30 @@ class FocalViewModelTest {
         val failing = AtomicBoolean(false)
         val model = model(read = { if (failing.get()) throw IOException("Synthetic post-commit read failure") })
         model.select(passage.noteId)
-        await(model) { it.note?.id == passage.noteId && it.passages == listOf(passage) && it.error == null }
+        await(model) { it.note?.id == passage.noteId && it.paragraphs == listOf(passage) && it.error == null }
 
         failing.set(true)
         assertTrue(withTimeout(10_000) { model.restorePassage(passage) })
-        assertFalse(app.store.passages(passage.noteId).single().excluded)
+        assertFalse(app.store.paragraphs(passage.noteId).single().hidden)
         assertNotNull(model.library.value.error)
         assertNull(model.latestTransferSnapshot(passage.noteId))
 
         failing.set(false)
         model.retryLibrary()
-        await(model) { it.note?.id == passage.noteId && it.passages.singleOrNull()?.excluded == false && it.error == null }
-        assertEquals(passage.text, transferableTranscript(checkNotNull(model.latestTransferSnapshot(passage.noteId)).passages))
+        await(model) { it.note?.id == passage.noteId && it.paragraphs.singleOrNull()?.hidden == false && it.error == null }
+        assertEquals(passage.text, transcriptText(checkNotNull(model.latestTransferSnapshot(passage.noteId)).paragraphs))
     }
 
     /** The retired background-sound check left passages like this in existing notes. */
-    private fun excludedLegacyPassage(): Passage {
-        val saved = completedPassage()
-        app.store.writableDatabase.execSQL("UPDATE passages SET excluded=1 WHERE id=?", arrayOf<Any>(saved.id))
-        return app.store.passages(saved.noteId).single().also { assertTrue(it.excluded) }
-    }
-
-    private fun completedPassage(): Passage {
-        val id = app.store.createLegacy("en").also { created += it }
-        val chunk = app.store.beginChunk(id, 0, false)
-        app.store.finishChunk(chunk, 1000)
-        app.store.complete(checkNotNull(app.store.nextChunk(id)), listOf(
-            Passage(noteId = id, chunkId = chunk, start = 0, end = 1000, text = "Review this synthetic text", uncertain = true)
-        ))
-        app.store.state(id, "READY")
-        return app.store.passages(id).single()
+    private fun excludedLegacyPassage(): Paragraph {
+        val id = app.store.insertNoteForTests(listOf("Review this synthetic text"), 1000, legacy = true, hidden = setOf(0))
+            .also { created += it }
+        return app.store.paragraphs(id).single().also { assertTrue(it.hidden) }
     }
 
     @Test fun notificationLaunchIsNotReplayedOverSavedNavigation() {
-        val first = app.store.createLegacy("en").also { created += it }
-        val second = app.store.createLegacy("en").also { created += it }
+        val first = app.store.insertNoteForTests(emptyList(), 0, legacy = true).also { created += it }
+        val second = app.store.insertNoteForTests(emptyList(), 0, legacy = true).also { created += it }
         app.store.rename(first, "Notification session A")
         app.store.rename(second, "Notification session B")
         val intent = Intent(app, MainActivity::class.java).putExtra(RecordingService.NOTE, first)

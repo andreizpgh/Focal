@@ -15,9 +15,12 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.Note
-import app.focal.data.Chunk
+import app.focal.core.EndKind
+import app.focal.data.RawAsr
+import app.focal.data.StoredWindow
+import app.focal.data.ULTRA_ENGINE
+import app.focal.data.WindowState
 import app.focal.data.NoteStore
-import app.focal.data.Passage
 import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingInput
 import app.focal.recording.RecordingService
@@ -59,7 +62,7 @@ class RecordingServiceTest {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         automation.grantRuntimePermission(app.packageName, Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) automation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
-        originalIds = app.store.notes().map { it.id }.toSet()
+        originalIds = app.store.library().map { it.id }.toSet()
         await { RecordingState.live.value.noteId == null && !serviceRunning() }
         // Explicit decoder failure keeps every saved second untranscribed; it never supplies fake text.
         RecordingService.metadataCapacityForTests = null
@@ -76,7 +79,7 @@ class RecordingServiceTest {
         RecordingService.decoderFactoryForTests = null
         RecordingService.metadataCapacityForTests = null
         if (::activity.isInitialized) activity.close()
-        originalIds?.let { baseline -> app.store.notes().filter { it.id !in baseline }.forEach { app.store.delete(it.id) } }
+        originalIds?.let { baseline -> app.store.library().filter { it.id !in baseline }.forEach { app.store.delete(it.id) } }
     }
 
     @Test fun decoderFailureKeepsCaptureAliveAndPauseIsSyncedAndIdempotent() {
@@ -110,8 +113,8 @@ class RecordingServiceTest {
         assertOriginalMatchesDeliveredSamples(id, source)
         assertEquals("INTERRUPTED", app.store.note(id)!!.state)
         assertTrue(app.store.note(id)!!.error.contains("Synthetic decoder"))
-        assertTrue("Every saved second must remain available to transcribe", app.store.hasUnpublishedTail(app.store.note(id)!!))
-        assertTrue("Capture-only checks must not invent a transcript", app.store.passages(id).isEmpty())
+        assertTrue("Every saved second must remain available to transcribe", app.store.hasUntranscribedAudio(app.store.note(id)!!))
+        assertTrue("Capture-only checks must not invent a transcript", app.store.paragraphs(id).isEmpty())
     }
 
     @Test fun sqliteWriterCannotBlockCaptureOrMicrophoneShutdown() {
@@ -130,7 +133,7 @@ class RecordingServiceTest {
         }
         finish(id)
         assertOriginalMatchesDeliveredSamples(id, inputs.single())
-        assertTrue(app.store.hasUnpublishedTail(app.store.note(id)!!))
+        assertTrue(app.store.hasUntranscribedAudio(app.store.note(id)!!))
     }
 
     @Test fun boundedMetadataOverflowStopsVisiblyAndRecoversPersistedAudio() {
@@ -160,7 +163,7 @@ class RecordingServiceTest {
         assertEquals("INTERRUPTED", note.state)
         assertTrue(note.error, note.error.contains("metadata"))
         assertOriginalMatchesDeliveredSamples(id, inputs.single())
-        assertTrue(app.store.hasUnpublishedTail(note))
+        assertTrue(app.store.hasUntranscribedAudio(note))
     }
 
     @Test fun immediateStopAndRepeatedStartCannotLeaveAnOrphanRecording() {
@@ -206,7 +209,7 @@ class RecordingServiceTest {
         assertTrue(note.error, note.error.contains("muted"))
         assertTrue(app.store.audioBytes(id) > 0)
         assertEquals(app.store.audioBytes(id) / 32, note.duration)
-        assertTrue(app.store.hasUnpublishedTail(note))
+        assertTrue(app.store.hasUntranscribedAudio(note))
     }
 
     @Test fun positiveReadIsKeptWhenSilencingArrivesDuringThatRead() {
@@ -220,7 +223,7 @@ class RecordingServiceTest {
         val note = app.store.note(id)!!
         assertEquals("INTERRUPTED", note.state)
         assertTrue(note.error, note.error.contains("muted"))
-        assertTrue(app.store.hasUnpublishedTail(note))
+        assertTrue(app.store.hasUntranscribedAudio(note))
     }
 
     @Test fun disconnectedMicrophoneKeepsTheFinalSavedAudio() {
@@ -232,7 +235,7 @@ class RecordingServiceTest {
         assertEquals("INTERRUPTED", note.state)
         assertTrue(note.error, note.error.contains("disconnected"))
         assertOriginalMatchesDeliveredSamples(id, inputs.single())
-        assertTrue(app.store.hasUnpublishedTail(note))
+        assertTrue(app.store.hasUntranscribedAudio(note))
     }
 
     @Test fun staleControlsAndInvalidRecoveryNeverOpenAMicrophone() {
@@ -275,14 +278,12 @@ class RecordingServiceTest {
         assertOriginalMatchesDeliveredSamples(id, inputs.single())
     }
 
-    // A legacy note's PENDING range is drained by the Ultra worker; the decoder here is unavailable.
+    // Saved audio of an interrupted note is segmented and decoded; the decoder here is unavailable.
     @Test fun recoveryDoesNotReopenMicrophoneOrAlterOriginalAudioWhenDecoderIsUnavailable() {
-        val id = app.store.createLegacy("en")
+        val id = app.store.create()
         val pcm = ByteArray(1200 * 32) { index -> (index % 97).toByte() }
         app.store.audioFile(id).writeBytes(pcm)
         app.store.duration(id, 1200)
-        val chunk = app.store.beginChunk(id, 0, false)
-        app.store.finishChunk(chunk, 1200)
         app.store.state(id, "INTERRUPTED", "Synthetic interrupted capture")
         activity.onActivity { RecordingService.command(it, RecordingService.RECOVER, id) }
         await { app.store.note(id)?.error?.contains("Synthetic decoder") == true }
@@ -292,25 +293,21 @@ class RecordingServiceTest {
         assertNull(RecordingState.live.value.noteId)
         assertTrue(inputs.isEmpty())
         assertArrayEquals(pcm, app.store.audioFile(id).readBytes())
-        assertEquals(1, app.store.pendingCount(id))
+        assertEquals(1200L, app.store.progress(id).remainingMs)
         assertEquals("INTERRUPTED", app.store.note(id)!!.state)
         assertTrue(app.store.note(id)!!.error.contains("Synthetic decoder"))
     }
 
     @Test fun stoppingRecoveryKeepsInFlightResultPending() {
-        val id = app.store.createLegacy("en")
+        val id = app.store.create()
         val pcm = ByteArray(1200 * 32) { (it % 97).toByte() }
         app.store.audioFile(id).writeBytes(pcm)
         app.store.duration(id, 1200)
-        val completed = app.store.beginChunk(id, 0, false)
-        app.store.finishChunk(completed, 600)
-        app.store.complete(app.store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = completed,
-            start = 0, end = 600, text = "Original", uncertain = true)))
-        app.store.edit(app.store.passages(id).single(), "Keep this correction")
-        val savedPassage = app.store.passages(id).single()
-        app.store.finishChunk(app.store.beginChunk(id, 600, false), 1200)
+        Synthetic.commit(app.store, id, Synthetic.plan(0, 0, 600, EndKind.BREAK), Synthetic.speech("Original."))
+        val savedPassage = app.store.paragraphs(id).single()
+        app.store.addWindow(id, Synthetic.plan(1, 600, 1200, EndKind.FINAL, EndKind.BREAK))
         app.store.state(id, "INTERRUPTED")
-        val savedChunks = app.store.chunks(id)
+        val savedChunks = app.store.windows(id)
         val decoding = CountDownLatch(1)
         val releaseResult = CountDownLatch(1)
         val decodeReturned = CountDownLatch(1)
@@ -318,13 +315,12 @@ class RecordingServiceTest {
         val closes = AtomicInteger()
         RecordingService.decoderFactoryForTests = {
             object : RecordingDecoder {
-                override suspend fun transcribe(store: NoteStore, chunk: Chunk, threads: Int) {
+                override suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int) {
                     decoding.countDown()
                     try {
                         check(releaseResult.await(10, TimeUnit.SECONDS)) { "Test decode was not released." }
                         currentCoroutineContext().ensureActive()
-                        store.complete(chunk, listOf(Passage(noteId = id, chunkId = chunk.id,
-                            start = chunk.start, end = chunk.end, text = "Synthetic result", uncertain = false)))
+                        store.commitDecoded(window.id, ULTRA_ENGINE, RawAsr("Synthetic result", Synthetic.speech("Synthetic result")))
                     } finally { decodeReturned.countDown() }
                 }
                 override fun cancel() {
@@ -342,8 +338,8 @@ class RecordingServiceTest {
             finish(id)
             await { !SessionOperations.matchesSession(capture = false, noteId = id) }
             assertTrue("Decode must return during the cancellation request", returnedDuringCancel.get())
-            assertEquals("The in-flight chunk must remain pending", savedChunks, app.store.chunks(id))
-            assertEquals(listOf(savedPassage), app.store.passages(id))
+            assertEquals("The in-flight window must remain pending, its attempt released", savedChunks, app.store.windows(id))
+            assertEquals(listOf(savedPassage), app.store.paragraphs(id))
             assertEquals("INTERRUPTED", app.store.note(id)!!.state)
             assertArrayEquals(pcm, app.store.audioFile(id).readBytes())
             assertEquals(1, closes.get())
@@ -351,9 +347,8 @@ class RecordingServiceTest {
     }
 
     @Test fun startingCaptureExcludesPlaybackBeforeServicePublishesItsNote() {
-        val playbackId = app.store.createLegacy("en")
+        val playbackId = app.store.insertNoteForTests(emptyList(), 1_000)
         app.store.audioFile(playbackId).writeBytes(ByteArray(32_000))
-        app.store.state(playbackId, "READY")
         val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val otherPlayer = SpeechPlayer(app, app.store, playbackScope)
         var playbackError: String? = null
@@ -375,65 +370,34 @@ class RecordingServiceTest {
         }
     }
 
-    @Test fun sameProcessRecoverySealsWritingRangesBeforeDecodingAndCanRetryAFailedSeal() {
-        val id = app.store.createLegacy("en")
-        val original = ByteArray(1500 * 32) { (it % 97).toByte() }
-        app.store.audioFile(id).writeBytes(original)
-        app.store.beginChunk(id, 0, false)
-        app.store.state(id, "INTERRUPTED", "Synthetic failed finalization")
-        val decoded = CopyOnWriteArrayList<Chunk>()
-        completingDecoder(decoded)
-        val trigger = "test_recover_" + id.replace("-", "")
-        app.store.writableDatabase.execSQL("""CREATE TRIGGER $trigger BEFORE UPDATE OF state ON chunks
-            WHEN NEW.note_id='$id' BEGIN SELECT RAISE(ABORT,'Synthetic unavailable metadata'); END""")
-        try {
-            activity.onActivity { RecordingService.command(it, RecordingService.RECOVER, id) }
-            await { app.store.note(id)?.state == "ERROR" }
-            finish(id)
-            assertTrue(decoded.isEmpty())
-            assertEquals("WRITING", app.store.chunks(id).single().state)
-        } finally { app.store.writableDatabase.execSQL("DROP TRIGGER $trigger") }
-
-        activity.onActivity { RecordingService.command(it, RecordingService.RECOVER, id) }
-        await { app.store.note(id)?.state == "READY" }
-        finish(id)
-        assertEquals(listOf(0L to 1500L), decoded.map { it.start to it.end })
-        assertEquals("DONE", app.store.chunks(id).single().state)
-        assertEquals(1500L, app.store.note(id)!!.duration)
-        assertTrue(inputs.isEmpty())
-        assertArrayEquals(original, app.store.audioFile(id).readBytes())
-    }
-
-    @Test fun sameProcessRecoveryFindsUnpublishedTailAndPreservesCompletedEdits() {
-        val id = app.store.createLegacy("en")
+    @Test fun sameProcessRecoverySegmentsTheUntranscribedTailAndKeepsCommittedText() {
+        val id = app.store.create()
         val original = ByteArray(2000 * 32) { (it % 101).toByte() }
         app.store.audioFile(id).writeBytes(original)
-        val first = app.store.beginChunk(id, 0, false)
-        app.store.finishChunk(first, 1000)
-        app.store.complete(app.store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = first,
-            start = 0, end = 1000, text = "Original", uncertain = true)))
-        app.store.edit(app.store.passages(id).single(), "Keep this correction")
-        val saved = app.store.passages(id).single()
-        app.store.state(id, "INTERRUPTED", "Synthetic lost Begin metadata")
-        val decoded = CopyOnWriteArrayList<Chunk>()
+        app.store.duration(id, 1000)
+        Synthetic.commit(app.store, id, Synthetic.plan(0, 0, 1000, EndKind.BREAK), Synthetic.speech("Original."))
+        val saved = app.store.paragraphs(id).single()
+        app.store.state(id, "INTERRUPTED", "Synthetic interrupted capture")
+        val decoded = CopyOnWriteArrayList<StoredWindow>()
         completingDecoder(decoded)
 
         activity.onActivity { RecordingService.command(it, RecordingService.RECOVER, id) }
         await { app.store.note(id)?.state == "READY" }
         finish(id)
-        assertEquals(listOf(1000L to 2000L), decoded.map { it.start to it.end })
-        assertTrue(app.store.chunks(id).all { it.state == "DONE" })
-        assertEquals(saved, app.store.passages(id).single())
+        assertEquals(listOf(1000L to 2000L), decoded.map { it.ownStartMs to it.ownEndMs })
+        assertTrue(app.store.windows(id).all { it.state == WindowState.DONE })
+        assertEquals(saved.text, app.store.paragraphs(id).single().text)
+        assertEquals(2000L, app.store.note(id)!!.duration)
         assertTrue(inputs.isEmpty())
         assertArrayEquals(original, app.store.audioFile(id).readBytes())
     }
 
-    private fun completingDecoder(decoded: MutableList<Chunk>) {
+    private fun completingDecoder(decoded: MutableList<StoredWindow>) {
         RecordingService.decoderFactoryForTests = {
             object : RecordingDecoder {
-                override suspend fun transcribe(store: NoteStore, chunk: Chunk, threads: Int) {
-                    decoded += chunk
-                    store.complete(chunk, emptyList())
+                override suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int) {
+                    decoded += window
+                    store.commitDecoded(window.id, ULTRA_ENGINE, RawAsr("", emptyList()))
                 }
                 override fun cancel() = Unit
                 override fun close() = Unit
@@ -472,7 +436,7 @@ class RecordingServiceTest {
         assertTrue("Recording notification survived service teardown: ${manager.activeNotifications.map { it.id to it.notification.flags }}",
             manager.activeNotifications.isEmpty())
     }
-    private fun createdNotes(): List<Note> = originalIds?.let { baseline -> app.store.notes().filter { it.id !in baseline } }.orEmpty()
+    private fun createdNotes(): List<Note> = originalIds?.let { baseline -> app.store.library().filter { it.id !in baseline } }.orEmpty()
     private fun assertOriginalMatchesDeliveredSamples(id: String, source: SyntheticInput) {
         assertOriginalBytesMatchDeliveredSamples(id, source)
         assertEquals(app.store.audioBytes(id) / 32, app.store.note(id)!!.duration)

@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.Note
-import app.focal.data.Passage
+import app.focal.data.Paragraph
 import app.focal.recording.LiveSession
 import app.focal.ui.FocalTheme
 import app.focal.ui.NoteScreen
@@ -148,22 +148,20 @@ class LiveTranscriptTest {
     }
 
     @Composable private fun LiveNote(
-        note: Note, passages: List<Passage>, live: LiveSession?, editorOpen: Boolean = false,
+        note: Note, passages: List<Paragraph>, live: LiveSession?, editorOpen: Boolean = false,
         width: Dp = 360.dp, height: Dp = 320.dp,
     ) {
         FocalTheme("light") {
             Box(Modifier.size(width, height)) {
-                NoteScreen(note, LibraryState(note = note, passages = passages, loaded = true), live,
+                NoteScreen(note, LibraryState(note = note, paragraphs = passages, loaded = true), live,
                     reviewOnly = false, toggleReview = {}, edit = {}, retry = {}, playing = false,
                     audioAvailable = false, play = {}, rename = {}, followSuspended = editorOpen)
             }
         }
     }
 
-    private fun passage(index: Int) = Passage(
-        id = index.toLong(), noteId = note.id, chunkId = "fixture", start = (index - 1) * 1_000L, end = index * 1_000L,
-        text = "Passage $index. These words make the recording long enough to scroll.", uncertain = false,
-    )
+    private fun passage(index: Int) = testParagraph(index.toLong(), note.id, (index - 1) * 1_000L, index * 1_000L,
+        "Passage $index. These words make the recording long enough to scroll.")
 
     private fun capture(name: String) {
         if (InstrumentationRegistry.getArguments().getString("screenshots") != "true") return

@@ -14,7 +14,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.Note
 import app.focal.data.NoteStore
-import app.focal.data.Passage
 import app.focal.speech.PlaybackState
 import app.focal.speech.SpeechPlayer
 import app.focal.recording.SessionOperations
@@ -210,7 +209,7 @@ class SpeechPlayerTest {
 
     @Test fun seekingLeavesAnExcerptAndClampsToTheOriginalAudio() {
         val note = syntheticNote(5000, metadataDuration = 900)
-        val passage = Passage(42, note.id, "synthetic", 1400, 1800, "Synthetic excerpt", true)
+        val passage = testParagraph(42, note.id, 1400, 1800, "Synthetic excerpt")
         player.play(passage, onError)
         await { player.playback.value.isPlaying && player.playback.value.passageId == 42L }
         assertEquals(42L, player.playing.value)
@@ -260,7 +259,7 @@ class SpeechPlayerTest {
     }
 
     private fun syntheticNote(durationMs: Long, metadataDuration: Long = durationMs): Note {
-        val id = store.createLegacy("en").also { created += it }
+        val id = store.insertNoteForTests(emptyList(), 0, legacy = true).also { created += it }
         // A low-amplitude 220 Hz tone, PCM16 little endian / mono / 16 kHz.
         store.audioFile(id).outputStream().buffered().use { output ->
             val buffer = ByteArray(2048)

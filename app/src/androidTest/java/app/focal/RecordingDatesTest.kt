@@ -26,7 +26,6 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ApplicationProvider
 import app.focal.data.NoteStore
-import app.focal.data.Passage
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -39,19 +38,14 @@ class RecordingDatesTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
     private fun recording(store: NoteStore, title: String, day: LocalDate, flagged: Boolean): String {
-        val id = store.createLegacy("en")
+        val id = store.insertNoteForTests(listOf("Synthetic date navigation passage."), 1_000, title,
+            state = if (flagged) "INTERRUPTED" else "READY")
         try {
-            store.rename(id, title)
             store.audioFile(id).writeBytes(ByteArray(32_000))
-            val chunk = store.beginChunk(id, 0, false)
-            store.finishChunk(chunk, 1_000)
-            store.complete(store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = chunk,
-                start = 0, end = 1_000, text = "Synthetic date navigation passage.", uncertain = flagged)))
-            store.duration(id, 1_000)
             val created = day.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
             store.writableDatabase.execSQL("UPDATE notes SET created=? WHERE id=?", arrayOf<Any>(created, id))
             // Publish the final date through the store's normal change notification.
-            store.state(id, "READY")
+            store.state(id, if (flagged) "INTERRUPTED" else "READY")
             return id
         } catch (error: Throwable) {
             store.delete(id)
@@ -101,7 +95,7 @@ class RecordingDatesTest {
             compose.onNode(hasSetTextAction()).performTextReplacement("qxdates")
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.waitUntil(10_000) {
-                store.notes("qxdates").size == 17 &&
+                store.search("qxdates").size == 17 &&
                     compose.onAllNodesWithText("qxdates today 0").fetchSemanticsNodes().isNotEmpty()
             }
             waitForDay("Today")

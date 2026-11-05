@@ -11,9 +11,11 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.AUTOMATIC_LANGUAGE
-import app.focal.data.Chunk
+import app.focal.core.EndKind
 import app.focal.data.NoteStore
-import app.focal.data.Passage
+import app.focal.data.RawAsr
+import app.focal.data.StoredWindow
+import app.focal.data.WindowState
 import app.focal.data.ULTRA_ENGINE
 import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingInput
@@ -83,15 +85,15 @@ class UltraServiceTest {
     @Test fun defaultUltraPersistsLongCaptureWhileFirstDecodeIsBlocked() {
         val firstMs = 36_000L
         val totalMs = 185_001L
-        val input = BoundedInput(frames(firstMs), ::quietSample)
+        val input = BoundedInput(frames(firstMs), ::audibleSample)
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val decoded = CopyOnWriteArrayList<String>()
+        val decoded = CopyOnWriteArrayList<Long>()
         RecordingService.inputFactoryForTests = { input }
         RecordingService.decoderFactoryForTests = {
-            completingDecoder { chunk ->
-                decoded += chunk.id
-                if (chunk.start == 0L) {
+            completingDecoder { window ->
+                decoded += window.id
+                if (window.ownStartMs == 0L) {
                     entered.countDown()
                     check(release.await(45, TimeUnit.SECONDS)) { "Test did not release the first window." }
                 }
@@ -105,8 +107,8 @@ class UltraServiceTest {
                 store.note(id)?.let { it.state == "PAUSED" && it.duration == firstMs } == true
             }
             assertTrue("The first window must reach the decoder.", entered.await(20, TimeUnit.SECONDS))
-            assertEquals("PENDING", store.chunks(id).single().state)
-            assertTrue(store.passages(id).isEmpty())
+            assertTrue(store.windows(id).all { it.state == WindowState.PENDING })
+            assertTrue(store.paragraphs(id).isEmpty())
 
             input.allow(frames(totalMs))
             send(RecordingService.RESUME)
@@ -116,41 +118,40 @@ class UltraServiceTest {
             assertFalse(input.closed)
             assertFalse(RecordingState.live.value.processing)
             assertEquals(1, decoded.size)
-            assertEquals("PENDING", store.chunks(id).single().state)
-            assertTrue(store.passages(id).isEmpty())
+            assertTrue(store.windows(id).all { it.state == WindowState.PENDING })
+            assertTrue(store.paragraphs(id).isEmpty())
 
             send(RecordingService.STOP)
             await("Microphone closed and complete original synced before decode returns") {
                 input.closed && store.note(id)?.duration == totalMs && RecordingState.live.value.processing
             }
             assertEquals(totalMs * BYTES_PER_MS, store.audioBytes(id))
-            assertTrue(store.passages(id).isEmpty())
+            assertTrue(store.paragraphs(id).isEmpty())
             release.countDown()
             awaitReady(id)
             assertUltraTimeline(id, totalMs)
-            assertEquals(store.chunks(id).map { it.id }, decoded.toList())
-            assertTrue("Full quiet original PCM must survive pause, resume and finish.",
+            assertEquals(store.windows(id).filter { it.state != WindowState.SILENT }.map { it.id }, decoded.toList())
+            assertTrue("Full original PCM must survive pause, resume and finish.",
                 store.audioFile(id).readBytes().contentEquals(syntheticPcm(totalMs)))
         } finally {
             release.countDown()
         }
     }
 
-    @Test fun recoveryUsesPendingCursorAndUnpublishedTailWithoutOpeningInput() {
+    @Test fun recoveryDecodesThePendingWindowAndSegmentsTheTailWithoutOpeningInput() {
         val duration = 65_001L
         val original = syntheticPcm(duration)
         val id = store.create().also { fixtureId = it }
         FileOutputStream(store.audioFile(id)).use { it.write(original); it.fd.sync() }
         store.duration(id, 59_500)
-        val first = store.enqueueUltraWindow(id, 0, 30_000, 29_500)
-        complete(store, first)
-        store.edit(store.passages(id).single(), "My synthetic manual edit")
-        val edited = store.passages(id).single()
-        val pending = store.enqueueUltraWindow(id, 29_500, 59_500, 59_000)
+        val first = store.addWindow(id, Synthetic.plan(0, 0, 20_000, EndKind.HARD))
+        complete(store, checkNotNull(store.beginDecode(first.id)))
+        val committed = store.paragraphs(id).single()
+        val pending = store.addWindow(id, Synthetic.plan(1, 20_000, 40_000, EndKind.HARD, EndKind.HARD))
         store.state(id, "INTERRUPTED")
-        assertTrue(store.hasUnpublishedTail(checkNotNull(store.note(id))))
+        assertTrue(store.hasUntranscribedAudio(checkNotNull(store.note(id))))
         val inputOpens = AtomicInteger()
-        val decoded = CopyOnWriteArrayList<Chunk>()
+        val decoded = CopyOnWriteArrayList<StoredWindow>()
         RecordingService.inputFactoryForTests = {
             inputOpens.incrementAndGet()
             error("Recovery must use the saved original.")
@@ -161,11 +162,9 @@ class UltraServiceTest {
         awaitReady(id)
         assertUltraTimeline(id, duration)
         assertEquals(0, inputOpens.get())
-        assertEquals(listOf(pending.id, store.chunks(id).last().id), decoded.map { it.id })
-        assertEquals(59_000L, decoded.last().start)
-        assertEquals(edited, store.passages(id).first())
-        assertTrue(edited.reviewed)
-        assertEquals(windowText(first), edited.originalTranscriptText)
+        assertEquals(pending.id, decoded.first().id)
+        assertEquals(store.windows(id).drop(1).filter { it.state != WindowState.SILENT }.map { it.id }, decoded.map { it.id })
+        assertEquals(committed.text, store.paragraphs(id).first().text.take(committed.text.length))
         assertArrayEquals(original, store.audioFile(id).readBytes())
     }
 
@@ -187,7 +186,7 @@ class UltraServiceTest {
         assertUltraTimeline(id, 11_000)
         assertTrue("Saved audio must match the public fixture PCM.",
             store.audioFile(id).let { it.length() == pcm.size.toLong() && sha256(it.readBytes()) == sha256(pcm) })
-        val passages = store.passages(id)
+        val passages = store.paragraphs(id)
         val words = Regex("[a-z]+").findAll(passages.joinToString(" ") { it.text }.lowercase())
             .map { it.value }.toList()
         assertTrue("The default engine must produce substantive public-fixture speech.", words.size >= 8)
@@ -222,22 +221,18 @@ class UltraServiceTest {
         assertEquals(ULTRA_ENGINE, note.speechEngine)
         assertEquals(AUTOMATIC_LANGUAGE, note.language)
         assertEquals(duration, note.duration)
-        val chunks = store.chunks(id)
-        assertEquals(0L, chunks.first().start)
-        assertFalse(chunks.first().overlap)
-        assertEquals(duration, chunks.last().end)
-        assertEquals(duration, checkNotNull(chunks.last().nextStart))
-        assertTrue(chunks.all { it.state == "DONE" && it.end - it.start in 1L..30_000L })
-        for ((previous, next) in chunks.zipWithNext()) {
-            assertEquals(checkNotNull(previous.nextStart), next.start)
-            assertTrue(next.end > previous.end)
-            assertTrue(previous.end - next.start in 0L..500L)
-            assertEquals(next.start < previous.end, next.overlap)
-        }
+        // Windows tile the whole recording without gaps, each at most the maximum window length.
+        val windows = store.windows(id)
+        assertEquals(0L, windows.first().ownStartMs)
+        assertEquals(duration, windows.last().ownEndMs)
+        assertEquals(EndKind.FINAL, windows.last().endKind)
+        assertTrue(windows.all { it.state in listOf(WindowState.DONE, WindowState.SILENT) && it.ownEndMs - it.ownStartMs in 1L..20_000L })
+        for ((previous, next) in windows.zipWithNext()) assertEquals(previous.ownEndMs, next.ownStartMs)
         assertEquals(0, store.pendingCount(id))
-        val passages = store.passages(id)
-        assertEquals(chunks.map { it.id }, passages.map { it.chunkId }.distinct())
-        assertTrue(passages.all { it.originalTranscriptText?.isNotBlank() == true })
+        assertEquals(0L, store.progress(id).remainingMs)
+        val paragraphs = store.paragraphs(id)
+        assertTrue(paragraphs.isNotEmpty())
+        assertTrue(paragraphs.all { !it.open && it.sourceText?.isNotBlank() == true })
     }
 
     @Suppress("DEPRECATION")
@@ -281,28 +276,31 @@ class UltraServiceTest {
         }
     }
 
-    private fun completingDecoder(beforeComplete: (Chunk) -> Unit) = object : RecordingDecoder {
-        override suspend fun transcribe(store: NoteStore, chunk: Chunk, threads: Int) {
-            beforeComplete(chunk)
+    private fun completingDecoder(beforeComplete: (StoredWindow) -> Unit) = object : RecordingDecoder {
+        override suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int) {
+            beforeComplete(window)
             currentCoroutineContext().ensureActive()
-            complete(store, chunk)
+            complete(store, window)
         }
         override fun cancel() = Unit
         override fun close() = Unit
     }
 
-    private fun complete(store: NoteStore, chunk: Chunk) {
-        check(store.readChunk(chunk).size.toLong() == (chunk.end - chunk.start) * BYTES_PER_MS)
-        store.complete(chunk, listOf(Passage(noteId = chunk.noteId, chunkId = chunk.id,
-            start = chunk.start, end = chunk.end, text = windowText(chunk), uncertain = false)))
+    /** Commits one short synthetic word at the start of the window's own audio. */
+    private fun complete(store: NoteStore, window: StoredWindow) {
+        val samples = store.readAudio(window.noteId, window.audioStartMs, window.audioEndMs).size
+        check(samples.toLong() == (window.audioEndMs - window.audioStartMs) * 16)
+        val text = "Window${window.ownStartMs}."
+        val start = (window.ownStartMs - window.audioStartMs) / 1000.0
+        store.commitDecoded(window.id, ULTRA_ENGINE, RawAsr(text, Synthetic.tokens(Triple(text, start, 0.1))))
     }
 
-    private fun windowText(chunk: Chunk) = "Synthetic Ultra window ${chunk.start}"
     private fun frames(ms: Long) = (ms * 16).toInt()
-    private fun quietSample(index: Int) = (index % 31 - 15).toShort()
+    /** A sawtooth above the silence gate (about -42 dBFS), so every window is decoded. */
+    private fun audibleSample(index: Int) = ((index % 63 - 31) * 8).toShort()
     private fun syntheticPcm(ms: Long): ByteArray {
         val bytes = ByteBuffer.allocate(frames(ms) * 2).order(ByteOrder.LITTLE_ENDIAN)
-        repeat(frames(ms)) { bytes.putShort(quietSample(it)) }
+        repeat(frames(ms)) { bytes.putShort(audibleSample(it)) }
         return bytes.array()
     }
     private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)

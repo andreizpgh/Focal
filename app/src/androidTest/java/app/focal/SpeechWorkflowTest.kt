@@ -6,7 +6,8 @@ import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
-import app.focal.data.Passage
+import app.focal.core.EndKind
+import app.focal.data.WindowState
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
 import app.focal.speech.UltraModel
@@ -20,40 +21,36 @@ import java.security.MessageDigest
 class SpeechWorkflowTest {
     private val app get() = ApplicationProvider.getApplicationContext<FocalApplication>()
 
-    /** Constant PCM never reaches the recognizer, so this legacy recovery needs no model. */
-    @Test fun legacyRecoveryOfConstantAudioKeepsOriginalAndManualEditsWithoutAddingPassages() {
+    /** A digitally silent tail is recorded as silent without decoding, so this recovery needs no model. */
+    @Test fun recoveryOfASilentTailKeepsTextAndOriginalWithoutAddingParagraphs() {
         kotlinx.coroutines.runBlocking { app.storageReady.await() }
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            for (value in listOf(0.toShort(), 8192.toShort())) {
-                val id = app.store.createLegacy("ru")
+            run {
+                val id = app.store.create()
                 try {
                     val original = ByteBuffer.allocate(3000 * 32).order(ByteOrder.LITTLE_ENDIAN).apply {
                         repeat(16000) { putShort(((it % 200) - 100).toShort()) }
-                        repeat(32000) { putShort(value) }
+                        repeat(32000) { putShort(0) }
                     }.array()
                     app.store.audioFile(id).writeBytes(original)
+                    app.store.duration(id, 1000)
                     val expectedHash = MessageDigest.getInstance("SHA-256").digest(original)
-                    val first = app.store.beginChunk(id, 0, false)
-                    app.store.finishChunk(first, 1000)
-                    app.store.complete(app.store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = first,
-                        start = 0, end = 1000, text = "Synthetic original", uncertain = true)))
-                    app.store.edit(app.store.passages(id).single(), "Keep this manual correction.")
-                    val savedPassages = app.store.passages(id)
-                    val savedChunk = app.store.chunks(id).single()
-                    // The constant tail has durable PCM but no published range after interruption.
+                    Synthetic.commit(app.store, id, Synthetic.plan(0, 0, 1000, EndKind.BREAK), Synthetic.speech("Synthetic original."))
+                    val savedParagraphs = app.store.paragraphs(id)
+                    val savedWindow = app.store.windows(id).single()
+                    // The silent tail has durable PCM but no window after the interruption.
                     app.store.state(id, "INTERRUPTED", "Synthetic interrupted capture")
                     scenario.onActivity { RecordingService.command(it, RecordingService.RECOVER, id) }
                     await { app.store.note(id)?.state == "READY" && RecordingState.live.value.noteId == null }
                     assertEquals(0, app.store.pendingCount(id))
                     assertEquals(3000L, app.store.note(id)!!.duration)
                     assertEquals("", app.store.note(id)!!.error)
-                    val chunks = app.store.chunks(id)
-                    assertEquals(2, chunks.size)
-                    assertEquals(savedChunk, chunks.first())
-                    assertEquals(1000L, chunks.last().start)
-                    assertEquals(3000L, chunks.last().end)
-                    assertTrue(chunks.all { it.state == "DONE" })
-                    assertEquals(savedPassages, app.store.passages(id))
+                    val windows = app.store.windows(id)
+                    assertEquals(savedWindow, windows.first())
+                    assertEquals(1000L, windows[1].ownStartMs)
+                    assertEquals(3000L, windows.last().ownEndMs)
+                    assertTrue(windows.drop(1).all { it.state == WindowState.SILENT })
+                    assertEquals(savedParagraphs.map { it.text }, app.store.paragraphs(id).map { it.text })
                     assertArrayEquals(expectedHash,
                         MessageDigest.getInstance("SHA-256").digest(app.store.audioFile(id).readBytes()))
                 } finally {

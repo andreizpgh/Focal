@@ -51,7 +51,7 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import app.focal.core.Transcript
 import app.focal.data.Note
-import app.focal.data.Passage
+import app.focal.data.Paragraph
 import app.focal.data.fitsPassageDraftBudget
 import kotlinx.coroutines.launch
 
@@ -74,7 +74,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable internal fun EditSheet(
-    passage: Passage, playing: Boolean, audio: Boolean, play: () -> Unit, dismiss: () -> Unit,
+    passage: Paragraph, playing: Boolean, audio: Boolean, play: () -> Unit, dismiss: () -> Unit,
     hasNextReview: Boolean, audioUnavailableReason: String,
     onDirtyChange: (Boolean) -> Unit = {}, onSavingChange: (Boolean) -> Unit = {},
     restore: suspend () -> Boolean = { false },
@@ -94,7 +94,7 @@ import kotlinx.coroutines.launch
     val scope = rememberCoroutineScope()
     SideEffect { onDirtyChange(text != passage.text) }
     DisposableEffect(passage.id) { onDispose { onDirtyChange(false); onSavingChange(false) } }
-    val needsReview = passage.uncertain && !passage.reviewed && !passage.excluded
+    val needsReview = false
     val canAdvance = needsReview && hasNextReview
     val dirty = text != passage.text
     val passageAlpha = remember { Animatable(1f) }
@@ -135,7 +135,7 @@ import kotlinx.coroutines.launch
         val keyboard = LocalSoftwareKeyboardController.current
         fun commit(next: Boolean) {
             if (saving) return
-            if (passage.excluded && !dirty) { closeEditor(); return }
+            if (passage.hidden && !dirty) { closeEditor(); return }
             focus.clearFocus(force = true); keyboard?.hide()
             saving = true; onSavingChange(true)
             scope.launch { try { saveFailed = !save(text, next) } finally { saving = false; onSavingChange(false) } }
@@ -147,9 +147,9 @@ import kotlinx.coroutines.launch
                 IconButton(onClick = ::requestClose, enabled = !saving,
                     modifier = Modifier.semantics { contentDescription = "Close editor" }) { Glyph(Symbol.Close, Modifier.size(20.dp)) }
             }
-            Text("${Transcript.time(passage.start)}–${Transcript.time(passage.end)}", style = MaterialTheme.typography.labelMedium,
+            Text("${Transcript.time(passage.startMs)}–${Transcript.time(passage.endMs)}", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
-            if (passage.excluded) {
+            if (passage.hidden) {
                 Text("Excluded from Copy and Share. The text and audio are retained.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(enabled = !saving && !dirty, onClick = {
@@ -297,7 +297,7 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun LargePassageSheet(
-    passage: Passage, playing: Boolean, audio: Boolean, play: () -> Unit, dismiss: () -> Unit, audioUnavailableReason: String,
+    passage: Paragraph, playing: Boolean, audio: Boolean, play: () -> Unit, dismiss: () -> Unit, audioUnavailableReason: String,
 ) {
     var part by rememberSaveable(passage.id) { mutableIntStateOf(0) }
     val count = passageTextPartCount(passage.text)
@@ -315,7 +315,7 @@ internal fun passageTextPart(text: String, part: Int, partChars: Int = LARGE_PAS
                     Glyph(Symbol.Close, Modifier.size(20.dp))
                 }
             }
-            Text("${Transcript.time(passage.start)}–${Transcript.time(passage.end)}", style = MaterialTheme.typography.labelMedium,
+            Text("${Transcript.time(passage.startMs)}–${Transcript.time(passage.endMs)}", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
             if (audio) TextButton(onClick = play, contentPadding = PaddingValues(vertical = 12.dp)) {
                 Glyph(if (playing) Symbol.Pause else Symbol.Play, Modifier.size(17.dp))

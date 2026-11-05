@@ -21,7 +21,6 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import app.focal.data.Note
-import app.focal.data.Passage
 import app.focal.recording.LiveSession
 import app.focal.ui.FocalTheme
 import app.focal.ui.LibraryScreen
@@ -42,7 +41,7 @@ class UiMotionTest {
             Note(id = "first", title = "First session", created = now, language = "en", state = "READY",
                 duration = 30_000, error = ""),
             Note(id = "second", title = "Flagged session", created = now, language = "en", state = "READY",
-                duration = 30_000, error = "", reviewCount = 1),
+                duration = 30_000, error = "", failedWindows = 1),
         )
         var searchOpen by mutableStateOf(false)
         var attentionOnly by mutableStateOf(false)
@@ -124,12 +123,11 @@ class UiMotionTest {
     @Test fun timestampAndPassageFirstLineShareBaseline() {
         val note = Note(id = "note", title = "A session", created = System.currentTimeMillis(), language = "en",
             state = "READY", duration = 60_000, error = "")
-        val passage = Passage(id = 1, noteId = note.id, chunkId = "chunk", start = 15_000, end = 20_000,
-            text = "A synthetic passage for alignment.", uncertain = false)
+        val passage = testParagraph(1, note.id, 15_000, 20_000, "A synthetic passage for alignment.")
         compose.setContent {
             FocalTheme("light") {
                 Box(Modifier.size(width = 360.dp, height = 720.dp)) {
-                    NoteScreen(note = note, library = LibraryState(note = note, passages = listOf(passage), loaded = true),
+                    NoteScreen(note = note, library = LibraryState(note = note, paragraphs = listOf(passage), loaded = true),
                         live = null, reviewOnly = false, toggleReview = {}, edit = {}, retry = {},
                         playing = false, audioAvailable = true, play = {}, rename = {})
                 }

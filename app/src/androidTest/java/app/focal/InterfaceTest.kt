@@ -27,9 +27,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.core.Transcript
-import app.focal.data.Chunk
+import app.focal.core.EndKind
+import app.focal.data.EditResult
 import app.focal.data.NoteStore
-import app.focal.data.Passage
+import app.focal.data.RawAsr
+import app.focal.data.StoredWindow
+import app.focal.data.ULTRA_ENGINE
 import app.focal.recording.LiveSession
 import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingService
@@ -62,25 +65,11 @@ class InterfaceTest {
     }
 
     private fun readySession(
-        store: NoteStore, title: String, texts: List<String>, language: String = "en",
-        uncertain: Set<Int> = emptySet(), duration: Long = texts.size * 1_000L,
+        store: NoteStore, title: String, texts: List<String>, duration: Long = texts.size * 1_000L,
+        hidden: Set<Int> = emptySet(),
     ): String {
-        // Fixtures use the Whisper-era range API, so they are legacy notes.
-        val id = store.createLegacy(language)
+        val id = store.insertNoteForTests(texts, duration, title, hidden = hidden)
         store.audioFile(id).writeBytes(ByteArray((duration * 32).toInt()))
-        val interval = duration / texts.size
-        require(interval in 1..30_000L) { "Fixture passages must fit the recording chunk limit." }
-        texts.forEachIndexed { index, text ->
-            val start = index * interval
-            val end = if (index == texts.lastIndex) duration else (index + 1) * interval
-            val chunk = store.beginChunk(id, start, false)
-            store.finishChunk(chunk, end)
-            store.complete(store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = chunk,
-                start = start, end = end, text = text, uncertain = index in uncertain)))
-        }
-        store.rename(id, title)
-        store.duration(id, duration)
-        store.state(id, "READY")
         return id
     }
 
@@ -126,10 +115,6 @@ class InterfaceTest {
     private fun waitForEditor() {
         compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
     }
-
-    private fun reviewFilter(label: String) = compose.onNode(
-        hasText(label) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected)
-    )
 
     private fun assertAutomaticLanguage() {
         compose.onNodeWithContentDescription("Speech language: Automatic").assertIsDisplayed().assert(!hasClickAction())
@@ -312,7 +297,7 @@ class InterfaceTest {
             }.getOrDefault("")
             val state = model.library.value
             val published = state.notes.map { ids.indexOf(it.id) }
-            val stored = runCatching { store.notes(query).map { ids.indexOf(it.id) } }.getOrNull()
+            val stored = runCatching { store.search(query).map { it.note }.map { ids.indexOf(it.id) } }.getOrNull()
             // Fixture ranks preserve ordering without exposing unrelated titles or IDs. -1 is an outside row.
             failure.addSuppressed(AssertionError(
                 "Fixture rows=${ids.size}, loaded=${state.loaded}, error=${state.error != null}, " +
@@ -333,7 +318,7 @@ class InterfaceTest {
                 "The middle passage mentions a durable marker for the draft.",
                 "В середине записи есть полезная мысль о восстановлении.",
                 "The closing passage has no search markers either.",
-            ), language = "ru")
+            ))
             ids += readySession(store, "Other session", listOf("An unrelated recorded idea."))
             waitForTitle("Other session")
             compose.onNodeWithContentDescription("Search recordings").performClick()
@@ -363,75 +348,6 @@ class InterfaceTest {
         } finally { ids.forEach(store::delete) }
     }
 
-    @Test fun libraryReviewFilterOpensTheRightNote() {
-        val app = application()
-        val store = app.store
-        val ids = mutableListOf<String>()
-        val initialTheme = app.preferences.settings.value.theme
-        try {
-            ids += readySession(store, "Ideas for the weekend", listOf("A walk by the river, a book and a slow Sunday morning."))
-            ids += readySession(store, "A thought worth keeping", listOf("Make more space for the projects that matter."), uncertain = setOf(0))
-            waitForTitle("A thought worth keeping")
-            app.preferences.theme("light"); capture("library-light")
-            app.preferences.theme("dark"); capture("library-dark")
-            app.preferences.theme("light")
-            val count = store.notes().count { it.reviewCount > 0 || it.state in listOf("ERROR", "INTERRUPTED") }
-            reviewFilter("$count to review").performClick()
-            compose.onNodeWithText("Ideas for the weekend").assertDoesNotExist()
-            reviewFilter("Show all").assertExists()
-            compose.onNodeWithText("A thought worth keeping").performClick()
-            waitForSessionReady("A thought worth keeping", "Make more space for the projects that matter.")
-            compose.onNodeWithContentDescription("Back to recordings").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Recording options").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Play original audio").assertIsDisplayed()
-            compose.onNodeWithText("Make more space for the projects that matter.").assertExists()
-            compose.onNodeWithText("Marked passages may need a closer listen.").assertDoesNotExist()
-            capture("note-light")
-            app.preferences.theme("dark"); capture("note-dark")
-        } finally { ids.forEach(store::delete); app.preferences.theme(initialTheme) }
-    }
-
-    @Test fun libraryReviewFilterAndScrollSurviveOpeningSessionAndRotation() {
-        val app = application()
-        val ids = mutableListOf<String>()
-        try {
-            repeat(16) { index ->
-                ids += readySession(app.store, "Review context $index", listOf("Review fixture passage $index."), uncertain = setOf(0))
-            }
-            val filtered = app.store.notes().filter { it.id in ids }
-            val target = filtered[filtered.size / 2]
-            waitForTitle(filtered.first().title)
-            val count = app.store.notes().count { it.reviewCount > 0 || it.state in listOf("ERROR", "INTERRUPTED") }
-            reviewFilter("$count to review").performClick()
-            val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
-            list.performScrollToNode(hasText(target.title))
-            fun browsingPosition(): Pair<Float, Float> {
-                val listNode = list.fetchSemanticsNode()
-                val rowNode = compose.onNodeWithText(target.title).fetchSemanticsNode()
-                // Read both coordinates in one frame, including while window insets settle.
-                return compose.runOnUiThread {
-                    listNode.config[SemanticsProperties.VerticalScrollAxisRange].value() to
-                        (rowNode.boundsInRoot.top - listNode.boundsInRoot.top)
-                }
-            }
-            val (scrollPosition, rowOffset) = browsingPosition()
-            compose.onNodeWithText(target.title).performClick()
-            waitForSessionReady(target.title, "Review fixture passage ${ids.indexOf(target.id)}.")
-            // The library is absent during recreation; its browsing state must still be saved.
-            compose.activityRule.scenario.recreate()
-            waitForSessionReady(target.title)
-            compose.onNodeWithContentDescription("Back to recordings").performClick()
-            waitForTitle(target.title)
-            compose.onNodeWithText(target.title).assertIsDisplayed()
-            val (restoredPosition, restoredOffset) = browsingPosition()
-            assertEquals("Library logical scroll position changed after navigation and recreation", scrollPosition,
-                restoredPosition, .001f)
-            assertEquals("Session moved within the library viewport after navigation and recreation", rowOffset,
-                restoredOffset, 1f)
-            reviewFilter("Show all").assertIsDisplayed().assertIsSelected()
-        } finally { ids.forEach(app.store::delete) }
-    }
-
     @Test fun searchOpensAtTopAndDoesNotRefocusAfterReturningFromSession() {
         val app = application()
         val ids = mutableListOf<String>()
@@ -439,7 +355,7 @@ class InterfaceTest {
             repeat(16) { index ->
                 ids += readySession(app.store, "Search context [$index]", listOf("Search fixture passage $index."))
             }
-            val sessions = app.store.notes().filter { it.id in ids }
+            val sessions = app.store.library().filter { it.id in ids }
             waitForTitle(sessions.first().title)
             val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
             list.performScrollToNode(hasText(sessions.last().title))
@@ -615,7 +531,7 @@ class InterfaceTest {
     @Test fun largeFontLandscapeSearchKeepsTheWholeFieldAboveTheKeyboard() {
         val app = application()
         val originalOrientation = compose.activity.requestedOrientation
-        val id = readySession(app.store, "Accessible search target", listOf("Search remains readable while typing."), uncertain = setOf(0))
+        val id = readySession(app.store, "Accessible search target", listOf("Search remains readable while typing."))
         var lastGeometry = "The search field has not been measured."
         try {
             compose.runOnUiThread { compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
@@ -683,22 +599,28 @@ class InterfaceTest {
         }
     }
 
-    @Test fun continueTranscriptionFindsAnUnpublishedTailAndPreservesManualEdits() {
+    @Test fun continueTranscriptionRetriesAFailedWindowAndPreservesManualEdits() {
         val app = application()
-        val title = "Interrupted session with an unpublished tail"
+        val title = "Session with a part that failed"
         val correction = "Keep this manual correction."
-        val recoveredText = "Recovered the saved tail."
-        val decoded = CopyOnWriteArrayList<Chunk>()
+        val recoveredText = "Recovered the failed part."
+        val decoded = CopyOnWriteArrayList<StoredWindow>()
         val microphoneOpens = AtomicInteger()
         val previousInputFactory = RecordingService.inputFactoryForTests
         val previousDecoderFactory = RecordingService.decoderFactoryForTests
-        val id = readySession(app.store, title, listOf("Original text"), uncertain = setOf(0))
+        val id = app.store.create()
         try {
             val original = ByteArray(2000 * 32) { (it % 101).toByte() }
             app.store.audioFile(id).writeBytes(original)
-            app.store.edit(app.store.passages(id).single(), correction)
-            val saved = app.store.passages(id).single()
-            app.store.state(id, "INTERRUPTED", "Saved audio can still be transcribed.")
+            app.store.duration(id, 2000)
+            Synthetic.commit(app.store, id, Synthetic.plan(0, 0, 1000, EndKind.BREAK), Synthetic.speech("Original text."))
+            val failing = app.store.addWindow(id, Synthetic.plan(1, 1000, 2000, EndKind.FINAL, EndKind.BREAK))
+            app.store.failWindow(failing.id, "Synthetic failure")
+            assertTrue(app.store.markReady(id))
+            app.store.rename(id, title)
+            val first = app.store.paragraphs(id).single()
+            assertTrue(app.store.editParagraph(first.id, first.revision, correction) is EditResult.Saved)
+            val saved = app.store.paragraphs(id).single()
             assertEquals(0, app.store.pendingCount(id))
 
             RecordingService.inputFactoryForTests = {
@@ -707,10 +629,9 @@ class InterfaceTest {
             }
             RecordingService.decoderFactoryForTests = {
                 object : RecordingDecoder {
-                    override suspend fun transcribe(store: NoteStore, chunk: Chunk, threads: Int) {
-                        decoded += chunk
-                        store.complete(chunk, listOf(Passage(noteId = chunk.noteId, chunkId = chunk.id,
-                            start = chunk.start, end = chunk.end, text = recoveredText, uncertain = false)))
+                    override suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int) {
+                        decoded += window
+                        store.commitDecoded(window.id, ULTRA_ENGINE, RawAsr(recoveredText, Synthetic.speech(recoveredText, 0.1, 0.1)))
                     }
                     override fun cancel() = Unit
                     override fun close() = Unit
@@ -720,12 +641,7 @@ class InterfaceTest {
             waitForTitle(title)
             compose.onNodeWithText(title).performClick()
             waitForSessionReady(title)
-            compose.onNodeWithText("Transcription interrupted").assertIsDisplayed()
-            capture("interrupted-unpublished-tail")
-            compose.onNodeWithText("Continue transcription").assertExists()
-            compose.onNodeWithContentDescription("Recording options").performClick()
-            compose.onNodeWithText("Remove audio").assertIsNotEnabled()
-            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            capture("failed-window-retry")
             compose.onNodeWithText("Continue transcription").performScrollTo().performClick()
 
             compose.waitUntil(10_000) {
@@ -734,13 +650,10 @@ class InterfaceTest {
             }
             compose.waitUntil(10_000) { compose.onAllNodesWithText(recoveredText).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("Continue transcription").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Recording options").performClick()
-            compose.onNodeWithText("Remove audio").assertIsEnabled()
-            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-            assertEquals(listOf(1000L to 2000L), decoded.map { it.start to it.end })
+            assertEquals(listOf(1000L to 2000L), decoded.map { it.ownStartMs to it.ownEndMs })
             assertEquals(0, microphoneOpens.get())
-            assertEquals(0, app.store.pendingCount(id))
-            assertEquals(saved, app.store.passages(id).first())
+            assertEquals(0, app.store.note(id)!!.failedWindows)
+            assertEquals(saved.text, app.store.paragraphs(id).first().text)
             assertArrayEquals(original, app.store.audioFile(id).readBytes())
         } finally {
             try {
@@ -876,7 +789,7 @@ class InterfaceTest {
             compose.onNodeWithContentDescription("Close editor").performScrollTo().performClick()
             compose.onNodeWithText("Discard", substring = false).performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            assertEquals(originalText, app.store.passages(id).single().text)
+            assertEquals(originalText, app.store.paragraphs(id).single().text)
             compose.onNodeWithContentDescription("Resume recording").assertIsDisplayed()
         } finally {
             RecordingState.live.value = originalLive
@@ -931,55 +844,6 @@ class InterfaceTest {
         }
     }
 
-    @Test fun reviewAndCopyPreservesRussianEdits() {
-        val app = application()
-        val store = app.store
-        val id = readySession(store, "Sample note", listOf("Это тестовая запись."), language = "ru", uncertain = setOf(0))
-        val reviewHint = "Dots mark recognizer hints. You can check and edit any passage."
-        try {
-            waitForTitle("Sample note")
-            compose.onNodeWithText("Sample note").performClick()
-            waitForSessionReady("Sample note", "Это тестовая запись.")
-            compose.onNodeWithText(reviewHint).assertDoesNotExist()
-            reviewFilter("1 to review").performClick()
-            compose.onNodeWithText(reviewHint).assertDoesNotExist()
-            reviewFilter("Show all").assertIsSelected()
-            compose.onNode(hasText("Это тестовая запись.") and hasClickAction()).performScrollTo().performClick()
-            waitForEditor()
-            capture("review")
-            compose.onNode(hasSetTextAction()).performTextReplacement("Это исправленная запись.")
-            compose.activityRule.scenario.recreate()
-            waitForEditor()
-            compose.onNode(hasSetTextAction()).assertTextContains("Это исправленная запись.")
-            // A real storage write failure must preserve the draft and the saved original text.
-            store.writableDatabase.execSQL("PRAGMA query_only=ON")
-            try {
-                compose.onNodeWithTag("editor-save").performScrollTo().performClick()
-                compose.waitUntil(10_000) {
-                    compose.onAllNodesWithText("Couldn't save. Your changes are still here. Try again.").fetchSemanticsNodes().isNotEmpty()
-                }
-                compose.onNode(hasSetTextAction()).assertTextContains("Это исправленная запись.")
-                assertEquals("Это тестовая запись.", store.passages(id).single().text)
-            } finally { store.writableDatabase.execSQL("PRAGMA query_only=OFF") }
-            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
-            compose.waitUntil(10_000) { store.passages(id).single().reviewed }
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithText("No flagged passages.").fetchSemanticsNodes().isNotEmpty()
-            }
-            compose.onNodeWithText("No flagged passages.").assertIsDisplayed()
-            compose.onNodeWithText("All checked.").assertDoesNotExist()
-            reviewFilter("Show all").performClick()
-            waitForSessionReady("Sample note", "Это исправленная запись.")
-            compose.onNodeWithText(reviewHint).assertDoesNotExist()
-            compose.onNodeWithText("Это исправленная запись.").assertIsDisplayed()
-            compose.onNodeWithText("Copy text").performClick()
-            compose.runOnIdle {
-                assertEquals("Это исправленная запись.", app.getSystemService(ClipboardManager::class.java)
-                    .primaryClip!!.getItemAt(0).text.toString())
-            }
-        } finally { store.delete(id) }
-    }
-
     @Test fun editorWindowSystemBarsFollowThemeWithoutLosingDraft() {
         // The platform insets controller identifies the actual dialog window on API 30+.
         org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 30)
@@ -1011,97 +875,19 @@ class InterfaceTest {
                     assertEquals("Editor navigation bar in $theme theme", theme == "light", bars.isAppearanceLightNavigationBars)
                 }
             }
-            assertEquals(original, app.store.passages(id).single().text)
+            assertEquals(original, app.store.paragraphs(id).single().text)
         } finally {
             compose.runOnUiThread { app.preferences.theme(initialTheme) }
             app.store.delete(id)
         }
     }
 
-    @Test fun saveAndNextAdvancesReviewAndSaveAndCloseCopiesCommittedText() {
-        val app = application()
-        val originals = listOf("Первый фрагмент.", "Второй фрагмент.", "Третий фрагмент.")
-        val edits = listOf("Первый исправленный фрагмент.", "Второй исправленный фрагмент.")
-        val id = readySession(app.store, "Review sequence fixture", originals, language = "ru", uncertain = setOf(0, 1, 2))
-        try {
-            waitForTitle("Review sequence fixture")
-            compose.onNodeWithText("Review sequence fixture").performClick()
-            waitForSessionReady("Review sequence fixture", originals.first())
-            compose.onNode(hasText(originals.first()) and hasClickAction()).performScrollTo().performClick()
-            waitForEditor()
-            compose.onNode(hasSetTextAction()).performTextReplacement(edits.first())
-            // The editor lives in a dialog window, separate from the Activity's
-            // window. Clear the actual text-field root focus and hide its IME.
-            val editorView = checkNotNull(compose.onNode(hasSetTextAction()).fetchSemanticsNode().root as? android.view.View)
-            compose.runOnUiThread {
-                editorView.clearFocus()
-                editorView.context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
-                    .hideSoftInputFromWindow(editorView.windowToken, 0)
-            }
-            compose.onNode(hasSetTextAction()).assertIsNotFocused()
-            compose.waitForIdle()
-            compose.waitUntil(5_000) {
-                compose.runOnUiThread {
-                    ViewCompat.getRootWindowInsets(editorView)
-                        ?.isVisible(WindowInsetsCompat.Type.ime()) != true
-                }
-            }
-            val saveNext = compose.onNodeWithText("Save & next").performScrollTo().assertIsDisplayed().assertIsEnabled()
-            compose.waitForIdle()
-            val saveAction = checkNotNull(saveNext.fetchSemanticsNode().config[SemanticsActions.OnClick].action)
-            val sheet = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.PaneTitle)).fetchSemanticsNode()
-            val sheetTop = sheet.boundsInRoot.top
-            fun editableText(node: SemanticsNode): String? =
-                if (node.config.contains(SemanticsProperties.EditableText)) node.config[SemanticsProperties.EditableText].text
-                else node.children.firstNotNullOfOrNull(::editableText)
-            val autoAdvance = compose.mainClock.autoAdvance
-            try {
-                compose.mainClock.autoAdvance = false
-                // Scroll and fetch while frames advance. Dispatch only the already
-                // resolved semantic click while frozen; never synchronously await scrolling.
-                compose.runOnUiThread { org.junit.Assert.assertTrue(saveAction()) }
-                compose.waitUntil(10_000) {
-                    compose.mainClock.advanceTimeByFrame()
-                    compose.runOnUiThread {
-                        assertEquals("Save & next moved or hid the bottom sheet", sheetTop, sheet.boundsInRoot.top, 1f)
-                        editableText(sheet) == originals[1]
-                    }
-                }
-                // A new SheetState would replay its entrance after the next passage appears.
-                repeat(24) {
-                    compose.mainClock.advanceTimeByFrame()
-                    compose.runOnUiThread {
-                        assertEquals("The bottom sheet replayed its entrance after advancing review", sheetTop, sheet.boundsInRoot.top, 1f)
-                    }
-                }
-            } finally {
-                compose.mainClock.autoAdvance = autoAdvance
-            }
-            assertEquals(edits.first(), app.store.passages(id)[0].text)
-            org.junit.Assert.assertTrue(app.store.passages(id)[0].reviewed)
-            compose.onNode(hasSetTextAction()).performTextReplacement(edits[1])
-            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
-            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            val passages = app.store.passages(id)
-            assertEquals(edits[1], passages[1].text)
-            org.junit.Assert.assertTrue(passages[1].reviewed)
-            org.junit.Assert.assertFalse(passages[2].reviewed)
-            compose.onNodeWithText("Copy text").performClick()
-            compose.runOnIdle {
-                assertEquals((edits + originals.last()).joinToString("\n\n"), app.getSystemService(ClipboardManager::class.java)
-                    .primaryClip!!.getItemAt(0).text.toString())
-            }
-        } finally { app.store.delete(id) }
-    }
-
     @Test fun legacyExcludedPassageStaysOutOfCopyAndCanBeRestoredAfterRecreation() {
         val app = application()
         val texts = listOf("Synthetic noise words.", "Keep these words.")
         val title = "Legacy background sound fixture"
-        val id = readySession(app.store, title, texts)
-        // The retired background-sound check stored its decisions this way.
-        app.store.writableDatabase.execSQL("UPDATE passages SET excluded=1 WHERE id=?",
-            arrayOf<Any>(app.store.passages(id).first().id))
+        // The retired background-sound check hid the first paragraph.
+        val id = readySession(app.store, title, texts, hidden = setOf(0))
         val originalAudio = app.store.audioFile(id).readBytes()
         val clipboard = app.getSystemService(ClipboardManager::class.java)
         try {
@@ -1123,14 +909,14 @@ class InterfaceTest {
             // Merely viewing the retained text and pressing Done must not restore it.
             compose.onNodeWithTag("editor-save").performScrollTo().performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            assertTrue(app.store.passages(id).first().excluded)
+            assertTrue(app.store.paragraphs(id).first().hidden)
             compose.onNodeWithText("Excluded background sound").performClick()
             waitForEditor()
             compose.onNodeWithText("Restore text").performScrollTo().performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("Copy text").performClick()
             compose.runOnIdle { assertEquals(texts.joinToString("\n\n"), clipboard.primaryClip!!.getItemAt(0).text.toString()) }
-            assertEquals(texts, app.store.passages(id).map { it.originalTranscriptText })
+            assertEquals(texts, app.store.paragraphs(id).map { it.sourceText })
             assertArrayEquals(originalAudio, app.store.audioFile(id).readBytes())
         } finally { app.store.delete(id) }
     }
@@ -1163,7 +949,7 @@ class InterfaceTest {
                     .fetchSemanticsNodes().isNotEmpty()
             }
             compose.runOnIdle { assertEquals("Existing clipboard", clipboard.primaryClip!!.getItemAt(0).text.toString()) }
-            assertEquals(texts, app.store.passages(id).map { it.text })
+            assertEquals(texts, app.store.paragraphs(id).map { it.text })
         } finally { app.store.delete(id) }
     }
 
@@ -1201,7 +987,7 @@ class InterfaceTest {
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
             waitForSessionReady(draft, originalText)
             assertEquals(draft, app.store.note(id)?.title)
-            assertEquals(originalText, app.store.passages(id).single().text)
+            assertEquals(originalText, app.store.paragraphs(id).single().text)
         } finally { app.store.delete(id) }
     }
 
@@ -1243,7 +1029,7 @@ class InterfaceTest {
             capture("oversized-editor-after-recreation")
             compose.onNodeWithTag("editor-save").performScrollTo().performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            assertEquals(draft, app.store.passages(id).single().text)
+            assertEquals(draft, app.store.paragraphs(id).single().text)
         } finally { app.store.delete(id) }
     }
 
@@ -1272,13 +1058,13 @@ class InterfaceTest {
             compose.onNode(hasSetTextAction()).performTextReplacement(draft)
             compose.onNodeWithText(warning).assertIsDisplayed()
             compose.onNode(hasSetTextAction()).assertTextContains(draft)
-            assertEquals(original, app.store.passages(id).single().text)
+            assertEquals(original, app.store.paragraphs(id).single().text)
             compose.onNode(hasSetTextAction()).performTextReplacement(changedDraft)
             compose.onNodeWithText(warning).assertDoesNotExist()
             compose.onNode(hasSetTextAction()).assertTextContains(changedDraft)
             compose.onNodeWithTag("editor-save").performScrollTo().performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            assertEquals(changedDraft, app.store.passages(id).single().text)
+            assertEquals(changedDraft, app.store.paragraphs(id).single().text)
         } finally { app.store.delete(id) }
     }
 
@@ -1308,7 +1094,7 @@ class InterfaceTest {
         val id = readySession(app.store, "Large legacy fixture", listOf("Initial text."))
         val legacy = "Legacy start🙂\r\n" + "a".repeat(2_100_000) + "\r\nLegacy end🙂"
         try {
-            val passage = app.store.passages(id).single()
+            val passage = app.store.paragraphs(id).single()
             app.store.writableDatabase.execSQL("UPDATE passages SET text=? WHERE id=?", arrayOf<Any>(legacy, passage.id))
             app.store.rename(id, "Large legacy fixture")
             waitForTitle("Large legacy fixture")
@@ -1329,7 +1115,7 @@ class InterfaceTest {
             compose.onNodeWithText("Part 1 of $count").assertIsDisplayed()
             compose.onNodeWithContentDescription("Close editor").performScrollTo().performClick()
             compose.onNodeWithText("Discard your changes?").assertDoesNotExist()
-            assertEquals(legacy, app.store.passages(id).single().text)
+            assertEquals(legacy, app.store.paragraphs(id).single().text)
         } finally { app.store.delete(id) }
     }
 }

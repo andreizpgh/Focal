@@ -23,7 +23,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
-import app.focal.data.Passage
 import app.focal.recording.RecordingService
 import app.focal.ui.FocalApp
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,8 +43,8 @@ class SessionActionsTest {
         val app = ApplicationProvider.getApplicationContext<FocalApplication>()
         runBlocking { app.storageReady.await() }
         val store = app.store
-        val other = store.createLegacy("en")
-        val target = store.createLegacy("en")
+        val other = store.insertNoteForTests(emptyList(), 0)
+        val target = store.insertNoteForTests(emptyList(), 0)
         val title = "Context action fixture"
         val renamed = "Renamed from the list"
         try {
@@ -85,8 +84,8 @@ class SessionActionsTest {
         val app = ApplicationProvider.getApplicationContext<FocalApplication>()
         runBlocking { app.storageReady.await() }
         val store = app.store
-        val first = store.createLegacy("en")
-        val second = store.createLegacy("en")
+        val first = store.insertNoteForTests(emptyList(), 0)
+        val second = store.insertNoteForTests(listOf("Shareable synthetic text."), 1_000)
         val firstTitle = "First context fixture"
         val secondTitle = "Second context fixture"
         val blockNextRead = AtomicBoolean(false)
@@ -97,11 +96,6 @@ class SessionActionsTest {
             store.state(first, "READY")
             store.rename(second, secondTitle)
             store.audioFile(second).writeBytes(ByteArray(32_000))
-            val chunk = store.beginChunk(second, 0, false)
-            store.finishChunk(chunk, 1_000)
-            store.complete(store.nextChunk(second)!!, listOf(Passage(noteId = second, chunkId = chunk,
-                start = 0, end = 1_000, text = "Shareable synthetic text.", uncertain = false)))
-            store.duration(second, 1_000)
             store.state(second, "READY")
 
             val factory = object : ViewModelProvider.Factory {

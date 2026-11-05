@@ -10,11 +10,12 @@ import app.focal.speech.UltraModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
+/** [notes] are search results (preview = snippet) while a query is entered. */
 data class LibraryState(val notes: List<Note> = emptyList(), val note: Note? = null,
-                        val passages: List<Passage> = emptyList(), val audioBytes: Long = 0,
+                        val paragraphs: List<Paragraph> = emptyList(), val audioBytes: Long = 0,
                         val pending: Int = 0, val loaded: Boolean = false,
                         val selectedId: String? = null, val error: String? = null,
-                        val hasUnpublishedTail: Boolean = false, internal val storeRevision: Long = 0)
+                        val hasUntranscribedAudio: Boolean = false, internal val storeRevision: Long = 0)
 
 @OptIn(FlowPreview::class)
 class FocalViewModel internal constructor(
@@ -45,9 +46,11 @@ class FocalViewModel internal constructor(
                         app.storageReady.await()
                         beforeLibraryReadForTests?.invoke()
                         val note = id?.let(app.store::note)
-                        LibraryState(app.store.notes(query), note, id?.let(app.store::passages).orEmpty(),
+                        val notes = if (query.isBlank()) app.store.library()
+                            else app.store.search(query).map { it.note.copy(preview = it.snippet) }
+                        LibraryState(notes, note, id?.let(app.store::paragraphs).orEmpty(),
                             id?.let(app.store::audioBytes) ?: 0, id?.let(app.store::pendingCount) ?: 0, true, id,
-                            hasUnpublishedTail = note?.let(app.store::hasUnpublishedTail) == true)
+                            hasUntranscribedAudio = note?.let(app.store::hasUntranscribedAudio) == true)
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
@@ -55,10 +58,10 @@ class FocalViewModel internal constructor(
                     val sameSelection = previous.selectedId == id
                     previous.copy(
                         note = previous.note.takeIf { sameSelection },
-                        passages = if (sameSelection) previous.passages else emptyList(),
+                        paragraphs = if (sameSelection) previous.paragraphs else emptyList(),
                         audioBytes = if (sameSelection) previous.audioBytes else 0,
                         pending = if (sameSelection) previous.pending else 0,
-                        hasUnpublishedTail = sameSelection && previous.hasUnpublishedTail,
+                        hasUntranscribedAudio = sameSelection && previous.hasUntranscribedAudio,
                         selectedId = id, error = if (e is PassageSizeException) e.message else "Could not load sessions. Try again when storage is available."
                     )
                 }
@@ -91,28 +94,37 @@ class FocalViewModel internal constructor(
             return
         }
         player.stop()
-        try { RecordingService.command(app, RecordingService.RECOVER, id) }
+        try { RecordingService.command(app, RecordingService.RECOVER, id, retryFailed = true) }
         catch (e: Exception) { errors.tryEmit(e.message ?: "Could not continue transcription.") }
     }
-    suspend fun edit(passage: Passage, text: String): Boolean = withContext(Dispatchers.IO) {
-        try { app.store.edit(passage, text); true }
-        catch (e: Exception) {
-            if (e is CancellationException) throw e
-            errors.emit(if (e is PassageSizeException) e.message ?: "This passage is too large. Your draft is still open."
-                else "Could not save changes. Your draft is still open.")
-            false
-        }
-    }
-    internal suspend fun restorePassage(passage: Passage): Boolean = viewModelScope.async(Dispatchers.Main.immediate) {
-        val restored = withContext(Dispatchers.IO) {
-            try { app.store.restorePassage(passage) }
-            catch (error: Exception) {
-                if (error is CancellationException) throw error
-                errors.emit("Could not restore this passage. Try again.")
-                false
+    suspend fun edit(paragraph: Paragraph, text: String): Boolean = withContext(Dispatchers.IO) {
+        val message = try {
+            when (app.store.editParagraph(paragraph.id, paragraph.revision, text)) {
+                is EditResult.Saved -> return@withContext true
+                EditResult.TooLarge -> "This passage is too long to save. Shorten it and try again; your draft is still open."
+                EditResult.NotEditable -> "Edit this note when its transcription is finished. Your draft is still open."
+                EditResult.Conflict, EditResult.Missing, EditResult.NoOriginal ->
+                    "This passage changed. Your draft has not been saved."
             }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            "Could not save changes. Your draft is still open."
         }
-        if (restored) awaitPassageRefresh(passage.noteId)
+        errors.emit(message)
+        false
+    }
+    /** Shows a hidden legacy paragraph again, or puts back the recognizer's text of an edited one. */
+    internal suspend fun restorePassage(paragraph: Paragraph): Boolean = viewModelScope.async(Dispatchers.Main.immediate) {
+        val restored = withContext(Dispatchers.IO) {
+            try {
+                if (paragraph.hidden) app.store.unhideParagraph(paragraph.id)
+                else app.store.restoreOriginal(paragraph.id, paragraph.revision) is EditResult.Saved
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                false
+            }.also { if (!it) errors.emit("Could not restore this passage. Try again.") }
+        }
+        if (restored) awaitPassageRefresh(paragraph.noteId)
         restored
     }.await()
 
@@ -155,12 +167,12 @@ class FocalViewModel internal constructor(
         check(live.value.noteId != id && app.store.pendingCount(id) == 0) { "Finish transcription before removing its source audio." }
         player.stopNote(id); app.store.removeAudio(id)
     }
-    fun play(passage: Passage) {
+    fun play(paragraph: Paragraph) {
         if (live.value.noteId != null && !live.value.processing) {
             errors.tryEmit("Finish recording before playing audio.")
             return
         }
-        player.play(passage) { errors.tryEmit(it) }
+        player.play(paragraph) { errors.tryEmit(it) }
     }
     fun playNote(note: Note) {
         if (live.value.noteId != null && !live.value.processing) return
