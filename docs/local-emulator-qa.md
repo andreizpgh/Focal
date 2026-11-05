@@ -29,6 +29,7 @@ background reliability, or Russian recognition quality.
    ```sh
    git submodule update --init --recursive
    python3 scripts/fetch-model.py
+   python3 scripts/fetch-vad-model.py
    ```
 
    Reuse existing checksum-verified model assets where available. Before any new
@@ -36,6 +37,10 @@ background reliability, or Russian recognition quality.
    and reserve the pinned 59,707,625 model bytes (including any repeated attempt).
    `fetch-model.py` does not update that cross-environment research ledger; record
    the reservation explicitly rather than resetting the budget on the laptop.
+   The optional background-sound check also requires the pinned 885,098-byte
+   Silero asset. Reuse it with `python3 scripts/fetch-vad-model.py --local-file PATH`;
+   a verified installed asset skips any network request. Reserve those bytes only
+   for an actual new transfer.
    Model fetching needs network access. The runner itself does not download the
    model or silently replace it. Gradle may resolve missing build dependencies;
    provision those in advance if working offline. The runner requires a clean,
@@ -109,6 +114,7 @@ The separate Python host-tool suite is not run by this command.
 The runner executes core and app JVM unit tests, debug lint, the debug and instrumentation APK
 builds, then verifies the actual APK's embedded model against the committed
 SHA-256 and checks the test APK's speech fixture before installing either APK.
+The pinned speech-presence model is checked in source and in the exact APK as well.
 After installation it starts Focal and verifies the SHA-256 of the model in its
 private app storage using `run-as`. If an existing imported or older model differs,
 the runner fails instead of deleting or replacing app data; use a fresh dedicated
@@ -116,7 +122,7 @@ AVD or explicitly replace that model. The installed-model digest is in the manif
 It runs all instrumentation tests directly with `adb -s SERIAL`, independently
 of Gradle's device discovery. A run fails for a test failure, skipped test,
 crash, missing completion or count, any missing source-discovered test, or any
-of the eight missing real-model checks. Source changes during build or testing
+of the ten missing real-model checks (including real VAD speech/reset and graph-error recovery). Source changes during build or testing
 also fail the run; avoid editing the checkout while it runs. The test discovery
 check deliberately fails closed if new test source syntax is unsupported.
 

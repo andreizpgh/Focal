@@ -1,5 +1,44 @@
 # Product verification · 2026-11-05
 
+## Background-sound decisions · focused verification 2026-11-05
+
+The optional check for finished recordings now proposes passages whose saved
+PCM has no detected speech. It never changes text automatically. Keep/Exclude
+are explicit decisions; excluded text stays available in the timeline with
+Restore and is omitted from Copy/Share. Original PCM and the first stored
+post-reconciliation transcript remain preserved; migrated historical passages
+with unknown originals are not assigned invented provenance. Automatic language
+correction and the ordinary Whisper decoding policy remain unchanged.
+
+The offline prebuild passed both lints, 36 core tests (cached), six app JVM
+tests, debug/test APKs and the unsigned R8 build in 14m08s. A focused Android
+run passed **21/0/0** in 9.685s instrumentation / 12.110s runner wall, including
+real Silero speech/reset and graph-abort failure handling, storage migration,
+cancellation/ownership, fresh Copy snapshots, and exclusion/restore across
+Activity recreation. Nineteen Python runner/summary checks passed. Complete
+129-test clean-source QA is still required before publication.
+
+Manual checks on the dedicated KVM emulator covered the synthetic three-part
+note (silence / public JFK speech / silence): only the two silent ranges were
+proposed. Contextual Edit, Keep, Exclude, Undo, persistent Restore, Copy feedback,
+and the native Share preview behaved as expected. Original text remained in
+the excluded passage editor after recreation. Light/dark settings and the
+editor were inspected, including 200% font, landscape and the actual keyboard.
+Host audio was disabled; audible playback and real microphone input were not
+verified. Independent Astra source and screenshot reviews found no remaining
+blocker; Terra audited both model hashes, absence of Internet/Sherpa/ONNX,
+16 KB ZIP/ELF alignment and the absence of debug fault hooks in R8.
+
+Private evidence: `build/local-diagnostics/noise-review-20261105/`.
+The build stayed within its 4 GiB cgroup cap with no max/OOM events. Heavy jobs
+ran sequentially. The 885,098-byte verified Silero asset was reused locally;
+no new model transfer occurred and the cumulative download ledger is unchanged.
+Two bounded research follow-ups are recorded in the
+[benchmark report](benchmarks/2026-11-05-stt/report.md): cached-noise display
+filtering is counterfactual, and the measured sampler saving was below its
+predeclared threshold. Neither justifies a seven-language accuracy/speed claim.
+Alpha 6 remains the latest public release pending complete candidate QA.
+
 ## ACFT comparison · completed 2026-11-05
 
 The FUTO ACFT Base candidate is **not promoted**. A separately frozen diagnostic

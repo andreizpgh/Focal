@@ -6,6 +6,39 @@ development-handoff, quality-report, architecture, local-emulator-qa и device-v
 [PR #8](https://github.com/andreizpgh/Focal/pull/8). Перед продолжением проверь его
 статус и `build/local-diagnostics/current-android-delivery-work.json`.
 
+## Текущий незавершённый batch · ручная очистка шума
+
+После `b62b611` реализована, но ещё не проверена полным Android QA, явная
+проверка фонового звука в готовой записи: Silero только предлагает, пользователь
+выбирает Keep/Exclude, оригинальные текст/аудио сохраняются, Restore доступен
+из таймлайна. ASR и автоматическая коррекция не менялись. DB v3 хранит исходный
+post-reconciliation текст новых passages; старый неизвестен. Native overlay
+исправляет частичный VAD graph failure, сохраняя прежний ownership patch.
+Astra проверила source; исправлены stale Copy после commit, случайный Restore
+по Done, contextual Edit и сохранение решения при rotation. Sol/Terra добавили
+проверки контроллера, БД, VM, настоящего детектора и ошибки внутри graph.
+
+Кандидат имеет versionCode 7 / alpha.7. Offline build-01 прошёл обе lint,
+core/JVM и debug/test/R8 за 14m08s. Focus-01: **21/0/0**, 9.685s JUnit,
+12.110s wall; реальные VAD speech/reset/graph abort и storage/VM/rotation.
+Ручной synthetic-note QA подтвердил предложения только на двух участках тишины,
+Edit из library, Exclude/Undo/Restore, Copy feedback и Share preview без
+исключённого текста; тёмную тему, 200% шрифт, landscape и клавиатуру.
+Astra просмотрела фактические кадры; Terra проверила упаковку APK.
+Два Python набора прошли: 14 + 5. Новых загрузок весов не было.
+**Нового APK-релиза пока нет.** Следом clean-source полный
+`qa-local.py --release-checks`: 129 tests и 10 real-model checks.
+Приватные результаты: `build/local-diagnostics/noise-review-20261105/`.
+Перед запуском убедись, что unit `focal-noise-focus-20261105` остановлен;
+full QA запускается отдельно с 4 GiB/150% CPU и MemoryHigh=3584M.
+
+Два малых исследования завершены и независимо проверены; не повторять:
+`noise-transfer.json` — два старых seeded-noise диапазона дают no-speech,
+контрфактуально 40→0 вставок, без новых ASR вызовов; `sampler-cost.json` —
+117 µs экономии ниже заранее установленного порога 500 µs, engine не менять.
+Оба aggregates в `docs/benchmarks/2026-11-05-stt/`. Это не новое held-out,
+не улучшение каждого из семи языков и не результат телефона.
+
 ## Текущий checkpoint
 
 Debug-only preview сохранённого аудио прошёл 15 целевых Android- и шесть JVM-тестов,
@@ -105,8 +138,9 @@ RSS 1,299,664 KiB — это эмулятор, не телефон. AVD оста
 overlap до публичного пробного выпуска. Отдельные 42 held-out
 клипа закрыты; production backend и опубликованный APK не менялись.
 См. docs/parakeet-android-probe.md и aggregate parakeet-android.json.
-PR #9 открыт: https://github.com/andreizpgh/Focal/pull/9; UI и предыдущие
-результаты опубликованы в ветке до `fc58b5b`.
+PR #9 открыт: https://github.com/andreizpgh/Focal/pull/9; UI, debug-only preview,
+полный QA и сравнения framing/ACFT опубликованы до `b62b611`.
+Full-history Gitleaks: 112 commits, no findings. Alpha 6 не перезаписана.
 
 Только одна тяжёлая задача в systemd unit: `MemoryHigh=3G`, `MemoryMax=4G`,
 `MemorySwapMax=0`, `CPUQuota=150%`, `Nice=10`, CPUs 0–3. Перед запуском проверь

@@ -33,7 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
-internal enum class SessionAction { Rename, Share, Alternative, RemoveAudio, Delete }
+internal enum class SessionAction { Rename, Share, CheckBackground, Alternative, RemoveAudio, Delete }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable internal fun SessionActionsSheet(
@@ -46,6 +46,7 @@ internal enum class SessionAction { Rename, Share, Alternative, RemoveAudio, Del
     onDismiss: () -> Unit,
     alternativeAvailable: Boolean = false,
     alternativeReason: String? = null,
+    backgroundReason: String? = null,
     onAction: (SessionAction) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -81,6 +82,8 @@ internal enum class SessionAction { Rename, Share, Alternative, RemoveAudio, Del
             }
             SessionActionRow("Rename", Symbol.Edit, loaded && !closing) { choose(SessionAction.Rename) }
             SessionActionRow("Share text", Symbol.Share, loaded && shareReason == null && !closing, shareReason) { choose(SessionAction.Share) }
+            SessionActionRow("Check background sound", Symbol.Audio,
+                loaded && backgroundReason == null && !closing, backgroundReason) { choose(SessionAction.CheckBackground) }
             if (alternativeAvailable) SessionActionRow("Alternative transcript", Symbol.Audio,
                 loaded && alternativeReason == null && !closing, alternativeReason) { choose(SessionAction.Alternative) }
             SessionActionRow("Remove audio", Symbol.Audio, loaded && audioReason == null && !closing, audioReason) { choose(SessionAction.RemoveAudio) }

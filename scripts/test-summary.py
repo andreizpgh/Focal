@@ -24,6 +24,8 @@ required_model_tests = {
     ("app.focal.NativeWhisperTest", "constantPcmProducesNoSegmentsInAnyLanguageEvenWithContext"),
     ("app.focal.SpeechWorkflowTest", "quietVaryingSpeechStillReachesTheDecoder"),
     ("app.focal.SpeechWorkflowTest", "recoveryOfConstantAudioKeepsOriginalAndManualEditsWithoutAddingPassages"),
+    ("app.focal.speech.NoiseDetectorTest", "realModelDistinguishesSpeechFromConstantAndSeededNoiseAndResets"),
+    ("app.focal.speech.NoiseDetectorTest", "graphAbortIsAnErrorClearsStaleProbabilitiesAndContextCanBeReused"),
 }
 model_outcomes = {test: [] for test in required_model_tests}
 rows = []

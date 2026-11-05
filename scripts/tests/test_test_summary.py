@@ -18,6 +18,8 @@ MODEL_CASES = (
     ("app.focal.NativeWhisperTest", "constantPcmProducesNoSegmentsInAnyLanguageEvenWithContext"),
     ("app.focal.SpeechWorkflowTest", "quietVaryingSpeechStillReachesTheDecoder"),
     ("app.focal.SpeechWorkflowTest", "recoveryOfConstantAudioKeepsOriginalAndManualEditsWithoutAddingPassages"),
+    ("app.focal.speech.NoiseDetectorTest", "realModelDistinguishesSpeechFromConstantAndSeededNoiseAndResets"),
+    ("app.focal.speech.NoiseDetectorTest", "graphAbortIsAnErrorClearsStaleProbabilitiesAndContextCanBeReused"),
 )
 
 
@@ -54,7 +56,7 @@ class ModelGateTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(MODEL_CASES[-1][1], result.stdout)
 
-    def test_all_five_required_cases_must_pass(self):
+    def test_all_required_cases_must_pass(self):
         self.report([(c, n, None) for c, n in MODEL_CASES])
         self.assertEqual(self.run_summary().returncode, 0)
 

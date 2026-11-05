@@ -1,0 +1,10 @@
+{
+  "repository": "ggml-org/whisper-vad",
+  "revision": "9ffd54a1e1ee413ddf265af9913beaf518d1639b",
+  "filename": "ggml-silero-v5.1.2.bin",
+  "bytes": 885098,
+  "sha256": "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf",
+  "license": "MIT",
+  "model_source": "https://github.com/snakers4/silero-vad/tree/v5.1.2",
+  "license_source": "https://github.com/snakers4/silero-vad/blob/v5.1.2/LICENSE"
+}

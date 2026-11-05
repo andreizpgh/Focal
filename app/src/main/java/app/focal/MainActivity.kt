@@ -29,7 +29,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         // Saved-audio previews are foreground work; rotation retains the ViewModel's preview.
-        if (!isChangingConfigurations) ViewModelProvider(this)[FocalViewModel::class.java].alternativePreview.stop()
+        if (!isChangingConfigurations) ViewModelProvider(this)[FocalViewModel::class.java].let { model ->
+            model.alternativePreview.stop()
+            model.noiseReview.stop()
+        }
         super.onStop()
     }
 

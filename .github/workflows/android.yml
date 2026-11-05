@@ -32,6 +32,8 @@ jobs:
           build/host-tools/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
       - name: Fetch and verify offline model
         run: python3 scripts/fetch-model.py
+      - name: Fetch and verify speech presence model
+        run: python3 scripts/fetch-vad-model.py
       - name: Recognize a real speech fixture
         run: bash scripts/smoke-stt.sh
       - name: Test, lint, and build

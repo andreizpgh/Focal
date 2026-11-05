@@ -295,10 +295,10 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     retryLoad: () -> Unit = {}, notificationsEnabled: Boolean = true,
     followSuspended: Boolean = false,
 ) {
-    val review = library.passages.count { it.uncertain && !it.reviewed }
+    val review = library.passages.count { it.uncertain && !it.reviewed && !it.excluded }
     val canRetryTranscription = library.pending > 0 || note.mayNeedRecovery
     val reviewing = live == null && reviewOnly
-    val passages = if (reviewing) library.passages.filter { it.uncertain && !it.reviewed } else library.passages
+    val passages = if (reviewing) library.passages.filter { it.uncertain && !it.reviewed && !it.excluded } else library.passages
     var following by rememberSaveable(note.id) { mutableStateOf(true) }
     var awaitingFinalNote by rememberSaveable(note.id) { mutableStateOf(false) }
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
@@ -482,7 +482,7 @@ private val liveNoteStates = setOf("RECORDING", "PAUSED", "PROCESSING")
     passage: Passage, active: Boolean, audioAvailable: Boolean, seek: () -> Unit, edit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val flagged = passage.uncertain && !passage.reviewed
+    val flagged = passage.uncertain && !passage.reviewed && !passage.excluded
     val timestamp = Transcript.time(passage.start)
     val fontScale = LocalDensity.current.fontScale
     val ink = MaterialTheme.colorScheme.onSurface
@@ -513,7 +513,7 @@ private val liveNoteStates = setOf("RECORDING", "PAUSED", "PROCESSING")
             .background(highlight)
             .clickable(
                 role = Role.Button,
-                onClickLabel = "${if (oversized) "Open full passage" else if (flagged) "Review passage" else "Edit passage"} at $timestamp",
+                onClickLabel = "${if (passage.excluded) "View or restore excluded text" else if (oversized) "Open full passage" else if (flagged) "Review passage" else "Edit passage"} at $timestamp",
                 onClick = edit,
             ).semantics {
                 if (active || flagged) stateDescription = listOfNotNull(
@@ -522,10 +522,14 @@ private val liveNoteStates = setOf("RECORDING", "PAUSED", "PROCESSING")
                 ).joinToString(", ")
             }.padding(12.dp)) {
             Text(
-                if (oversized) passageTextPart(passage.text, 0, 512) else passage.text.ifBlank { "Unclear speech" },
-                style = MaterialTheme.typography.bodyLarge,
+                if (passage.excluded) "Excluded background sound"
+                else if (oversized) passageTextPart(passage.text, 0, 512) else passage.text.ifBlank { "Unclear speech" },
+                style = if (passage.excluded) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
+                color = if (passage.excluded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 maxLines = if (oversized) 6 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis,
             )
+            if (passage.excluded) Text("View or restore text", style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(top = 4.dp))
             if (oversized) Text("Open full passage", style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.padding(top = 8.dp))
         }

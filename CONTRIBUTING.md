@@ -12,12 +12,18 @@ these. Set `ANDROID_HOME`, or `sdk.dir` in your untracked `local.properties`.
 ```sh
 git submodule update --init --recursive
 python3 scripts/fetch-model.py
+python3 scripts/fetch-vad-model.py
 ./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
 The model downloader verifies the upstream LFS SHA-256 and records the immutable
 upstream revision in the APK. Reproduce a model with
 `python3 scripts/fetch-model.py --revision <revision-from-model-provenance.json>`.
+The separate speech-presence model is pinned by `models/speech-presence.json`;
+the downloader verifies its exact size and SHA-256 before installation. To reuse
+an existing copy without another transfer, run
+`python3 scripts/fetch-vad-model.py --local-file /path/to/ggml-silero-v5.1.2.bin`.
+Both debug and release builds reject a missing or corrupt presence model.
 Never commit model binaries, private recordings, signing keys, or local SDK paths.
 
 An Android emulator or connected phone is needed for device tests:

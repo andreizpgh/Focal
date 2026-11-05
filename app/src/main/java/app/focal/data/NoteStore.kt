@@ -30,9 +30,13 @@ internal val Note.mayNeedRecovery: Boolean get() = state == "INTERRUPTED" || sta
 data class Chunk(val id: String, val noteId: String, val start: Long, val end: Long,
                  val overlap: Boolean, val state: String)
 data class Passage(val id: Long = 0, val noteId: String, val chunkId: String, val start: Long,
-                   val end: Long, val text: String, val uncertain: Boolean, val reviewed: Boolean = false)
+                   val end: Long, val text: String, val uncertain: Boolean, val reviewed: Boolean = false,
+                   val originalTranscriptText: String? = null, val excluded: Boolean = false)
 
-class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 2) {
+internal fun transferableTranscript(passages: List<Passage>): String = passages.asSequence()
+    .filter { !it.excluded && it.text.isNotBlank() }.joinToString("\n\n") { it.text }
+
+class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 3) {
     private companion object {
         const val BYTES_PER_MS = 32L
         const val MIN_RECOVERABLE_MS = 20L
@@ -40,6 +44,12 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         const val RECOVERY_OVERLAP_MS = 500L
         const val MAX_LEGACY_PASSAGE_BYTES = 16 * 1024 * 1024
         const val TEXT_BLOCK_BYTES = 64 * 1024
+        const val PASSAGE_COLUMNS = "id,note_id,chunk_id,start,end,uncertain,reviewed,excluded," +
+            "CASE WHEN length(CAST(text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES THEN text END AS safe_text"
+        const val ORIGINAL_COLUMNS = "length(CAST(original_transcript_text AS BLOB)) AS original_size," +
+            "original_transcript_text=text AS original_matches_current," +
+            "CASE WHEN original_transcript_text!=text AND length(CAST(original_transcript_text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES " +
+            "THEN original_transcript_text END AS safe_original_text"
     }
     val changes = MutableStateFlow(0L)
     val audioDir = File(context.filesDir, "audio").apply { mkdirs() }
@@ -47,19 +57,27 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE notes(id TEXT PRIMARY KEY,title TEXT NOT NULL,created INTEGER NOT NULL,
-            language TEXT NOT NULL,state TEXT NOT NULL,duration INTEGER NOT NULL DEFAULT 0,error TEXT NOT NULL DEFAULT '')""")
+            language TEXT NOT NULL,state TEXT NOT NULL,duration INTEGER NOT NULL DEFAULT 0,error TEXT NOT NULL DEFAULT '',
+            automatic_title_chunk TEXT)""")
         db.execSQL("""CREATE TABLE chunks(id TEXT PRIMARY KEY,note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
             start INTEGER NOT NULL,end INTEGER NOT NULL,overlap INTEGER NOT NULL,state TEXT NOT NULL)""")
         db.execSQL("""CREATE TABLE passages(id INTEGER PRIMARY KEY AUTOINCREMENT,note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
             chunk_id TEXT NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,start INTEGER NOT NULL,end INTEGER NOT NULL,
-            text TEXT NOT NULL,uncertain INTEGER NOT NULL,reviewed INTEGER NOT NULL DEFAULT 0)""")
+            text TEXT NOT NULL,uncertain INTEGER NOT NULL,reviewed INTEGER NOT NULL DEFAULT 0,
+            original_transcript_text TEXT,excluded INTEGER NOT NULL DEFAULT 0)""")
         db.execSQL("CREATE INDEX chunks_queue ON chunks(note_id,state,start)")
         db.execSQL("CREATE INDEX passages_note ON passages(note_id,start,id)")
         createDeletionJournal(db)
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        check(oldVersion == 1 && newVersion == 2) { "Missing database migration" }
-        createDeletionJournal(db)
+        check(oldVersion in 1..2 && newVersion in (oldVersion + 1)..3) { "Missing database migration" }
+        if (oldVersion == 1) createDeletionJournal(db)
+        if (newVersion == 3) {
+            // Older text may already include manual edits. Its original provenance is unknown.
+            db.execSQL("ALTER TABLE passages ADD COLUMN original_transcript_text TEXT")
+            db.execSQL("ALTER TABLE passages ADD COLUMN excluded INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE notes ADD COLUMN automatic_title_chunk TEXT")
+        }
     }
     private fun createDeletionJournal(db: SQLiteDatabase) {
         // No foreign key: the intent must survive deleting the corresponding note.
@@ -75,8 +93,8 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     }
     fun notes(query: String = ""): List<Note> {
         val notes = readableDatabase.rawQuery("""SELECT n.*,
-        (SELECT substr(text,1,512) FROM passages WHERE note_id=n.id ORDER BY start,id LIMIT 1) preview,
-        (SELECT count(*) FROM passages WHERE note_id=n.id AND uncertain=1 AND reviewed=0) reviews
+        (SELECT substr(text,1,512) FROM passages WHERE note_id=n.id AND excluded=0 ORDER BY start,id LIMIT 1) preview,
+        (SELECT count(*) FROM passages WHERE note_id=n.id AND excluded=0 AND uncertain=1 AND reviewed=0) reviews
         FROM notes n ORDER BY created DESC""", null).use { c -> buildList {
         while (c.moveToNext()) add(note(c).copy(preview = c.string("preview"), reviewCount = c.int("reviews")))
         } }
@@ -85,7 +103,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         val matches = notes.filter { it.title.contains(term, ignoreCase = true) }.mapTo(mutableSetOf()) { it.id }
         // Read in bounded byte chunks: legacy passages can exceed a CursorWindow.
         // Search uses Unicode-aware Kotlin matching, including across chunk boundaries.
-        readableDatabase.rawQuery("SELECT id,note_id,CASE WHEN length(CAST(text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES THEN text END FROM passages", null).use { cursor ->
+        readableDatabase.rawQuery("SELECT id,note_id,CASE WHEN length(CAST(text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES THEN text END FROM passages WHERE excluded=0", null).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(1)
                 if (id !in matches && (cursor.getString(2)?.contains(term, ignoreCase = true)
@@ -106,7 +124,10 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         writableDatabase.update("notes", ContentValues().apply { put("duration", ms) }, "id=?", arrayOf(id)); changed()
     }
     fun rename(id: String, title: String) {
-        writableDatabase.update("notes", ContentValues().apply { put("title", Transcript.truncateUtf16(title.trim(), 120).ifBlank { "Untitled note" }) }, "id=?", arrayOf(id)); changed()
+        writableDatabase.update("notes", ContentValues().apply {
+            put("title", Transcript.truncateUtf16(title.trim(), 120).ifBlank { "Untitled note" })
+            putNull("automatic_title_chunk")
+        }, "id=?", arrayOf(id)); changed()
     }
     fun audioFile(noteId: String) = File(audioDir, "$noteId.pcm")
     fun readChunk(chunk: Chunk): ByteArray {
@@ -160,34 +181,49 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         }
 
     fun recentPassages(note: String, before: Long): List<Passage> = readPassages(
-        "SELECT id,note_id,chunk_id,start,end,uncertain,reviewed,CASE WHEN length(CAST(text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES THEN text END AS safe_text FROM passages WHERE note_id=? AND start<? ORDER BY start DESC,id DESC LIMIT 6",
-        arrayOf(note, before.toString())
+        "SELECT $PASSAGE_COLUMNS FROM passages WHERE note_id=? AND start<? AND excluded=0 ORDER BY start DESC,id DESC LIMIT 6",
+        arrayOf(note, before.toString()),
     ).asReversed()
     fun chunks(note: String): List<Chunk> = readableDatabase.rawQuery("SELECT * FROM chunks WHERE note_id=? ORDER BY start,rowid", arrayOf(note)).use { c -> buildList {
         while (c.moveToNext()) add(Chunk(c.string("id"), c.string("note_id"), c.long("start"), c.long("end"), c.int("overlap") == 1, c.string("state")))
     } }
+    // The extra row lets the caller refuse a note beyond the cleanup work limit.
+    internal fun completedChunks(noteId: String): List<Chunk> = readableDatabase.rawQuery(
+        "SELECT * FROM chunks WHERE note_id=? AND state='DONE' ORDER BY start,rowid LIMIT 257", arrayOf(noteId)
+    ).use { c -> buildList { while (c.moveToNext()) add(chunkFromCursor(c)) } }
+
+    internal fun noiseCandidatePassages(noteId: String, chunkId: String): List<Passage> = readPassages(
+        """SELECT $PASSAGE_COLUMNS,$ORIGINAL_COLUMNS FROM passages WHERE note_id=? AND chunk_id=? AND reviewed=0
+            AND excluded=0 AND length(CAST(text AS BLOB)) BETWEEN 1 AND $MAX_PASSAGE_EDIT_BYTES
+            ORDER BY start,id LIMIT 257""", arrayOf(noteId, chunkId), includeOriginal = true,
+    ).filter { it.text.isNotBlank() }
+
     fun passages(note: String): List<Passage> = readPassages(
-        "SELECT id,note_id,chunk_id,start,end,uncertain,reviewed,CASE WHEN length(CAST(text AS BLOB)) <= $MAX_PASSAGE_EDIT_BYTES THEN text END AS safe_text FROM passages WHERE note_id=? ORDER BY start,id", arrayOf(note)
+        "SELECT $PASSAGE_COLUMNS,$ORIGINAL_COLUMNS FROM passages WHERE note_id=? ORDER BY start,id", arrayOf(note),
+        includeOriginal = true,
     )
-    private fun readPassages(sql: String, args: Array<String>): List<Passage> = readableDatabase.rawQuery(sql, args).use { c -> buildList {
+    private fun readPassages(sql: String, args: Array<String>, includeOriginal: Boolean = false): List<Passage> = readableDatabase.rawQuery(sql, args).use { c -> buildList {
         while (c.moveToNext()) {
             val id = c.long("id")
-            val text = c.getString(c.getColumnIndexOrThrow("safe_text")) ?: passageReader(id).use { reader ->
-                val out = StringBuilder()
-                val buffer = CharArray(8192)
-                while (true) { val count = reader.read(buffer); if (count < 0) break; out.append(buffer, 0, count) }
-                out.toString()
+            val text = c.getString(c.getColumnIndexOrThrow("safe_text")) ?: passageReader(id).use { it.readText() }
+            val original = when {
+                !includeOriginal || c.isNull(c.getColumnIndexOrThrow("original_size")) -> null
+                c.int("original_matches_current") == 1 -> text
+                else -> c.getString(c.getColumnIndexOrThrow("safe_original_text"))
+                    ?: passageReader(id, original = true).use { it.readText() }
             }
-            add(Passage(id, c.string("note_id"), c.string("chunk_id"), c.long("start"), c.long("end"), text, c.int("uncertain") == 1, c.int("reviewed") == 1))
+            add(Passage(id, c.string("note_id"), c.string("chunk_id"), c.long("start"), c.long("end"), text,
+                c.int("uncertain") == 1, c.int("reviewed") == 1, original, c.int("excluded") == 1))
         }
     } }
     // One SQL statement holds a consistent snapshot while individual rows fit safely
     // inside CursorWindow. The byte stream preserves UTF-8 across block boundaries.
-    private fun passageReader(id: Long, limit: Boolean = true): InputStreamReader {
+    private fun passageReader(id: Long, limit: Boolean = true, original: Boolean = false): InputStreamReader {
+        val column = if (original) "original_transcript_text" else "text"
         val cursor = readableDatabase.rawQuery("""WITH RECURSIVE offsets(pos,size) AS (
-            SELECT 1,length(CAST(text AS BLOB)) FROM passages WHERE id=?
+            SELECT 1,length(CAST($column AS BLOB)) FROM passages WHERE id=?
             UNION ALL SELECT pos+$TEXT_BLOCK_BYTES,size FROM offsets WHERE pos+$TEXT_BLOCK_BYTES<=size
-        ) SELECT substr(CAST(p.text AS BLOB),offsets.pos,$TEXT_BLOCK_BYTES), offsets.size
+        ) SELECT substr(CAST(p.$column AS BLOB),offsets.pos,$TEXT_BLOCK_BYTES), offsets.size
           FROM offsets JOIN passages p ON p.id=?""", arrayOf(id.toString(), id.toString()))
         val stream = object : InputStream() {
             var bytes = ByteArray(0)
@@ -246,11 +282,14 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
             results.forEach { p -> db.insertOrThrow("passages", null, ContentValues().apply {
                 put("note_id", p.noteId); put("chunk_id", p.chunkId); put("start", p.start); put("end", p.end)
                 put("text", p.text); put("uncertain", if (p.uncertain) 1 else 0)
+                put("original_transcript_text", p.text)
             }) }
             db.update("chunks", ContentValues().apply { put("state", "DONE") }, "id=?", arrayOf(chunk.id))
             if (note(chunk.noteId)?.title == "Untitled note") {
                 val title = results.joinToString(" ") { it.text }
-                if (title.isNotBlank()) db.update("notes", ContentValues().apply { put("title", Transcript.title(title)) }, "id=?", arrayOf(chunk.noteId))
+                if (title.isNotBlank()) db.update("notes", ContentValues().apply {
+                    put("title", Transcript.title(title)); put("automatic_title_chunk", chunk.id)
+                }, "id=? AND automatic_title_chunk IS NULL", arrayOf(chunk.noteId))
             }
         }
         changed()
@@ -258,11 +297,68 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     fun edit(passage: Passage, text: String) {
         if (!fitsPassageDraftBudget(text))
             throw PassageSizeException("This passage is too long to save. Shorten it and try again; your draft is still open.")
-        val updated = writableDatabase.update("passages", ContentValues().apply { put("text", text.trim()); put("reviewed", 1) },
-            "id=? AND note_id=? AND chunk_id=?", arrayOf(passage.id.toString(), passage.noteId, passage.chunkId))
-        check(updated == 1) { "This passage is no longer available. Your draft has not been saved." }
+        writableDatabase.transaction {
+            val identity = arrayOf(passage.id.toString(), passage.noteId, passage.chunkId)
+            val wasExcluded = rawQuery("SELECT excluded FROM passages WHERE id=? AND note_id=? AND chunk_id=?", identity).use {
+                it.moveToFirst() && it.getInt(0) == 1
+            }
+            val updated = update("passages", ContentValues().apply {
+                put("text", text.trim()); put("reviewed", 1); put("excluded", 0)
+            }, "id=? AND note_id=? AND chunk_id=?", identity)
+            check(updated == 1) { "This passage is no longer available. Your draft has not been saved." }
+            if (wasExcluded) refreshAutomaticTitle(this, passage)
+        }
         changed()
     }
+    fun excludePassage(expected: Passage): Boolean = recordNoiseDecision(expected, exclude = true)
+
+    fun keepPassage(expected: Passage): Boolean = recordNoiseDecision(expected, exclude = false)
+
+    private fun recordNoiseDecision(expected: Passage, exclude: Boolean): Boolean {
+        if (expected.reviewed || expected.excluded || expected.text.isBlank()) return false
+        val updated = writableDatabase.transaction {
+            val values = ContentValues().apply {
+                if (exclude) put("excluded", 1) else put("reviewed", 1)
+            }
+            val changed = update("passages", values, """
+                id=? AND note_id=? AND chunk_id=? AND start=? AND end=? AND text=? AND reviewed=0 AND excluded=0
+                AND EXISTS (SELECT 1 FROM notes WHERE id=passages.note_id AND state='READY')
+                AND NOT EXISTS (SELECT 1 FROM chunks WHERE note_id=passages.note_id AND state!='DONE')
+            """.trimIndent(),
+                arrayOf(expected.id.toString(), expected.noteId, expected.chunkId, expected.start.toString(),
+                    expected.end.toString(), expected.text)) == 1
+            if (changed && exclude) refreshAutomaticTitle(this, expected)
+            changed
+        }
+        if (updated) changed()
+        return updated
+    }
+
+    fun restorePassage(passage: Passage): Boolean {
+        val updated = writableDatabase.transaction {
+            val changed = update("passages", ContentValues().apply {
+                put("excluded", 0); put("reviewed", 1)
+            }, "id=? AND note_id=? AND chunk_id=? AND excluded=1",
+                arrayOf(passage.id.toString(), passage.noteId, passage.chunkId)) == 1
+            if (changed) refreshAutomaticTitle(this, passage)
+            changed
+        }
+        if (updated) changed()
+        return updated
+    }
+
+    private fun refreshAutomaticTitle(db: SQLiteDatabase, passage: Passage) {
+        val identity = arrayOf(passage.noteId, passage.chunkId)
+        val titleSource = db.rawQuery("SELECT 1 FROM notes WHERE id=? AND automatic_title_chunk=?", identity).use { it.moveToFirst() }
+        if (!titleSource) return
+        val text = db.rawQuery(
+            "SELECT substr(ltrim(text),1,512) FROM passages WHERE note_id=? AND chunk_id=? AND excluded=0 ORDER BY start,id",
+            identity,
+        ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) }.joinToString(" ") }
+        db.update("notes", ContentValues().apply { put("title", Transcript.title(text)) },
+            "id=? AND automatic_title_chunk=?", identity)
+    }
+
     fun recover(noteId: String? = null, tailFromMs: Long? = null) {
         require(tailFromMs == null || (noteId != null && tailFromMs >= 0)) { "A recovery tail needs a note and a valid source offset." }
         val db = writableDatabase

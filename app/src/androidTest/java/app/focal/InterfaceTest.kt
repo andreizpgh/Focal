@@ -1140,6 +1140,54 @@ class InterfaceTest {
         } finally { app.store.delete(id) }
     }
 
+    @Test fun backgroundSoundDecisionKeepsSourceAndCanBeRestoredAfterRecreation() {
+        val app = application()
+        val texts = listOf("Synthetic noise words.", "Keep these words.")
+        val title = "Background sound fixture"
+        val id = readySession(app.store, title, texts)
+        val originalAudio = app.store.audioFile(id).readBytes()
+        val clipboard = app.getSystemService(ClipboardManager::class.java)
+        try {
+            waitForTitle(title)
+            compose.onNodeWithText(title).performClick()
+            waitForSessionReady(title, texts.first())
+            compose.onNodeWithContentDescription("Recording options").performClick()
+            compose.onNodeWithText("Check background sound").performScrollTo().performClick()
+            compose.waitUntil(10_000) {
+                compose.onAllNodesWithText("Exclude text").fetchSemanticsNodes().isNotEmpty()
+            }
+            assertEquals(texts, app.store.passages(id).map { it.text })
+            assertTrue(app.store.passages(id).none { it.excluded })
+            capture("background-sound-proposal")
+            compose.onNodeWithText("Exclude text").performScrollTo().performClick()
+            compose.waitUntil(10_000) { app.store.passages(id).first().excluded }
+            compose.onNodeWithText("Keep text").performScrollTo().performClick()
+            compose.waitUntil(10_000) { app.store.passages(id).last().reviewed }
+            compose.onNodeWithText("Done").performScrollTo().performClick()
+            compose.onNodeWithText("Copy text").performClick()
+            compose.runOnIdle { assertEquals(texts.last(), clipboard.primaryClip!!.getItemAt(0).text.toString()) }
+
+            compose.activityRule.scenario.recreate()
+            waitForSessionReady(title, "Excluded background sound")
+            compose.onNodeWithText("Excluded background sound").performClick()
+            waitForEditor()
+            compose.onNode(hasSetTextAction()).assertTextContains(texts.first())
+            capture("background-sound-retained-text")
+            // Merely viewing the retained text and pressing Done must not restore it.
+            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
+            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
+            assertTrue(app.store.passages(id).first().excluded)
+            compose.onNodeWithText("Excluded background sound").performClick()
+            waitForEditor()
+            compose.onNodeWithText("Restore text").performScrollTo().performClick()
+            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithText("Copy text").performClick()
+            compose.runOnIdle { assertEquals(texts.joinToString("\n\n"), clipboard.primaryClip!!.getItemAt(0).text.toString()) }
+            assertEquals(texts, app.store.passages(id).map { it.originalTranscriptText })
+            assertArrayEquals(originalAudio, app.store.audioFile(id).readBytes())
+        } finally { app.store.delete(id) }
+    }
+
     @Test fun textTransferBudgetAccountsForUtf8AndUtf16() {
         org.junit.Assert.assertTrue(fitsTextTransferBudget("a".repeat(131_072)))
         org.junit.Assert.assertFalse(fitsTextTransferBudget("a".repeat(131_073)))

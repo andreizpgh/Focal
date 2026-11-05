@@ -1,1 +1,2 @@
 -keep class app.focal.speech.NativeWhisper { *; }
+-keep class app.focal.speech.NoiseDetector { *; }

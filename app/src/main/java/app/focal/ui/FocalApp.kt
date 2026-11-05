@@ -120,6 +120,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     val playback by model.player.playback.collectAsStateWithLifecycle()
     val requested by openedNote.collectAsStateWithLifecycle()
     val alternative by model.alternativePreview.state.collectAsStateWithLifecycle()
+    val noiseReview by model.noiseReview.state.collectAsStateWithLifecycle()
     val view = LocalView.current
     var destination by rememberSaveable(stateSaver = destinationSaver) { mutableStateOf<Destination>(Destination.Sessions) }
     val selected = (destination as? Destination.Session)?.id
@@ -216,6 +217,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         dialog = "actions"
     }
     fun performOpen(id: String?) {
+        model.noiseReview.stop()
         model.alternativePreview.stop()
         dismissInput(); editingId = null; closeDialog(); pendingOpenTarget = null
         editorDirty = false; renameDirty = false; formSaving = false
@@ -324,17 +326,25 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
     val actionActive = detailId != null && live.noteId == detailId
     val hasUnprocessedAudio = library.pending > 0 || library.hasUnpublishedTail
     val canRemoveAudio = actionNote != null && !actionActive && !hasUnprocessedAudio && library.audioBytes > 0 && library.error == null
-    val transcript = remember(library.passages) { library.passages.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n") }
+    val transcript = remember(library.passages) { app.focal.data.transferableTranscript(library.passages) }
     val canShare = actionNote != null && transcript.isNotBlank() && library.error == null
-    fun allowTextTransfer(action: String): Boolean {
-        if (fitsTextTransferBudget(transcript)) return true
+    fun textForTransfer(action: String): String? {
+        // A tap can precede Compose rendering the newest committed snapshot.
+        val current = detailId?.let(model::latestTransferSnapshot)
+        if (current == null) {
+            notify("Reload this recording before copying or sharing.")
+            return null
+        }
+        val text = app.focal.data.transferableTranscript(current.passages)
+        if (text.isBlank()) return null
+        if (fitsTextTransferBudget(text)) return text
         notify("This transcript is too long to $action at once. Copy a smaller selection from the passage editor.")
-        return false
+        return null
     }
     fun copyTranscript(): Boolean {
-        if (!allowTextTransfer("copy")) return false
+        val currentText = textForTransfer("copy") ?: return false
         return try {
-            val clip = ClipData.newPlainText("Focal transcript", transcript)
+            val clip = ClipData.newPlainText("Focal transcript", currentText)
             if (Build.VERSION.SDK_INT >= 33) clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
             context.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
             true
@@ -344,8 +354,8 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         }
     }
     fun shareTranscript() {
-        if (!allowTextTransfer("share")) return
-        try { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, transcript), "Share transcript")) }
+        val currentText = textForTransfer("share") ?: return
+        try { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, currentText), "Share transcript")) }
         catch (_: ActivityNotFoundException) { notify("No app is available to share text.") }
         catch (_: RuntimeException) { notify("Couldn't share text. Try copying a smaller selection from the passage editor.") }
     }
@@ -522,12 +532,13 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         editing?.let { passage ->
             val ordered = library.passages.sortedWith(compareBy<Passage> { it.start }.thenBy { it.id })
             val index = ordered.indexOfFirst { it.id == passage.id }
-            val nextReview = (ordered.drop(index + 1) + ordered.take(index.coerceAtLeast(0))).firstOrNull { it.uncertain && !it.reviewed && it.id != passage.id }
+            val nextReview = (ordered.drop(index + 1) + ordered.take(index.coerceAtLeast(0))).firstOrNull { it.uncertain && !it.reviewed && !it.excluded && it.id != passage.id }
             EditSheet(
                 passage, playing == passage.id, audioAvailable, { model.play(passage) }, { model.player.pause(); editingId = null },
                 hasNextReview = nextReview != null,
                 audioUnavailableReason = if (live.noteId != null && !live.processing) "Audio unavailable during recording." else "Original audio is unavailable.",
                 onDirtyChange = { editorDirty = it }, onSavingChange = { formSaving = it },
+                restore = { model.restorePassage(passage) },
             ) { text, next ->
                 val saved = model.edit(passage, text)
                 if (saved) {
@@ -567,6 +578,11 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 deleteReason = activeReason.takeUnless { loading },
                 onDismiss = ::closeDialog,
                 alternativeAvailable = model.alternativeAvailable,
+                backgroundReason = (audioReason ?: when {
+                    actionNote?.state != "READY" -> "Finish transcription first"
+                    library.audioBytes > app.focal.speech.NoiseReviewController.MAX_DURATION_MS * 32 -> "Available for recordings up to 15 minutes"
+                    else -> null
+                }).takeUnless { loading },
                 alternativeReason = (audioReason ?: when {
                     actionNote?.state != "READY" -> "Finish the original transcription first"
                     library.audioBytes > 180L * 16_000 * 2 -> "Available for recordings up to three minutes"
@@ -576,6 +592,14 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                 when (action) {
                     SessionAction.Rename -> if (actionNote != null) dialog = "rename" else closeDialog()
                     SessionAction.Share -> { closeDialog(); if (canShare) shareTranscript() }
+                    SessionAction.CheckBackground -> {
+                        val id = actionNote?.id
+                        closeDialog()
+                        if (id != null) {
+                            open(id)
+                            if (!model.noiseReview.start(id)) notify("Finish the current operation first.")
+                        }
+                    }
                     SessionAction.Alternative -> {
                         val id = actionNote?.id
                         closeDialog()
@@ -612,6 +636,17 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
             dismissButton = { TextButton(onClick = ::closeDialog) { Text("Cancel") } }
         )
         AlternativeTranscriptSheet(alternative, model.alternativePreview::stop)
+        BackgroundSoundSheet(noiseReview, playing,
+            dismiss = { model.player.pause(); model.noiseReview.stop() },
+            play = model::play,
+            edit = { passage ->
+                model.noiseReview.stop()
+                open(passage.noteId)
+                editingId = passage.id
+            },
+            decide = model::decideBackgroundSound,
+            restore = model::restorePassage,
+        )
     }
 }
 

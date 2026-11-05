@@ -94,18 +94,61 @@ class ParserTests(unittest.TestCase):
             content = b"synthetic model"
             model = {"repository": "fixture", "revision": "r", "filename": qa.MODEL_NAME,
                      "sha256": hashlib.sha256(content).hexdigest()}
-            with zipfile.ZipFile(app, "w") as apk:
-                apk.writestr("assets/model-provenance.json", json.dumps(model))
-                apk.writestr("assets/" + qa.MODEL_NAME, content)
+            presence_content = b"synthetic vad"
+            presence = {"filename": qa.PRESENCE_NAME, "bytes": len(presence_content),
+                        "sha256": hashlib.sha256(presence_content).hexdigest()}
+            def app_with_presence(data):
+                with zipfile.ZipFile(app, "w") as apk:
+                    apk.writestr("assets/model-provenance.json", json.dumps(model))
+                    apk.writestr("assets/" + qa.MODEL_NAME, content)
+                    if data is not None:
+                        apk.writestr("assets/" + qa.PRESENCE_NAME, data)
+            app_with_presence(presence_content)
             with zipfile.ZipFile(tests, "w") as apk:
                 apk.writestr("assets/jfk.wav", b"fixture")
-            qa.verify_apks(app, tests, model)
+            qa.verify_apks(app, tests, model, presence)
             with self.assertRaisesRegex(qa.QAError, "provenance"):
-                qa.verify_apks(app, tests, {**model, "sha256": "0" * 64})
+                qa.verify_apks(app, tests, {**model, "sha256": "0" * 64}, presence)
+            app_with_presence(None)
+            with self.assertRaisesRegex(qa.QAError, "missing the speech presence model"):
+                qa.verify_apks(app, tests, model, presence)
+            app_with_presence(b"short")
+            with self.assertRaisesRegex(qa.QAError, "speech presence model size"):
+                qa.verify_apks(app, tests, model, presence)
+            app_with_presence(b"x" * len(presence_content))
+            with self.assertRaisesRegex(qa.QAError, "speech presence model SHA-256"):
+                qa.verify_apks(app, tests, model, presence)
+            app_with_presence(presence_content)
             with zipfile.ZipFile(tests, "w"):
                 pass
             with self.assertRaisesRegex(qa.QAError, "speech fixture"):
-                qa.verify_apks(app, tests, model)
+                qa.verify_apks(app, tests, model, presence)
+
+    def test_presence_source_rejects_missing_corrupt_and_changed_lock(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "models").mkdir()
+            assets = root / "app/src/main/assets"
+            assets.mkdir(parents=True)
+            content = b"synthetic vad"
+            digest = hashlib.sha256(content).hexdigest()
+            lock = {"repository": qa.PRESENCE_REPOSITORY, "revision": qa.PRESENCE_REVISION,
+                    "filename": qa.PRESENCE_NAME, "bytes": len(content), "sha256": digest}
+            lock_path = root / "models/speech-presence.json"
+            lock_path.write_text(json.dumps(lock))
+            model_path = assets / qa.PRESENCE_NAME
+            with patch.object(qa, "ROOT", root), patch.object(qa, "PRESENCE_BYTES", len(content)), patch.object(qa, "PRESENCE_SHA256", digest):
+                with self.assertRaisesRegex(qa.QAError, "missing or differs"):
+                    qa.verify_presence_model_source()
+                model_path.write_bytes(content)
+                self.assertEqual(lock, qa.verify_presence_model_source())
+                model_path.write_bytes(b"x" * len(content))
+                with self.assertRaisesRegex(qa.QAError, "missing or differs"):
+                    qa.verify_presence_model_source()
+                lock_path.write_text(json.dumps({**lock, "revision": "changed"}))
+                with self.assertRaisesRegex(qa.QAError, "model lock"):
+                    qa.verify_presence_model_source()
 
 
 class PlanningAndDeviceTests(unittest.TestCase):

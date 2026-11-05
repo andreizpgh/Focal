@@ -50,8 +50,8 @@ android {
         applicationId = "app.focal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.1.0-alpha.6"
+        versionCode = 7
+        versionName = "0.1.0-alpha.7"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         externalNativeBuild {
             cmake {
@@ -150,3 +150,26 @@ val verifyBundledModel by tasks.registering {
     }
 }
 tasks.matching { it.name in setOf("packageRelease", "bundleRelease") }.configureEach { dependsOn(verifyBundledModel) }
+
+val verifyBundledSpeechPresenceModel by tasks.registering {
+    group = "verification"
+    description = "Debug and release builds require the pinned speech presence model."
+    doLast {
+        val model = file("src/main/assets/ggml-silero-v5.1.2.bin")
+        val expectedSize = 885_098L
+        val expectedSha256 = "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf"
+        check(model.isFile && model.length() == expectedSize) {
+            "Missing or incomplete speech presence model. Run python3 scripts/fetch-vad-model.py."
+        }
+        val digest = MessageDigest.getInstance("SHA-256")
+        model.inputStream().use { input ->
+            val buffer = ByteArray(65_536)
+            while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+        check(actual == expectedSha256) { "Bundled speech presence model checksum mismatch; run the verified downloader." }
+    }
+}
+tasks.matching { it.name in setOf("preDebugBuild", "preReleaseBuild") }.configureEach {
+    dependsOn(verifyBundledSpeechPresenceModel)
+}

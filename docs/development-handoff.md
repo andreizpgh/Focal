@@ -20,6 +20,16 @@ ARM phone performance and full application acceptance remain open.
 
 ## Current checkpoint · 2026-11-05
 
+The current unreleased candidate is Alpha 7. Optional background-sound checking
+is implemented with explicit Keep/Exclude, retained original audio/text and
+persistent Restore; automatic correction and ordinary decoding remain unchanged.
+Both lint/build variants and 21 focused Android tests passed, with manual
+synthetic-note Copy/Share, restoration, light/dark and large-font checks.
+Independent source, APK and screenshot reviews found no remaining blocker.
+The next required gate is clean-source full QA: 129 tests, including ten mandatory
+real-model checks. See the top of [quality-report](quality-report.md). No new
+model was downloaded. The current batch has not yet been publicly released.
+
 The debug-only saved-audio preview passed 15 focused Android and six JVM tests,
 but its actual 18-input DEV quality screen rejects adoption: normal word errors
 25 → 53 / 210, attenuated 31 → 52 / 210 against matching-PCM Linux Whisper.
