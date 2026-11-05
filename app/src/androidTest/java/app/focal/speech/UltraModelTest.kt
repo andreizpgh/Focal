@@ -45,7 +45,10 @@ class UltraModelTest {
                     assertEquals(firstName, name)
                     body.inputStream()
                 }
-            }.also { assertTrue(it.message.orEmpty().contains("damaged")) }
+            }.also {
+                assertTrue(it.message.orEmpty().contains("damaged"))
+                assertTrue("A damaged APK copy is not retried automatically", it is BundledModelException)
+            }
             assertFalse(fixture.active.exists())
             assertFalse(fixture.partial.exists())
         }

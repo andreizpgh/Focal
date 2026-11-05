@@ -126,9 +126,8 @@ internal object UltraModel {
                 openAsset(model.name).use { input ->
                     File(partial, model.name).outputStream().use { output ->
                         val before = copied
-                        check(matches(input, model, checkCancelled, output) { copied = before + it; onProgress(copied) }) {
-                            "The bundled speech model is damaged. Reinstall Focal."
-                        }
+                        if (!matches(input, model, checkCancelled, output) { copied = before + it; onProgress(copied) })
+                            throw BundledModelException("The bundled speech model is damaged. Reinstall Focal.")
                         output.fd.sync()
                     }
                 }

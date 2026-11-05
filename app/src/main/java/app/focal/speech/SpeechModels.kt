@@ -17,7 +17,7 @@ import java.io.FileNotFoundException
 
 /** Where the bundled speech model set stands. Recording never waits for it. */
 sealed interface ModelStatus {
-    /** Not looked at yet (the first moments after process start). */
+    /** Not looked at yet (the first moments after process start), or a retry about to start. */
     data object Checking : ModelStatus
 
     /** A checks-only build made without the model: recordings are kept but not transcribed. */
@@ -30,84 +30,110 @@ sealed interface ModelStatus {
 
     data class Ready(val files: Map<String, File>) : ModelStatus
 
-    /** The copy failed (usually storage); [retry] tries again, as does the next foreground start. */
-    data class Failed(val message: String) : ModelStatus
+    /**
+     * The copy failed. Usually storage: [SpeechModels.retry] tries again, as does the next foreground start.
+     * [permanent] failures (the APK's copy is damaged or missing) need a reinstall; only the user's own
+     * retry tries those again.
+     */
+    data class Failed(val message: String, val permanent: Boolean = false) : ModelStatus
 }
+
+/** The APK's copy of the model cannot be used (missing or damaged): retrying cannot help. */
+internal class BundledModelException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
 
 /**
  * Installs the speech model set once, in the background, from the first launch: a staging directory,
  * SHA-256 while copying, fsync, an atomic rename and a marker keyed by the lock's hashes. Later sessions
  * only check the marker and file sizes. Transcription waits for [awaitFiles]; recording never does.
+ *
+ * A failed install stays failed until something asks for a retry ([retry]): [ensureStarted], which the
+ * speech worker may call as often as it likes, never repeats it.
  */
 class SpeechModels internal constructor(
-    private val context: Context,
     private val scope: CoroutineScope,
+    /** Runs one install attempt, publishing progress through its argument, and returns how it ended. */
+    private val installer: (publish: (ModelStatus) -> Unit) -> ModelStatus,
 ) {
+    constructor(context: Context, scope: CoroutineScope) : this(scope, { publish -> install(context, publish) })
+
     private val state = MutableStateFlow<ModelStatus>(ModelStatus.Checking)
     val status: StateFlow<ModelStatus> = state.asStateFlow()
     private var job: Job? = null
 
-    private val directory get() = File(context.noBackupFilesDir, UltraModel.directoryName)
-
-    /** Starts the install unless it is running or done. Safe to call at every foreground start. */
+    /** Starts the first install attempt unless it already ran. Never repeats a failed one. */
     @Synchronized
-    fun start() {
-        if (job?.isActive == true) return
-        when (state.value) {
-            is ModelStatus.Ready, ModelStatus.NotBundled -> return
-            // A waiter must not mistake the previous failure for the retry's result.
-            is ModelStatus.Failed -> state.value = ModelStatus.Checking
-            else -> Unit
-        }
-        job = scope.launch(Dispatchers.IO) { install() }
+    fun ensureStarted() {
+        if (job != null || state.value != ModelStatus.Checking) return
+        launch()
     }
 
-    /** Tries a failed install again. */
-    fun retry() = start()
+    /**
+     * Tries a failed install again: always for the user's Retry, and at a foreground start ([automatic])
+     * unless the failure needs a reinstall. Starts the first attempt if none ran yet.
+     */
+    @Synchronized
+    fun retry(automatic: Boolean = false) {
+        val current = state.value
+        if (current !is ModelStatus.Failed) { ensureStarted(); return }
+        if (job?.isActive == true || (automatic && current.permanent)) return
+        // A waiter must not mistake the previous failure for the retry's result.
+        state.value = ModelStatus.Checking
+        launch()
+    }
 
     /** The installed files, waiting while the copy runs; null when there is no usable model. */
     suspend fun awaitFiles(): Map<String, File>? {
-        start()
+        ensureStarted()
         return when (val settled = state.first { it !is ModelStatus.Checking && it !is ModelStatus.Installing }) {
             is ModelStatus.Ready -> settled.files
             else -> null
         }
     }
 
-    private fun install() {
-        val previousPriority = Process.getThreadPriority(Process.myTid())
-        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
-        try {
-            UltraModel.installed(directory)?.let { state.value = ModelStatus.Ready(it); return }
-            if (!UltraModel.isBundled(context)) { state.value = ModelStatus.NotBundled; return }
-            val total = UltraModel.totalBytes
-            state.value = ModelStatus.Installing(0, total)
-            var published = 0L
-            val files = UltraModel.installOnce(
-                directory,
-                openAsset = { name ->
-                    try {
-                        context.assets.open(name, AssetManager.ACCESS_STREAMING)
-                    } catch (error: FileNotFoundException) {
-                        throw IllegalStateException(MODEL_MISSING, error)
-                    }
-                },
-                onProgress = { copied ->
-                    // About two hundred updates over the whole copy.
-                    if (copied - published >= total / 200 || copied == total) {
-                        published = copied
-                        state.value = ModelStatus.Installing(copied, total)
-                    }
-                },
-            )
-            state.value = ModelStatus.Ready(files)
-        } catch (error: Exception) {
-            Log.w(TAG, "Speech model install failed", error)
-            state.value = ModelStatus.Failed(error.message ?: "The speech model could not be prepared.")
-        } finally {
-            Process.setThreadPriority(previousPriority)
+    private fun launch() {
+        job = scope.launch(Dispatchers.IO) {
+            state.value = try { installer { state.value = it } }
+            catch (error: Exception) {
+                runCatching { Log.w(TAG, "Speech model install failed", error) } // never decides the outcome
+                ModelStatus.Failed(error.message ?: "The speech model could not be prepared.", error is BundledModelException)
+            }
         }
     }
 
-    private companion object { const val TAG = "FocalModel" }
+    private companion object {
+        const val TAG = "FocalModel"
+
+        fun install(context: Context, publish: (ModelStatus) -> Unit): ModelStatus {
+            val previousPriority = Process.getThreadPriority(Process.myTid())
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+            try {
+                val directory = File(context.noBackupFilesDir, UltraModel.directoryName)
+                UltraModel.installed(directory)?.let { return ModelStatus.Ready(it) }
+                if (!UltraModel.isBundled(context)) return ModelStatus.NotBundled
+                val total = UltraModel.totalBytes
+                publish(ModelStatus.Installing(0, total))
+                var published = 0L
+                val files = UltraModel.installOnce(
+                    directory,
+                    openAsset = { name ->
+                        try {
+                            context.assets.open(name, AssetManager.ACCESS_STREAMING)
+                        } catch (error: FileNotFoundException) {
+                            throw BundledModelException(MODEL_MISSING, error)
+                        }
+                    },
+                    onProgress = { copied ->
+                        // About two hundred updates over the whole copy.
+                        if (copied - published >= total / 200 || copied == total) {
+                            published = copied
+                            publish(ModelStatus.Installing(copied, total))
+                        }
+                    },
+                )
+                return ModelStatus.Ready(files)
+            } finally {
+                Process.setThreadPriority(previousPriority)
+            }
+        }
+    }
 }

@@ -212,6 +212,8 @@ class RecordingService : Service() {
                 owned[noteId] = claim
                 skipped -= noteId
             }
+            // The user's Retry also tries a failed model install again, before the worker looks at it.
+            app.models.retry()
             engineRetry = true
             notifications.cancelTimedOut()
             scope.launch {
@@ -219,7 +221,6 @@ class RecordingService : Service() {
                     app.preferences.unfinishedEngineLoads = 0
                     // Only the user's explicit retry gives failed windows new attempts.
                     if (retryFailed) store.retryFailed(noteId)
-                    if (app.models.status.value is ModelStatus.Failed) app.models.retry()
                 } catch (error: Exception) { Log.w(TAG, "Could not reset failed windows", error) }
                 // Queued only now, so the worker never sees the note before its failed windows are pending.
                 synchronized(workLock) { requested += noteId }
@@ -829,8 +830,8 @@ class RecordingService : Service() {
                     return Outcome.Yielded
                 }
                 if (!engine.settled()) {
+                    // The notification follows only a change (publishSpeech), never every poll.
                     publishSpeech(id, SpeechAvailability.PREPARING)
-                    if (!live) updateNotification(transcribingNotification())
                     delay(250); continue
                 }
                 // The recognizer loads once the microphone delivers audio (never before capture starts).
@@ -949,6 +950,8 @@ class RecordingService : Service() {
         private var vad: SileroVad? = null
         private var files: Map<String, File>? = null
         private var resolved = false
+        /** Resolved without a usable model (a failed install or a build without one). */
+        private var modelUnavailable = false
         private var loadTried = false
         private var consecutiveFailures = 0
         private var lastFailedWindow: Long? = null
@@ -962,18 +965,25 @@ class RecordingService : Service() {
 
         fun availabilityOrPreparing() = if (resolved) availability else SpeechAvailability.PREPARING
 
-        /** False while the model is still being installed; the detector is decided once it is not. */
+        /**
+         * False while the model is still being installed; the detector is decided once it is not. A failed
+         * install settles too (the note then waits with its message); it is never restarted from here, only
+         * followed when a retry elsewhere (the user's, a foreground start) changes it.
+         */
         fun settled(): Boolean {
             // The user's Retry gives a failed install or recognizer load another chance.
             if (engineRetry && decoder == null) {
                 engineRetry = false
-                resolved = false; loadTried = false; failure = null; consecutiveFailures = 0; lastFailedWindow = null
+                reset()
             }
-            if (resolved) return true
             if (testDecoder != null) { resolved = true; return true }
-            app.models.start()
-            when (val status = app.models.status.value) {
-                ModelStatus.Checking, is ModelStatus.Installing -> return false
+            val status = app.models.status.value
+            if (resolved && modelUnavailable && status !is ModelStatus.Failed && status != ModelStatus.NotBundled) reset()
+            if (resolved) return true
+            when (status) {
+                // Only the first attempt starts here: a failed one is not repeated on every poll.
+                ModelStatus.Checking -> { app.models.ensureStarted(); return false }
+                is ModelStatus.Installing -> return false
                 is ModelStatus.Ready -> {
                     files = status.files
                     if (vad == null) vad = try { SileroVad.open(status.files.getValue(UltraModel.VAD)) }
@@ -983,11 +993,16 @@ class RecordingService : Service() {
                         null
                     }
                 }
-                is ModelStatus.Failed -> failure = status.message
-                ModelStatus.NotBundled -> failure = MODEL_MISSING
+                is ModelStatus.Failed -> { failure = status.message; modelUnavailable = true }
+                ModelStatus.NotBundled -> { failure = MODEL_MISSING; modelUnavailable = true }
             }
             resolved = true
             return true
+        }
+
+        private fun reset() {
+            resolved = false; modelUnavailable = false; loadTried = false; failure = null
+            consecutiveFailures = 0; lastFailedWindow = null
         }
 
         /** A fresh detector state for each new segmenter; null selects the energy fallback. */

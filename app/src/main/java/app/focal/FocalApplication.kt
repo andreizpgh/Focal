@@ -37,7 +37,7 @@ class FocalApplication : Application() {
         // After recovery, whatever its result: drop model files that Whisper-era builds left behind.
         scope.launch { storageReady.join(); RetiredFiles.remove(filesDir) }
         // Recording never waits for this copy; transcription catches up once it is done.
-        models.start()
+        models.ensureStarted()
     }
 
     /** Retry only a failed recovery; never run recovery over an active recording. */
@@ -59,8 +59,9 @@ class FocalApplication : Application() {
      * loads that kept failing until the user retries).
      */
     fun resumeWaitingTranscription(activity: Activity) {
-        // A failed model install (usually storage) is retried at every foreground start.
-        models.start()
+        // A failed model install (usually storage) is retried at every foreground start, unless the APK's
+        // own copy is damaged: that needs a reinstall, and only the user's Retry tries it again.
+        models.retry(automatic = true)
         if (!autoResumeTranscription) return
         scope.launch {
             try {
