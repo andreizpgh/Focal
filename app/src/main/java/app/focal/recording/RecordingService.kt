@@ -1226,6 +1226,10 @@ class RecordingService : Service() {
                     val capture = action == START
                     val claim = SessionOperations.reserveSession(capture, if (capture) null else id)
                     if (claim == null) {
+                        // The microphone slot is still held while the previous recording closes its note:
+                        // nothing would start, so say so instead of accepting the tap silently.
+                        if (capture && SessionOperations.captureFinishing())
+                            error("Finishing the previous recording. Try again in a moment.")
                         if (SessionOperations.matchesSession(capture, id)) return
                         error(if (capture) "A recording is already running." else "This note is being changed. Try again when it finishes.")
                     }

@@ -71,6 +71,9 @@ internal object SessionOperations {
         return claim
     }
 
+    /** The capture slot is held by a recording whose microphone is already closed (it is finishing). */
+    fun captureFinishing(): Boolean = synchronized(lock) { captureClaim?.captureFinished == true }
+
     /** A second tap is idempotent; a different operation is rejected visibly by its caller. */
     fun matchesSession(capture: Boolean, noteId: String?): Boolean = synchronized(lock) {
         if (capture) captureClaim != null else noteId != null && noteId in processing
