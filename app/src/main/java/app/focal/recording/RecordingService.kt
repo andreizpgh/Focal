@@ -189,6 +189,9 @@ class RecordingService : Service() {
         }
         val session = Capture(claim)
         synchronized(workLock) { capture = session }
+        // A finishing recording may have promoted transcription since the promotion above: the microphone
+        // type and notification of this capture win now that it is current.
+        promoteForCurrentWork()
         session.job = scope.launch(captureDispatcher) { runCapture(session) }
         ensureWorker()
     }
@@ -254,10 +257,39 @@ class RecordingService : Service() {
     }
 
     /** Re-promotes with the type the current work needs (each foreground start must be answered). */
-    private fun restoreForeground(preferProcessing: Boolean = false) {
+    private fun restoreForeground(preferProcessing: Boolean = false) = synchronized(notificationLock) {
         val session = capture
-        if (session != null && !session.ended) promote(microphoneType(), recordingNotification(session))
+        if (session != null && !session.ended) promote(microphoneType(), foregroundNotification())
         else if (preferProcessing || worker != null) promote(processingType(), transcribingNotification())
+    }
+
+    /**
+     * Promotes with the type and notification of the current work, decided under the notification lock: a
+     * live capture keeps the microphone type, otherwise transcription's type. Throws if Android refuses.
+     */
+    private fun promoteForCurrentWork() = synchronized(notificationLock) {
+        val session = capture
+        if (session != null && !session.ended) promote(microphoneType(), foregroundNotification())
+        else promote(processingType(), transcribingNotification())
+    }
+
+    /** The foreground notification for the current work: a live capture always wins over transcription. */
+    private fun foregroundNotification(): Notification {
+        val session = capture
+        return when {
+            session == null || session.ended -> transcribingNotification()
+            session.noteId == null -> notifications.starting()
+            else -> recordingNotification(session)
+        }
+    }
+
+    /**
+     * Re-posts the foreground notification for whatever runs now. Every update goes through here, so a
+     * transcription update that lands after a new recording started cannot replace its chronometer and
+     * Pause/Finish actions.
+     */
+    private fun refreshNotification() = synchronized(notificationLock) {
+        if (!destroyed) notifications.update(foregroundNotification())
     }
 
     private fun recordingNotification(session: Capture): Notification =
@@ -269,9 +301,6 @@ class RecordingService : Service() {
         return notifications.transcribing(id, processingTitle, live.progress, live.speech == SpeechAvailability.PREPARING)
     }
 
-    private fun updateNotification(notification: Notification) = synchronized(notificationLock) {
-        if (!destroyed) notifications.update(notification)
-    }
 
     @Synchronized private fun reconcileWake(renew: Boolean = false) {
         wakeLock?.let { lock ->
@@ -474,7 +503,7 @@ class RecordingService : Service() {
                     if (it.noteId == id) it.copy(paused = true, pauseReason = session.pauseReason, storageShortBytes = session.storageShort,
                         duration = samplesWritten / 16, level = 0f, message = "Paused") else it
                 }
-                updateNotification(recordingNotification(session))
+                refreshNotification()
             }
             while (currentCoroutineContext().isActive && !session.stopping.get()) {
                 if (session.paused.get()) {
@@ -535,7 +564,7 @@ class RecordingService : Service() {
                     RecordingState.live.update {
                         if (it.noteId == id) it.copy(paused = false, pauseReason = null, storageShortBytes = 0, message = "Listening") else it
                     }
-                    updateNotification(recordingNotification(session))
+                    refreshNotification()
                 }
                 if (current.silenced) { session.pauseAutomatically(silencedReason()); continue }
                 val count = current.read(frame, 0, frame.size)
@@ -636,7 +665,8 @@ class RecordingService : Service() {
             captureAwake.set(false); reconcileWake()
         }
         if (queued) {
-            try { promote(processingType(), transcribingNotification()) }
+            // A new recording may already be current: it keeps the microphone type.
+            try { promoteForCurrentWork() }
             catch (error: RuntimeException) {
                 // Android refused background processing: the note waits for the next foreground start.
                 Log.w(TAG, "Could not continue transcription in the background", error)
@@ -773,7 +803,7 @@ class RecordingService : Service() {
                 }
                 when (outcome) {
                     Outcome.Continue -> Unit
-                    Outcome.Yielded -> { feedNote = null; feed = null }
+                    Outcome.Yielded -> { feedNote = null; feed = null; refreshNotification() }
                     Outcome.Done -> { feedNote = null; feed = null; dequeue(target.noteId) }
                     is Outcome.Blocked -> {
                         feedNote = null; feed = null
@@ -896,17 +926,18 @@ class RecordingService : Service() {
         val progress = progressOf(id)
         val note = store.note(id)
         processingTitle = note?.title.orEmpty()
-        RecordingState.live.value = LiveSession(id, processing = true, duration = note?.duration ?: 0,
+        val session = LiveSession(id, processing = true, duration = note?.duration ?: 0,
             message = "Transcribing", progress = progress, speech = engine.availabilityOrPreparing(),
             pending = runCatching { store.pendingCount(id) }.getOrDefault(0))
-        updateNotification(transcribingNotification())
+        // A recording that started since this note was picked owns the live state: never overwrite it.
+        RecordingState.live.update { if (it.capturing) it else session }
+        refreshNotification()
     }
 
     private fun publishSpeech(id: String, speech: SpeechAvailability) {
         if (RecordingState.live.value.let { it.noteId == id && it.speech != speech }) {
             RecordingState.live.update { if (it.noteId == id) it.copy(speech = speech) else it }
-            if (processingNote == id) updateNotification(transcribingNotification())
-            else capture?.takeIf { it.noteId == id }?.let { updateNotification(recordingNotification(it)) }
+            refreshNotification()
         }
     }
 
@@ -924,7 +955,7 @@ class RecordingService : Service() {
         if ((progress * 100).toInt() != (previous * 100).toInt()) {
             // The automatic title appears with the first words.
             store.note(id)?.title?.let { processingTitle = it }
-            updateNotification(transcribingNotification())
+            refreshNotification()
         }
         return progress
     }
