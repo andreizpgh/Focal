@@ -25,16 +25,34 @@ but its actual 18-input DEV quality screen rejects adoption: normal word errors
 25 → 53 / 210, attenuated 31 → 52 / 210 against matching-PCM Linux Whisper.
 Four no-speech controls were blank; the Spanish outlier and Italian overlap
 problem remain included. These are not matched timing measurements. See
-[quality-report](quality-report.md) and the linked aggregate. Ordinary full QA
-of the integration is pending; the normal build passed both lints, 36 core and
-six app JVM tests, debug/test/R8 APKs in 11m15s with bounded resources.
-Next is a private paired framing check using the existing Android Whisper
-Transcriber on the same 18 inputs. No new model or public backend is enabled.
+[quality-report](quality-report.md) and the linked aggregate. Ordinary full QA at clean `b4ea46b` passed **115/0/0**, all eight mandatory
+real-model checks, in 181.677s instrumentation / 182.674s runner wall. Both lints,
+36 core and six app JVM tests, debug/test/R8 APKs passed; build 11m15s and runner
+build 3m40s. Exact ordinary APKs are archived; see the top of quality-report.
+The paired Android Whisper framing attempt stopped after two completed English
+conditions: full PCM reduced word errors 26 → 2 and 28 → 3 / 28, but the Russian
+pair exceeded its shared case budget. A separate four-call noise continuation
+passed: seeded noise insertions 40 → 2, weak emulator noise 0 → 4. Automatic
+full-source bypass is rejected; the original 18-case attempt remains incomplete.
+Both results received independent audit and are linked from quality-report.
+No new public backend is enabled. The dedicated AVD is stopped.
+
+One new, removable FUTO ACFT Base Q8_0 file (81,768,602 bytes) has been downloaded
+and matched its publisher's SHA-256; it has not been enabled in the app. This is a
+model trained for short encoder contexts, unlike the rejected stock-model
+shortening. The completed comparison does not promote ACFT Base: seven normal
+DEV clips gave 25→28/210 word errors, despite fresh host wall time 40.929→19.880s.
+The notebook-style context and publisher context formula have separate frozen
+results; both controls-first attempts remain rejected. Diagnostic completion of
+the remaining eight product-context pairs does not undo the failed quiet control.
+Both models failed longer quiet instructions; noise insertions remained nonzero.
+Independent Astra audits cover all results. See the [ACFT report](benchmarks/2026-11-05-stt/report.md#futo-acft-context-formulas-kept-separate).
+All heavy jobs have ended. Do not repeat finished Parakeet/Qwen/gate/ACFT runs,
+download another model speculatively or open held-out speech yet.
 Keep the 42 held-out clips unopened and all cached models. Alpha 6 remains latest.
 
 
-
-Latest ordinary-app checkpoint `e6f4ca4` passed full local QA: **109/0/0**, eight
+Previous ordinary-app checkpoint `e6f4ca4` passed full local QA: **109/0/0**, eight
 real-model checks, JUnit 180.147s / wall 181.166s. A new-note visibility regression
 introduced by removing the first date header was reproduced on screen and fixed
 with a permanent 4dp start anchor, retaining manual scroll position. Identical
@@ -45,7 +63,6 @@ with the existing 4GiB hard limit; model-only/build-only jobs keep MemoryHigh=3G
 No new release has been made. The saved-audio Parakeet preview is an opt-in
 debug experiment; the failed quality screen above supersedes its earlier plan.
 
-
 Unreleased UI commit `5f290bc` removes the duplicate first library date,
 groups Speech model and Appearance together, and uses a 4 dp / 220 ms ease-out
 page transition. Five focused checks passed in 13.717 s; core, debug lint and
@@ -54,6 +71,13 @@ review; details and limits are at the top of [quality-report](quality-report.md)
 Alpha 6 remains the latest release; no new APK has been released. The owner
 prioritizes an STT decision before any cosmetic Review work. Real-phone quality,
 latency, memory, battery, thermal and background gates remain open.
+
+Focused Terra review reconfirmed that the latest non-Review UI requests are
+covered by code and manual evidence. The archived normal APK still declares
+version 6/alpha.6, with different bytes from the published Alpha 6. A later public
+preview needs a new version, exact-build QA and a new release asset; never relabel
+or overwrite the existing release. Keep the concrete [owner-present phone plan](device-validation.md)
+open. A failed model comparison is useful evidence, not application finalization.
 
 The laptop rebooted on November 5; its cause is unknown and the available
 evidence does not establish OOM. ASR `screen-01` preserves two complete pairs,
@@ -107,9 +131,10 @@ Check the live job and `build/local-diagnostics/current-android-delivery-work.js
 before starting any further work.
 
 The cumulative [download ledger](benchmarks/2026-11-03-stt/download-budget.json)
-reserves **4,474,520,764 / 5,000,000,000 bytes**, leaving **525,479,236**.
+reserves **4,557,289,366 / 5,000,000,000 bytes**, leaving **442,710,634**.
 This includes 1,000,000 bytes of Android runtime metadata and one verified
-49,441,341-byte official AAR transfer; no model was downloaded again.
+49,441,341-byte official AAR transfer, 1,000,000 bytes of ACFT metadata reserve,
+and one 81,768,602-byte ACFT transfer; no model was downloaded again.
 Keep retries and the existing CI reserve counted; reuse verified local artifacts.
 
 ## Previous delivery step · UX Alpha 6
@@ -542,8 +567,8 @@ WER gain into an all-language Android claim.
 
 The current shared ceiling is **5,000,000,000 bytes including retries**, raised
 by the owner on 2026-11-04 for removable local research artifacts. Reservation:
-**4,474,520,764 bytes**, including the existing 61,000,000-byte future CI reserve;
-remaining **525,479,236 bytes**. The old reservation prefix is preserved.
+**4,557,289,366 bytes**, including the existing 61,000,000-byte future CI reserve;
+remaining **442,710,634 bytes**. The old reservation prefix is preserved.
 The ledger includes two Qwen Q4 files, one local Whisper small transfer, the
 Qwen ASR runtime and model, and bounded metadata.
 Do not reset the ledger or repeatedly fetch existing models. The 42 fresh

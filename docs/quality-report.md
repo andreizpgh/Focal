@@ -1,5 +1,80 @@
 # Product verification · 2026-11-05
 
+## ACFT comparison · completed 2026-11-05
+
+The FUTO ACFT Base candidate is **not promoted**. A separately frozen diagnostic
+completed the seven ordinary DEV pairs: word errors 25→28/210, lexical character
+errors 47→46/1,050. All seven fresh host-process calls were faster, with combined
+wall time 40.929→19.880s, but English/German word errors increased. One clip per
+language and a joint weights/quantization/context change do not establish phone
+performance or general accuracy. See the [full report](benchmarks/2026-11-05-stt/report.md#futo-acft-context-formulas-kept-separate).
+
+The preceding controls-first screens remain rejected: notebook-style context
+lost a short French negative answer, while the formula from FUTO's Android source
+preserved it and recovered short Portuguese. Both models still failed longer
+quiet instructions. Noise insertions fell 8→1 and 4→2 but remained nonzero.
+Astra independently checked all results, original stop decisions and the separate
+diagnostic completion. The last two jobs used about 217/213 MiB peak cgroup memory,
+zero swap and zero high/max/OOM events. The AVD stayed stopped.
+
+Only one new 81,768,602-byte model was fetched, once, with its official hash
+verified. The cumulative ledger remains 4,557,289,366/5,000,000,000 bytes.
+No app-source change, new APK, default-model change or automatic correction
+follows from this experiment. The latest ordinary QA below remains applicable.
+
+## Ordinary build after preview integration · verified 2026-11-05
+
+Clean `b4ea46bd36d2620df4ce7b471c88a0bcd52f8500` passed the complete local runner:
+**115 Android tests, zero failures/errors/skips**, including all eight mandatory
+real-model checks and the unchanged oversized-editor rotation assertions.
+Instrumentation: 181.677s; runner wall: 182.674s. The runner also passed 36 core
+and six app JVM tests (cached), both lint variants and debug/test/unsigned R8
+builds in 3m40s, after the 11m15s prebuild. Eighteen Python runner/summary tests
+passed separately. Report: `20261105T030356.823535Z`.
+
+Independent Terra inspection matched the exact APKs to the manifest and all 115
+source-discovered tests to the raw XML. Both APKs exclude Sherpa/ONNX Runtime,
+Parakeet assets and Internet permission; the ordinary factory is unavailable.
+The new controller tests run with fake decoders. Opt-in preview UI/model checks
+remain a separate result below, not part of the ordinary real-model test count.
+
+Verified ordinary app SHA-256:
+`20a3d96a5d3b3da8492bb22e126e1eaecf081361230fa957e79d67a9f096c708`;
+test APK: `30c988dfb830052787a509261c42dbb09edc32c8a1f5668d29d4a07573efe144`.
+Exact APKs are archived privately under
+`build/local-diagnostics/parakeet-preview-20261105/normal-verified-apks/`.
+The dedicated KVM AVD was stopped after the passing runner. Heavy work stayed
+sequential and within the documented limits. No new release or production
+speech-engine change is claimed; phone and speech-quality gates remain open.
+
+## Whisper framing: speech recovery and a noise regression
+
+The existing Android Transcriber was compared on unchanged SpeechGate ranges
+and complete original PCM, with the same model, explicit language and one
+thread. The 18-case attempt stopped at its shared 120-second case budget during
+the Russian full-source arm: only two pairs completed, both the same English
+DEV recording at normal and 0.1 gain. Normal word errors fell 26 → 2 / 28 and
+quiet errors 28 → 3 / 28; the gate had retained 18.56% and 0% of the audio.
+Russian has only a completed gated arm (4 / 26 errors, three calls totaling
+110.079s); its full arm did not have a standalone 90-second timeout. The failed
+attempt remains incomplete, with no seven-language claim.
+[Partial counts and exact artifact identities](benchmarks/2026-11-05-stt/whisper-framing-partial.json).
+
+A separate continuation completed both previously unrun varying-noise controls:
+30s seeded noise gave 40 → 2 inserted words, but 2s emulator noise gave 0 → 4.
+Four Transcriber calls passed in 167.232s instrumentation / 169.149s host wall.
+All nonempty results were marked uncertain; this does not remove invented text.
+**Automatic full-source bypass is rejected.**
+[Noise counts and identities](benchmarks/2026-11-05-stt/whisper-framing-noise.json).
+Independent Astra review verified inputs, ranges, receipts, binaries and scores.
+These are emulator observations, not phone performance or general noise rates.
+
+The first noise attempt failed before inference: its cleanup assumed an
+interrupted fixture still had a database owner, but the matching PCM was an
+orphan. The continuation verified and preserved that exact file. No production
+storage change follows from this harness failure; the disappearance of the row
+was not diagnosed. Prior failed results are retained. The AVD is stopped.
+
 ## Saved-audio preview · experimental Android checkpoint
 
 The opt-in debug [alternative transcript](saved-audio-preview.md) passed **15/15
@@ -33,7 +108,8 @@ functional passes do not override the speech regressions. Candidate and baseline
 timings are not comparable. [Full results and artifact identities](benchmarks/2026-11-05-stt/saved-audio-preview.json).
 The normal offline build passed in 11m15s: 36 core tests (cached), six app JVM
 tests (0.993s), both lint variants and debug/test/unsigned R8 APKs. Eighteen
-Python runner/summary checks also passed. Normal full-app Android QA is pending.
+Python runner/summary checks also passed. The normal full-app Android result is
+recorded above.
 Ordinary/release builds do not expose the experiment. No new release, default
 backend change, automatic correction or phone-performance claim is made.
 

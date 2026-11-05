@@ -1,0 +1,301 @@
+{
+  "schema": 1,
+  "scope": "Diagnostic completion of eight originally selected but unrun product-context cases; not a new acceptance screen.",
+  "status": "DIAGNOSTIC_COMPLETE",
+  "original_screen_status": "REJECTED",
+  "completion": {
+    "completed_pairs": 8,
+    "planned_pairs": 8,
+    "successful_calls": 16,
+    "normal_dev_pairs": 7,
+    "normal_dev_clips_per_language": 1,
+    "additional_quiet_control_pairs": 1,
+    "repeated_pairs_from_original_product_context_run": 0,
+    "combined_unique_product_context_pairs_across_two_attempts": 13,
+    "combined_coverage_does_not_change_original_rejection": true,
+    "runtime_failures": 0
+  },
+  "method": {
+    "comparison": "Stock Whisper base Q5/full encoder context versus ACFT base Q8 with the publisher audio-context formula in Focal host code.",
+    "candidate_context": "max(160, min(1500, ceil(original PCM frames / 320) + 32))",
+    "baseline_context": 1500,
+    "explicit_language": true,
+    "threads": 2,
+    "beam_size": 3,
+    "prompt": "empty",
+    "fresh_process_per_arm": true,
+    "arm_order": "Original frozen AB/BA order retained for positions 5 through 12.",
+    "references": "The same previously consumed DEV references and frozen synthetic control; no held-out access."
+  },
+  "normal_quality_totals": {
+    "base": {
+      "words": 210,
+      "word_errors": 25,
+      "characters": 1050,
+      "character_errors": 47,
+      "wer_percent": 11.904761904761905,
+      "lexical_cer_percent": 4.476190476190476
+    },
+    "acft": {
+      "words": 210,
+      "word_errors": 28,
+      "characters": 1050,
+      "character_errors": 46,
+      "wer_percent": 13.333333333333334,
+      "lexical_cer_percent": 4.380952380952381
+    }
+  },
+  "normal_quality_by_language": [
+    {
+      "language": "en",
+      "reference_words": 28,
+      "reference_lexical_characters": 120,
+      "audio_seconds": 10.02,
+      "base": {
+        "word_errors": 2,
+        "character_errors": 5,
+        "effective_audio_context": 1500,
+        "host_wall_seconds": 5.2825422909991175,
+        "host_load_seconds": 0.083057236,
+        "host_decode_seconds": 5.16376988,
+        "host_process_peak_rss_bytes": 189624320
+      },
+      "acft": {
+        "word_errors": 5,
+        "character_errors": 6,
+        "effective_audio_context": 533,
+        "host_wall_seconds": 1.6708906200001366,
+        "host_load_seconds": 0.096986641,
+        "host_decode_seconds": 1.50847747,
+        "host_process_peak_rss_bytes": 185368576
+      }
+    },
+    {
+      "language": "ru",
+      "reference_words": 26,
+      "reference_lexical_characters": 141,
+      "audio_seconds": 17.04,
+      "base": {
+        "word_errors": 8,
+        "character_errors": 13,
+        "effective_audio_context": 1500,
+        "host_wall_seconds": 5.949018937000801,
+        "host_load_seconds": 0.082122062,
+        "host_decode_seconds": 5.81782013,
+        "host_process_peak_rss_bytes": 190578688
+      },
+      "acft": {
+        "word_errors": 8,
+        "character_errors": 12,
+        "effective_audio_context": 884,
+        "host_wall_seconds": 3.1754633029995603,
+        "host_load_seconds": 0.098799316,
+        "host_decode_seconds": 3.01221254,
+        "host_process_peak_rss_bytes": 195964928
+      }
+    },
+    {
+      "language": "de",
+      "reference_words": 19,
+      "reference_lexical_characters": 118,
+      "audio_seconds": 15.48,
+      "base": {
+        "word_errors": 1,
+        "character_errors": 1,
+        "effective_audio_context": 1500,
+        "host_wall_seconds": 5.378344396001921,
+        "host_load_seconds": 0.081659151,
+        "host_decode_seconds": 5.25325431,
+        "host_process_peak_rss_bytes": 189980672
+      },
+      "acft": {
+        "word_errors": 3,
+        "character_errors": 1,
+        "effective_audio_context": 806,
+        "host_wall_seconds": 2.3982623160009098,
+        "host_load_seconds": 0.099449963,
+        "host_decode_seconds": 2.20873503,
+        "host_process_peak_rss_bytes": 193400832
+      },
+      "text_review_note": "Additional word errors mainly reflect a fused word boundary; lexical character error count is unchanged."
+    },
+    {
+      "language": "fr",
+      "reference_words": 32,
+      "reference_lexical_characters": 160,
+      "audio_seconds": 12.0,
+      "base": {
+        "word_errors": 2,
+        "character_errors": 5,
+        "effective_audio_context": 1500,
+        "host_wall_seconds": 5.88053070100068,
+        "host_load_seconds": 0.087065608,
+        "host_decode_seconds": 5.73677775,
+        "host_process_peak_rss_bytes": 189767680
+      },
+      "acft": {
+        "word_errors": 2,
+        "character_errors": 5,
+        "effective_audio_context": 632,
+        "host_wall_seconds": 2.121172914001363,
+        "host_load_seconds": 0.099523785,
+        "host_decode_seconds": 1.98006236,
+        "host_process_peak_rss_bytes": 188534784
+      }
+    },
+    {
+      "language": "es",
+      "reference_words": 59,
+      "reference_lexical_characters": 279,
+      "audio_seconds": 24.18,
+      "base": {
+        "word_errors": 4,
+        "character_errors": 3,
+        "effective_audio_context": 1500,
+        "host_wall_seconds": 6.703824927000824,
+        "host_load_seconds": 0.090240896,
+        "host_decode_seconds": 6.55185411,
+        "host_process_peak_rss_bytes": 190951424
+      },
+      "acft": {
+        "word_errors": 4,
+        "character_errors": 3,
+        "effective_audio_context": 1241,
+        "host_wall_seconds": 4.742861445000017,
+        "host_load_seconds": 0.101473141,
+        "host_decode_seconds": 4.58558118,
+        "host_process_peak_rss_bytes": 206098432
+      }
+    },
+    {
+      "language": "it",
+      "reference_words": 25,
+      "reference_lexical_characters": 141,
+      "audio_seconds": 20.64,
+      "base": {
+        "word_errors": 3,
+        "character_errors": 2,
+        "effective_audio_context": 1500,
+        "host_wall_seconds": 5.930914325999765,
+        "host_load_seconds": 0.086299233,
+        "host_decode_seconds": 5.76956878,
+        "host_process_peak_rss_bytes": 190754816
+      },
+      "acft": {
+        "word_errors": 1,
+        "character_errors": 1,
+        "effective_audio_context": 1064,
+        "host_wall_seconds": 3.697751834999508,
+        "host_load_seconds": 0.098321389,
+        "host_decode_seconds": 3.5156085,
+        "host_process_peak_rss_bytes": 200491008
+      }
+    },
+    {
+      "language": "pt",
+      "reference_words": 21,
+      "reference_lexical_characters": 91,
+      "audio_seconds": 13.92,
+      "base": {
+        "word_errors": 5,
+        "character_errors": 18,
+        "effective_audio_context": 1500,
+        "host_wall_seconds": 5.8041183489986,
+        "host_load_seconds": 0.082927968,
+        "host_decode_seconds": 5.67644153,
+        "host_process_peak_rss_bytes": 190033920
+      },
+      "acft": {
+        "word_errors": 5,
+        "character_errors": 18,
+        "effective_audio_context": 728,
+        "host_wall_seconds": 2.0737132870017376,
+        "host_load_seconds": 0.101157806,
+        "host_decode_seconds": 1.89086567,
+        "host_process_peak_rss_bytes": 191307776
+      }
+    }
+  ],
+  "normal_host_timing": {
+    "pairs": 7,
+    "total_audio_seconds": 113.28,
+    "candidate_faster_pairs": 7,
+    "base_total_wall_seconds": 40.92929392700171,
+    "acft_total_wall_seconds": 19.880115720003232,
+    "base_median_wall_seconds": 5.88053070100068,
+    "acft_median_wall_seconds": 2.3982623160009098,
+    "median_paired_base_over_acft_wall_ratio": 2.242600552957978,
+    "paired_wall_ratio_min": 1.4134557808067698,
+    "paired_wall_ratio_max": 3.1615129247650486,
+    "total_base_over_acft_wall_ratio": 2.058805617807292,
+    "scope": "Seven fresh-process paired host observations only. Wall time includes process startup, model load, decode and output. Storage caches were not independently controlled; this is not phone performance."
+  },
+  "portuguese_meeting_control": {
+    "condition": "Digitally attenuated synthetic Portuguese negative meeting instruction.",
+    "reference_words": 13,
+    "reference_lexical_characters": 53,
+    "base": {
+      "word_errors": 12,
+      "character_errors": 28,
+      "expected_marker_present_raw": false,
+      "expected_marker_present_emitted": false
+    },
+    "acft": {
+      "word_errors": 11,
+      "character_errors": 17,
+      "expected_marker_present_raw": false,
+      "expected_marker_present_emitted": false
+    },
+    "interpretation": "Both outputs fail to preserve the intended negative instruction and its date/time details. The candidate is lexically closer but still does not recover the critical meaning. Missing negation is shared with the baseline; a newly introduced negation loss or definite affirmative-polarity inversion is not established."
+  },
+  "raw_and_emitted_text_identical_for_all_sixteen_calls": true,
+  "discarded_raw_segments_total": 0,
+  "decision": "No promotion: lower host latency did not produce a clear accuracy benefit on these seven clips. Word errors increased while lexical character errors changed by one. The original absolute quiet-French-control rejection stands; its missing negation was shared with the baseline. Both quiet meeting controls remain unreliable, and earlier noise controls still produced text.",
+  "host_resources": {
+    "screen_elapsed_seconds": 66.99611018799988,
+    "wrapper_elapsed_seconds": 67.21141474099932,
+    "whole_cgroup_memory_peak_bytes": 222994432,
+    "whole_cgroup_memory_peak_mib": 212.6640625,
+    "swap_peak_bytes": 0,
+    "memory_limit_bytes": 4294967296,
+    "cpu_quota_percent": 150,
+    "memory_events": {
+      "low": 0,
+      "high": 0,
+      "max": 0,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0,
+      "sock_throttled": 0
+    },
+    "scope": "Host wrapper and children; not physical-phone memory, thermal or energy measurements."
+  },
+  "provenance": {
+    "plan_sha256": "8f343f65d184d3d045072c4ba8709d1c47ffaf47891e75f37dc6d7b093c72374",
+    "result_sha256": "cc0379aaf01d2d915ed721d4ad1ab5f4b9fdb68646b7cf6afdada42b5fe984c7",
+    "runner_sha256": "fab3e6977adabd517d2cbffb2a868506eec7d3051ee4f790aab18dc46a98f552",
+    "original_product_context_plan_sha256": "6f2532f5bd70752f153794c94363b8be691d6f6f1f025c76ceb817b0e766620e",
+    "original_product_context_result_sha256": "cfb0bde95014fcf3fc2613768f881ec1e6c6b251f02ab559ed8d7765a829d158",
+    "original_product_context_runner_sha256": "490882b91242ab9753d342f506d62898f0d1addd561a31a22ff41f0134c0753b",
+    "base_runner_sha256": "32b3b3727afa01b351f090f0b8a4c219dbf0a5ce9908f2313ec2a3c193b9095e",
+    "publisher_context_source": {
+      "url": "https://github.com/futo-org/voice-input/blob/c0bbb05b47f02e1df089bed5bf63736ae1735d1a/app/src/main/cpp/voiceinput.cpp#L202-L224",
+      "local_copy_sha256": "0d395fa8411dbdbd9825b16349126cf4d6f2102a931e7b355481e7a6cca07d9a"
+    },
+    "scorer_sha256": "dfde50ec467c30bfddabd19593ee00ba187caca0b1d202b557fa2b67a2946abb",
+    "probe_sha256": "2c17f90bb6d322c413a914df1d5f7b193aa7b65926591c8d120724b0632fbf2b",
+    "whisper_library_sha256": "a24f12490e3de59f099772947ad6c2fad82c92414a22176a0dda470401b89d70",
+    "base_model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "acft_model_sha256": "e44f352c9aa2c3609dece20c733c4ad4a75c28cd9ab07d005383df55fa96efc4",
+    "resource_receipt_sha256": "62cea9f499d694702537173f9ad91aa95f2127999bbaaea9be10c960df469b0f",
+    "independent_audit": "PASS: exact remaining-case selection, source/model/library/input bindings, all sixteen raw/log/receipt chains, per-language raw/emitted scores, phase timings and resource receipt checked."
+  },
+  "limitations": [
+    "One already-consumed DEV clip per language is not representative seven-language recognition quality.",
+    "Model weights, quantization and encoder context changed together; neither accuracy nor timing effects are isolated.",
+    "Only the publisher context formula was reproduced. Focal engine, timestamps, decoding settings and padding do not reproduce the publisher application.",
+    "Synthetic control intelligibility was not independently adjudicated by listening.",
+    "These fresh host-process times do not establish Android or physical-phone speed, battery, thermals, background reliability or continuous recording behavior.",
+    "The original rejected screen and this diagnostic completion are separate attempts; no control gate was retrospectively passed."
+  ]
+}

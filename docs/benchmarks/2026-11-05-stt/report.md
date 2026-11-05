@@ -274,12 +274,12 @@ six JVM tests cover bounded processing. The exact-path quality screen below
 rejects promotion despite those functional passes. Ordinary APKs retain the
 Whisper/manual-language path. No automatic LLM correction passed its gate.
 
-Keep the unused 42 held-out clips closed. The next bounded comparison uses the
-existing Android Whisper Transcriber on identical source PCM, contrasting its
-production gate ranges with complete short fragments. This isolates framing
-without changing models. Prior full-audio noise hallucinations remain a rejection
-criterion; bypassing the gate is not an established fix. Physical Pixel 10
-quality, latency, memory and background checks remain separate requirements.
+Keep the unused 42 held-out clips closed. The subsequent Android Whisper
+comparison contrasted production gate ranges with complete source fragments
+without changing models. Its partial speech result and separate noise continuation
+are recorded below: full-source bypass was rejected after weak-noise insertions
+rose from zero to four. Physical Pixel 10 quality, latency, memory and background
+checks remain separate requirements.
 
 ## Saved-audio preview: bounded Android DEV screen
 
@@ -321,3 +321,97 @@ lock, test source and both APK hashes are recorded in the [aggregate result](sav
 This screen does not support promoting the alternative backend. The unused
 held-out cohort, acoustic review and real-phone quality and resource gates remain
 open; automatic correction remains disabled.
+
+## Whisper framing: speech recovery and a noise regression
+
+The existing Android Transcriber was compared on unchanged SpeechGate ranges
+and complete original PCM, with the same model, explicit language and one
+thread. The 18-case attempt stopped at its shared 120-second case budget during
+the Russian full-source arm: only two pairs completed, both the same English
+DEV recording at normal and 0.1 gain. Normal word errors fell 26 → 2 / 28 and
+quiet errors 28 → 3 / 28; the gate had retained 18.56% and 0% of the audio.
+Russian has only a completed gated arm (4 / 26 errors, three calls totaling
+110.079s); its full arm did not have a standalone 90-second timeout. The failed
+attempt remains incomplete, with no seven-language claim.
+[Partial counts and exact artifact identities](whisper-framing-partial.json).
+
+A separate continuation completed both previously unrun varying-noise controls:
+30s seeded noise gave 40 → 2 inserted words, but 2s emulator noise gave 0 → 4.
+Four Transcriber calls passed in 167.232s instrumentation / 169.149s host wall.
+All nonempty results were marked uncertain; this does not remove invented text.
+**Automatic full-source bypass is rejected.**
+[Noise counts and identities](whisper-framing-noise.json).
+Independent Astra review verified inputs, ranges, receipts, binaries and scores.
+These are emulator observations, not phone performance or general noise rates.
+
+The first noise attempt failed before inference: its cleanup assumed an
+interrupted fixture still had a database owner, but the matching PCM was an
+orphan. The continuation verified and preserved that exact file. No production
+storage change follows from this harness failure; the disappearance of the row
+was not diagnosed. Prior failed results are retained. The AVD is stopped.
+
+## FUTO ACFT: context formulas kept separate
+
+One official multilingual ACFT Base Q8_0 file was fetched once (81,768,602 bytes),
+matched the [publisher catalog](https://github.com/futo-org/voice-input/blob/c0bbb05b47f02e1df089bed5bf63736ae1735d1a/shared/src/main/java/org/futo/voiceinput/shared/Models.kt#L190-L194)
+SHA-256, and passed the existing Android model-structure validator on the host.
+No production backend or model-selection behavior changed.
+
+The first controls-first screen used the research-notebook formula
+`min(1500, round(frames / 320) + 8)`. It stopped as planned after three pairs
+and six successful calls in 19.993 seconds. Noise insertions fell 8 → 1 and
+4 → 2, but a 0.288-second digitally attenuated French negative answer changed
+from correct to an unrelated word. Raw and emitted text agreed; filtering did
+not cause the error. Ten pairs, including all seven ordinary DEV clips, did
+not run. This profile is rejected, without a seven-language verdict.
+[Independently audited aggregate](acft-notebook-context.json).
+
+Inspection of the pinned [FUTO Android source](https://github.com/futo-org/voice-input/blob/c0bbb05b47f02e1df089bed5bf63736ae1735d1a/app/src/main/cpp/voiceinput.cpp#L202-L224)
+found a different context formula: `max(160, min(1500, ceil(frames / 320) + 32))`.
+For the short French input it gives 160 rather than 22. This motivated a
+separately frozen comparison on the same controls and DEV inputs, with fresh
+AB/BA arms and unchanged rejection rules. It evaluates this context formula
+inside Focal's pinned host engine, not FUTO's application: timestamp mode,
+engine and padding behavior differ. The first run remains a rejected result.
+
+That separate screen also stopped at its frozen criterion: five pairs / ten
+successful calls in 32.900 seconds. Short French remained correct and short
+Portuguese improved from a missing word to the expected negative answer. Both
+models failed the longer quiet French phrase (11 → 12 word errors / 12 words);
+neither retained its expected negative meaning. The rejection therefore does
+not establish a newly introduced polarity error against a correct baseline.
+Noise insertions remained 8 → 1 and 4 → 2, with nonempty candidate output.
+[Independently audited control results](acft-product-context.json).
+The measured cgroup peak was 227,577,856 bytes, swap peak zero and no high/max/OOM
+events. These are host-job resources, not Android or model-only memory.
+
+Independent review approved a separate diagnostic completion of only the eight
+unrun, already frozen pairs: the last Portuguese control and seven ordinary DEV
+clips. It preserves their original AB/BA order and all decoding parameters,
+without repeating the five completed pairs or changing the rejected screen.
+This characterizes the candidate; it cannot turn the failed gate into acceptance.
+
+The diagnostic completion finished all eight pairs / sixteen calls in 66.996
+seconds. On the seven ordinary clips, word errors changed **25 → 28 / 210**
+(11.90% → 13.33% WER), while lexical character errors changed **47 → 46 / 1,050**.
+English word errors were 2→5, Russian 8→8, German 1→3, French 2→2, Spanish 4→4,
+Italian 3→1 and Portuguese 5→5. German's additional word errors mainly reflect
+a fused word boundary; its lexical character error count did not change.
+The remaining Portuguese quiet instruction was closer lexically (12→11/13 word
+errors) but both models still lost its negative instruction and date/time details.
+[Independently audited diagnostic results](acft-product-remaining.json).
+
+All seven ordinary candidate calls were faster on the constrained host. Their
+combined process wall time was **40.929 → 19.880 seconds**, including load and
+output; paired ratios ranged from 1.41× to 3.16×. Each arm used a fresh process,
+but filesystem caches were not controlled. Weights, quantization and context
+changed together. This is neither an isolated optimization nor a phone-speed
+measurement. The diagnostic cgroup peaked at 222,994,432 bytes with no swap or
+memory-pressure/OOM events.
+
+**ACFT Base is not promoted.** Lower host latency did not establish better
+accuracy, the quiet controls remain unreliable, and noise output is still
+nonempty. Both original stopped screens remain separate rejected attempts;
+completing coverage does not retroactively pass their criteria. No further
+context sweep or model download is justified by this checkpoint. The existing
+backend, automatic-correction setting and unopened held-out cohort are unchanged.

@@ -1041,8 +1041,20 @@
       "bytes": 49441341,
       "kind": "runtime",
       "note": "Official pinned Android AAR for isolated prototype; existing Parakeet weights reused."
+    },
+    {
+      "name": "futo-acft-base-metadata-20261105",
+      "bytes": 1000000,
+      "kind": "metadata",
+      "note": "Official model catalog and bounded HEAD metadata; no weights. Preserve existing cumulative reservations."
+    },
+    {
+      "name": "futo-acft-base-q8-local-attempt-1",
+      "bytes": 81768602,
+      "kind": "asr-model",
+      "note": "One official multilingual ACFT Base Q8_0 transfer, published catalog SHA verified after download; candidate only, no app default change."
     }
   ],
-  "reserved_bytes": 4474520764,
+  "reserved_bytes": 4557289366,
   "note": "Conservative upper bounds: prior checkpoint transfers, local baseline model, disjoint FLEURS cohort, research-only Silero VAD, matching host sanitizer runtimes, metadata/retries, and one reserved publication CI. Carry the total forward; never reset it. On 2026-11-04 the owner increased the cumulative local, removable research-download ceiling to 5 GB. Reserve every attempt before transfer; no reset."
 }
