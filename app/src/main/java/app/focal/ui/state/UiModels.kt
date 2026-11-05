@@ -240,9 +240,13 @@ data class ParagraphUi(
     }
 }
 
-/** An untranscribed range of a partly failed note, drawn as a gap row after [afterParagraphId] (null: first). */
+/**
+ * An untranscribed range, drawn as a gap row after [afterParagraphId] (null: before the first paragraph).
+ * [failed]: a part that could not be transcribed ("0:42 not transcribed", Retry); otherwise a range of a note
+ * from an older version that is still waiting for transcription.
+ */
 @Immutable
-data class GapUi(val startMs: Long, val endMs: Long, val afterParagraphId: Long?)
+data class GapUi(val startMs: Long, val endMs: Long, val afterParagraphId: Long?, val failed: Boolean = true)
 
 /**
  * A note screen. [title] empty = fallback ("Note at 14:32" from [created], muted). [progress] (0..1) is the

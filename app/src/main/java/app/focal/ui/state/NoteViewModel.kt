@@ -111,9 +111,12 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
                 converted.keys.retainAll(visible.mapTo(HashSet()) { it.id })
                 visible.map { p -> converted[p.id]?.takeIf { it.revision == p.revision } ?: ParagraphUi.of(p).also { converted[p.id] = it } }
             }
-            val gaps = store.windows(noteId).filter { it.state == WindowState.FAILED }.map { window ->
-                GapUi(window.ownStartMs, window.ownEndMs, visible.lastOrNull { it.startMs < window.ownStartMs }?.id)
-            }
+            fun after(startMs: Long) = visible.lastOrNull { it.startMs < startMs }?.id
+            // Failed windows, and ranges of a migrated note that were never transcribed (its coverage map).
+            val gaps = (store.windows(noteId).filter { it.state == WindowState.FAILED }
+                .map { GapUi(it.ownStartMs, it.ownEndMs, after(it.ownStartMs), failed = true) } +
+                store.gaps(noteId).map { GapUi(it.startMs, it.endMs, after(it.startMs), failed = false) })
+                .sortedBy { it.startMs }
             Loaded(note, paragraphs, gaps, store.progress(noteId).remainingMs, null)
         } catch (error: Exception) {
             if (error is CancellationException) throw error
