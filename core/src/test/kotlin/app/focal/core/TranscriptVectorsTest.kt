@@ -78,6 +78,78 @@ class TranscriptVectorsTest {
         }
     }
 
+    /**
+     * Spec F3 / algorithms.md section 4: formatting preserves the words. Same count, times, scores and
+     * windows; the letters and digits of every word unchanged; only logged seam words change, each by exactly
+     * one removed '.'. Checked on every vector and on random token streams.
+     */
+    @Test
+    fun formatterPreservesEveryWord() {
+        val inputs = vectors["format_cases"].list().map { c -> c.obj()["input"].obj()["windows"].list().map(::window) } +
+            (0 until 3_000).map { randomWindows(kotlin.random.Random(it)) }
+        var repaired = 0
+        for ((n, windows) in inputs.withIndex()) {
+            val result = Formatter.format(windows, format)
+            assertInvariant("input $n", result)
+            repaired += result.seamOps.size
+            assertIncrementalMatches("input $n", windows, result)
+        }
+        assertTrue(repaired > 100, "the random inputs exercise seam repair ($repaired repairs)")
+    }
+
+    private fun assertInvariant(id: String, result: FormattedTranscript) {
+        val raw = result.rawWords
+        val words = result.words
+        assertEquals(raw.size, words.size, "$id word count")
+        val logged = result.seamOps.map { it.afterWord }.toSet()
+        assertEquals(result.seamOps.size, logged.size, "$id one repair per word")
+        for (i in raw.indices) {
+            val before = raw[i]
+            val after = words[i]
+            assertEquals(before.copy(text = after.text), after, "$id word $i keeps times, scores and window")
+            assertEquals(TextRules.core(before.text), TextRules.core(after.text), "$id word $i letters")
+            if (before.text == after.text) { assertTrue(i !in logged, "$id word $i logged but unchanged"); continue }
+            assertTrue(i in logged, "$id word $i changed without a log entry")
+            assertEquals(before.text.length - 1, after.text.length, "$id word $i")
+            val k = before.text.indices.first { it >= after.text.length || before.text[it] != after.text[it] }
+            assertEquals('.', before.text[k], "$id word $i removes a period")
+            assertEquals(before.text.removeRange(k, k + 1), after.text, "$id word $i")
+        }
+        result.seamOps.forEach {
+            assertEquals(it.afterWord + 1, it.nextWord, "$id seam")
+            assertEquals(raw[it.afterWord].text, it.before, "$id seam")
+            assertEquals(words[it.afterWord].text, it.after, "$id seam")
+        }
+        assertEquals(words.indices.toList(), result.paragraphs.flatMap { it.toList() }, "$id paragraphs cover the words")
+    }
+
+    /** Pause-cut and hard-cut windows of random pieces: words, punctuation, spacers, <unk>, abbreviations. */
+    private fun randomWindows(random: kotlin.random.Random): List<DecodedWindow> {
+        val pieces = listOf(" we", " The", " and", " it", " Dr", " etc", " z", ".B", " EU", " 3", " 15", ":30", " 2002",
+            " I", " über", " и", " Мы", " ¿", "qué", " «", "»", " $", "5", "0", " -", " (", ")", "ing", "s", " ")
+        val enders = listOf(".", ".", ".", ",", "?", "!", "…", "..", "<unk>", "'")
+        val windows = ArrayList<DecodedWindow>()
+        var at = 0L
+        repeat(1 + random.nextInt(5)) {
+            var t = 0.24
+            val tokens = ArrayList<AsrToken>()
+            fun add(text: String) {
+                val duration = if (text.any { c -> c.isLetterOrDigit() }) 0.16 else 0.08
+                val logProb = if (random.nextInt(10) == 0) null else -random.nextDouble(2.0)
+                tokens += AsrToken(text, t, duration, logProb)
+                t += duration + if (random.nextInt(6) == 0) random.nextDouble(1.2) else 0.0
+            }
+            // Seams worth repairing: a window ending in '.' before one that starts lowercase.
+            if (random.nextBoolean()) add(listOf(" and", " we", " и", " über", " z").random(random))
+            repeat(random.nextInt(14)) { add(if (random.nextInt(4) == 0) enders.random(random) else pieces.random(random)) }
+            if (random.nextBoolean()) add(".")
+            val hard = windows.isNotEmpty() && random.nextInt(3) == 0
+            windows += DecodedWindow(at, if (hard) at + 500 else null, null, tokens)
+            at += (t * 1000).toLong() + random.nextLong(600)
+        }
+        return windows
+    }
+
     /** The worker's window-by-window assembly, restored from storage after every window, equals the batch. */
     private fun assertIncrementalMatches(id: String, windows: List<DecodedWindow>, batch: FormattedTranscript) {
         val closed = ArrayList<List<Word>>()

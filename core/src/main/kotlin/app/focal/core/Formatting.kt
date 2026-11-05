@@ -27,7 +27,9 @@ object SeamRepair {
         val stem = TextRules.periodStem(previous.text) ?: return null
         if (TextRules.seamAbbreviation(stem)) return null
         val cut = stem.length
-        return previous.text.removeRange(cut, cut + 1)
+        val fixed = previous.text.removeRange(cut, cut + 1)
+        // The formatter's invariant: a repair never changes a word's letters or digits.
+        return fixed.takeIf { TextRules.core(it) == TextRules.core(previous.text) }
     }
 
     /** Repairs every seam (adjacent words from different windows) of a merged word list. */
