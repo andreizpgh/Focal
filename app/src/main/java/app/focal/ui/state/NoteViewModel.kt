@@ -39,7 +39,13 @@ import kotlinx.coroutines.withContext
 
 /** The result of an edit, rename, split, merge or restore. On anything but [Saved] keep the user's draft. */
 sealed interface EditOutcome {
-    data object Saved : EditOutcome
+    /**
+     * The change is stored. [paragraphs] are the affected paragraphs as now stored, with their new
+     * revisions: after a split the kept part and the new one (the new one's id is what undo merges; it may
+     * be empty and so not yet in [NoteUiState.paragraphs]), after a merge the joined paragraph. Session
+     * undo takes ids and revisions from here instead of waiting for the state to reload.
+     */
+    data class Saved(val paragraphs: List<ParagraphUi>) : EditOutcome
     /** The paragraph changed since it was read (or is gone): reload; the draft is not saved. */
     data object Stale : EditOutcome
     /** The note is recording or transcribing. */
@@ -192,7 +198,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
     /** Undoes the last Replace all, while none of its paragraphs changed again. */
     suspend fun undoReplace(): EditOutcome {
         val undo = lastReplace ?: return EditOutcome.Stale
-        return edit { store.undoReplace(undo) }.also { if (it == EditOutcome.Saved) lastReplace = null }
+        return edit { store.undoReplace(undo) }.also { if (it is EditOutcome.Saved) lastReplace = null }
     }
 
     /** The body as Copy puts it: visible paragraphs joined by a blank line (no title, no doubt marks). */
@@ -246,7 +252,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
     }
 
     private fun outcome(result: EditResult): EditOutcome = when (result) {
-        is EditResult.Saved -> EditOutcome.Saved
+        is EditResult.Saved -> EditOutcome.Saved(result.paragraphs.map(ParagraphUi::of))
         EditResult.Conflict, EditResult.Missing -> EditOutcome.Stale
         EditResult.NotEditable -> EditOutcome.NotEditable
         EditResult.TooLarge -> EditOutcome.TooLarge
