@@ -26,6 +26,9 @@
             <!-- The static "New recording" shortcut. -->
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+        <!-- The shortcut's target. Not exported, so no other app can make Focal record. -->
+        <activity android:name=".ShortcutActivity" android:exported="false" android:excludeFromRecents="true"
+            android:noHistory="true" android:theme="@android:style/Theme.NoDisplay" />
         <service android:name=".recording.RecordingService" android:exported="false"
             android:stopWithTask="false" android:foregroundServiceType="microphone|dataSync|mediaProcessing" />
     </application>

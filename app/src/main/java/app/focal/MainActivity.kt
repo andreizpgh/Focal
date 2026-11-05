@@ -20,8 +20,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
     private val openedNote = MutableStateFlow<Pair<String?, Long>>(null to 0)
-    /** The launcher shortcut asked to record; handled once the activity is in the foreground. */
-    private var recordOnResume = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,17 +38,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (recordOnResume) {
-            recordOnResume = false
-            recordFromShortcut()
-        }
+        // Only the non-exported ShortcutActivity asks for this, in memory: no intent another app can send to
+        // this exported activity starts the microphone.
+        if (ShortcutRecord.consume()) recordFromShortcut()
         // Transcription that waits (process death, Android's background limit) continues only from here.
         (application as FocalApplication).resumeWaitingTranscription(this)
     }
 
     private fun handle(intent: Intent) {
         when (intent.action) {
-            ACTION_RECORD -> recordOnResume = true
+            // The shortcut's request itself travels in memory (ShortcutRecord), handled in onResume.
+            ACTION_FROM_SHORTCUT -> Unit
             ACTION_SHOW_RECORDING -> {
                 val id = intent.getStringExtra(RecordingService.NOTE)
                 EntryRequests.post(EntryRequest.ShowRecording(id))
@@ -91,8 +89,8 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        /** The launcher shortcut "New recording" (res/xml/shortcuts.xml). */
-        const val ACTION_RECORD = "app.focal.action.RECORD"
+        /** Sent by [ShortcutActivity] ("New recording", res/xml/shortcuts.xml); carries no request itself. */
+        const val ACTION_FROM_SHORTCUT = "app.focal.action.FROM_SHORTCUT"
         /** The recording notification: show the recording screen. */
         const val ACTION_SHOW_RECORDING = "app.focal.action.SHOW_RECORDING"
     }
