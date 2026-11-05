@@ -49,7 +49,7 @@ internal class UltraTranscriber(
         // The native thread count is fixed at recognizer creation. Keep one recognizer per session.
         val engine = decoder ?: openDecoder(threads.coerceIn(1, 2), ::checkCancelled).also { decoder = it }
         checkCancelled()
-        val text = engine.decode(samples)
+        val text = engine.decode(samples).text
         checkCancelled()
         check(fitsPassageDraftBudget(text)) { "Ultra transcription is too long for one passage." }
 

@@ -1,5 +1,5 @@
 {
-  "description": "sherpa-onnx Android AAR (Kotlin API and JNI libraries, ONNX Runtime included).",
+  "description": "sherpa-onnx Android AAR. Focal packages only its C API library (libsherpa-onnx-c-api.so) and ONNX Runtime, called through Focal's JNI bridge; the Kotlin API and JNI library are unused.",
   "license": "Apache-2.0",
   "version": "2.0.1",
   "revision": "af2d8d81dbfa61c4cea4c568da78f3982edca005",
@@ -7,5 +7,10 @@
   "path": "libs/sherpa-onnx-2.0.1.aar",
   "bytes": 49441341,
   "sha256": "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7",
-  "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-2.0.1.aar"
+  "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-2.0.1.aar",
+  "c_api_header": {
+    "path": "app/src/main/cpp/third_party/sherpa-onnx/c-api/c-api.h",
+    "sha256": "5698f38ba09ad2bdf085c56a6cbbd7741acf15e25f4ce5c7097b9702cadf437f",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/af2d8d81dbfa61c4cea4c568da78f3982edca005/sherpa-onnx/c-api/c-api.h"
+  }
 }

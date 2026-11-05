@@ -32,7 +32,8 @@ val modelFiles = (modelLock.getValue("files") as List<Map<String, Any>>).map {
     Pinned(it.getValue("name") as String, (it.getValue("bytes") as Number).toLong(), it.getValue("sha256") as String)
 }
 
-// sherpa-onnx (Kotlin API, JNI and ONNX Runtime): every build compiles against it, so it is verified first.
+// sherpa-onnx: every build links Focal's JNI bridge against the C API library inside this AAR,
+// so the AAR is verified first. Nothing else from it (Kotlin API, JNI library) is used.
 val speechRuntime = rootProject.file(runtimeLock.getValue("path") as String)
 require(speechRuntime.isFile) {
     "Missing the speech runtime ${speechRuntime.path}. Run: python3 scripts/fetch-model.py --runtime-only"
@@ -40,6 +41,28 @@ require(speechRuntime.isFile) {
 check(speechRuntime.length() == (runtimeLock.getValue("bytes") as Number).toLong() &&
     sha256(speechRuntime) == runtimeLock.getValue("sha256")) {
     "The speech runtime ${speechRuntime.path} does not match models/sherpa-onnx.json."
+}
+// The bridge compiles against the C API header of the same sherpa-onnx commit, vendored unchanged.
+@Suppress("UNCHECKED_CAST")
+val cApiHeader = (runtimeLock.getValue("c_api_header") as Map<String, Any>).let {
+    rootProject.file(it.getValue("path") as String) to it.getValue("sha256") as String
+}
+check(cApiHeader.first.isFile && sha256(cApiHeader.first) == cApiHeader.second) {
+    "${cApiHeader.first.path} is not the sherpa-onnx C API header pinned in models/sherpa-onnx.json."
+}
+// The ABIs Focal ships (release: arm64-v8a only) and the two prebuilt libraries the bridge needs.
+val speechRuntimeAbis = listOf("arm64-v8a", "x86_64")
+val speechRuntimeLibraries = listOf("libsherpa-onnx-c-api.so", "libonnxruntime.so")
+val speechRuntimeDirectory = layout.buildDirectory.dir("speech-runtime").get().asFile
+val extractSpeechRuntime = tasks.register<Sync>("extractSpeechRuntime") {
+    group = "build"
+    description = "Unpacks the sherpa-onnx C API and ONNX Runtime libraries from the verified AAR for CMake."
+    from(zipTree(speechRuntime)) {
+        include(speechRuntimeAbis.flatMap { abi -> speechRuntimeLibraries.map { "jni/$abi/$it" } })
+        eachFile { path = path.removePrefix("jni/") }
+        includeEmptyDirs = false
+    }
+    into(speechRuntimeDirectory)
 }
 
 // Parakeet Ultra INT8 is packaged straight from this ignored directory; no extra 670 MB staging copy.
@@ -77,11 +100,19 @@ android {
         buildConfigField("String", "SPEECH_RUNTIME_REVISION", "\"${runtimeLock.getValue("revision")}\"")
         buildConfigField("String", "ONNXRUNTIME_VERSION", "\"${runtimeLock.getValue("onnxruntime")}\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake { arguments += "-DFOCAL_SPEECH_RUNTIME_DIR=${speechRuntimeDirectory.path}" }
+        }
     }
+    // The JNI bridge (src/main/cpp) is Focal's only native code.
+    ndkVersion = "28.2.13676358"
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     // The recognizer streams its model out of the APK once; keep the ONNX files stored.
     androidResources { noCompress += "onnx" }
+    // Ship the verified sherpa-onnx and ONNX Runtime binaries byte for byte; only the bridge is stripped.
+    packaging { jniLibs { keepDebugSymbols += speechRuntimeLibraries.map { "**/$it" } } }
     if (modelPresent) sourceSets.getByName("main").assets.directories.add(ultraModelDirectory.path)
     // ABI filters are set per build type only: AGP unions them with defaultConfig's.
     buildTypes {
@@ -102,7 +133,6 @@ kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
 dependencies {
     implementation(project(":core"))
-    implementation(files(speechRuntime))
     implementation(platform(libs.compose.bom))
     implementation(libs.core.ktx)
     implementation(libs.activity.compose)
@@ -176,3 +206,10 @@ val verifiedAssetMerges = buildSet {
 }
 tasks.matching { it.name in verifiedAssetMerges }.configureEach { dependsOn(verifyUltraModel) }
 tasks.matching { it.name in setOf("mergeDebugAssets", "mergeReleaseAssets") }.configureEach { dependsOn(verifyAppAssets) }
+
+// CMake links the bridge against the extracted runtime, so it must exist before any native build.
+tasks.configureEach {
+    if (listOf("configureCMake", "buildCMake", "generateJsonModel", "externalNativeBuild").any { name.startsWith(it) }) {
+        dependsOn(extractSpeechRuntime)
+    }
+}

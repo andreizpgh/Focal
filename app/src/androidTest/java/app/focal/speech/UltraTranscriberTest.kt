@@ -148,7 +148,7 @@ class UltraTranscriberTest {
 
     private fun fakeDecoder(decodeBlock: (FloatArray) -> String, onClose: () -> Unit = {}) =
         object : SpeechDecoder {
-            override fun decode(samples: FloatArray): String = decodeBlock(samples)
+            override fun decode(samples: FloatArray): AsrResult = AsrResult.textOnly(decodeBlock(samples))
             override fun close() = onClose()
         }
 
