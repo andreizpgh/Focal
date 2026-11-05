@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "COMPLETE_AUDIT_PENDING",
+  "status": "COMPLETE_AUDITED",
   "cases": 21,
   "speech": {
     "normal": {

@@ -105,7 +105,8 @@ words in ten windows. The repeated stream is a duration check and shares its
 source with an earlier case. The comparison measures recognition on saved PCM
 and uses historical Base scores.
 
-Full primary-build emulator QA, the minified release check and physical-phone
-validation remain pending. See [local emulator QA](local-emulator-qa.md) and
+The primary build passed all 146 emulator tests and a separate minified runtime
+smoke with public speech. Physical-phone validation remains pending.
+See [local emulator QA](local-emulator-qa.md) and
 [device validation](device-validation.md). Earlier saved-audio comparisons are
 recorded in the [STT benchmark report](benchmarks/2026-11-05-stt/report.md).

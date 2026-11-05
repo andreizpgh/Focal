@@ -1,5 +1,60 @@
 # Product verification · 2026-11-05
 
+## Alpha 9 primary Ultra · emulator verification
+
+Clean `2341e7bad78a5f88a5f976c58d17b00897326bc9` passed
+`qa-local.py --ultra --release-checks` on the dedicated API 35 x86_64 emulator.
+Report `20261105T125605.370324Z` records **146 passed, zero failures and zero
+skips**. JUnit took 240.582 s and instrumentation wall time was 241.672 s. The
+runner's Gradle build took 4m 7s with passing cached results for 36 core and
+18 app JVM tests. Debug and release lint, the debug and test APKs and the
+unsigned minified APK passed their build checks. The bounded QA service took
+8m 57.862s wall and 12m 34.485s CPU, with 3.5 GiB peak memory and zero swap.
+
+The verified 815,769,167-byte debug APK has SHA-256
+`7f79f810b293e692811d852cbdcc195ca51ff4a4629a24434bdd445d5f854652`.
+The instrumentation APK has SHA-256
+`fc3ffe1fae08ebc21f704b6c48bd6ef650778fe664b71c2af15d68caa3e4bc44`.
+The manifest binds the installed pair to the build. The suite covers real Ultra
+transcription of the public JFK fixture through Record and Finish, synthetic
+capture past three minutes with its decoder blocked, saved-tail recovery,
+database migration and legacy Whisper behavior.
+
+New recordings use Ultra with automatic language selection and save the
+transcript in the note. Each decode uses a window of up to 30 seconds. Live
+planning waits for 35 seconds of saved audio from the cursor, and Pause or
+Finish makes the durable tail eligible immediately. Whisper notes keep their
+engine and saved language for recovery. Original audio, edits and exclusions
+remain with the note. Automatic LLM correction is off.
+[Primary Ultra architecture](architecture.md#ultra).
+
+On the separate 21-input DEV recovery check, all 14 short speech cases matched
+the previous Ultra error counts. Against historical same-PCM Whisper Base,
+word errors were **25 → 12 / 210** on normal speech and **31 → 15 / 210**
+on quiet speech. Quiet Portuguese worsened **5 → 8 / 21**. Four controls
+emitted no words. A 276.8-second repeated Russian fixture completed in ten
+windows with **48 / 420** word errors. The repeated source is a duration check.
+The earlier 42-clip held-out comparison below used the separate saved-audio
+path. [Primary DEV21 report](benchmarks/2026-11-05-stt/ultra-primary-report.md).
+
+The exact debug APK passed manual Record/Finish, public-speech recovery into
+the main note, Copy feedback, model settings, light/dark and 200% portrait and
+landscape scroll-to-end checks. A separate non-debuggable R8 copy
+`915156deee8b5cb3a8bca0573a5586ed282bfd109227b63e481e459b4d2a135b`
+passed cold extraction of all four verified model files and primary public-speech
+recovery into the main note. Legacy rows, manual edits and original audio matched
+before/after both updates; both new fixture originals also matched. R8-to-debug
+restoration initially lacked temporary AVD storage; rebooting only the dedicated
+AVD resolved the storage error and the exact debug APK was restored. No data
+was cleared. The AVD is stopped. No models were downloaded.
+
+Sol, Terra and Astra independently reviewed source, quality, all raw test outcomes,
+packaging and actual UI/data evidence. [Alpha 9 artifact provenance](../releases/stt-alpha-9.json)
+binds the testing APK; the R8 copy is not distributed. Host audio was disabled.
+Physical Pixel 10 microphone, mixed-language dictation, latency, RAM, battery,
+thermals and background checks remain open.
+[Device checklist](device-validation.md).
+
 ## Alpha 8 bundled Ultra · final emulator verification
 
 Clean `db225cfcc171248ffd92e45ae64fae20aa03cdaa` completed
@@ -46,7 +101,7 @@ Physical Pixel 10 installation, microphone and audible playback, latency, RAM,
 battery, thermals and background capture remain open. See the
 [device checklist](device-validation.md).
 
-## Optional Ultra · Android research and held-out quality
+## Alpha 8 saved-audio Ultra · Android research and held-out quality
 
 A frozen paired screen of 42 disjoint FLEURS read-speech clips (six per language)
 compares the same PCM through full-input Base on the host and the Ultra
@@ -65,10 +120,10 @@ coverage, and the previously observed Spanish repeated joins and invented tail
 were absent in that review. This does not prove all long boundaries are safe;
 the fallback overlap and difficult quiet or mixed-language speech remain open.
 
-The Android quality tests staged the model separately. The bundled app and
-minified runtime smoke are verified above. Ultra is an explicit copy-only
+The Android quality tests staged the model separately from the Alpha 8 bundled
+app and minified runtime smoke. In Alpha 8, Ultra was an explicit copy-only
 alternative for saved recordings up to three minutes. Live Whisper, original
-audio, saved ASR and edits are preserved. Automatic LLM correction remains off.
+audio, saved ASR and edits were preserved. Automatic LLM correction stayed off.
 The cumulative download ledger is **7,850,618,526 / 8,500,000,000 bytes**. See
 the [Android quality report](benchmarks/2026-11-05-stt/ultra-android-report.md).
 
