@@ -163,6 +163,23 @@ class SegmenterTest {
     }
 
     @Test
+    fun energyFallbackRecoveryReproducesTheRelativeThreshold() {
+        // Loud speech, then quieter speech: the relative-energy detector's 10 s history decides which
+        // frames are quiet, so recovery must rebuild all of it.
+        val pcm = Pcm().apply {
+            speech(14_000, amplitude = 8_000); silence(600); speech(9_000, amplitude = 600)
+            silence(700, amplitude = 5); speech(8_000, amplitude = 600); silence(900); speech(3_000, amplitude = 8_000)
+        }
+        val all = run(pcm, Segmenter(detector = null))
+        assertTrue(all.size >= 3)
+        for (k in 0 until all.size - 1) {
+            val resumed = Segmenter(detector = null, start = SegmenterStart.after(all[k]))
+            assertEquals(all.drop(k + 1), run(pcm, resumed), "resumed after window $k")
+            assertTrue(resumed.feedFromSample <= all[k].ownEndMs * 16 - 160_000 || resumed.feedFromSample == 0L)
+        }
+    }
+
+    @Test
     fun aRangeOfAnOldRecordingStartsLikeABreak() {
         val pcm = Pcm().apply { speech(3_000); silence(1_000); speech(8_000) }
         val segmenter = Segmenter(detector, SegmenterStart.range(5, 4_000))

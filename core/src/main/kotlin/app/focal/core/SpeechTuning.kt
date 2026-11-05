@@ -25,7 +25,10 @@ object SpeechTuning {
     const val RIGHT_CONTEXT_MS = 1_000L
     /** Pure-pause audio decoded before a pause-cut window, without a keep filter. */
     const val PAUSE_LEAD_IN_MS = 250L
-    /** After process death the detector is re-warmed on this much audio before the open window. */
+    /**
+     * After process death the detector is re-warmed on this much audio before the open window (the
+     * relative-energy fallback on its whole 10 s history instead).
+     */
     const val RECOVERY_WARM_UP_MS = 2_000L
 
     // Silero VAD (sherpa-onnx v2.0.1 defaults as used in the experiments).

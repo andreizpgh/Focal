@@ -93,8 +93,9 @@ fun interface SpeechDetector {
  * Speech flags come from [detector] (Silero through sherpa-onnx); with no detector the gain-invariant
  * relative-energy detector is the fallback. Feed PCM from [feedFromSample]: after process death that
  * position lies [SegmenterConfig.warmUpMs] before the open window so the detector state is rebuilt
- * (pass a detector with fresh state). Persist each returned window atomically with its transcription
- * cursor; [SegmenterStart.after] the last persisted window resumes exactly there.
+ * (pass a detector with fresh state); the energy fallback is re-warmed on its whole 10 s history, which
+ * reproduces it exactly. Persist each returned window atomically with its transcription cursor;
+ * [SegmenterStart.after] the last persisted window resumes exactly there.
  */
 class Segmenter(
     private val detector: SpeechDetector?,
@@ -103,7 +104,10 @@ class Segmenter(
 ) {
     /** The first PCM sample to feed (a multiple of the slot, frame and detector window sizes). */
     val feedFromSample: Long = if (start.previousEnd == null && start.ownStartMs == 0L) 0L
-    else floorDiv(maxOf(0L, (start.ownStartMs - config.warmUpMs) * SAMPLES_PER_MS), ALIGN) * ALIGN
+    else {
+        val warmUpMs = if (detector == null) maxOf(config.warmUpMs, ENERGY_TRAIL_FRAMES * FRAME_MS) else config.warmUpMs
+        floorDiv(maxOf(0L, (start.ownStartMs - warmUpMs) * SAMPLES_PER_MS), ALIGN) * ALIGN
+    }
 
     /** Absolute index of the next sample to feed. */
     var fedSamples: Long = feedFromSample
@@ -113,7 +117,7 @@ class Segmenter(
 
     private val planner = CutPlanner(config, start, feedFromSample / SLOT_SAMPLES, feedFromSample / FRAME_SAMPLES)
     private val flagSamples = if (detector != null) SpeechTuning.VAD_WINDOW_SAMPLES else FRAME_SAMPLES
-    private val energy = if (detector == null) RelativeEnergyDetector() else null
+    private val energy = if (detector == null) RelativeEnergyDetector(ENERGY_TRAIL_FRAMES.toInt()) else null
 
     private var frameSum = 0L
     private var frameSquares = 0L
@@ -221,6 +225,8 @@ class Segmenter(
         const val FRAME_SAMPLES = 320
         /** Least common multiple of the slot, frame and VAD window sizes. */
         const val ALIGN = 2_560L
+        /** The energy fallback's history (10 s): recovery re-warms it on all of it. */
+        const val ENERGY_TRAIL_FRAMES = 500L
     }
 }
 
