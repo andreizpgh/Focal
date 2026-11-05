@@ -23,6 +23,8 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- The static "New recording" shortcut. -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
         <service android:name=".recording.RecordingService" android:exported="false"
             android:stopWithTask="false" android:foregroundServiceType="microphone|dataSync|mediaProcessing" />

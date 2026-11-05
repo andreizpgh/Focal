@@ -289,6 +289,15 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
         }
         if (needed.isEmpty()) model.record() else permissions.launch(needed.toTypedArray())
     }
+    // The launcher shortcut without microphone permission: run the same flow as Record.
+    val entry by app.focal.ui.state.EntryRequests.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(entry, library.loaded) {
+        val request = entry
+        if (request is app.focal.ui.state.EntryRequest.Record && library.loaded) {
+            app.focal.ui.state.EntryRequests.consume(request)
+            start()
+        }
+    }
     val actionNote = library.note?.takeIf { it.id == detailId && library.selectedId == detailId }
     val note = actionNote?.takeIf { it.id == selected }
     val active = note != null && live.noteId == note.id

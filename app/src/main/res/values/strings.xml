@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Strings used outside Compose: notifications and their channels. -->
+<!-- Strings used outside Compose: notifications, channels and the launcher shortcut. -->
 <resources>
     <string name="app_name" translatable="false">Focal</string>
 
@@ -35,4 +35,8 @@
     <string name="action_pause">Pause</string>
     <string name="action_resume">Resume</string>
     <string name="action_finish">Finish</string>
+
+    <string name="shortcut_short">Record</string>
+    <string name="shortcut_long">New recording</string>
+    <string name="shortcut_disabled">Recording isn’t available</string>
 </resources>
