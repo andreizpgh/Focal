@@ -114,3 +114,21 @@ object StorageReserve {
         return (missing + STEP_BYTES - 1) / STEP_BYTES * STEP_BYTES
     }
 }
+
+/**
+ * The service's wake lock rule. The lock is acquired with [TIMEOUT_MS] so that a lost release cannot keep
+ * the CPU awake for good, and renewed after [RENEW_MS] while it is still wanted, so long work (an hour of
+ * screen-off recording, for example) never runs past the timeout.
+ */
+internal object WakePolicy {
+    const val TIMEOUT_MS = 35 * 60_000L
+    const val RENEW_MS = 30 * 60_000L
+
+    enum class Action { ACQUIRE, RELEASE, KEEP }
+
+    fun action(wanted: Boolean, held: Boolean, acquiredAtMs: Long, nowMs: Long): Action = when {
+        !wanted -> if (held) Action.RELEASE else Action.KEEP
+        !held || nowMs - acquiredAtMs >= RENEW_MS -> Action.ACQUIRE
+        else -> Action.KEEP
+    }
+}

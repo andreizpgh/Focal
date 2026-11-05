@@ -109,6 +109,8 @@ class RecordingService : Service() {
     private val workLock = Any()
     private val power by lazy { getSystemService(PowerManager::class.java) }
     private var wakeLock: PowerManager.WakeLock? = null
+    /** When the wake lock was last acquired (elapsed realtime); guarded by the service monitor. */
+    private var wakeAcquiredAt = 0L
     private val captureAwake = AtomicBoolean(false)
     private val decoderAwake = AtomicBoolean(false)
     @Volatile private var destroyed = false
@@ -302,11 +304,25 @@ class RecordingService : Service() {
     }
 
 
-    @Synchronized private fun reconcileWake(renew: Boolean = false) {
+    /**
+     * Holds the CPU awake while capture or a decode needs it. The lock has a timeout (a lost release never
+     * holds it for good), so long work renews it: capture calls this every second and the worker on every
+     * pass, which re-acquires it [WakePolicy.RENEW_MS] after the last acquisition and whenever it expired,
+     * whether or not anything is being decoded (long silence, a model still installing, thermal waits).
+     */
+    @Synchronized private fun reconcileWake() {
         wakeLock?.let { lock ->
             val wanted = captureAwake.get() || decoderAwake.get()
-            if (lock.isHeld && (!wanted || renew)) runCatching { lock.release() }
-            if (wanted && !lock.isHeld) lock.acquire(35 * 60_000L)
+            val now = SystemClock.elapsedRealtime()
+            when (WakePolicy.action(wanted, lock.isHeld, wakeAcquiredAt, now)) {
+                WakePolicy.Action.RELEASE -> runCatching { lock.release() }
+                WakePolicy.Action.ACQUIRE -> {
+                    // Not reference counted: acquiring a held lock re-arms its timeout.
+                    lock.acquire(WakePolicy.TIMEOUT_MS)
+                    wakeAcquiredAt = now
+                }
+                WakePolicy.Action.KEEP -> Unit
+            }
         }
     }
 
@@ -595,6 +611,7 @@ class RecordingService : Service() {
                 }
                 if (now - lastSync >= 1000) {
                     syncAudio(); lastSync = now
+                    reconcileWake()
                     if (filesDir.usableSpace < StorageReserve.PAUSE_BYTES) session.pauseAutomatically(CaptureReason.STORAGE)
                     if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                         session.endReason = CaptureReason.PERMISSION
@@ -851,6 +868,7 @@ class RecordingService : Service() {
             var lastProgress = -1f
             while (true) {
                 currentCoroutineContext().ensureActive()
+                reconcileWake()
                 val session = capture
                 val stillLive = live && session != null && session.noteId == id && !session.ended
                 if (live && !stillLive) return Outcome.Continue
