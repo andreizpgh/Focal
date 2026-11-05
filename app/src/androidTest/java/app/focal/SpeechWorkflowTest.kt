@@ -6,7 +6,6 @@ import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
-import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.Passage
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
@@ -26,7 +25,7 @@ class SpeechWorkflowTest {
         kotlinx.coroutines.runBlocking { app.storageReady.await() }
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             for (value in listOf(0.toShort(), 8192.toShort())) {
-                val id = app.store.create("ru", LEGACY_WHISPER_ENGINE)
+                val id = app.store.createLegacy("ru")
                 try {
                     val original = ByteBuffer.allocate(3000 * 32).order(ByteOrder.LITTLE_ENDIAN).apply {
                         repeat(16000) { putShort(((it % 200) - 100).toShort()) }

@@ -12,7 +12,6 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.Note
 import app.focal.data.NoteStore
 import app.focal.data.Passage
@@ -261,7 +260,7 @@ class SpeechPlayerTest {
     }
 
     private fun syntheticNote(durationMs: Long, metadataDuration: Long = durationMs): Note {
-        val id = store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
+        val id = store.createLegacy("en").also { created += it }
         // A low-amplitude 220 Hz tone, PCM16 little endian / mono / 16 kHz.
         store.audioFile(id).outputStream().buffered().use { output ->
             val buffer = ByteArray(2048)

@@ -139,7 +139,7 @@ class UltraServiceTest {
     @Test fun recoveryUsesPendingCursorAndUnpublishedTailWithoutOpeningInput() {
         val duration = 65_001L
         val original = syntheticPcm(duration)
-        val id = store.create(AUTOMATIC_LANGUAGE, ULTRA_ENGINE).also { fixtureId = it }
+        val id = store.create().also { fixtureId = it }
         FileOutputStream(store.audioFile(id)).use { it.write(original); it.fd.sync() }
         store.duration(id, 59_500)
         val first = store.enqueueUltraWindow(id, 0, 30_000, 29_500)

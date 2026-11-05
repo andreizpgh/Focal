@@ -14,7 +14,6 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.Note
 import app.focal.data.Chunk
 import app.focal.data.NoteStore
@@ -278,7 +277,7 @@ class RecordingServiceTest {
 
     // A legacy note's PENDING range is drained by the Ultra worker; the decoder here is unavailable.
     @Test fun recoveryDoesNotReopenMicrophoneOrAlterOriginalAudioWhenDecoderIsUnavailable() {
-        val id = app.store.create("en", LEGACY_WHISPER_ENGINE)
+        val id = app.store.createLegacy("en")
         val pcm = ByteArray(1200 * 32) { index -> (index % 97).toByte() }
         app.store.audioFile(id).writeBytes(pcm)
         app.store.duration(id, 1200)
@@ -299,7 +298,7 @@ class RecordingServiceTest {
     }
 
     @Test fun stoppingRecoveryKeepsInFlightResultPending() {
-        val id = app.store.create("en", LEGACY_WHISPER_ENGINE)
+        val id = app.store.createLegacy("en")
         val pcm = ByteArray(1200 * 32) { (it % 97).toByte() }
         app.store.audioFile(id).writeBytes(pcm)
         app.store.duration(id, 1200)
@@ -352,7 +351,7 @@ class RecordingServiceTest {
     }
 
     @Test fun startingCaptureExcludesPlaybackBeforeServicePublishesItsNote() {
-        val playbackId = app.store.create("en", LEGACY_WHISPER_ENGINE)
+        val playbackId = app.store.createLegacy("en")
         app.store.audioFile(playbackId).writeBytes(ByteArray(32_000))
         app.store.state(playbackId, "READY")
         val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -377,7 +376,7 @@ class RecordingServiceTest {
     }
 
     @Test fun sameProcessRecoverySealsWritingRangesBeforeDecodingAndCanRetryAFailedSeal() {
-        val id = app.store.create("en", LEGACY_WHISPER_ENGINE)
+        val id = app.store.createLegacy("en")
         val original = ByteArray(1500 * 32) { (it % 97).toByte() }
         app.store.audioFile(id).writeBytes(original)
         app.store.beginChunk(id, 0, false)
@@ -406,7 +405,7 @@ class RecordingServiceTest {
     }
 
     @Test fun sameProcessRecoveryFindsUnpublishedTailAndPreservesCompletedEdits() {
-        val id = app.store.create("en", LEGACY_WHISPER_ENGINE)
+        val id = app.store.createLegacy("en")
         val original = ByteArray(2000 * 32) { (it % 101).toByte() }
         app.store.audioFile(id).writeBytes(original)
         val first = app.store.beginChunk(id, 0, false)

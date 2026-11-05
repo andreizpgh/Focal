@@ -3,7 +3,6 @@ package app.focal.speech
 import androidx.test.core.app.ApplicationProvider
 import app.focal.FocalApplication
 import app.focal.data.Chunk
-import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.NoteStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
@@ -156,7 +155,7 @@ class UltraTranscriberTest {
     private fun withAudio(pcm: ByteArray, block: (NoteStore, String) -> Unit) {
         val app = ApplicationProvider.getApplicationContext<FocalApplication>()
         runBlocking { app.storageReady.await() }
-        val id = app.store.create("ru", LEGACY_WHISPER_ENGINE)
+        val id = app.store.createLegacy("ru")
         try {
             app.store.audioFile(id).writeBytes(pcm)
             block(app.store, id)

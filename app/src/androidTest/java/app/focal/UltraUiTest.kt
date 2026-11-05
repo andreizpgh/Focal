@@ -5,9 +5,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
-import app.focal.data.AUTOMATIC_LANGUAGE
 import app.focal.data.Passage
-import app.focal.data.ULTRA_ENGINE
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
@@ -23,7 +21,7 @@ class UltraUiTest {
         runBlocking { withTimeout(15_000) { app.storageReady.await() } }
         val model = compose.runOnUiThread { ViewModelProvider(compose.activity)[FocalViewModel::class.java] }
         val title = "Ultra primary ${UUID.randomUUID()}"
-        val id = app.store.create(AUTOMATIC_LANGUAGE, ULTRA_ENGINE)
+        val id = app.store.create()
         try {
             app.store.audioFile(id).writeBytes(ByteArray(32_000))
             val chunk = app.store.beginChunk(id, 0, false)

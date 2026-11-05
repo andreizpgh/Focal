@@ -15,7 +15,6 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.Passage
 import app.focal.data.PassageSizeException
 import app.focal.data.transferableTranscript
@@ -109,7 +108,7 @@ class FocalViewModelTest {
     }
 
     @Test fun failedReadsKeepKnownDataAndRetryAfterInitialAndLaterErrors() {
-        val id = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
+        val id = app.store.createLegacy("en").also { created += it }
         app.store.rename(id, "Recoverable library")
         val failing = AtomicBoolean(true)
         val model = model(read = { if (failing.get()) throw IOException("Synthetic read failure") })
@@ -136,8 +135,8 @@ class FocalViewModelTest {
     }
 
     @Test fun delayedDeletionDoesNotClearTheNewSelection() {
-        val first = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
-        val second = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
+        val first = app.store.createLegacy("en").also { created += it }
+        val second = app.store.createLegacy("en").also { created += it }
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val model = model(delete = { id ->
@@ -164,7 +163,7 @@ class FocalViewModelTest {
     }
 
     @Test fun delayedDeletionExcludesRecoveryAcrossControllersUntilDiskWorkFinishes() {
-        val id = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
+        val id = app.store.createLegacy("en").also { created += it }
         app.store.audioFile(id).writeBytes(ByteArray(32_000))
         val chunk = app.store.beginChunk(id, 0, false)
         app.store.finishChunk(chunk, 1000)
@@ -199,7 +198,7 @@ class FocalViewModelTest {
     }
 
     @Test fun retryWhileRecoveryClaimIsStillHeldShowsBusyMessage() {
-        val id = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
+        val id = app.store.createLegacy("en").also { created += it }
         val pcm = ByteArray(32_000) { (it % 97).toByte() }
         app.store.audioFile(id).writeBytes(pcm)
         app.store.duration(id, 1000)
@@ -235,7 +234,7 @@ class FocalViewModelTest {
         val unreadable = model(read = { throw PassageSizeException(sizeMessage) })
         assertEquals(sizeMessage, await(unreadable) { it.error != null }.error)
 
-        val id = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
+        val id = app.store.createLegacy("en").also { created += it }
         val chunk = app.store.beginChunk(id, 0, false)
         app.store.finishChunk(chunk, 1000)
         app.store.complete(app.store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = chunk,
@@ -310,7 +309,7 @@ class FocalViewModelTest {
     }
 
     private fun completedPassage(): Passage {
-        val id = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
+        val id = app.store.createLegacy("en").also { created += it }
         val chunk = app.store.beginChunk(id, 0, false)
         app.store.finishChunk(chunk, 1000)
         app.store.complete(checkNotNull(app.store.nextChunk(id)), listOf(
@@ -321,8 +320,8 @@ class FocalViewModelTest {
     }
 
     @Test fun notificationLaunchIsNotReplayedOverSavedNavigation() {
-        val first = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
-        val second = app.store.create("en", LEGACY_WHISPER_ENGINE).also { created += it }
+        val first = app.store.createLegacy("en").also { created += it }
+        val second = app.store.createLegacy("en").also { created += it }
         app.store.rename(first, "Notification session A")
         app.store.rename(second, "Notification session B")
         val intent = Intent(app, MainActivity::class.java).putExtra(RecordingService.NOTE, first)

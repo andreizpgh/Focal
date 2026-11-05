@@ -27,12 +27,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.core.Transcript
-import app.focal.data.AUTOMATIC_LANGUAGE
 import app.focal.data.Chunk
-import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.NoteStore
 import app.focal.data.Passage
-import app.focal.data.ULTRA_ENGINE
 import app.focal.recording.LiveSession
 import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingService
@@ -69,7 +66,7 @@ class InterfaceTest {
         uncertain: Set<Int> = emptySet(), duration: Long = texts.size * 1_000L,
     ): String {
         // Fixtures use the Whisper-era range API, so they are legacy notes.
-        val id = store.create(language, LEGACY_WHISPER_ENGINE)
+        val id = store.createLegacy(language)
         store.audioFile(id).writeBytes(ByteArray((duration * 32).toInt()))
         val interval = duration / texts.size
         require(interval in 1..30_000L) { "Fixture passages must fit the recording chunk limit." }
@@ -159,7 +156,7 @@ class InterfaceTest {
         val app = application()
         val original = RecordingState.live.value
         org.junit.Assume.assumeTrue(original.noteId == null)
-        val id = app.store.create(AUTOMATIC_LANGUAGE, ULTRA_ENGINE)
+        val id = app.store.create()
         try {
             // Synthetic presentation state; microphone and STT behavior are tested separately.
             RecordingState.live.value = LiveSession(noteId = id, duration = 73_000, level = .65f,

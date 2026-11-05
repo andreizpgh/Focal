@@ -3,7 +3,6 @@ package app.focal
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.content.Context
-import app.focal.data.LEGACY_WHISPER_ENGINE
 import app.focal.data.NoteStore
 import app.focal.data.Passage
 import org.junit.*
@@ -23,7 +22,7 @@ class NoteStoreTest {
     }
     @After fun cleanup() { created.forEach { store.delete(it) } }
     // These notes use the Whisper-era range API, so they are legacy notes.
-    private fun note() = store.create("ru", LEGACY_WHISPER_ENGINE).also { created += it }
+    private fun note() = store.createLegacy("ru").also { created += it }
 
     @Test fun savedAudioSurvivesInterruptionAndCanBeCommittedExactlyOnce() {
         val id = note()

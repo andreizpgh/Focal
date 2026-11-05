@@ -17,7 +17,6 @@ import app.focal.R
 import app.focal.core.DecodePolicy
 import app.focal.core.LevelMeter
 import app.focal.core.Transcript
-import app.focal.data.AUTOMATIC_LANGUAGE
 import app.focal.data.Chunk
 import app.focal.data.NoteStore
 import app.focal.data.ULTRA_ENGINE
@@ -145,7 +144,7 @@ class RecordingService : Service() {
             app.storageReady.await()
             if (stopping.get()) { stopSelf(); return }
             val id = recover?.also { checkNotNull(store.note(it)) { "This note is no longer available." } }
-                ?: store.create(AUTOMATIC_LANGUAGE, ULTRA_ENGINE)
+                ?: store.create()
             noteId = id
             ownership?.bindNote(id)
             val note = checkNotNull(store.note(id))

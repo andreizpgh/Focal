@@ -30,8 +30,9 @@ const val AUTOMATIC_LANGUAGE = "auto"
 /**
  * Notes recorded before the single-engine rebuild. Their text, edits and audio stay as saved;
  * any range they left PENDING is now transcribed by Ultra through the same chunk queue.
+ * The app never creates such notes; only migration and recovery tests do (createLegacy).
  */
-const val LEGACY_WHISPER_ENGINE = "whisper"
+internal const val LEGACY_WHISPER_ENGINE = "whisper"
 
 data class Note(val id: String, val title: String, val created: Long, val language: String,
                 val state: String, val duration: Long, val error: String, val preview: String = "", val reviewCount: Int = 0,
@@ -100,8 +101,15 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         db.execSQL("CREATE TABLE pending_audio_deletions(note_id TEXT PRIMARY KEY)")
     }
     private fun changed() { changes.update { it + 1 } }
-    fun create(language: String, speechEngine: String): String {
-        require(speechEngine in setOf(ULTRA_ENGINE, LEGACY_WHISPER_ENGINE)) { "Unknown speech engine." }
+    /** Every new note is an Ultra note; Ultra detects the language itself. */
+    fun create(): String = insertNote(AUTOMATIC_LANGUAGE, ULTRA_ENGINE)
+    /**
+     * A note as Whisper-era builds saved it. Capture no longer publishes ranges for such a note,
+     * so only tests that build legacy fixtures (with beginChunk/finishChunk) may create one.
+     */
+    @VisibleForTesting
+    internal fun createLegacy(language: String): String = insertNote(language, LEGACY_WHISPER_ENGINE)
+    private fun insertNote(language: String, speechEngine: String): String {
         val id = UUID.randomUUID().toString()
         writableDatabase.insertOrThrow("notes", null, ContentValues().apply {
             put("id", id); put("title", "Untitled note"); put("created", System.currentTimeMillis())

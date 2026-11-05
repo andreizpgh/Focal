@@ -99,7 +99,7 @@ class UltraQueueStoreTest {
         lateinit var pending: Chunk
         lateinit var edited: Passage
         val id = NoteStore(context).use { store ->
-            val note = store.create(AUTOMATIC_LANGUAGE, ULTRA_ENGINE)
+            val note = store.create()
             FileOutputStream(store.audioFile(note)).use { it.write(audio); it.fd.sync() }
             store.duration(note, 29_999)
             assertThrows(IllegalStateException::class.java) { store.enqueueUltraWindow(note, 0, 30_000, 29_500) }
