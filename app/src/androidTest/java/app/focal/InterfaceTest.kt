@@ -1109,15 +1109,16 @@ class InterfaceTest {
             compose.onNodeWithText("Saved passage").assertIsDisplayed()
             compose.onNode(hasSetTextAction()).assertDoesNotExist()
             val count = passageTextPartCount(legacy)
-            compose.onNodeWithText("Part 1 of $count").assertIsDisplayed()
+            // On a small screen the page controls sit below the fold of the sheet.
+            compose.onNodeWithText("Part 1 of $count").performScrollTo().assertIsDisplayed()
             compose.onNodeWithContentDescription("Next text part").performScrollTo().performClick()
-            compose.onNodeWithText("Part 2 of $count").assertIsDisplayed()
+            compose.onNodeWithText("Part 2 of $count").performScrollTo().assertIsDisplayed()
             // Only the page index and small scroll state belong in saved instance state.
             compose.activityRule.scenario.recreate()
             compose.waitUntil(10_000) { compose.onAllNodesWithText("Part 2 of $count").fetchSemanticsNodes().isNotEmpty() }
             compose.onNode(hasSetTextAction()).assertDoesNotExist()
             compose.onNodeWithContentDescription("Previous text part").performScrollTo().performClick()
-            compose.onNodeWithText("Part 1 of $count").assertIsDisplayed()
+            compose.onNodeWithText("Part 1 of $count").performScrollTo().assertIsDisplayed()
             compose.onNodeWithContentDescription("Close editor").performScrollTo().performClick()
             compose.onNodeWithText("Discard your changes?").assertDoesNotExist()
             assertEquals(legacy, app.store.paragraphs(id).single().text)
