@@ -123,6 +123,10 @@ class RecordingService : Service() {
     private val requested = LinkedHashSet<String>()
     private val owned = HashMap<String, SessionOperations.SessionClaim>()
     private var drainWaiting = false
+    /** DRAIN arrived since the worker last looked for waiting notes. */
+    private var drainRequested = false
+    /** RECOVER commands accepted but not yet in [requested] (their failed windows are being reset). */
+    private var pendingRequests = 0
     private var worker: Job? = null
 
     // Speech worker state.
@@ -216,6 +220,8 @@ class RecordingService : Service() {
                 owned[noteId]?.takeIf { it !== claim }?.release()
                 owned[noteId] = claim
                 skipped -= noteId
+                // Counted now, so a worker that is just going idle does not stop the service under it.
+                pendingRequests++
             }
             // The user's Retry also tries a failed model install again, before the worker looks at it.
             app.models.retry()
@@ -227,12 +233,14 @@ class RecordingService : Service() {
                     // Only the user's explicit retry gives failed windows new attempts.
                     if (retryFailed) store.retryFailed(noteId)
                 } catch (error: Exception) { Log.w(TAG, "Could not reset failed windows", error) }
-                // Queued only now, so the worker never sees the note before its failed windows are pending.
-                synchronized(workLock) { requested += noteId }
+                finally {
+                    // Queued only now, so the worker never sees the note before its failed windows are pending.
+                    synchronized(workLock) { requested += noteId; pendingRequests-- }
+                }
                 ensureWorker()
             }
         } else {
-            synchronized(workLock) { drainWaiting = true }
+            synchronized(workLock) { drainWaiting = true; drainRequested = true }
             notifications.cancelTimedOut()
             ensureWorker()
         }
@@ -750,7 +758,9 @@ class RecordingService : Service() {
         val more = synchronized(workLock) {
             if (worker !== job) return
             worker = null
-            capture != null || finishing.isNotEmpty() || requested.isNotEmpty()
+            // A RECOVER still resetting its windows starts the worker itself when it is queued.
+            if (pendingRequests > 0) return
+            capture != null || finishing.isNotEmpty() || requested.isNotEmpty() || drainRequested
         }
         if (destroyed) return
         if (more) { ensureWorker(); return }
@@ -771,6 +781,8 @@ class RecordingService : Service() {
             finishing.firstOrNull()?.let { return Target(it, live = false) }
             requested.firstOrNull()?.let { return Target(it, live = false) }
             if (!drainWaiting) return null
+            // This scan answers every DRAIN so far; a later one makes the worker look again.
+            drainRequested = false
         }
         val waiting = try { store.waitingNotes() } catch (_: Exception) { emptyList() }
         return synchronized(workLock) { waiting.firstOrNull { it !in skipped && it !in owned }?.let { Target(it, live = false) } }
