@@ -134,8 +134,29 @@ class SpeechPlayer(private val context: Context, private val store: NoteStore, p
     }
 
     /** Seeking exits excerpt playback and starts the original recording at the clamped time. */
-    fun seekTo(note: Note, positionMs: Long, onError: (String) -> Unit) = synchronized(lock) {
-        startLocked(Source(note.id, null), positionMs.coerceAtLeast(0), onError)
+    fun seekTo(note: Note, positionMs: Long, onError: (String) -> Unit) = playFrom(note.id, positionMs, onError)
+
+    /** Plays the whole recording of [noteId] from [positionMs] (clamped to the audio). */
+    fun playFrom(noteId: String, positionMs: Long, onError: (String) -> Unit) = synchronized(lock) {
+        startLocked(Source(noteId, null), positionMs.coerceAtLeast(0), onError)
+    }
+
+    /** Plays [startMs, endMs) of [noteId] only, for example an untranscribed gap. */
+    fun playRange(noteId: String, startMs: Long, endMs: Long, onError: (String) -> Unit) = synchronized(lock) {
+        val start = startMs.coerceAtLeast(0)
+        startLocked(Source(noteId, null, start, maxOf(start, endMs)), start, onError)
+    }
+
+    /** Pauses the recording of [noteId] if it plays, else plays it from its retained position. */
+    fun toggle(noteId: String, onError: (String) -> Unit) = playWhole(noteId, onError)
+
+    /**
+     * The position now, read from the audio output itself (not the last published state). Cheap and
+     * thread-safe: meant for draw, layout and frame callbacks that follow the playing word.
+     */
+    fun positionMs(): Long = synchronized(lock) {
+        active?.takeIf { it.generation == generation }?.let { runCatching { it.positionMs() }.getOrNull() }
+            ?: playback.value.positionMs
     }
 
     private fun freezeLocked() {
