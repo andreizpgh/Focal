@@ -47,6 +47,8 @@ object SeamRepair {
 /**
  * Paragraph breaks from pauses and sentence ends. Only a sentence end can close a paragraph: after a long
  * pause, after a shorter pause once the paragraph holds enough sentences, or once it holds enough words.
+ * Any '.', '!', '?' or '…' counts ([TextRules.endsSentence]): a pause that long after '3.' or 'Dr.' is a
+ * sentence end in speech. Only the title knows ordinals and abbreviations.
  */
 object Paragraphs {
     /** Whether a paragraph closes between [previous] and [next] (call only when [previous] ends a sentence). */
@@ -63,7 +65,7 @@ object Paragraphs {
         var sentences = 0
         for (j in 1..words.size) {
             val previous = words[j - 1]
-            val end = TextRules.sentenceEnd(previous.text)
+            val end = TextRules.endsSentence(previous.text)
             if (end) sentences++
             if (j == words.size || !end) continue
             if (breaks(previous, words[j], sentences, j - start, config)) {
@@ -175,7 +177,7 @@ class TranscriptAssembler(
     openParagraph: List<Word> = emptyList(),
 ) {
     private val open = openParagraph.toMutableList()
-    private var sentences = openParagraph.dropLast(1).count { TextRules.sentenceEnd(it.text) }
+    private var sentences = openParagraph.dropLast(1).count { TextRules.endsSentence(it.text) }
 
     /**
      * The result of one window. [paragraphs] is empty when nothing changed. Otherwise its first entry
@@ -201,7 +203,7 @@ class TranscriptAssembler(
         }
         for (word in fresh) {
             val previous = open.lastOrNull()
-            if (previous != null && TextRules.sentenceEnd(previous.text)) {
+            if (previous != null && TextRules.endsSentence(previous.text)) {
                 sentences++
                 if (Paragraphs.breaks(previous, word, sentences, open.size, config)) {
                     result += open.toList()

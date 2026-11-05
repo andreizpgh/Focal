@@ -15,8 +15,14 @@ internal object TextRules {
     /** Abbreviations whose period never ends a sentence (compared case-insensitively, letters only). */
     private val ABBREVIATIONS = setOf(
         "etc", "vs", "cf", "approx", "incl", "esp", "usw", "bzw", "ggf", "evtl", "inkl", "ca", "nr",
-        "dr", "prof", "mr", "mrs", "ms", "sr", "sra", "ecc", "pág", "tel",
+        "dr", "prof", "mr", "mrs", "sr", "sra", "ecc", "pág", "tel",
     )
+
+    /** Abbreviations listed only with this exact case: lowercase 'ms.' is usually milliseconds. */
+    private val CASED_ABBREVIATIONS = setOf("Ms")
+
+    /** A sentence ending in a number of up to this many digits ('3.', '15.') reads as an ordinal in the title. */
+    private const val MAX_ORDINAL_DIGITS = 2
 
     fun isAlnum(cp: Int): Boolean = Character.isLetter(cp) || when (Character.getType(cp).toByte()) {
         Character.DECIMAL_DIGIT_NUMBER, Character.LETTER_NUMBER, Character.OTHER_NUMBER -> true
@@ -52,24 +58,29 @@ internal object TextRules {
         return if (t.endsWith('.') && !t.endsWith("..")) t.dropLast(1) else null
     }
 
-    /** Seam guard: the period after this stem is kept (initials, ALLCAPS, digits, abbreviations). */
+    /**
+     * Seam guard: the period after this stem is kept (initials, ALLCAPS, digits, any internal dot, listed
+     * abbreviations). Conservative on purpose: keeping a period is the safe side of a repair.
+     */
     fun seamAbbreviation(stem: String): Boolean {
         val letters = wordChars(stem)
         return letters.codePointCount(0, letters.length) <= 1 || isUpper(letters) || isDigits(letters) ||
-            listedOrDotted(stem)
+            stem.trim('.').contains('.') || listed(stem)
     }
 
     /**
-     * Sentence guard for titles and paragraphs: the period of an ordinal ('3.'), a single capital initial,
-     * a dotted abbreviation ('z.B.') or a listed one ('Dr.') does not end a sentence. ALLCAPS words do.
+     * The title's sentence guard: the period of an ordinal ('3.', '15.'; not '2002.'), a single capital
+     * initial, a dotted letter abbreviation ('z.B.', 'p.m.'; not '15.30.', '3.14.' or 'example.com.') or a
+     * listed one ('Dr.') does not end a sentence. ALLCAPS words do. Paragraphs use [endsSentence].
      */
     fun sentenceAbbreviation(stem: String): Boolean {
         val letters = wordChars(stem)
-        return isDigits(stem.trimStart { it in OPENERS }) ||
-            (letters.codePointCount(0, letters.length) == 1 && isUpper(letters)) || listedOrDotted(stem)
+        val bare = stem.trimStart { it in OPENERS }
+        return (isDigits(bare) && bare.codePointCount(0, bare.length) <= MAX_ORDINAL_DIGITS) ||
+            (letters.codePointCount(0, letters.length) == 1 && isUpper(letters)) || dottedLetters(stem) || listed(stem)
     }
 
-    /** A sentence end that is not an ordinal or abbreviation period. */
+    /** A sentence end for the title: not an ordinal or abbreviation period ([sentenceAbbreviation]). */
     fun sentenceEnd(text: String): Boolean {
         if (!endsSentence(text)) return false
         val stem = periodStem(text) ?: return true
@@ -86,8 +97,18 @@ internal object TextRules {
         return letter && Character.isLowerCase(cp)
     }
 
-    private fun listedOrDotted(stem: String): Boolean =
-        stem.trim('.').contains('.') || wordChars(stem).lowercase(Locale.ROOT) in ABBREVIATIONS
+    private fun listed(stem: String): Boolean {
+        val letters = wordChars(stem)
+        return letters.lowercase(Locale.ROOT) in ABBREVIATIONS || letters in CASED_ABBREVIATIONS
+    }
+
+    /** Dot-separated runs of one to three letters: 'z.B', 'p.m', 'т.д', 'U.S'. */
+    private fun dottedLetters(stem: String): Boolean {
+        val parts = stem.trimStart { it in OPENERS }.trim('.').split('.')
+        return parts.size >= 2 && parts.all { part ->
+            part.codePointCount(0, part.length) in 1..3 && part.codePoints().allMatch(Character::isLetter)
+        }
+    }
 
     private fun wordChars(text: String): String {
         val out = StringBuilder(text.length)

@@ -11173,8 +11173,8 @@
    }
   },
   {
-   "id": "para_no_break_after_ordinal",
-   "description": "A long pause after the ordinal '3.' is not a sentence end: no break.",
+   "id": "para_break_after_ordinal_long_pause",
+   "description": "Paragraphs use the plain sentence end: a long pause after '3.' breaks the paragraph; only the title treats '3.' as an ordinal.",
    "source": "rebuild",
    "options": {},
    "input": {
@@ -11391,12 +11391,1311 @@
     "paragraphs": [
      [
       0,
+      5
+     ],
+     [
+      5,
       11
      ]
     ],
     "title": "Wir treffen uns am 3. Mai in Berlin",
     "flagged_word_indices": [],
-    "copy_text": "Wir treffen uns am 3. Mai in Berlin. Das passt gut."
+    "copy_text": "Wir treffen uns am 3.\n\nMai in Berlin. Das passt gut."
+   }
+  },
+  {
+   "id": "para_break_after_trailing_number",
+   "description": "A sentence ending in a number followed by a long pause is a paragraph break.",
+   "source": "rebuild",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " We",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " sold",
+        "start_s": 0.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " 42",
+        "start_s": 0.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 0.72,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": " Then",
+        "start_s": 4.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 4.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " left",
+        "start_s": 5.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 5.2,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": " Nobody",
+        "start_s": 9.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " noticed",
+        "start_s": 9.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 9.52,
+        "dur_s": 0.08,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "We",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "sold",
+      "start_ms": 400,
+      "end_ms": 560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "42.",
+      "start_ms": 560,
+      "end_ms": 720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "Then",
+      "start_ms": 4720,
+      "end_ms": 4880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 4880,
+      "end_ms": 5040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "left.",
+      "start_ms": 5040,
+      "end_ms": 5200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "Nobody",
+      "start_ms": 9200,
+      "end_ms": 9360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "noticed.",
+      "start_ms": 9360,
+      "end_ms": 9520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "We",
+     "sold",
+     "42.",
+     "Then",
+     "we",
+     "left.",
+     "Nobody",
+     "noticed."
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      3
+     ],
+     [
+      3,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ],
+    "title": "We sold 42. Then we left",
+    "flagged_word_indices": [],
+    "copy_text": "We sold 42.\n\nThen we left.\n\nNobody noticed."
+   }
+  },
+  {
+   "id": "title_year_ends_sentence",
+   "description": "A four-digit year is not an ordinal: '2002.' ends the title's sentence.",
+   "source": "rebuild",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " It",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " was",
+        "start_s": 0.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " built",
+        "start_s": 0.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 0.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " 2002",
+        "start_s": 0.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.04,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": " Later",
+        "start_s": 1.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " it",
+        "start_s": 1.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " burned",
+        "start_s": 1.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " down",
+        "start_s": 1.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.76,
+        "dur_s": 0.08,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "It",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "was",
+      "start_ms": 400,
+      "end_ms": 560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "built",
+      "start_ms": 560,
+      "end_ms": 720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 720,
+      "end_ms": 880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "2002.",
+      "start_ms": 880,
+      "end_ms": 1040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "Later",
+      "start_ms": 1120,
+      "end_ms": 1280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "it",
+      "start_ms": 1280,
+      "end_ms": 1440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "burned",
+      "start_ms": 1440,
+      "end_ms": 1600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "down.",
+      "start_ms": 1600,
+      "end_ms": 1760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "It",
+     "was",
+     "built",
+     "in",
+     "2002.",
+     "Later",
+     "it",
+     "burned",
+     "down."
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      9
+     ]
+    ],
+    "title": "It was built in 2002",
+    "flagged_word_indices": [],
+    "copy_text": "It was built in 2002. Later it burned down."
+   }
+  },
+  {
+   "id": "title_clock_time_ends_sentence",
+   "description": "'15.30.' is a time, not a dotted abbreviation: the sentence ends.",
+   "source": "rebuild",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " We",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " meet",
+        "start_s": 0.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " again",
+        "start_s": 0.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " at",
+        "start_s": 0.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " 15.30",
+        "start_s": 0.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.04,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": " Bring",
+        "start_s": 1.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 1.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " slides",
+        "start_s": 1.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.6,
+        "dur_s": 0.08,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "We",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "meet",
+      "start_ms": 400,
+      "end_ms": 560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "again",
+      "start_ms": 560,
+      "end_ms": 720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "at",
+      "start_ms": 720,
+      "end_ms": 880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "15.30.",
+      "start_ms": 880,
+      "end_ms": 1040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "Bring",
+      "start_ms": 1120,
+      "end_ms": 1280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 1280,
+      "end_ms": 1440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "slides.",
+      "start_ms": 1440,
+      "end_ms": 1600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "We",
+     "meet",
+     "again",
+     "at",
+     "15.30.",
+     "Bring",
+     "the",
+     "slides."
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      8
+     ]
+    ],
+    "title": "We meet again at 15.30",
+    "flagged_word_indices": [],
+    "copy_text": "We meet again at 15.30. Bring the slides."
+   }
+  },
+  {
+   "id": "title_decimal_ends_sentence",
+   "description": "'3.14.' is a decimal, not a dotted abbreviation: the sentence ends.",
+   "source": "rebuild",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " The",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " ratio",
+        "start_s": 0.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " is",
+        "start_s": 0.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " about",
+        "start_s": 0.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " 3.14",
+        "start_s": 0.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.04,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": " Everyone",
+        "start_s": 1.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " knows",
+        "start_s": 1.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " that",
+        "start_s": 1.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.6,
+        "dur_s": 0.08,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "The",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "ratio",
+      "start_ms": 400,
+      "end_ms": 560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "is",
+      "start_ms": 560,
+      "end_ms": 720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "about",
+      "start_ms": 720,
+      "end_ms": 880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "3.14.",
+      "start_ms": 880,
+      "end_ms": 1040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "Everyone",
+      "start_ms": 1120,
+      "end_ms": 1280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "knows",
+      "start_ms": 1280,
+      "end_ms": 1440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "that.",
+      "start_ms": 1440,
+      "end_ms": 1600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "The",
+     "ratio",
+     "is",
+     "about",
+     "3.14.",
+     "Everyone",
+     "knows",
+     "that."
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      8
+     ]
+    ],
+    "title": "The ratio is about 3.14",
+    "flagged_word_indices": [],
+    "copy_text": "The ratio is about 3.14. Everyone knows that."
+   }
+  },
+  {
+   "id": "title_domain_ends_sentence",
+   "description": "'example.com.' is a domain, not a dotted abbreviation: the sentence ends.",
+   "source": "rebuild",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " Send",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 0.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " report",
+        "start_s": 0.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " to",
+        "start_s": 0.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " example.com",
+        "start_s": 0.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.04,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": " Then",
+        "start_s": 1.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " wait",
+        "start_s": 1.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.44,
+        "dur_s": 0.08,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "Send",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 400,
+      "end_ms": 560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "report",
+      "start_ms": 560,
+      "end_ms": 720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "to",
+      "start_ms": 720,
+      "end_ms": 880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "example.com.",
+      "start_ms": 880,
+      "end_ms": 1040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "Then",
+      "start_ms": 1120,
+      "end_ms": 1280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "wait.",
+      "start_ms": 1280,
+      "end_ms": 1440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "Send",
+     "the",
+     "report",
+     "to",
+     "example.com.",
+     "Then",
+     "wait."
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      7
+     ]
+    ],
+    "title": "Send the report to example.com",
+    "flagged_word_indices": [],
+    "copy_text": "Send the report to example.com. Then wait."
+   }
+  },
+  {
+   "id": "title_milliseconds_end_sentence",
+   "description": "Lowercase 'ms.' (milliseconds) ends a sentence; only 'Ms.' is listed.",
+   "source": "rebuild",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " The",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " delay",
+        "start_s": 0.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " was",
+        "start_s": 0.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " about",
+        "start_s": 0.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " 200",
+        "start_s": 0.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " ms",
+        "start_s": 1.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.2,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": " Then",
+        "start_s": 1.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " it",
+        "start_s": 1.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " recovered",
+        "start_s": 1.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.76,
+        "dur_s": 0.08,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "The",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "delay",
+      "start_ms": 400,
+      "end_ms": 560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "was",
+      "start_ms": 560,
+      "end_ms": 720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "about",
+      "start_ms": 720,
+      "end_ms": 880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "200",
+      "start_ms": 880,
+      "end_ms": 1040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "ms.",
+      "start_ms": 1040,
+      "end_ms": 1200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "Then",
+      "start_ms": 1280,
+      "end_ms": 1440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "it",
+      "start_ms": 1440,
+      "end_ms": 1600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "recovered.",
+      "start_ms": 1600,
+      "end_ms": 1760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "The",
+     "delay",
+     "was",
+     "about",
+     "200",
+     "ms.",
+     "Then",
+     "it",
+     "recovered."
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      9
+     ]
+    ],
+    "title": "The delay was about 200 ms",
+    "flagged_word_indices": [],
+    "copy_text": "The delay was about 200 ms. Then it recovered."
+   }
+  },
+  {
+   "id": "title_dotted_letters_abbreviation",
+   "description": "Dotted letter abbreviations ('z.B.') do not end the title's sentence.",
+   "source": "rebuild",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " Wir",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " nehmen",
+        "start_s": 0.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " z.B",
+        "start_s": 0.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 0.72,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": " den",
+        "start_s": 0.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " Zug",
+        "start_s": 0.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " nach",
+        "start_s": 1.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " Hamburg",
+        "start_s": 1.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.44,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": " Dann",
+        "start_s": 1.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " sehen",
+        "start_s": 1.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " wir",
+        "start_s": 1.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " weiter",
+        "start_s": 2.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 2.16,
+        "dur_s": 0.08,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "Wir",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "nehmen",
+      "start_ms": 400,
+      "end_ms": 560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "z.B.",
+      "start_ms": 560,
+      "end_ms": 720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "den",
+      "start_ms": 800,
+      "end_ms": 960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "Zug",
+      "start_ms": 960,
+      "end_ms": 1120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "nach",
+      "start_ms": 1120,
+      "end_ms": 1280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "Hamburg.",
+      "start_ms": 1280,
+      "end_ms": 1440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "Dann",
+      "start_ms": 1520,
+      "end_ms": 1680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "sehen",
+      "start_ms": 1680,
+      "end_ms": 1840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "wir",
+      "start_ms": 1840,
+      "end_ms": 2000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "weiter.",
+      "start_ms": 2000,
+      "end_ms": 2160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "Wir",
+     "nehmen",
+     "z.B.",
+     "den",
+     "Zug",
+     "nach",
+     "Hamburg.",
+     "Dann",
+     "sehen",
+     "wir",
+     "weiter."
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      11
+     ]
+    ],
+    "title": "Wir nehmen z.B. den Zug nach Hamburg",
+    "flagged_word_indices": [],
+    "copy_text": "Wir nehmen z.B. den Zug nach Hamburg. Dann sehen wir weiter."
    }
   },
   {
