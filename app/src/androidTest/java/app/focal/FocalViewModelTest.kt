@@ -1,7 +1,11 @@
 package app.focal
 
+import android.Manifest
+import android.app.NotificationManager
 import android.content.Intent
+import android.os.Build
 import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -20,7 +24,9 @@ import app.focal.data.PassageSizeException
 import app.focal.data.transcriptText
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
+import app.focal.recording.ServiceNotifications
 import app.focal.recording.SessionOperations
+import app.focal.ui.state.UndoableActions
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -193,6 +199,40 @@ class FocalViewModelTest {
         val available = SessionOperations.reserveSession(capture = false, noteId = id)
         assertNotNull(available)
         available?.release()
+    }
+
+    @Test fun deletingANoteClearsItsReadyNotification() {
+        if (Build.VERSION.SDK_INT >= 33) InstrumentationRegistry.getInstrumentation().uiAutomation
+            .grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
+        val manager = app.getSystemService(NotificationManager::class.java)
+        fun posted(id: String) = manager.activeNotifications.any { it.id == ServiceNotifications.READY_ID && it.tag == id }
+        fun awaitPosted(id: String, expected: Boolean) {
+            val deadline = SystemClock.elapsedRealtime() + 5_000
+            while (posted(id) != expected && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(20)
+            assertEquals("Note ready for $id", expected, posted(id))
+        }
+        val first = app.store.insertNoteForTests(listOf("Ready words."), 1000).also { created += it }
+        val second = app.store.insertNoteForTests(listOf("More ready words."), 1000).also { created += it }
+        val notifications = ServiceNotifications(app).also { it.createChannels() }
+        try {
+            notifications.ready(first, "Ready words", 0, partial = false)
+            notifications.ready(second, "More ready words", 0, partial = false)
+            awaitPosted(first, true)
+            awaitPosted(second, true)
+
+            runBlocking { withTimeout(10_000) { model().delete(first).join() } }
+            assertNull(app.store.note(first))
+            awaitPosted(first, false)
+            assertTrue("Another note keeps its notification", posted(second))
+
+            // Delete with Undo, the path of the new library and note screens, clears it as well.
+            runBlocking { assertTrue(UndoableActions.delete(app, second) { fail(it) }) }
+            awaitPosted(second, false)
+            UndoableActions.commitDelete(app, second)
+        } finally {
+            manager.cancel(first, ServiceNotifications.READY_ID)
+            manager.cancel(second, ServiceNotifications.READY_ID)
+        }
     }
 
     @Test fun retryWhileRecoveryClaimIsStillHeldShowsBusyMessage() {

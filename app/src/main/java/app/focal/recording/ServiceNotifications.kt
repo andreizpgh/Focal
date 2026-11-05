@@ -163,5 +163,10 @@ internal class ServiceNotifications(private val context: Context) {
         private const val PROGRESS_MAX = 100
         /** Channels of notifications that outlive the service on purpose. */
         val LASTING_CHANNELS = setOf(READY, PAUSED)
+
+        /** A deleted note's "Note ready" would open nothing: it goes with the note. */
+        fun cancelReady(context: Context, noteId: String) {
+            runCatching { context.getSystemService(NotificationManager::class.java)?.cancel(noteId, READY_ID) }
+        }
     }
 }

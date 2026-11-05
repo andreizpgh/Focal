@@ -3,6 +3,7 @@ package app.focal.ui.state
 import app.focal.FocalApplication
 import app.focal.data.NoteState
 import app.focal.recording.RecordingState
+import app.focal.recording.ServiceNotifications
 import app.focal.recording.SessionOperations
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +53,7 @@ object UndoableActions {
             onError("Could not delete this note."); false
         } finally { claim.release() }
         if (!deleted) { onError("Finish this recording or transcription before deleting it."); return false }
+        ServiceNotifications.cancelReady(app, noteId)
         synchronized(this) {
             deletions.remove(noteId)?.cancel()
             deletions[noteId] = app.scope.launch {

@@ -163,6 +163,7 @@ class FocalViewModel internal constructor(
         check(live.value.noteId != id) { "Finish this recording or transcription before deleting it." }
         player.stopNote(id)
         (deleteForTests ?: app.store::delete)(id)
+        ServiceNotifications.cancelReady(app, id)
         selected.compareAndSet(id, null)
     }
     fun removeAudio(id: String) = destructive(id) {
