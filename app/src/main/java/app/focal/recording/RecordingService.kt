@@ -20,6 +20,8 @@ import app.focal.core.Transcript
 import app.focal.data.NoteState
 import app.focal.data.NoteStore
 import app.focal.data.StoredWindow
+import app.focal.speech.DeviceSpeechPolicy
+import app.focal.speech.MODEL_MISSING
 import app.focal.speech.UltraEngine
 import app.focal.speech.UltraTranscriber
 import kotlinx.coroutines.*
@@ -44,6 +46,9 @@ internal interface RecordingInput : AutoCloseable {
     fun read(samples: ShortArray, offset: Int, count: Int): Int
 }
 internal interface RecordingDecoder : AutoCloseable {
+    /** Loads the recognizer ahead of the first window, with [threads] fixed for its lifetime. */
+    fun prepare(threads: Int) {}
+
     /** Decodes one persisted window and commits it with [NoteStore.commitDecoded]. */
     suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int)
     fun cancel()
@@ -389,7 +394,7 @@ class RecordingService : Service() {
                             RecordingState.live.update { if (it.noteId == id) it.copy(message = if (recordingDone) "Finishing transcript…" else "Recording · transcribing") else it }
                             val start = SystemClock.elapsedRealtime()
                             val warm = Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_MODERATE
-                            val threads = DecodePolicy.threads(Runtime.getRuntime().availableProcessors(), power.isPowerSaveMode, warm)
+                            val threads = DeviceSpeechPolicy.recognizerThreads(this@RecordingService)
                             try { engine.transcribe(store, window, threads) }
                             catch (error: CancellationException) { runCatching { store.cancelDecode(window.id) }; throw error }
                             RecordingState.live.update { if (it.noteId == id) it.copy(pending = store.pendingCount(id)) else it }
@@ -421,8 +426,10 @@ class RecordingService : Service() {
         }
     }
 
-    private fun deviceDecoder(): RecordingDecoder = UltraTranscriber { threads, checkCancelled ->
-        UltraEngine.open(app, threads.coerceIn(1, 2), checkCancelled)
+    /** Waits for the background model install (recording goes on meanwhile), then opens Ultra on it. */
+    private suspend fun deviceDecoder(): RecordingDecoder {
+        val files = app.models.awaitFiles() ?: error(MODEL_MISSING)
+        return UltraTranscriber { threads, _ -> UltraEngine.open(app, files, threads) }
     }
 
     @Suppress("MissingPermission")

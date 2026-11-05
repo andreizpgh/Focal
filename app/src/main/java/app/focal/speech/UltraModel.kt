@@ -40,7 +40,60 @@ internal object UltraModel {
     fun isBundled(context: Context): Boolean =
         context.assets.list("").orEmpty().toSet().containsAll(models.map { it.name })
 
-    /** Call on the decoder owner thread while holding the existing session claim. */
+    /** Bytes of the whole model set. */
+    val totalBytes: Long get() = models.sumOf { it.bytes }
+
+    /**
+     * The installed files when [directory] holds a completed install of this exact model set: its marker
+     * names the lock (every file's name, size and SHA-256) and every file has its size. Nothing is hashed,
+     * so this is cheap enough for every session; the hashes were checked while copying.
+     */
+    fun installed(directory: File, expected: List<ModelFile> = models): Map<String, File>? {
+        val marker = markerFile(directory)
+        if (!Files.isRegularFile(marker.toPath(), NOFOLLOW_LINKS)) return null
+        if (runCatching { marker.readText() }.getOrNull() != markerText(expected)) return null
+        if (!Files.isDirectory(directory.toPath(), NOFOLLOW_LINKS)) return null
+        return expected.associate { model ->
+            val file = File(directory, model.name)
+            if (!Files.isRegularFile(file.toPath(), NOFOLLOW_LINKS) || file.length() != model.bytes) return null
+            model.name to file
+        }
+    }
+
+    /**
+     * Installs the model set once: a marked install is used as it is; otherwise the copy is verified (or
+     * made) by [install] and then marked. Restartable: an interrupted copy is discarded and redone.
+     */
+    @Synchronized
+    fun installOnce(
+        directory: File,
+        openAsset: (String) -> InputStream,
+        checkCancelled: () -> Unit = {},
+        onProgress: (copiedBytes: Long) -> Unit = {},
+        expected: List<ModelFile> = models,
+    ): Map<String, File> {
+        installed(directory, expected)?.let { return it }
+        val marker = markerFile(directory)
+        Files.deleteIfExists(marker.toPath())
+        val files = install(directory, openAsset, checkCancelled, expected, onProgress = onProgress)
+        val partial = File(marker.parentFile, "${marker.name}.partial")
+        partial.outputStream().use { output ->
+            output.write(markerText(expected).toByteArray())
+            output.fd.sync()
+        }
+        Files.move(partial.toPath(), marker.toPath(), ATOMIC_MOVE)
+        syncDirectory(checkNotNull(marker.parentFile))
+        return files
+    }
+
+    private fun markerFile(directory: File) = File(directory.absoluteFile.parentFile, "${directory.name}.installed")
+    private fun markerText(expected: List<ModelFile>) =
+        expected.joinToString("\n", postfix = "\n") { "${it.name}:${it.bytes}:${it.sha256}" }
+
+    /**
+     * Verifies the copy in [directory] (hashing every file) or replaces it with a fresh copy from the APK,
+     * hashed while copying. Prefer [installOnce], which skips the hashing once a copy is marked.
+     */
     @Synchronized
     fun install(
         directory: File,
@@ -48,6 +101,7 @@ internal object UltraModel {
         checkCancelled: () -> Unit,
         expected: List<ModelFile> = models,
         usableSpace: (File) -> Long = { it.usableSpace },
+        onProgress: (copiedBytes: Long) -> Unit = {},
     ): Map<String, File> {
         checkCancelled()
         val parent = checkNotNull(directory.parentFile).canonicalFile
@@ -66,11 +120,13 @@ internal object UltraModel {
         checkCancelled()
         check(partial.mkdir()) { "Could not prepare private storage for the speech model." }
         try {
+            var copied = 0L
             for (model in expected) {
                 checkCancelled()
                 openAsset(model.name).use { input ->
                     File(partial, model.name).outputStream().use { output ->
-                        check(matches(input, model, checkCancelled, output)) {
+                        val before = copied
+                        check(matches(input, model, checkCancelled, output) { copied = before + it; onProgress(copied) }) {
                             "The bundled speech model is damaged. Reinstall Focal."
                         }
                         output.fd.sync()
@@ -111,6 +167,7 @@ internal object UltraModel {
 
     private fun matches(
         input: InputStream, model: ModelFile, checkCancelled: () -> Unit, output: OutputStream? = null,
+        onProgress: (Long) -> Unit = {},
     ): Boolean {
         val digest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(65_536)
@@ -122,6 +179,7 @@ internal object UltraModel {
             output?.write(buffer, 0, count)
             digest.update(buffer, 0, count)
             remaining -= count
+            onProgress(model.bytes - remaining)
         }
         checkCancelled()
         return input.read() == -1 && digest.digest().joinToString("") { "%02x".format(it) } == model.sha256

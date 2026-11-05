@@ -2,9 +2,7 @@ package app.focal.speech
 
 import android.app.ActivityManager
 import android.content.Context
-import android.content.res.AssetManager
 import java.io.File
-import java.io.FileNotFoundException
 
 /**
  * Parakeet Ultra INT8 through Focal's bridge over the pinned sherpa-onnx C API: Focal's only
@@ -12,28 +10,14 @@ import java.io.FileNotFoundException
  */
 internal object UltraEngine {
     /**
-     * Installs the bundled model into private storage if needed, then opens one recognizer.
-     * Call on the decoder owner thread while holding the session claim.
+     * Opens one recognizer on the installed model [files] ([SpeechModels]) with [threads] inference threads,
+     * fixed for its lifetime. Call on the speech worker; loading takes seconds and most of a gigabyte.
      */
-    fun open(context: Context, threads: Int, checkCancelled: () -> Unit): SpeechDecoder {
+    fun open(context: Context, files: Map<String, File>, threads: Int): SpeechDecoder {
         try {
             require(threads in 1..OfflineRecognizer.MAX_THREADS) { "Choose 1 to ${OfflineRecognizer.MAX_THREADS} inference threads." }
-            check(UltraModel.isBundled(context)) { MODEL_MISSING }
-            val files = UltraModel.install(
-                File(context.noBackupFilesDir, UltraModel.directoryName),
-                openAsset = { name ->
-                    try {
-                        context.assets.open(name, AssetManager.ACCESS_STREAMING)
-                    } catch (error: FileNotFoundException) {
-                        throw IllegalStateException(MODEL_MISSING, error)
-                    }
-                },
-                checkCancelled = checkCancelled,
-            )
-            checkCancelled()
             // The runtime identity comes from models/sherpa-onnx.json, the lock the build verified.
             SpeechRuntime.requirePinned()
-            checkCancelled()
             val recognizer = OfflineRecognizer.create(
                 OfflineRecognizer.Config(
                     encoder = files.getValue(UltraModel.ENCODER),
@@ -47,7 +31,6 @@ internal object UltraEngine {
             )
             var transferred = false
             try {
-                checkCancelled()
                 val decoder = UltraDecoder(recognizer)
                 transferred = true
                 return decoder
