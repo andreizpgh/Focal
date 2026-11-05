@@ -1,5 +1,33 @@
 # Product verification · 2026-11-05
 
+## STT research · new evidence, production unchanged
+
+The [decision review](stt-decision-review-2026-11-05.md) separates prior failed
+configurations from model-family conclusions and records additional primary-source
+research. **Ultra is the primary Android candidate** after 42 consumed DEV clips:
+word errors 146 → 51 / 864, with WER and lexical CER improved over Base in all
+seven languages. Seven exact outputs were reused and 35 additional calls made.
+[Per-language results and provenance](benchmarks/2026-11-05-stt/parakeet-ultra-dev-42.json).
+
+The separate 18-input comparison gives Base/Small/Ultra normal errors 25/18/15,
+attenuated 31/19/14 and noise insertions 12/4/0. Portuguese quantities and short
+selected-language fidelity remain concerns. Five synthetic RU+EN canaries
+improve HTML matches but do not solve API/guardrails or natural mixed speech.
+Gemma 4 E2B audio was tested directly and as correction. The Base-draft screen
+remains incomplete (35/36 returned, one invalid); the separate Ultra-draft
+18/18 diagnostic gives normal errors 15 → 14, quiet 14 → 14, worse lexical CER
+and 30 inserted noise words. Median added host call: 9.86 s. Automatic correction
+is not justified by this result. [Full comparison and controls](benchmarks/2026-11-05-stt/report.md).
+
+Independent audits bind inputs, raw outputs, scoring and completed/reused calls.
+Heavy jobs ran sequentially under CPU150%, 4GiB hard memory and no-swap limits;
+all have ended. Downloads carry forward the cumulative ledger: 7,850,106,526
+reserved of 8.5 GB. Existing weights were reused. No app source changed, so no
+new Android build/test pass is claimed; Alpha 7 verification below describes
+the delivered app. Next is Ultra in the actual Android framing. The 42 unopened
+held-out clips, natural mixed-language speech and physical-phone acceptance
+remain open; host results do not establish phone speed or resource use.
+
 ## Alpha 7 candidate · full verification 2026-11-05
 
 Clean `4ac250d322849e4cc2ee29c034b4c8b28330a78c` passed the complete local

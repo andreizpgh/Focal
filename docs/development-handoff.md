@@ -20,6 +20,36 @@ ARM phone performance and full application acceptance remain open.
 
 ## Current checkpoint · 2026-11-05
 
+The owner has explicitly prioritized core STT and renewed model/LLM research.
+Read [the decision review](stt-decision-review-2026-11-05.md) before continuing.
+Do not wait for UX feedback or spend the next batch polishing Review. Historical
+failed screens remain failed, but they do not disprove whole model families.
+The completed, independently audited research now selects **Ultra as the primary
+Android candidate**: 42 consumed DEV recordings, word errors **146 → 51 / 864**,
+with lower WER and lexical CER than Base in all seven languages. Seven results
+were reused; only 35 additional DEV calls were made. The 18-input diagnostic
+also gives normal/quiet errors 15/14 versus Base 25/31 and Small 18/19; noise
+insertions are 0 versus 12/4. Portuguese numeric errors and short selected-language
+failures remain. Synthetic HTML improves, API/guardrails remain unresolved.
+
+Gemma 4 E2B audio was actually tested in direct-ASR, Base-draft and Ultra-draft
+modes. The Base screen remains incomplete (35/36 returned, one invalid);
+Ultra-draft correction completes 18/18 but changes normal/quiet word errors only
+15 → 14 and 14 → 14, worsens lexical CER and invents 30 words on two empty noise
+drafts. Median added host call is 9.86 s. Keep these results separate; no blanket
+LLM rejection or automatic correction follows. See the [full report](benchmarks/2026-11-05-stt/report.md).
+
+Next: bind the existing debug-only Parakeet preview to the verified Ultra graphs
+and evaluate its actual 16-second window/overlap path on the same audio, plus
+long-boundary controls. Input coverage and framing are separate from model
+quality. Do not repeat completed host screens, download weights again or open
+the 42 held-out recordings before the selected pipeline is frozen. Models and
+private receipts are under `build/stt/parakeet-ultra-20261105/` and
+`build/stt/gemma4-audio-20261105/`. All heavy jobs ended; the AVD is stopped.
+The cumulative ledger reserves **7,850,106,526 of 8,500,000,000 bytes**; never
+reset it. Ordinary ASR, automatic-correction policy and the delivered APK are
+unchanged. This checkpoint changes research documentation only.
+
 [Alpha 7 is published](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-7) from clean `4ac250d322849e4cc2ee29c034b4c8b28330a78c`:
 **129/0/0**, ten required real-model checks, 186.980s JUnit / 187.992s runner wall.
 Both lints, core/JVM and debug/test/unsigned R8 builds passed. Exact APK identity
@@ -32,10 +62,10 @@ remain unchanged. Original oversized-draft and capture/storage assertions passed
 Source, actual screenshots and artifact checks were reviewed independently.
 The dedicated AVD and all heavy jobs are stopped. Phone and all-language
 quality/speed/mixed-term gates remain open; see [device-validation](device-validation.md).
-PR #9 is the delivery PR; PR #1–8 are already merged. The remote digest and
+PR #1–9 are merged. The remote digest and
 HTTP 200 download filename match `Focal-0.1.0-alpha.7.apk`; signing matches
-Alpha 2–6. Do not upload it again or replace any asset. The next step is owner
-UX acceptance, then the owner-present Pixel 10 plan. See GitHub for PR merge state.
+Alpha 2–6. Do not upload it again or replace any asset. Owner UX acceptance and
+the owner-present Pixel 10 plan remain open; they do not block the STT work above.
 
 ## Earlier research and QA checkpoints
 
@@ -68,7 +98,7 @@ Both models failed longer quiet instructions; noise insertions remained nonzero.
 Independent Astra audits cover all results. See the [ACFT report](benchmarks/2026-11-05-stt/report.md#futo-acft-context-formulas-kept-separate).
 All heavy jobs have ended. Do not repeat finished Parakeet/Qwen/gate/ACFT runs,
 download another model speculatively or open held-out speech yet.
-Keep the 42 held-out clips unopened and all cached models. Alpha 6 remains latest.
+Keep the 42 held-out clips unopened and all cached models. Alpha 6 was latest at that checkpoint.
 
 
 Previous ordinary-app checkpoint `e6f4ca4` passed full local QA: **109/0/0**, eight
@@ -87,7 +117,7 @@ groups Speech model and Appearance together, and uses a 4 dp / 220 ms ease-out
 page transition. Five focused checks passed in 13.717 s; core, debug lint and
 app/test builds passed in 1m 58s. Source and actual frames received manual
 review; details and limits are at the top of [quality-report](quality-report.md).
-Alpha 6 remains the latest release; no new APK has been released. The owner
+Alpha 6 was the latest release at that checkpoint. The owner
 prioritizes an STT decision before any cosmetic Review work. Real-phone quality,
 latency, memory, battery, thermal and background gates remain open.
 
@@ -149,8 +179,9 @@ Run only one heavy job at a time in a systemd unit with `MemoryHigh=3G`,
 Check the live job and `build/local-diagnostics/current-android-delivery-work.json`
 before starting any further work.
 
-The cumulative [download ledger](benchmarks/2026-11-03-stt/download-budget.json)
-reserves **4,557,289,366 / 5,000,000,000 bytes**, leaving **442,710,634**.
+At this earlier checkpoint the cumulative download reservation was
+**4,557,289,366 / 5,000,000,000 bytes**, leaving **442,710,634**.
+Use the [current ledger](benchmarks/2026-11-03-stt/download-budget.json), not this historical balance.
 This includes 1,000,000 bytes of Android runtime metadata and one verified
 49,441,341-byte official AAR transfer, 1,000,000 bytes of ACFT metadata reserve,
 and one 81,768,602-byte ACFT transfer; no model was downloaded again.
@@ -584,10 +615,11 @@ critical-error precision or Russian spontaneous-dictation performance. Preserve
 these limitations when comparing models; do not turn a fast host run or aggregate
 WER gain into an all-language Android claim.
 
-The current shared ceiling is **5,000,000,000 bytes including retries**, raised
-by the owner on 2026-11-04 for removable local research artifacts. Reservation:
+The earlier shared ceiling was **5,000,000,000 bytes including retries**, raised
+by the owner on 2026-11-04 for removable local research artifacts. Historical reservation:
 **4,557,289,366 bytes**, including the existing 61,000,000-byte future CI reserve;
-remaining **442,710,634 bytes**. The old reservation prefix is preserved.
+remaining **442,710,634 bytes**. The current ceiling and balance are at the top
+of this document and in the shared ledger; this historical prefix is preserved.
 The ledger includes two Qwen Q4 files, one local Whisper small transfer, the
 Qwen ASR runtime and model, and bounded metadata.
 Do not reset the ledger or repeatedly fetch existing models. The 42 fresh

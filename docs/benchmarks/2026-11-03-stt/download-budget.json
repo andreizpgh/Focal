@@ -1,5 +1,5 @@
 {
-  "limit": 5000000000,
+  "limit": 8500000000,
   "reservations": [
     {
       "name": "base-q5_1-attempt-1",
@@ -1053,8 +1053,32 @@
       "bytes": 81768602,
       "kind": "asr-model",
       "note": "One official multilingual ACFT Base Q8_0 transfer, published catalog SHA verified after download; candidate only, no app default change."
+    },
+    {
+      "name": "ultra-gemma4-metadata-20261105",
+      "bytes": 1000000,
+      "kind": "metadata",
+      "note": "Owner approved cumulative 8.5 GB on 2026-11-05. Bounded metadata for selected Ultra and Gemma 4 audio artifacts/runtimes; no weight transfers in this reservation."
+    },
+    {
+      "name": "parakeet-ultra-int8-attempt-1",
+      "bytes": 670483077,
+      "kind": "asr-model",
+      "note": "Three pinned Marmalade Ultra INT8 graphs; published size and SHA-256. Reuse verified cached tokenizer and Sherpa runtime. One attempt per file."
+    },
+    {
+      "name": "litert-lm-api-019-runtime-attempt-1",
+      "bytes": 33186371,
+      "kind": "runtime",
+      "note": "One pinned Linux x86_64 API wheel, no package dependencies declared. Import/native audio symbol smoke before Gemma weight transfer; no CLI or PyTorch."
+    },
+    {
+      "name": "gemma4-e2b-audio-litert-attempt-1",
+      "bytes": 2588147712,
+      "kind": "audio-language-model",
+      "note": "One immutable-commit LiteRT E2B bundle with audio support; API/native Linux preflight passed. Published LFS SHA and size checked after download. Research only; no G5 alternative or repeated weight download."
     }
   ],
-  "reserved_bytes": 4557289366,
-  "note": "Conservative upper bounds: prior checkpoint transfers, local baseline model, disjoint FLEURS cohort, research-only Silero VAD, matching host sanitizer runtimes, metadata/retries, and one reserved publication CI. Carry the total forward; never reset it. On 2026-11-04 the owner increased the cumulative local, removable research-download ceiling to 5 GB. Reserve every attempt before transfer; no reset."
+  "reserved_bytes": 7850106526,
+  "note": "Conservative upper bounds: prior checkpoint transfers, local baseline model, disjoint FLEURS cohort, research-only Silero VAD, matching host sanitizer runtimes, metadata/retries, and one reserved publication CI. Carry the total forward; never reset it. On 2026-11-04 the owner increased the cumulative local, removable research-download ceiling to 5 GB. Reserve every attempt before transfer; no reset. On 2026-11-05 the owner increased the cumulative ceiling to 8.5 GB for Parakeet Ultra, Gemma 4 E2B audio, necessary runtimes and a small corpus; preserve all earlier reservations."
 }

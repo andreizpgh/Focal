@@ -1,0 +1,424 @@
+{
+  "schema": 1,
+  "scope": "One fixed small/auto full-PCM host diagnostic on already consumed DEV and synthetic controls. Cached base/full quality comparator; no adoption or matched speed decision.",
+  "status": "DIAGNOSTIC_COMPLETE",
+  "coverage": {
+    "planned_cases": 18,
+    "completed_cases": 18,
+    "fresh_candidate_calls": 18,
+    "fresh_baseline_calls": 0,
+    "runtime_failures": 0,
+    "retries": 0,
+    "ordinary_human_source_clips": 7,
+    "languages": 7,
+    "normal_versions": 7,
+    "digitally_attenuated_versions": 7,
+    "gain_for_attenuated_versions": 0.1,
+    "varying_noise_controls": 2,
+    "synthetic_short_negation_controls": 2,
+    "held_out_inputs": 0,
+    "independence": "Normal and quiet versions reuse seven source recordings. One source per language; synthetic controls are not human quiet speech."
+  },
+  "configuration": {
+    "baseline": {
+      "model": "Whisper base multilingual Q5_1",
+      "bytes": 59707625,
+      "sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+      "encoder_context": 1500,
+      "reuse": "Verified completed cold host calls with identical PCM and explicit language. Each baseline raw result, waveform and receipt is bound in the frozen plan."
+    },
+    "candidate": {
+      "model": "Whisper small multilingual Q5_1",
+      "file": "ggml-small-q5_1.bin",
+      "bytes": 190085487,
+      "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
+      "encoder_context_formula": "min(1500, max(768, ceil((original_seconds + 2) * 50 / 256) * 256))",
+      "effective_contexts_observed": [
+        768,
+        1024,
+        1280,
+        1500
+      ]
+    },
+    "shared": {
+      "sample_rate": 16000,
+      "pcm_format": "mono PCM16, unchanged amplitude",
+      "full_original_source_per_call": true,
+      "gate_or_vad": false,
+      "threads": 2,
+      "beam_size": 3,
+      "explicit_language": true,
+      "initial_prompt": "empty",
+      "fresh_process_per_call": true,
+      "retained_text_context": false,
+      "max_text_context": 64,
+      "temperature": 0,
+      "temperature_increment": 0,
+      "best_of": 1,
+      "timestamps": true,
+      "token_timestamps": false,
+      "gpu": false,
+      "flash_attention": true,
+      "short_input_padding": "Inputs shorter than one second are padded by the existing probe to one second; raw and original-duration-filtered output are both scored."
+    },
+    "confounding": "Model size and encoder context change together. This is not an isolated model-size ablation or a persistent Android session."
+  },
+  "quality": {
+    "normal": {
+      "baseline": {
+        "words": 210,
+        "word_errors": 25,
+        "characters": 1050,
+        "character_errors": 47,
+        "wer": 0.11904761904761904,
+        "lexical_cer": 0.04476190476190476
+      },
+      "small": {
+        "words": 210,
+        "word_errors": 18,
+        "characters": 1050,
+        "character_errors": 35,
+        "wer": 0.08571428571428572,
+        "lexical_cer": 0.03333333333333333
+      }
+    },
+    "quiet": {
+      "baseline": {
+        "words": 210,
+        "word_errors": 31,
+        "characters": 1050,
+        "character_errors": 63,
+        "wer": 0.14761904761904762,
+        "lexical_cer": 0.06
+      },
+      "small": {
+        "words": 210,
+        "word_errors": 19,
+        "characters": 1050,
+        "character_errors": 38,
+        "wer": 0.09047619047619047,
+        "lexical_cer": 0.03619047619047619
+      }
+    },
+    "forms": [
+      "raw",
+      "emitted"
+    ],
+    "raw_and_emitted_text_equal_for_all_36_results": true,
+    "discarded_candidate_segments": 0,
+    "per_language_counts_apply_identically_to_both_forms": [
+      {
+        "language": "en",
+        "words_per_condition": 28,
+        "lexical_characters_per_condition": 120,
+        "normal": {
+          "baseline": {
+            "word_errors": 2,
+            "character_errors": 5
+          },
+          "small": {
+            "word_errors": 3,
+            "character_errors": 2
+          }
+        },
+        "quiet": {
+          "baseline": {
+            "word_errors": 6,
+            "character_errors": 19
+          },
+          "small": {
+            "word_errors": 3,
+            "character_errors": 2
+          }
+        }
+      },
+      {
+        "language": "ru",
+        "words_per_condition": 26,
+        "lexical_characters_per_condition": 141,
+        "normal": {
+          "baseline": {
+            "word_errors": 8,
+            "character_errors": 13
+          },
+          "small": {
+            "word_errors": 7,
+            "character_errors": 12
+          }
+        },
+        "quiet": {
+          "baseline": {
+            "word_errors": 8,
+            "character_errors": 12
+          },
+          "small": {
+            "word_errors": 7,
+            "character_errors": 11
+          }
+        }
+      },
+      {
+        "language": "de",
+        "words_per_condition": 19,
+        "lexical_characters_per_condition": 118,
+        "normal": {
+          "baseline": {
+            "word_errors": 1,
+            "character_errors": 1
+          },
+          "small": {
+            "word_errors": 0,
+            "character_errors": 0
+          }
+        },
+        "quiet": {
+          "baseline": {
+            "word_errors": 0,
+            "character_errors": 0
+          },
+          "small": {
+            "word_errors": 0,
+            "character_errors": 0
+          }
+        }
+      },
+      {
+        "language": "fr",
+        "words_per_condition": 32,
+        "lexical_characters_per_condition": 160,
+        "normal": {
+          "baseline": {
+            "word_errors": 2,
+            "character_errors": 5
+          },
+          "small": {
+            "word_errors": 0,
+            "character_errors": 0
+          }
+        },
+        "quiet": {
+          "baseline": {
+            "word_errors": 5,
+            "character_errors": 9
+          },
+          "small": {
+            "word_errors": 1,
+            "character_errors": 4
+          }
+        }
+      },
+      {
+        "language": "es",
+        "words_per_condition": 59,
+        "lexical_characters_per_condition": 279,
+        "normal": {
+          "baseline": {
+            "word_errors": 4,
+            "character_errors": 3
+          },
+          "small": {
+            "word_errors": 1,
+            "character_errors": 1
+          }
+        },
+        "quiet": {
+          "baseline": {
+            "word_errors": 4,
+            "character_errors": 3
+          },
+          "small": {
+            "word_errors": 1,
+            "character_errors": 1
+          }
+        }
+      },
+      {
+        "language": "it",
+        "words_per_condition": 25,
+        "lexical_characters_per_condition": 141,
+        "normal": {
+          "baseline": {
+            "word_errors": 3,
+            "character_errors": 2
+          },
+          "small": {
+            "word_errors": 2,
+            "character_errors": 2
+          }
+        },
+        "quiet": {
+          "baseline": {
+            "word_errors": 3,
+            "character_errors": 2
+          },
+          "small": {
+            "word_errors": 2,
+            "character_errors": 2
+          }
+        }
+      },
+      {
+        "language": "pt",
+        "words_per_condition": 21,
+        "lexical_characters_per_condition": 91,
+        "normal": {
+          "baseline": {
+            "word_errors": 5,
+            "character_errors": 18
+          },
+          "small": {
+            "word_errors": 5,
+            "character_errors": 18
+          }
+        },
+        "quiet": {
+          "baseline": {
+            "word_errors": 5,
+            "character_errors": 18
+          },
+          "small": {
+            "word_errors": 5,
+            "character_errors": 18
+          }
+        }
+      }
+    ],
+    "word_error_breakdown": {
+      "substitutions": null,
+      "deletions": null,
+      "insertions": null,
+      "reason": "The frozen scorer records total Levenshtein errors, not an S/D/I alignment. No breakdown is invented; the separate zero-reference noise counts are insertions."
+    },
+    "normal_english_note": "English word errors rise 2 to 3 while character errors fall 5 to 2. A contraction changes word tokenization while another lexical error improves; semantic neutrality has not been acoustically established."
+  },
+  "noise": {
+    "forms": [
+      "raw",
+      "emitted"
+    ],
+    "baseline_inserted_words_total": 12,
+    "candidate_inserted_words_total": 4,
+    "cases": [
+      {
+        "kind": "seeded_noise",
+        "seconds": 30.0,
+        "explicit_language": "ru",
+        "candidate_encoder_context": 1500,
+        "baseline_inserted_words": 8,
+        "candidate_inserted_words": 4
+      },
+      {
+        "kind": "emulator_noise",
+        "seconds": 2.0,
+        "explicit_language": "ru",
+        "candidate_encoder_context": 768,
+        "baseline_inserted_words": 4,
+        "candidate_inserted_words": 0
+      }
+    ],
+    "limitation": "Residual invented text remains on the 30-second source. This is not a demonstrated noise-safe automatic full-PCM path."
+  },
+  "short_negation_controls": {
+    "forms": [
+      "raw",
+      "emitted"
+    ],
+    "cases": [
+      {
+        "language": "fr",
+        "synthetic_gain": 0.1,
+        "seconds": 0.2879375,
+        "reference_words": 1,
+        "reference_characters": 3,
+        "baseline_word_errors": 0,
+        "candidate_word_errors": 1,
+        "baseline_character_errors": 0,
+        "candidate_character_errors": 3,
+        "baseline_expected_marker_present": true,
+        "candidate_expected_marker_present": false,
+        "textual_interpretation": "The previously correct negative answer becomes an unrelated French word. This is a reference/text negation loss, not an equivalent negative in another language or proof of an affirmative inversion."
+      },
+      {
+        "language": "pt",
+        "synthetic_gain": 0.1,
+        "seconds": 0.3590625,
+        "reference_words": 1,
+        "reference_characters": 3,
+        "baseline_word_errors": 1,
+        "candidate_word_errors": 0,
+        "baseline_character_errors": 3,
+        "candidate_character_errors": 0,
+        "baseline_expected_marker_present": false,
+        "candidate_expected_marker_present": true,
+        "textual_interpretation": "The punctuation-only baseline becomes the expected negative answer."
+      }
+    ],
+    "interpretation": "The Portuguese improvement does not cancel the new French error. No listening or acoustic intelligibility adjudication was performed."
+  },
+  "runtime": {
+    "scope": "Candidate-only cold host costs; historical baseline timing is excluded from comparison.",
+    "runner_elapsed_seconds": 232.06902153400006,
+    "candidate_process_wall_seconds": {
+      "minimum": 6.687835740005539,
+      "median": 10.784290808500373,
+      "maximum": 34.226085572001466,
+      "sum": 231.2070955030067
+    },
+    "candidate_load_seconds": {
+      "median": 0.183178644,
+      "sum": 3.2982222070000002
+    },
+    "candidate_decode_seconds": {
+      "median": 10.4947457,
+      "sum": 226.07313603
+    },
+    "candidate_process_peak_rss_bytes_max": 450609152,
+    "systemd_service_report": {
+      "result": "success",
+      "runtime_seconds": 232.778,
+      "cpu_seconds": 345.535,
+      "memory_peak_display": "448.4M",
+      "swap_peak_display": "0B"
+    },
+    "resource_note": "Service memory is preserved in the exact rounded display form. Later systemctl inspection no longer retained unit counters and is not used to infer limits or peaks."
+  },
+  "limits": {
+    "per_call_seconds": 45,
+    "call_loop_seconds": 480,
+    "declared_outer_service_seconds": 540,
+    "preflight_memory_max_bytes": 4294967296,
+    "preflight_swap_max_bytes": 0,
+    "preflight_cpu_quota_max_percent": 150,
+    "output_file_bytes": 262144,
+    "quality_stop_policy": "Finish every planned quality case. Stop only on runtime failure, identity mismatch or deadline; no quality failure triggers a retry or tuning."
+  },
+  "identity": {
+    "runner_sha256": "9534fa186e9f3a1f0367b40c890b758636bf58b7fb7e61f89074fb13f64cbae1",
+    "frozen_plan_sha256": "59dc17848f0551872953633aaff1f00501074237bf22a3d81c83aae9011a1139",
+    "result_sha256": "a6a804605355a0ca62d8ec9700a623a337b261c0afbef14104ea314568cd12c6",
+    "reused_decoder_wrapper_sha256": "32b3b3727afa01b351f090f0b8a4c219dbf0a5ce9908f2313ec2a3c193b9095e",
+    "probe_sha256": "2c17f90bb6d322c413a914df1d5f7b193aa7b65926591c8d120724b0632fbf2b",
+    "engine_source_sha256": "02566a39137a14e0798ec0d88e78bd626f21e7549bc27d1cb5e4a30b101a0f7e",
+    "scorer_sha256": "dfde50ec467c30bfddabd19593ee00ba187caca0b1d202b557fa2b67a2946abb",
+    "upstream_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+    "loaded_whisper_library_sha256": "a24f12490e3de59f099772947ad6c2fad82c92414a22176a0dda470401b89d70",
+    "systemd_wait_output_sha256": "cb0653d41b5479fb02e35cf4f9aa1e2424137c1de41de13c1e24c8b57f090a88"
+  },
+  "independent_audit": {
+    "status": "PASS",
+    "candidate_raw_log_receipt_chains_verified": 18,
+    "baseline_pcm_and_result_bindings_verified": 18,
+    "raw_and_emitted_scores_recomputed": true,
+    "same_original_pcm_verified": true,
+    "actual_candidate_profile_verified": true,
+    "frozen_sources_models_and_runtime_verified": true,
+    "inference_rerun_for_audit": false
+  },
+  "decision": "The ordinary and attenuated DEV results establish a useful signal for this small/auto configuration and justify prioritizing a bounded saved-audio accuracy experiment. They do not authorize automatic replacement, automatic suppression or changing the default.",
+  "limitations": [
+    "The old warm/full small control rejection and the older all-language gate failures remain unchanged; this diagnostic does not retrospectively pass them.",
+    "Normal English WER worsened, Portuguese ordinary/quiet counts tied, one short French negative failed and varying noise still generated text. No all-language improvement or critical-error safety claim.",
+    "No acoustic adjudication, natural user dictation, continuous-note boundary test, Android execution or physical-phone resource evidence in this run.",
+    "No confidence interval or population accuracy claim from this small correlated development sample. The separate held-out cohort remains unopened."
+  ]
+}

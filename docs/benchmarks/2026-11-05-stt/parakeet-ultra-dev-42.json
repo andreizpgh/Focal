@@ -1,0 +1,209 @@
+{
+  "date": "2026-11-05",
+  "status": "DIAGNOSTIC_COMPLETE",
+  "scope": "42 already-consumed full-source DEV read-speech clips, six per language. Same input PCM and references across configurations. No gate, no unused held-out inputs, no new baseline decoding.",
+  "coverage": {
+    "clips": 42,
+    "fresh_ultra_decodes": 35,
+    "cached_ultra_exact_pcm": 7,
+    "cached_base_full": 42,
+    "cached_parakeet_v3": 42,
+    "held_out": 0
+  },
+  "profiles": {
+    "base_full": "Whisper Base Q5_1, explicit language, full encoder context, beam 3, two CPU threads, empty prompt.",
+    "parakeet_v3": "Parakeet TDT v3 INT8, automatic language, greedy, two CPU threads.",
+    "ultra": "Marmalade Parakeet Ultra INT8 release v1, automatic language, greedy, two CPU threads."
+  },
+  "publisher_release": "https://github.com/maxwhipw/marmalade-stt-engines/releases/tag/v1",
+  "model_files": [
+    {
+      "name": "encoder.int8.onnx",
+      "sha256": "7ef3ca4ffb49d60d4faa757b2930c8cec9927e73c24f6155d5b23a00229a7ed6"
+    },
+    {
+      "name": "decoder.int8.onnx",
+      "sha256": "1fab98fe6c12aded87d2da66272cc9e148d0a0044ce3850a12fe56302ec4a922"
+    },
+    {
+      "name": "joiner.int8.onnx",
+      "sha256": "8ba94c6919c17a6bd27368fb89533628a72ffc81d4acedebf3cdcb2cae331dbb"
+    },
+    {
+      "name": "tokens.txt",
+      "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+    }
+  ],
+  "runtime": {
+    "sherpa_onnx": "2.0.1",
+    "onnxruntime": "1.28.2",
+    "effective_feature_bins": 128,
+    "feature_normalization": "per_feature",
+    "cpu_quota_percent": 150,
+    "memory_max_bytes": 4294967296,
+    "swap_max_bytes": 0
+  },
+  "source_sha256": {
+    "plan": "c5bdd90243bee349adeb981f0edf44ffbd3dda9c9803de8bb3198ef10499e465",
+    "runner": "981066c2ae9985176f6cc682c7deda5b389c47ca954c48589bd9e02caa48dc8b",
+    "worker": "46e60846ae6754f5d9cee520df8e77b1b7ae301f67fe55f83000651c12712c56",
+    "result": "96f8d0b7c2d9f1651fa6bd04fabcadb372a3e4ff962208f41105d9c4a27973f8",
+    "execution": "309d11998d4a484ef0911c0b23d4643af2ac8f259ea570248b3fd3403128ee36",
+    "dev_manifest": "7d200d5d8f0904d48aceb923e023fa4fad935d9cbc42861f9ee9d62e0ba39412",
+    "dev_corpus_provenance": "3f297c7ed7475aab244f66b4fce3b5f619c68421ceaf7b913224c0a847660f22",
+    "scorer": "dfde50ec467c30bfddabd19593ee00ba187caca0b1d202b557fa2b67a2946abb",
+    "cached_ultra_dev18_result": "26a06a6e75f0b82154a9ccaf2da5b74486d4ef5cb679163955a57fa91f43d856",
+    "cached_parakeet_v3_dev42_execution": "60df7b68ab7c60af14ab3567e86401b352a4a1cde72d2f1eb4c87b06c47e7ff0",
+    "cached_parakeet_v3_dev42_status": "0b61291ff45d6c2f3f8189c7eab5f7646fe9e49045bff9f5780e3acf2cd74562",
+    "audited_case_receipt_chain": "a7e91dc9bec1d60adcad69bc8bd9dcdb740df54e382d632393490c3beb43a220",
+    "service_summary": "0092415a58ab4d62af9c9d08ba8e49b7ecb419b6e53ba124707676b6c5c79a1c"
+  },
+  "overall": {
+    "clips": 42,
+    "reference_words": 864,
+    "reference_characters": 4349,
+    "word_errors": {
+      "base_full": 146,
+      "parakeet_v3": 98,
+      "ultra": 51
+    },
+    "character_errors": {
+      "base_full": 262,
+      "parakeet_v3": 229,
+      "ultra": 107
+    }
+  },
+  "by_language": {
+    "en": {
+      "clips": 6,
+      "reference_words": 88,
+      "reference_characters": 428,
+      "word_errors": {
+        "base_full": 11,
+        "parakeet_v3": 3,
+        "ultra": 5
+      },
+      "character_errors": {
+        "base_full": 32,
+        "parakeet_v3": 9,
+        "ultra": 12
+      }
+    },
+    "ru": {
+      "clips": 6,
+      "reference_words": 105,
+      "reference_characters": 587,
+      "word_errors": {
+        "base_full": 31,
+        "parakeet_v3": 19,
+        "ultra": 13
+      },
+      "character_errors": {
+        "base_full": 48,
+        "parakeet_v3": 43,
+        "ultra": 24
+      }
+    },
+    "de": {
+      "clips": 6,
+      "reference_words": 122,
+      "reference_characters": 736,
+      "word_errors": {
+        "base_full": 13,
+        "parakeet_v3": 5,
+        "ultra": 3
+      },
+      "character_errors": {
+        "base_full": 17,
+        "parakeet_v3": 6,
+        "ultra": 3
+      }
+    },
+    "fr": {
+      "clips": 6,
+      "reference_words": 128,
+      "reference_characters": 575,
+      "word_errors": {
+        "base_full": 32,
+        "parakeet_v3": 13,
+        "ultra": 14
+      },
+      "character_errors": {
+        "base_full": 68,
+        "parakeet_v3": 21,
+        "ultra": 26
+      }
+    },
+    "es": {
+      "clips": 6,
+      "reference_words": 177,
+      "reference_characters": 853,
+      "word_errors": {
+        "base_full": 15,
+        "parakeet_v3": 44,
+        "ultra": 4
+      },
+      "character_errors": {
+        "base_full": 15,
+        "parakeet_v3": 101,
+        "ultra": 6
+      }
+    },
+    "it": {
+      "clips": 6,
+      "reference_words": 126,
+      "reference_characters": 616,
+      "word_errors": {
+        "base_full": 31,
+        "parakeet_v3": 7,
+        "ultra": 3
+      },
+      "character_errors": {
+        "base_full": 46,
+        "parakeet_v3": 19,
+        "ultra": 7
+      }
+    },
+    "pt": {
+      "clips": 6,
+      "reference_words": 118,
+      "reference_characters": 554,
+      "word_errors": {
+        "base_full": 13,
+        "parakeet_v3": 7,
+        "ultra": 9
+      },
+      "character_errors": {
+        "base_full": 36,
+        "parakeet_v3": 30,
+        "ultra": 29
+      }
+    }
+  },
+  "preserved_regressions_and_checks": {
+    "prior_spanish_outlier_word_errors": {
+      "base_full": 4,
+      "parakeet_v3": 41,
+      "ultra": 2
+    },
+    "portuguese_numeric_case_word_errors": {
+      "base_full": 5,
+      "parakeet_v3": 6,
+      "ultra": 8
+    },
+    "scope": "The Spanish result is one matched case. The Brazilian Portuguese number/name/term failure from the 18-case diagnostic remains in the totals. Quiet, negative-control and mixed-language risks are outside this DEV42 aggregate."
+  },
+  "host_resources": {
+    "scope": "35 fresh Ultra processes only. Filesystem caches may be warm. No matched baseline or phone timing.",
+    "decode_loop_seconds": 164.78147817500576,
+    "service_runtime_seconds": 166.424,
+    "service_cpu_seconds": 194.1,
+    "service_memory_peak_display": "1.1G",
+    "service_swap_peak_bytes": 0,
+    "fresh_ultra_peak_process_rss_bytes": 1258541056,
+    "fresh_ultra_median_load_seconds": 2.7673639210042893,
+    "fresh_ultra_median_decode_seconds": 1.4662574939939077,
+    "fresh_ultra_median_wall_seconds": 4.719722642999841
+  },
+  "limits": "Previously used read-speech DEV, one small sample per language group. The gain does not establish natural dictation, natural code-switching, acoustic semantic accuracy, quiet-speech coverage, production framing, or Pixel 10 performance. No adoption decision."
+}
