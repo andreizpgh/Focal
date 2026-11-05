@@ -38,9 +38,16 @@ data class Word(
     val unknownPiece: Boolean = false,
 )
 
-/** Builds words from one window's tokens. Joining the words with spaces reproduces sherpa's text. */
+/**
+ * Builds words from one window's tokens. Joining the words with spaces gives sherpa's text without `<unk>`,
+ * except that a space stays before punctuation that opens a word or stands alone ('$50', '(page', ' - '),
+ * which sherpa glues to the word on its left.
+ */
 object WordBuilder {
     private val SPECIAL = Regex("^<\\|?[^<>]*\\|?>$")
+
+    /** Closing punctuation: after a space it still joins the word on its left (audit L6). */
+    private const val ATTACH_LEFT = ",.;:!?%)]}"
 
     /** Seconds to integer milliseconds, rounding half up. */
     fun ms(seconds: Double): Long = floor(seconds * 1000 + 0.5).toLong()
@@ -88,8 +95,10 @@ object WordBuilder {
     }
 
     /**
-     * A piece with a leading space starts a word unless the next visible character is ASCII or CJK
-     * punctuation, which sherpa attaches to the previous word (`RemoveSpaceBetweenCjk`, text-utils.cc).
+     * A piece with a leading space starts a word unless its next visible character is closing punctuation
+     * ([ATTACH_LEFT]), which joins the previous word. sherpa's `RemoveSpaceBetweenCjk` (text-utils.cc) glues
+     * every ASCII punctuation mark to the left ('costs$50', 'thing-'); '$', '(', quotes and ' -' start a word
+     * here instead.
      */
     private fun startsWord(pieces: List<String>, i: Int): Boolean {
         val piece = pieces[i]
@@ -97,12 +106,8 @@ object WordBuilder {
         var rest = piece.trimStart(' ')
         var k = i + 1
         while (rest.isEmpty() && k < pieces.size && !pieces[k].startsWith(' ')) rest = pieces[k++]
-        return !(rest.isNotEmpty() && sherpaPunct(rest[0].code))
+        return !(rest.isNotEmpty() && rest[0] in ATTACH_LEFT)
     }
-
-    private fun sherpaPunct(cp: Int): Boolean = cp in 0x21..0x2F || cp in 0x3A..0x40 || cp in 0x5B..0x60 ||
-        cp in 0x7B..0x7E || cp in 0x3000..0x303F || cp in 0xFF01..0xFF0F || cp in 0xFF1A..0xFF20 ||
-        cp in 0xFF3B..0xFF40 || cp in 0xFF5B..0xFF65
 }
 
 /** Joins windows into one word sequence using their keep filters and the overlap duplicate guard. */

@@ -872,7 +872,7 @@
   },
   {
    "id": "space_before_punct",
-   "description": "' -' and ' '+',' attach to the previous word without a space, exactly as sherpa's text does (RemoveSpaceBetweenCjk drops a space before ASCII punctuation); their probabilities are ignored.",
+   "description": "' '+',' attaches to the previous word (closing punctuation); ' -' starts a punctuation-only word (audit L6), unlike sherpa's text; punctuation probabilities are ignored.",
    "source": "experiment",
    "options": {},
    "input": {
@@ -964,11 +964,20 @@
       "unknown_piece": false
      },
      {
-      "text": "thing-",
+      "text": "thing",
       "start_ms": 400,
       "end_ms": 560,
       "conf_min": 1.0,
       "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "-",
+      "start_ms": 560,
+      "end_ms": 640,
+      "conf_min": null,
+      "punct_only": true,
       "window": 0,
       "unknown_piece": false
      },
@@ -1020,7 +1029,8 @@
     ],
     "raw_texts": [
      "One",
-     "thing-",
+     "thing",
+     "-",
      "check",
      "the",
      "logs,",
@@ -1031,12 +1041,12 @@
     "paragraphs": [
      [
       0,
-      7
+      8
      ]
     ],
-    "title": "One thing- check the logs, then go",
+    "title": "One thing - check the logs, then go",
     "flagged_word_indices": [],
-    "copy_text": "One thing- check the logs, then go."
+    "copy_text": "One thing - check the logs, then go."
    }
   },
   {
@@ -13985,6 +13995,313 @@
      1
     ],
     "copy_text": "Wir treffen uns."
+   }
+  },
+  {
+   "id": "space_dollar_starts_word",
+   "description": "' ' then '$' starts the price word: '$50.', not 'costs$50.'.",
+   "source": "rebuild",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " It",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " costs",
+        "start_s": 0.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " ",
+        "start_s": 0.56,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": "$",
+        "start_s": 0.64,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": "5",
+        "start_s": 0.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": "0",
+        "start_s": 0.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 1.04,
+        "dur_s": 0.08,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "It",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "costs",
+      "start_ms": 400,
+      "end_ms": 560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "$50.",
+      "start_ms": 560,
+      "end_ms": 1040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "It",
+     "costs",
+     "$50."
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      3
+     ]
+    ],
+    "title": "It costs $50",
+    "flagged_word_indices": [],
+    "copy_text": "It costs $50."
+   }
+  },
+  {
+   "id": "space_dash_between_words",
+   "description": "' -' between words stays a separate punctuation-only word.",
+   "source": "rebuild",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " a",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " -",
+        "start_s": 0.4,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": " good",
+        "start_s": 0.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " one",
+        "start_s": 0.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 0.8,
+        "dur_s": 0.08,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "a",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "-",
+      "start_ms": 400,
+      "end_ms": 480,
+      "conf_min": null,
+      "punct_only": true,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "good",
+      "start_ms": 480,
+      "end_ms": 640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "one.",
+      "start_ms": 640,
+      "end_ms": 800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "a",
+     "-",
+     "good",
+     "one."
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      4
+     ]
+    ],
+    "title": "a - good one",
+    "flagged_word_indices": [],
+    "copy_text": "a - good one."
+   }
+  },
+  {
+   "id": "space_opening_bracket_starts_word",
+   "description": "' (' opens the next word; ')' and '.' attach to the left.",
+   "source": "rebuild",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " See",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " (",
+        "start_s": 0.4,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": "page",
+        "start_s": 0.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " 5",
+        "start_s": 0.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": ")",
+        "start_s": 0.8,
+        "dur_s": 0.08,
+        "logp": 0.0
+       },
+       {
+        "text": ".",
+        "start_s": 0.88,
+        "dur_s": 0.08,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "See",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "(page",
+      "start_ms": 400,
+      "end_ms": 640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "5).",
+      "start_ms": 640,
+      "end_ms": 800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "See",
+     "(page",
+     "5)."
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      3
+     ]
+    ],
+    "title": "See (page 5)",
+    "flagged_word_indices": [],
+    "copy_text": "See (page 5)."
    }
   },
   {

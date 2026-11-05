@@ -38,7 +38,7 @@ class TranscriptVectorsTest {
     @Test
     fun formatCases() {
         val cases = vectors["format_cases"].list()
-        assertEquals(77, cases.size)
+        assertEquals(80, cases.size)
         for (c in cases.map { it.obj() }) {
             val id = c["id"] as String
             assertTrue(c["options"].obj().isEmpty(), id)
