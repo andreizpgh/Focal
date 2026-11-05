@@ -136,7 +136,13 @@ internal object StoreSchema {
         val notes = db.rawQuery("SELECT id,state,speech_engine,audio_present FROM notes", null).use { c ->
             buildList { while (c.moveToNext()) add(LegacyNote(c.getString(0), c.getString(1), c.getString(2), c.getInt(3) == 1)) }
         }
-        for (note in notes) migrateWindows(db, note.id, note.state, note.engine, note.audioPresent, audioDir)
+        for (note in notes) {
+            // Before schema 5, Remove audio deleted the file and then its journal row, so only the missing
+            // file tells that the audio of such a note is gone.
+            val present = note.audioPresent && File(audioDir, "${note.id}.pcm").isFile
+            if (!present && note.audioPresent) db.execSQL("UPDATE notes SET audio_present=0 WHERE id=?", arrayOf<Any>(note.id))
+            migrateWindows(db, note.id, note.state, note.engine, present, audioDir)
+        }
         db.execSQL("DROP TABLE passages")
         db.execSQL("DROP TABLE chunks")
         // Notes saved before any text arrived get an automatic title from their text, if they have any.

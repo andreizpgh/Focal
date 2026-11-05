@@ -254,6 +254,8 @@ class LegacyDatabaseUpgradeTest {
 
             assertEquals(NoteState.READY, store.note("removed")!!.state)
             assertTrue(store.gaps("removed").isEmpty())
+            assertFalse("No audio file: the note is text only", store.note("removed")!!.audioPresent)
+            assertTrue(store.note("whisper-ready")!!.audioPresent)
             assertEquals(setOf("ultra", "whisper-gaps"), store.waitingNotes().toSet())
 
             // Ultra transcribes the first gap of the Whisper note; its text lands between the old paragraphs.
@@ -270,6 +272,25 @@ class LegacyDatabaseUpgradeTest {
             assertEquals(listOf(null, null, ULTRA_ENGINE, null), store.windows("whisper-gaps").map { if (it.legacy) null else it.engine })
             assertEquals(listOf(LEGACY_WHISPER_ENGINE, LEGACY_WHISPER_ENGINE), store.windows("whisper-gaps").filter { it.legacy }.map { it.engine })
             assertSearchIndexIntact(store)
+        }
+    }
+
+    @Test fun audioRemovedBeforeTheUpgradeLeavesTheNoteTextOnly() {
+        // Alpha 9 deleted the file first and its journal row after it: only the missing file remains.
+        savedAudio("kept", 1_000)
+        legacyDatabase(4) {
+            execSQL("INSERT INTO notes VALUES('removed','Text only',1,'en','READY',1000,'','c','whisper')")
+            execSQL("INSERT INTO chunks VALUES('c','removed',0,1000,0,'DONE',NULL)")
+            execSQL("INSERT INTO passages VALUES(1,'removed','c',0,1000,'Words stay.',0,0,'Words stay.',0)")
+            execSQL("INSERT INTO notes VALUES('kept','With audio',2,'en','READY',1000,'','d','whisper')")
+            execSQL("INSERT INTO chunks VALUES('d','kept',0,1000,0,'DONE',NULL)")
+            execSQL("INSERT INTO passages VALUES(2,'kept','d',0,1000,'Audio stays.',0,0,'Audio stays.',0)")
+        }
+        NoteStore(context).use { store ->
+            assertFalse(store.note("removed")!!.audioPresent)
+            assertEquals("Words stay.", store.transcript("removed"))
+            assertTrue(store.note("kept")!!.audioPresent)
+            assertTrue(store.audioFile("kept").isFile)
         }
     }
 
