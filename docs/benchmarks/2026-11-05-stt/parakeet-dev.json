@@ -1,0 +1,239 @@
+{
+  "date": "2026-11-05",
+  "status": "COMPLETE_NOT_ADOPTED",
+  "scope": "42 previously used DEV read-speech clips, six per language; complete WAVs, no production gate or held-out audio. Acoustic and critical semantic adjudication remain open.",
+  "candidate": "Parakeet TDT 0.6B v3 INT8, automatic language selection",
+  "baseline": "Whisper base Q5_1 beam 3, full encoder context and explicit language, empty prompt",
+  "source_sha256": {
+    "status.json": "0b61291ff45d6c2f3f8189c7eab5f7646fe9e49045bff9f5780e3acf2cd74562",
+    "execution.json": "60df7b68ab7c60af14ab3567e86401b352a4a1cde72d2f1eb4c87b06c47e7ff0"
+  },
+  "plan_sha256": "a110020bf4c13daf6b5e9eb654cc233daac966ed34ac3207b57f2644d106f668",
+  "runner_sha256": "86b5e37e6402a6c17c2107b5472dc33ce7dae890bfe554c9a87b6ca3e6eb3613",
+  "model_files_sha256": {
+    "encoder.int8.onnx": "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247",
+    "decoder.int8.onnx": "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e",
+    "joiner.int8.onnx": "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
+    "vocabulary": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+  },
+  "vocabulary_file": "tokens.txt",
+  "overall": {
+    "clips": 42,
+    "whisper": {
+      "words": 864,
+      "word_errors": 146,
+      "characters": 4349,
+      "character_errors": 262,
+      "wer": 0.16898148148148148,
+      "cer": 0.06024373419176822
+    },
+    "parakeet": {
+      "words": 864,
+      "word_errors": 98,
+      "characters": 4349,
+      "character_errors": 229,
+      "wer": 0.11342592592592593,
+      "cer": 0.05265578293860658
+    }
+  },
+  "by_language": {
+    "en": {
+      "clips": 6,
+      "whisper": {
+        "words": 88,
+        "word_errors": 11,
+        "characters": 428,
+        "character_errors": 32,
+        "wer": 0.125,
+        "cer": 0.07476635514018691
+      },
+      "parakeet": {
+        "words": 88,
+        "word_errors": 3,
+        "characters": 428,
+        "character_errors": 9,
+        "wer": 0.03409090909090909,
+        "cer": 0.02102803738317757
+      }
+    },
+    "ru": {
+      "clips": 6,
+      "whisper": {
+        "words": 105,
+        "word_errors": 31,
+        "characters": 587,
+        "character_errors": 48,
+        "wer": 0.29523809523809524,
+        "cer": 0.0817717206132879
+      },
+      "parakeet": {
+        "words": 105,
+        "word_errors": 19,
+        "characters": 587,
+        "character_errors": 43,
+        "wer": 0.18095238095238095,
+        "cer": 0.07325383304940375
+      }
+    },
+    "de": {
+      "clips": 6,
+      "whisper": {
+        "words": 122,
+        "word_errors": 13,
+        "characters": 736,
+        "character_errors": 17,
+        "wer": 0.10655737704918032,
+        "cer": 0.02309782608695652
+      },
+      "parakeet": {
+        "words": 122,
+        "word_errors": 5,
+        "characters": 736,
+        "character_errors": 6,
+        "wer": 0.040983606557377046,
+        "cer": 0.008152173913043478
+      }
+    },
+    "fr": {
+      "clips": 6,
+      "whisper": {
+        "words": 128,
+        "word_errors": 32,
+        "characters": 575,
+        "character_errors": 68,
+        "wer": 0.25,
+        "cer": 0.11826086956521739
+      },
+      "parakeet": {
+        "words": 128,
+        "word_errors": 13,
+        "characters": 575,
+        "character_errors": 21,
+        "wer": 0.1015625,
+        "cer": 0.036521739130434785
+      }
+    },
+    "es": {
+      "clips": 6,
+      "whisper": {
+        "words": 177,
+        "word_errors": 15,
+        "characters": 853,
+        "character_errors": 15,
+        "wer": 0.0847457627118644,
+        "cer": 0.017584994138335287
+      },
+      "parakeet": {
+        "words": 177,
+        "word_errors": 44,
+        "characters": 853,
+        "character_errors": 101,
+        "wer": 0.24858757062146894,
+        "cer": 0.11840562719812427
+      }
+    },
+    "it": {
+      "clips": 6,
+      "whisper": {
+        "words": 126,
+        "word_errors": 31,
+        "characters": 616,
+        "character_errors": 46,
+        "wer": 0.24603174603174602,
+        "cer": 0.07467532467532467
+      },
+      "parakeet": {
+        "words": 126,
+        "word_errors": 7,
+        "characters": 616,
+        "character_errors": 19,
+        "wer": 0.05555555555555555,
+        "cer": 0.030844155844155844
+      }
+    },
+    "pt": {
+      "clips": 6,
+      "whisper": {
+        "words": 118,
+        "word_errors": 13,
+        "characters": 554,
+        "character_errors": 36,
+        "wer": 0.11016949152542373,
+        "cer": 0.06498194945848375
+      },
+      "parakeet": {
+        "words": 118,
+        "word_errors": 7,
+        "characters": 554,
+        "character_errors": 30,
+        "wer": 0.059322033898305086,
+        "cer": 0.05415162454873646
+      }
+    }
+  },
+  "relative_word_error_reduction": 0.3287671232876712,
+  "spanish_outlier": {
+    "clips": 1,
+    "reference_words": 59,
+    "whisper_word_errors": 4,
+    "parakeet_word_errors": 41,
+    "description": "Candidate mixes Spanish and English; no audio adjudication.",
+    "whisper_character_errors": 3,
+    "parakeet_character_errors": 97
+  },
+  "broader_dev_numeric_gate": true,
+  "gate_definition": "At least 5% relative aggregate WER reduction, lower Russian WER and no increase in Russian lexical CER.",
+  "critical_semantic_adjudication_required": true,
+  "quiet_and_mixed_findings_unresolved": true,
+  "quality_pairs": {
+    "total": 42,
+    "cached": 7,
+    "fresh": 35
+  },
+  "fresh_matched_cold_timing": {
+    "pairs": 35,
+    "medians": {
+      "whisper": {
+        "load_seconds": 0.084730837,
+        "decode_seconds": 6.2554816,
+        "wall_seconds": 6.42352778500026,
+        "peak_rss_bytes": 189624320
+      },
+      "parakeet": {
+        "load_seconds": 2.6642239830000563,
+        "decode_seconds": 1.5985610459999862,
+        "wall_seconds": 4.719898893999925,
+        "peak_rss_bytes": 1159835648
+      }
+    },
+    "scope": "Fresh process/context on this host; OS page cache can be warm. Cached pairs excluded. The Parakeet decode phase includes fresh stream setup and audio acceptance.",
+    "order": "Alternate Whisper/Parakeet and Parakeet/Whisper on new pairs.",
+    "order_counts": {
+      "whisper_then_parakeet": 18,
+      "parakeet_then_whisper": 17
+    }
+  },
+  "compute": {
+    "provider": "cpu",
+    "decoder_threads": 2,
+    "cpu_quota": "150%",
+    "memory_high_bytes": 3221225472,
+    "memory_max_bytes": 4294967296,
+    "memory_swap_max_bytes": 0,
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "nice": 19,
+    "supervisor_nice": 10
+  },
+  "held_out_scored": 0,
+  "review": "Independent Astra review verified all 42 raw-result hashes and independently reproduced all scores.",
+  "next": "Android instrumentation passed. Gate-only audit rejected a global threshold reduction. Next plan: explicit Parakeet Auto alternative-transcript preview preserving originals; not implemented. Keep held-out closed until the real processing path is frozen.",
+  "spanish_other_five": {
+    "whisper_word_errors": 11,
+    "parakeet_word_errors": 3
+  }
+}

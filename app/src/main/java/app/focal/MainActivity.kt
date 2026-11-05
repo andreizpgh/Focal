@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
 import app.focal.recording.RecordingService
 import app.focal.ui.FocalApp
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,15 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         openFromIntent(intent)
+    }
+
+    override fun onStop() {
+        // Saved-audio previews are foreground work; rotation retains the ViewModel's preview.
+        if (!isChangingConfigurations) ViewModelProvider(this)[FocalViewModel::class.java].let { model ->
+            model.alternativePreview.stop()
+            model.noiseReview.stop()
+        }
+        super.onStop()
     }
 
     private fun openFromIntent(intent: Intent) {

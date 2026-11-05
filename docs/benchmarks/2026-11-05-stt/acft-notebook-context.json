@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "scope": "Controls-first cold-host comparison of joint ACFT Q8/notebook-style dynamic-context and stock Whisper base Q5/full-context configurations; not the publisher product-context recipe.",
+  "status": "REJECTED_BY_FROZEN_SHORT_QUIET_NEGATION_GATE",
+  "completion": {
+    "completed_pairs": 3,
+    "planned_pairs": 13,
+    "successful_calls": 6,
+    "planned_max_calls": 26,
+    "noise_pairs_completed": 2,
+    "noise_pairs_planned": 2,
+    "quiet_negation_pairs_completed": 1,
+    "quiet_negation_pairs_planned": 4,
+    "normal_dev_pairs_completed": 0,
+    "normal_dev_pairs_planned": 7,
+    "unrun_pairs": 10,
+    "runtime_failures": 0
+  },
+  "method": {
+    "explicit_language": true,
+    "noise_language": "ru",
+    "short_negation_language": "fr",
+    "threads": 2,
+    "beam_size": 3,
+    "prompt": "empty",
+    "base_audio_context": 1500,
+    "acft_audio_context": "min(1500, round(original PCM frames / 320) + 8)",
+    "host_minimum_decode_frames": 16000,
+    "fresh_process_per_arm": true,
+    "arm_order": "Alternating AB/BA by case; no retries."
+  },
+  "noise_controls": [
+    {
+      "control": "seeded_noise",
+      "audio_seconds": 30,
+      "base_inserted_words": 8,
+      "acft_inserted_words": 1,
+      "raw_and_emitted_counts_identical": true,
+      "candidate_blank": false
+    },
+    {
+      "control": "emulator_noise",
+      "audio_seconds": 2,
+      "base_inserted_words": 4,
+      "acft_inserted_words": 2,
+      "raw_and_emitted_counts_identical": true,
+      "candidate_blank": false
+    }
+  ],
+  "short_quiet_french_control": {
+    "source": "Synthetic single-word negative answer at digital gain 0.1.",
+    "original_frames": 4607,
+    "audio_seconds": 0.2879375,
+    "decode_frames_after_padding": 16000,
+    "reference_words": 1,
+    "reference_lexical_characters": 3,
+    "base": {
+      "effective_audio_context": 1500,
+      "word_errors": 0,
+      "character_errors": 0,
+      "expected_marker_present": true,
+      "output_category": "Correct expected-language negative answer."
+    },
+    "acft": {
+      "effective_audio_context": 22,
+      "word_errors": 1,
+      "character_errors": 5,
+      "expected_marker_present": false,
+      "output_category": "Nonempty unrelated English-like word without the expected negation."
+    },
+    "raw_and_emitted_text_identical": true,
+    "discarded_raw_segments": {
+      "base": 0,
+      "acft": 0
+    },
+    "interpretation": "The expected negative meaning was not preserved in the textual output. This was not silence or an equivalent negative answer in another language. It does not establish an affirmative-polarity inversion.",
+    "timestamp_note": "Candidate segment began at zero and extended beyond the source duration. Existing emitted-text rules retained its text, so filtering did not cause the missing marker."
+  },
+  "normal_dev_quality": null,
+  "host_elapsed_seconds": 19.993001549002656,
+  "rejection_scope": "This exact joint configuration failed the predefined marker gate on one short digitally attenuated synthetic French control. The remaining screen was stopped; there is no seven-language quality verdict or promotion.",
+  "provenance": {
+    "plan_sha256": "261e8b5bd36d014c30f0b74a72294b9344f323ee55daf091c620b5ab5cc70024",
+    "result_sha256": "a440b03fc71213023e10cef62aca9f22b81de1c90ad33ded4be5a944708f3140",
+    "runner_sha256": "32b3b3727afa01b351f090f0b8a4c219dbf0a5ce9908f2313ec2a3c193b9095e",
+    "scorer_sha256": "dfde50ec467c30bfddabd19593ee00ba187caca0b1d202b557fa2b67a2946abb",
+    "probe_sha256": "2c17f90bb6d322c413a914df1d5f7b193aa7b65926591c8d120724b0632fbf2b",
+    "whisper_library_sha256": "a24f12490e3de59f099772947ad6c2fad82c92414a22176a0dda470401b89d70",
+    "whisper_checkout_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+    "base_model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "acft_model_sha256": "e44f352c9aa2c3609dece20c733c4ad4a75c28cd9ab07d005383df55fa96efc4",
+    "acft_model_bytes": 81768602,
+    "publisher_catalog": "https://github.com/futo-org/voice-input/blob/c0bbb05b47f02e1df089bed5bf63736ae1735d1a/shared/src/main/java/org/futo/voiceinput/shared/Models.kt#L190-L194",
+    "independent_audit": "PASS: model/source/library bindings, input identities, all six raw/log/receipt chains and raw/emitted scoring independently checked."
+  },
+  "limitations": [
+    "No ordinary DEV speech pair ran; zero normal totals in the private result mean no data, not zero errors.",
+    "Reduced noise insertions are not silence safety: the candidate still emitted text on both noise controls.",
+    "Model weights, quantization and encoder context changed together; this does not isolate their causal effects.",
+    "This run used round(frames / 320) + 8 without a context floor. Its rejection does not evaluate the publisher product-context recipe with a minimum context and larger margin.",
+    "Synthetic audio intelligibility was not independently adjudicated by listening.",
+    "All time measurements are cold host-process observations, not Android or physical-phone performance.",
+    "No held-out, continuous multiwindow, microphone, battery, thermal or background-reliability result."
+  ]
+}

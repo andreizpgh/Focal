@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "scope": "Isolated Android x86_64 emulator instrumentation; no production backend change",
+  "status": "PASS",
+  "tests": 1,
+  "instrumentation_seconds": 25.844,
+  "runtime": {
+    "sherpa_onnx": "2.0.1",
+    "git_sha1": "af2d8d81",
+    "onnxruntime": "1.28.2"
+  },
+  "model_repository": "csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
+  "model_revision": "2bda32ec70b097a55adaa07d9a7173915b43cc78",
+  "aar_sha256": "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7",
+  "config": {
+    "sample_rate_hz": 16000,
+    "requested_feature_dim": 80,
+    "dither": 0,
+    "provider": "cpu",
+    "threads": 2,
+    "model_type": "nemo_transducer",
+    "decoding_method": "greedy_search",
+    "debug_logging": false,
+    "language_hint": null
+  },
+  "emulator": {
+    "api": 35,
+    "abi": "x86_64",
+    "kvm": true,
+    "vcpus": 2,
+    "ram_mib": 2560,
+    "host_cgroup_memory_max_bytes": 4294967296,
+    "host_cgroup_memory_peak_bytes": 3224985600,
+    "host_cgroup_cpu_quota_percent": 150
+  },
+  "load_seconds": 1.874012018,
+  "memory_before_load": {
+    "total_pss_kib": 89102,
+    "rss_kib": 192216,
+    "process_lifetime_peak_rss_kib": 192216
+  },
+  "memory_after_load": {
+    "total_pss_kib": 794029,
+    "rss_kib": 897016,
+    "process_lifetime_peak_rss_kib": 912844
+  },
+  "memory_after_release": {
+    "total_pss_kib": 143406,
+    "rss_kib": 246972,
+    "process_lifetime_peak_rss_kib": 1299664
+  },
+  "cases": [
+    {
+      "id": "jfk",
+      "frames": 176000,
+      "audio_seconds": 11,
+      "pcm16_sha256": "a29462b8ebd467318000e683b9117ade46230d3255ed2024e7db894abd9b38c9",
+      "passed": true,
+      "memory_after_decode": {
+        "total_pss_kib": 873324,
+        "rss_kib": 976732,
+        "process_lifetime_peak_rss_kib": 980484
+      },
+      "decode_seconds": 3.219850087,
+      "output_characters": 108
+    },
+    {
+      "id": "exact_zero_30s",
+      "frames": 480000,
+      "audio_seconds": 30,
+      "pcm16_sha256": "b9163d03c43083a18e6101539b555cb5e363eed61fa4b3a3b54f50ae60eb5b52",
+      "passed": true,
+      "memory_after_decode": {
+        "total_pss_kib": 1092943,
+        "rss_kib": 1196768,
+        "process_lifetime_peak_rss_kib": 1202200
+      },
+      "decode_seconds": 9.284966377,
+      "output_characters": 0
+    },
+    {
+      "id": "varying_noise_30s",
+      "frames": 480000,
+      "audio_seconds": 30,
+      "pcm16_sha256": "9b83b71b35c0d40f65f4eee8f63bae257d3c67a05439097228a86ffe837314d5",
+      "passed": true,
+      "memory_after_decode": {
+        "total_pss_kib": 1192526,
+        "rss_kib": 1296184,
+        "process_lifetime_peak_rss_kib": 1299664
+      },
+      "decode_seconds": 9.375880579,
+      "output_characters": 0
+    }
+  ],
+  "artifacts": {
+    "app-debug.apk": {
+      "bytes": 76801170,
+      "sha256": "ae2fec584d18b0528edb36d2f195d1d55bb4f8b3246cbdc8fcbf9fa80522889b"
+    },
+    "app-debug-androidTest.apk": {
+      "bytes": 69126910,
+      "sha256": "b15a59a96605c86a63a19ec0a26d063e62ae94e5beeb962d24abd2315e5ffd92"
+    }
+  },
+  "source_hashes": {
+    "app/build.gradle.kts": "789d1b6beaee22166e8c47c2eac671b944ff269f9b2b161f507bbfc6ee1c6e3f",
+    "app/src/parakeetProbeTest/java/app/focal/ParakeetProbeTest.kt": "408007b31f1416552c57718359ddf393dc17915e0a633472c1875e9d137981ed",
+    "app/src/androidTest/assets/jfk.wav": "d7d4e74b8a333ed02186008bc109a1b1a19d16da668bd56e785d80d69a16a72f",
+    "docs/parakeet-android-probe.md": "81474366925e58583d48da7cfd401475474e1062b607ebca276c08c58829e8c6"
+  },
+  "private_receipt_sha256": "2d45bf42baa91fbc81205b1c99e2448951ef6eafea0f5f07ca7b4b52a930630f",
+  "limitations": [
+    "English fixture and synthetic controls only; not seven-language accuracy",
+    "No capture, cancellation, recovery, overlap or original/manual-edit integration",
+    "Decode timing excludes stream setup and audio acceptance; no matched Whisper timing",
+    "Memory samples are process values; VmHWM is a process-lifetime peak, not incremental model memory",
+    "No physical-phone performance, battery, thermal or background evidence",
+    "Release guard rejects the research flag; Sherpa and ONNX Runtime are test-APK dependencies only"
+  ]
+}

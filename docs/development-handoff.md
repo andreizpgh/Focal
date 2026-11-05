@@ -18,7 +18,145 @@ assets are unchanged; the newer UX preview is described below. Seven-language
 read-speech results are measured on the host;
 ARM phone performance and full application acceptance remain open.
 
-## Current delivery step · UX Alpha 6
+## Current checkpoint · 2026-11-05
+
+[Alpha 7 is published](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-7) from clean `4ac250d322849e4cc2ee29c034b4c8b28330a78c`:
+**129/0/0**, ten required real-model checks, 186.980s JUnit / 187.992s runner wall.
+Both lints, core/JVM and debug/test/unsigned R8 builds passed. Exact APK identity
+is in [ux-alpha-7.json](../releases/ux-alpha-7.json). The archived debug APK equals
+the focused/manual build byte for byte. No model was downloaded.
+
+Optional background-sound checking uses explicit Keep/Exclude, retained original
+audio/text and persistent Restore. Automatic correction and ordinary decoding
+remain unchanged. Original oversized-draft and capture/storage assertions passed.
+Source, actual screenshots and artifact checks were reviewed independently.
+The dedicated AVD and all heavy jobs are stopped. Phone and all-language
+quality/speed/mixed-term gates remain open; see [device-validation](device-validation.md).
+PR #9 is the delivery PR; PR #1–8 are already merged. The remote digest and
+HTTP 200 download filename match `Focal-0.1.0-alpha.7.apk`; signing matches
+Alpha 2–6. Do not upload it again or replace any asset. The next step is owner
+UX acceptance, then the owner-present Pixel 10 plan. See GitHub for PR merge state.
+
+## Earlier research and QA checkpoints
+
+The debug-only saved-audio preview passed 15 focused Android and six JVM tests,
+but its actual 18-input DEV quality screen rejects adoption: normal word errors
+25 → 53 / 210, attenuated 31 → 52 / 210 against matching-PCM Linux Whisper.
+Four no-speech controls were blank; the Spanish outlier and Italian overlap
+problem remain included. These are not matched timing measurements. See
+[quality-report](quality-report.md) and the linked aggregate. Ordinary full QA at clean `b4ea46b` passed **115/0/0**, all eight mandatory
+real-model checks, in 181.677s instrumentation / 182.674s runner wall. Both lints,
+36 core and six app JVM tests, debug/test/R8 APKs passed; build 11m15s and runner
+build 3m40s. Exact ordinary APKs are archived; see the top of quality-report.
+The paired Android Whisper framing attempt stopped after two completed English
+conditions: full PCM reduced word errors 26 → 2 and 28 → 3 / 28, but the Russian
+pair exceeded its shared case budget. A separate four-call noise continuation
+passed: seeded noise insertions 40 → 2, weak emulator noise 0 → 4. Automatic
+full-source bypass is rejected; the original 18-case attempt remains incomplete.
+Both results received independent audit and are linked from quality-report.
+No new public backend is enabled. The dedicated AVD is stopped.
+
+One new, removable FUTO ACFT Base Q8_0 file (81,768,602 bytes) has been downloaded
+and matched its publisher's SHA-256; it has not been enabled in the app. This is a
+model trained for short encoder contexts, unlike the rejected stock-model
+shortening. The completed comparison does not promote ACFT Base: seven normal
+DEV clips gave 25→28/210 word errors, despite fresh host wall time 40.929→19.880s.
+The notebook-style context and publisher context formula have separate frozen
+results; both controls-first attempts remain rejected. Diagnostic completion of
+the remaining eight product-context pairs does not undo the failed quiet control.
+Both models failed longer quiet instructions; noise insertions remained nonzero.
+Independent Astra audits cover all results. See the [ACFT report](benchmarks/2026-11-05-stt/report.md#futo-acft-context-formulas-kept-separate).
+All heavy jobs have ended. Do not repeat finished Parakeet/Qwen/gate/ACFT runs,
+download another model speculatively or open held-out speech yet.
+Keep the 42 held-out clips unopened and all cached models. Alpha 6 remains latest.
+
+
+Previous ordinary-app checkpoint `e6f4ca4` passed full local QA: **109/0/0**, eight
+real-model checks, JUnit 180.147s / wall 181.166s. A new-note visibility regression
+introduced by removing the first date header was reproduced on screen and fixed
+with a permanent 4dp start anchor, retaining manual scroll position. Identical
+regression test APK: RED, then 15-test GREEN. Both lints, core (cached) and R8
+passed; exact artifacts and prior failed attempts are in [quality-report](quality-report.md).
+The dedicated AVD is stopped. Combined emulator/build QA uses MemoryHigh=3584M
+with the existing 4GiB hard limit; model-only/build-only jobs keep MemoryHigh=3G.
+No new release has been made. The saved-audio Parakeet preview is an opt-in
+debug experiment; the failed quality screen above supersedes its earlier plan.
+
+Unreleased UI commit `5f290bc` removes the duplicate first library date,
+groups Speech model and Appearance together, and uses a 4 dp / 220 ms ease-out
+page transition. Five focused checks passed in 13.717 s; core, debug lint and
+app/test builds passed in 1m 58s. Source and actual frames received manual
+review; details and limits are at the top of [quality-report](quality-report.md).
+Alpha 6 remains the latest release; no new APK has been released. The owner
+prioritizes an STT decision before any cosmetic Review work. Real-phone quality,
+latency, memory, battery, thermal and background gates remain open.
+
+Focused Terra review reconfirmed that the latest non-Review UI requests are
+covered by code and manual evidence. The archived normal APK still declares
+version 6/alpha.6, with different bytes from the published Alpha 6. A later public
+preview needs a new version, exact-build QA and a new release asset; never relabel
+or overwrite the existing release. Keep the concrete [owner-present phone plan](device-validation.md)
+open. A failed model comparison is useful evidence, not application finalization.
+
+The laptop rebooted on November 5; its cause is unknown and the available
+evidence does not establish OOM. ASR `screen-01` preserves two complete pairs,
+a verified Qwen arm 03 and an interrupted zero-byte tail. The continuation
+completed 15 valid pairs, then a noise response hit the 128-token cap with 73
+inserted words; five cases were not run. Seven ordinary DEV clips improved from
+28 to 21 errors / 144 reference words, but three varying-noise inputs produced
+17 → 75 raw insertions including the failed response. Qwen ASR is not promoted;
+quiet negation and late-phrase losses also matter. See the
+[comparison report](benchmarks/2026-11-05-stt/report.md) for scope and limits.
+
+The `corrected_text` attempt 1 failed preflight on an immediate unload race,
+with zero generations. Attempt 2 completed 21 calls: six accepted edits (four
+synthetic reference-exact repairs, one synthetic repair still misspelled and one
+Italian DEV reference-exact repair), 11 abstentions and four extra-quote changes
+blocked by the adapter. DEV errors changed 44 → 43 / 159 reference words; no
+audio adjudication was done. Automatic correction remains disabled. Preserve
+failed and interrupted results; do not claim final quality or phone performance.
+
+The four Parakeet model files are verified (670,478,772 bytes), with the existing
+runtime reused. Its 21-case screen is complete: ordinary errors were 28 → 16 /
+144 words and varying-noise insertions 17 → 0. Four synthetic mixed-term cases
+gave 1 → 2 exact matches / 8 occurrences, with no exact API or guardrails hits;
+critical mixed-term and quiet-speech behavior remains unresolved. The 42-DEV
+comparison is complete: seven cached quality pairs and 35 fresh cold AB/BA pairs.
+Aggregate word errors fell 146 → 98 / 864; Spanish worsened 15 → 44 / 177,
+including one 41-error output mixing Spanish and English. Independent review
+verified all raw-result hashes and reproduced the scores. The completed Kotlin
+pipeline replay compared 129 speech and two noise chunks: normal word errors
+223 → 102 / 864, attenuated 256 → 181 / 864. Quiet German word errors and
+Portuguese character errors worsened; the gate omitted all speech-overlap audio
+for two normal and four quiet English clips. The Spanish full-WAV translation
+did not recur in the frozen ranges, which does not prove it fixed. No overlap
+boundary was exercised. Astra reviewed all 131 raw outputs and replay.
+The isolated Android prototype passed one instrumentation test with three inputs
+in 25.844s: public English speech, exact-zero and varying-noise controls. Runtime,
+model and APK identities were verified; Sherpa/ORT remain test-only dependencies.
+See [the probe guide](parakeet-android-probe.md) and linked aggregate. Model load
+was 1.874s and process-lifetime peak RSS 1,299,664 KiB on the emulator, not a phone
+measurement. The AVD is stopped. A subsequent 43-case gate-only replay rejected the global
+threshold reduction: 0.001 recovers only one normal omitted clip and opens four
+additional noise controls. No production threshold changed. The implemented Parakeet Auto alternative
+preview preserves originals; its focused UI checks and rejected quality screen
+are described above. Keep capture/manual language intact and validate ownership,
+cancellation, recovery and overlap before a public trial. The separate 42 held-out clips remain
+closed. The production backend and published APK remain unchanged.
+
+Run only one heavy job at a time in a systemd unit with `MemoryHigh=3G`,
+`MemoryMax=4G`, `MemorySwapMax=0`, `CPUQuota=150%`, `Nice=10` and CPUs 0–3.
+Check the live job and `build/local-diagnostics/current-android-delivery-work.json`
+before starting any further work.
+
+The cumulative [download ledger](benchmarks/2026-11-03-stt/download-budget.json)
+reserves **4,557,289,366 / 5,000,000,000 bytes**, leaving **442,710,634**.
+This includes 1,000,000 bytes of Android runtime metadata and one verified
+49,441,341-byte official AAR transfer, 1,000,000 bytes of ACFT metadata reserve,
+and one 81,768,602-byte ACFT transfer; no model was downloaded again.
+Keep retries and the existing CI reserve counted; reuse verified local artifacts.
+
+## Previous delivery step · UX Alpha 6
 
 Clean `fe1dc9176563233016baeea50a8b7000e3ca163c` passes full local QA: **108/0/0**, eight
 required real-model checks, 181.672s JUnit/182.695s runner wall. Both lints,
@@ -136,8 +274,9 @@ A bounded vocabulary buffer reduced host model-validation time, with unchanged
 malformed-input/cancellation decisions and real-model acceptance. This is not
 ASR decoding or phone speed. A six-pair synthetic RU/English glossary experiment
 failed its guards; no prompt was shipped or other-language follow-up run.
-The owner authorized a **5 GB cumulative download ceiling**, retaining prior
-reservations: **2,749,583,598 / 5,000,000,000 bytes**, leaving **2,250,416,402**.
+At this historical checkpoint the **5 GB cumulative download ceiling** had
+reservations of **2,749,583,598 bytes**, leaving **2,250,416,402**; see the
+current checkpoint above for the updated total.
 Pinned Qwen3-0.6B and Qwen3.5-2B Q4 files are local and verified; do not fetch
 again. Each completed the same 21 source-only DEV/synthetic requests. The first
 returned 16 abstentions and five invalid replies; the second returned 20
@@ -447,10 +586,10 @@ WER gain into an all-language Android claim.
 
 The current shared ceiling is **5,000,000,000 bytes including retries**, raised
 by the owner on 2026-11-04 for removable local research artifacts. Reservation:
-**2,749,583,598 bytes**, including the existing 61,000,000-byte future CI reserve;
-remaining **2,250,416,402 bytes**. The old reservation prefix is preserved.
-The additional reservations include two Qwen Q4 files, one local Whisper small
-transfer and bounded metadata. All three local model files are verified.
+**4,557,289,366 bytes**, including the existing 61,000,000-byte future CI reserve;
+remaining **442,710,634 bytes**. The old reservation prefix is preserved.
+The ledger includes two Qwen Q4 files, one local Whisper small transfer, the
+Qwen ASR runtime and model, and bounded metadata.
 Do not reset the ledger or repeatedly fetch existing models. The 42 fresh
 held-out clips remain closed.
 CI model downloads also count; use Actions for bounded checkpoints, and the

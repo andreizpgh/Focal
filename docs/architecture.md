@@ -150,6 +150,25 @@ edit. Transfers have a conservative 256 KiB budget for both UTF-8 and UTF-16;
 oversized or failed transfers show guidance without truncating text or replacing
 the clipboard with a partial transcript.
 
+Finished recordings up to 15 minutes can be checked explicitly for background
+sound. A single CPU-thread Silero detector reads the existing bounded chunks;
+it never changes capture, decoder calls or transcript text. Its model is pinned
+in `models/speech-presence.json`. The build-time VAD error overlay composes onto
+the verified ownership fix and rejects partial graph results. Cancellation keeps
+the session claim until the synchronous call and native close actually finish.
+No partial list is published after an error or cancellation.
+
+A suggestion is not a correction. Keep marks the exact unchanged passage as
+reviewed; Exclude sets a reversible flag after comparing the saved identity,
+text and review state. Excluded text stays in the database and remains accessible
+from the timeline, but is omitted from Copy, Share, search and previews. Restore
+changes only that flag and marks the passage reviewed. Editing an excluded
+passage explicitly restores it; merely viewing and closing it does not.
+Database v3 retains the first post-reconciliation transcript for new passages;
+legacy originals are unknown, not reconstructed from possibly edited text.
+Decisions survive Activity recreation. Transfer reads the newest matching
+store-revision snapshot, rather than a potentially stale Compose closure.
+
 Legacy passages above the edit limit show a bounded preview and an explicit
 Open full passage action. Their read-only sheet exposes selectable pages of
 approximately 8,192 UTF-16 units, preserving surrogate pairs and CRLF boundaries.

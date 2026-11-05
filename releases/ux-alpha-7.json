@@ -1,0 +1,92 @@
+{
+  "schema": 1,
+  "tag": "ux-alpha-7",
+  "title": "Focal 0.1.0 · Alpha 7",
+  "provenance": "local-emulator-qa",
+  "source_commit": "4ac250d322849e4cc2ee29c034b4c8b28330a78c",
+  "source_clean": true,
+  "application_id": "app.focal",
+  "version_name": "0.1.0-alpha.7",
+  "version_code": 7,
+  "build_variant": "debug",
+  "apk_sha256": "5ba36437c0cd54ec446ab6890f8896ddfb8ff68b51ac1392a93984addb8d66ff",
+  "apk_bytes": 77396931,
+  "test_apk_sha256": "275f9f89d6e6a8d041312053e28d57a9b5ea9394f468abdec2032b0b9b0fad13",
+  "signing": {
+    "type": "development",
+    "certificate_sha256": "3e407a18880c9277982d6ad6222b39738484a3b768e4d268415eb795709aa3bc",
+    "alpha_1_update_compatibility": "not verified",
+    "alpha_2_certificate_matches": true,
+    "alpha_3_certificate_matches": true,
+    "alpha_4_certificate_matches": true,
+    "alpha_5_certificate_matches": true,
+    "alpha_6_certificate_matches": true
+  },
+  "model": {
+    "repository": "ggerganov/whisper.cpp",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "filename": "ggml-base-q5_1.bin",
+    "sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "bytes": 59707625,
+    "license": "MIT"
+  },
+  "engine_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+  "qa": {
+    "runner": "scripts/qa-local.py --release-checks",
+    "run": "20261105T051956.322657Z",
+    "android_api": 35,
+    "android_abi": "x86_64",
+    "hardware_acceleration": "KVM",
+    "virtual_cpus": 2,
+    "android_tests": 129,
+    "failures": 0,
+    "skips": 0,
+    "required_real_model_tests": 10,
+    "instrumentation_seconds": 186.98,
+    "build_seconds": 232,
+    "core_tests": 36,
+    "core_execution": "cached results for unchanged core source",
+    "debug_lint": "passed",
+    "release_lint": "passed",
+    "unsigned_release_build": "passed; not the instrumented or published APK",
+    "zip_and_elf_alignment_bytes": 16384,
+    "build_seconds_note": "Gradle reported 3m 52s; build time is not app performance.",
+    "runner_instrumentation_wall_seconds": 187.992,
+    "app_jvm_tests": 6,
+    "unsigned_release_sha256": "a6a414bd055d172297fe9b533c6c2129dd1e9fdf1f77b5afcdc48039e2ff43ca"
+  },
+  "targeted_regressions": {
+    "tests": 21,
+    "scope": "Real speech/noise detection and aborted graph failure; native ownership/reset; read-only controller cancellation; database migration and original provenance; Copy snapshot publication; Keep/Exclude/Restore across Activity recreation."
+  },
+  "manual": {
+    "scope": "Synthetic silence/public JFK/silence note on 320x640dp KVM emulator. Only two silent ranges proposed. Contextual Edit, Keep/Exclude, Undo and persistent Restore, Copy feedback and native Share preview checked. Light/dark settings and editor, 200% font, actual landscape and keyboard inspected. Static frame review does not establish phone frame pacing.",
+    "audio": "Host audio disabled: no audible playback or real microphone claim.",
+    "private_owner_screenshots_published": false
+  },
+  "independent_review": [
+    "Sol controller/storage/ViewModel implementation and regressions",
+    "Terra native failure handling, model packaging and final QA/APK audit",
+    "Astra critical source, experiment evidence and actual UI-frame review"
+  ],
+  "not_established": [
+    "Physical Pixel 10 microphone, audible playback and installation",
+    "Phone background reliability, battery, thermals and ARM latency",
+    "Seven-language accuracy/speed improvement and mixed English technical terms",
+    "Automatic language-model correction benefit and reversible correction UX",
+    "Complete noise-hallucination prevention or safety of automatic suppression",
+    "Stable production signing and release-variant runtime validation",
+    "Owner acceptance of the updated interface"
+  ],
+  "iteration_notes": "The original oversized-editor rotation and capture/storage assertions remain. Clean full QA covers the final code. Automatic correction and the ordinary Whisper policy are unchanged; alternative ASR/LLM candidates failed their acceptance screens. Background-sound checking is explicit and limited to finished recordings up to 15 minutes. Models were reused without downloading. Previous failed/interrupted experiments and QA remain documented separately.",
+  "speech_presence_model": {
+    "repository": "ggml-org/whisper-vad",
+    "revision": "9ffd54a1e1ee413ddf265af9913beaf518d1639b",
+    "filename": "ggml-silero-v5.1.2.bin",
+    "bytes": 885098,
+    "sha256": "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf",
+    "license": "MIT",
+    "model_source": "https://github.com/snakers4/silero-vad/tree/v5.1.2",
+    "license_source": "https://github.com/snakers4/silero-vad/blob/v5.1.2/LICENSE"
+  }
+}

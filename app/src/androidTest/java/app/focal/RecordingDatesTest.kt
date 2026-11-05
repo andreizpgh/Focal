@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
@@ -104,10 +105,12 @@ class RecordingDatesTest {
                     compose.onAllNodesWithText("qxdates today 0").fetchSemanticsNodes().isNotEmpty()
             }
             waitForDay("Today")
+            compose.onAllNodesWithText("Today").assertCountEquals(1)
             val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
-            // Header + eight today recordings precede the Yesterday group.
+            // The stable top spacer and eight today recordings precede Yesterday.
             list.performScrollToIndex(9)
             waitForDay("Yesterday")
+            compose.onNode(hasText("Yesterday") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertIsDisplayed()
 
             compose.onNodeWithContentDescription("Browse recording dates").performClick()
             compose.onNodeWithText("Choose day").assertIsDisplayed()
@@ -143,6 +146,7 @@ class RecordingDatesTest {
             dayRow("Today").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithText("Choose day").fetchSemanticsNodes().isEmpty() }
             waitForDay("Today")
+            compose.onAllNodesWithText("Today").assertCountEquals(1)
             compose.onNode(hasSetTextAction()).assertTextContains("qxdates")
             compose.onNode(hasText("Show all") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected)).assertIsSelected()
             compose.onNodeWithText("Unrelated recording").assertDoesNotExist()

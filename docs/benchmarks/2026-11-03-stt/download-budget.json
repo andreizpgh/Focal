@@ -1005,8 +1005,56 @@
       "name": "small-q5_1-local-warm-attempt-1",
       "bytes": 190085487,
       "kind": "model"
+    },
+    {
+      "name": "qwen-asr-screen-metadata-20261104",
+      "bytes": 2000000,
+      "kind": "metadata",
+      "note": "New acoustic backend: PyPI wheel lengths/hashes, HF tokenizer metadata and pinned runtime source; includes failed transfers; no weights yet."
+    },
+    {
+      "name": "qwen-asr-06b-int8-runtime-attempt-1",
+      "bytes": 1001817053,
+      "kind": "asr-model-runtime",
+      "note": "Pinned 3 ONNX graphs, tokenizer and two Linux wheels; local research, not bundled app."
+    },
+    {
+      "name": "parakeet-v3-pinned-metadata-20261105",
+      "bytes": 200000,
+      "kind": "metadata",
+      "note": "Pinned alternative ASR export metadata and feature configuration; no weights included."
+    },
+    {
+      "name": "parakeet-v3-int8-local-attempt-1",
+      "bytes": 670478772,
+      "kind": "asr-model",
+      "note": "Pinned INT8 transducer comparison, three graphs and tokens; reuse installed runtime."
+    },
+    {
+      "name": "sherpa-android-v201-metadata-20261105",
+      "bytes": 1000000,
+      "kind": "metadata",
+      "note": "Pinned Android runtime release metadata for an isolated local prototype; no model weights."
+    },
+    {
+      "name": "sherpa-onnx-201-android-aar-attempt-1",
+      "bytes": 49441341,
+      "kind": "runtime",
+      "note": "Official pinned Android AAR for isolated prototype; existing Parakeet weights reused."
+    },
+    {
+      "name": "futo-acft-base-metadata-20261105",
+      "bytes": 1000000,
+      "kind": "metadata",
+      "note": "Official model catalog and bounded HEAD metadata; no weights. Preserve existing cumulative reservations."
+    },
+    {
+      "name": "futo-acft-base-q8-local-attempt-1",
+      "bytes": 81768602,
+      "kind": "asr-model",
+      "note": "One official multilingual ACFT Base Q8_0 transfer, published catalog SHA verified after download; candidate only, no app default change."
     }
   ],
-  "reserved_bytes": 2749583598,
+  "reserved_bytes": 4557289366,
   "note": "Conservative upper bounds: prior checkpoint transfers, local baseline model, disjoint FLEURS cohort, research-only Silero VAD, matching host sanitizer runtimes, metadata/retries, and one reserved publication CI. Carry the total forward; never reset it. On 2026-11-04 the owner increased the cumulative local, removable research-download ceiling to 5 GB. Reserve every attempt before transfer; no reset."
 }

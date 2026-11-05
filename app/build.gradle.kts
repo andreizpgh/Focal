@@ -11,6 +11,36 @@ val nativeFaultVariant = providers.gradleProperty("focalNativeFaultTests").orNul
 require(nativeFaultVariant == null || nativeFaultVariant in setOf("baseline", "patched")) {
     "focalNativeFaultTests must be baseline or patched; omit it for a normal build."
 }
+val parakeetTestOption = providers.gradleProperty("focalParakeetTests").orNull
+require(parakeetTestOption == null || parakeetTestOption == "true") {
+    "focalParakeetTests must be true; omit it for a normal build."
+}
+val parakeetTests = parakeetTestOption == "true"
+val parakeetPreviewOption = providers.gradleProperty("focalParakeetPreview").orNull
+require(parakeetPreviewOption == null || parakeetPreviewOption == "true") {
+    "focalParakeetPreview must be true; omit it for a normal build."
+}
+val parakeetPreview = parakeetPreviewOption == "true"
+require(listOf(nativeFaultVariant != null, parakeetTests, parakeetPreview).count { it } <= 1) {
+    "Choose only one research build option."
+}
+val parakeetRuntime = rootProject.file("build/dependencies/sherpa-onnx-2.0.1.aar")
+if (parakeetTests || parakeetPreview) {
+    require(parakeetRuntime.isFile) { "Missing verified Parakeet test runtime. See docs/parakeet-android-probe.md." }
+    val digest = MessageDigest.getInstance("SHA-256")
+    parakeetRuntime.inputStream().use { input ->
+        val buffer = ByteArray(65536)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+    }
+    check(digest.digest().joinToString("") { "%02x".format(it) } ==
+        "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7") {
+        "Parakeet test runtime checksum mismatch."
+    }
+}
 
 android {
     namespace = "app.focal"
@@ -20,8 +50,8 @@ android {
         applicationId = "app.focal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.1.0-alpha.6"
+        versionCode = 7
+        versionName = "0.1.0-alpha.7"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         externalNativeBuild {
             cmake {
@@ -54,6 +84,13 @@ android {
             "src/nativeFaultTestSupport/java",
             if (nativeFaultVariant == "baseline") "src/nativeFaultBaselineTest/java" else "src/nativeFaultTest/java"))
     }
+    if (parakeetTests) {
+        sourceSets.getByName("androidTest").java.setSrcDirs(listOf("src/parakeetProbeTest/java"))
+    }
+    sourceSets.getByName("debug").java.srcDir(
+        if (parakeetPreview) "src/parakeetPreview/java" else "src/standard/java")
+    sourceSets.getByName("release").java.srcDir("src/standard/java")
+    if (parakeetPreview) sourceSets.getByName("androidTest").java.srcDir("src/parakeetPreviewTest/java")
     lint { abortOnError = true }
 }
 
@@ -65,6 +102,9 @@ gradle.taskGraph.whenReady {
     }
     check(nativeFaultVariant == null || releaseTasks.isEmpty()) {
         "Native fault tests are debug-only. Omit focalNativeFaultTests for ${releaseTasks.joinToString { it.path }}."
+    }
+    check(!(parakeetTests || parakeetPreview) || releaseTasks.isEmpty()) {
+        "Parakeet research is debug-only. Omit focalParakeetTests/focalParakeetPreview for ${releaseTasks.joinToString { it.path }}."
     }
 }
 
@@ -85,6 +125,8 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.04.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    if (parakeetTests) androidTestImplementation(files(parakeetRuntime))
+    if (parakeetPreview) debugImplementation(files(parakeetRuntime))
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
@@ -108,3 +150,26 @@ val verifyBundledModel by tasks.registering {
     }
 }
 tasks.matching { it.name in setOf("packageRelease", "bundleRelease") }.configureEach { dependsOn(verifyBundledModel) }
+
+val verifyBundledSpeechPresenceModel by tasks.registering {
+    group = "verification"
+    description = "Debug and release builds require the pinned speech presence model."
+    doLast {
+        val model = file("src/main/assets/ggml-silero-v5.1.2.bin")
+        val expectedSize = 885_098L
+        val expectedSha256 = "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf"
+        check(model.isFile && model.length() == expectedSize) {
+            "Missing or incomplete speech presence model. Run python3 scripts/fetch-vad-model.py."
+        }
+        val digest = MessageDigest.getInstance("SHA-256")
+        model.inputStream().use { input ->
+            val buffer = ByteArray(65_536)
+            while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+        check(actual == expectedSha256) { "Bundled speech presence model checksum mismatch; run the verified downloader." }
+    }
+}
+tasks.matching { it.name in setOf("preDebugBuild", "preReleaseBuild") }.configureEach {
+    dependsOn(verifyBundledSpeechPresenceModel)
+}

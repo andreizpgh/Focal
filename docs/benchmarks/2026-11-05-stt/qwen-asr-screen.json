@@ -1,0 +1,153 @@
+{
+  "date": "2026-11-05",
+  "candidate": "Qwen3-ASR 0.6B INT8 via sherpa-onnx 2.0.1 / ONNX Runtime 1.28.2",
+  "model_revision": "68818b2313fe77bd06f6a7c5068ff3ef59d02b8a",
+  "baseline": "Whisper base Q5_1, beam 3, full context, empty prompt, 2 threads",
+  "plan_sha256": "a110020bf4c13daf6b5e9eb654cc233daac966ed34ac3207b57f2644d106f668",
+  "result": "REJECTED",
+  "valid_pairs": 15,
+  "failed_outputs": 1,
+  "unrun": 5,
+  "composite_after_host_reboot": true,
+  "ordinary": {
+    "pairs": 7,
+    "reference_words": 144,
+    "reference_lexical_characters": 729,
+    "word_errors": {
+      "whisper": 28,
+      "qwen": 21
+    },
+    "character_errors": {
+      "whisper": 66,
+      "qwen": 48
+    },
+    "languages": [
+      {
+        "language": "en",
+        "words": 10,
+        "word_errors": {
+          "whisper": 8,
+          "qwen": 6
+        },
+        "characters": 45,
+        "character_errors": {
+          "whisper": 25,
+          "qwen": 15
+        }
+      },
+      {
+        "language": "ru",
+        "words": 14,
+        "word_errors": {
+          "whisper": 3,
+          "qwen": 1
+        },
+        "characters": 82,
+        "character_errors": {
+          "whisper": 3,
+          "qwen": 1
+        }
+      },
+      {
+        "language": "de",
+        "words": 31,
+        "word_errors": {
+          "whisper": 3,
+          "qwen": 4
+        },
+        "characters": 195,
+        "character_errors": {
+          "whisper": 6,
+          "qwen": 4
+        }
+      },
+      {
+        "language": "fr",
+        "words": 23,
+        "word_errors": {
+          "whisper": 5,
+          "qwen": 4
+        },
+        "characters": 101,
+        "character_errors": {
+          "whisper": 9,
+          "qwen": 9
+        }
+      },
+      {
+        "language": "es",
+        "words": 30,
+        "word_errors": {
+          "whisper": 2,
+          "qwen": 2
+        },
+        "characters": 139,
+        "character_errors": {
+          "whisper": 3,
+          "qwen": 3
+        }
+      },
+      {
+        "language": "it",
+        "words": 15,
+        "word_errors": {
+          "whisper": 2,
+          "qwen": 0
+        },
+        "characters": 76,
+        "character_errors": {
+          "whisper": 2,
+          "qwen": 0
+        }
+      },
+      {
+        "language": "pt",
+        "words": 21,
+        "word_errors": {
+          "whisper": 5,
+          "qwen": 4
+        },
+        "characters": 91,
+        "character_errors": {
+          "whisper": 18,
+          "qwen": 16
+        }
+      }
+    ]
+  },
+  "noise": {
+    "completed_varying_cases": 2,
+    "completed_varying_insertions": {
+      "whisper": 12,
+      "qwen": 2
+    },
+    "failed_case_seconds": 2,
+    "failed_case_output_tokens": 128,
+    "failed_case_raw_insertions": {
+      "whisper": 5,
+      "qwen": 73
+    },
+    "all_observed_varying_raw_insertions": {
+      "whisper": 17,
+      "qwen": 75
+    },
+    "raw_failed_output_is_not_a_valid_pair": true,
+    "exact_zero_insertions": {
+      "whisper": 1,
+      "qwen": 9
+    },
+    "exact_zero_scope": "Host probe bypasses production exact-constant PCM fast path."
+  },
+  "quiet_controls": {
+    "pairs": 4,
+    "candidate_missing_negation_flags": 4,
+    "newly_lost_correct_baseline_negation": "French short quiet control"
+  },
+  "timing_scope": "Cold host processes only; no phone speed claim. Resumed processes used CPUQuota150%, MemoryHigh3GiB, MemoryMax4GiB and swap0; pre-reboot pairs differ in environment.",
+  "held_out_consumed": 0,
+  "limitations": [
+    "One ordinary DEV clip per language, not a seven-language acceptance estimate.",
+    "Five mixed-term cases unrun after hard output-cap failure.",
+    "Original audio, app backend and automatic-correction setting unchanged."
+  ]
+}

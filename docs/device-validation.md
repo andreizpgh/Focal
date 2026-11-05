@@ -43,7 +43,8 @@ release evidence needs a midrange and an older ARM64 phone, including a 4 GB dev
    git status --short > "$FOCAL_PHONE_REPORT/source-status.txt"
    sha256sum app/build/outputs/apk/debug/app-debug.apk \
      app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
-     app/src/main/assets/ggml-base-q5_1.bin > "$FOCAL_PHONE_REPORT/artifacts.sha256"
+     app/src/main/assets/ggml-base-q5_1.bin \
+     app/src/main/assets/ggml-silero-v5.1.2.bin > "$FOCAL_PHONE_REPORT/artifacts.sha256"
    ```
 
 ## Install verified artifacts and run automation
@@ -59,9 +60,10 @@ adb -s "$FOCAL_PHONE_SERIAL" install -r app/build/outputs/apk/androidTest/debug/
 adb -s "$FOCAL_PHONE_SERIAL" shell am start -n app.focal/.MainActivity
 ```
 
-Wait for model preparation to finish, then verify the installed file, not only
-the APK asset. Its SHA-256 must equal `models/model.json` and the local QA manifest;
-a mismatched imported model must be resolved explicitly without deleting notes.
+Wait for Whisper preparation to finish, then verify the installed file against
+`models/model.json` and the local QA manifest. A startup error or mismatched
+imported model needs explicit resolution before testing. Preserve existing notes
+and the working model while resolving it.
 
 ```sh
 adb -s "$FOCAL_PHONE_SERIAL" shell run-as app.focal sha256sum \
@@ -85,8 +87,9 @@ adb -s "$FOCAL_PHONE_SERIAL" shell am instrument -r -w \
 ```
 
 An ADB exit code alone is insufficient. Require all source-discovered tests,
-including the eight real-model checks, with zero failures/skips and a completed
-runner. The existing parser can validate the direct phone log:
+including all ten required real-model checks, with zero failures/skips and a
+completed runner. These include speech detection, detector reset and graph-error
+recovery. The existing parser can validate the direct phone log:
 
 ```sh
 python3 - "$FOCAL_PHONE_REPORT" <<'PY'
@@ -106,6 +109,20 @@ print(f"Phone instrumentation passed: {len(outcomes)} tests, no skips.")
 PY
 ```
 
+After the real detector tests, verify the private Silero file against
+`models/speech-presence.json` and the exact APK asset already verified by local QA:
+
+```sh
+adb -s "$FOCAL_PHONE_SERIAL" shell run-as app.focal sha256sum \
+  files/ggml-silero-v5.1.2.bin > "$FOCAL_PHONE_REPORT/installed-presence.sha256"
+```
+
+In normal use, Silero is prepared on the first check that has eligible
+passages. A missing file before that first use is expected. If the detector tests
+cannot prepare or open it, or its checksum differs afterward, record a
+background-sound preparation failure separately from Whisper startup. Preserve
+the recording and transcript, and retain the private error or test log.
+
 If a run hangs or is interrupted, stop instrumentation with
 `adb -s "$FOCAL_PHONE_SERIAL" shell am force-stop app.focal.test` and the same command for
 `app.focal`; retain the failed log and restore changed settings. Do not clear data
@@ -118,7 +135,7 @@ manual and resource gates below.
 | --- | --- |
 | 1 · First launch offline; deny then grant microphone/notification permissions | Record is usable without networking/model downloads. Denials explain the action; permission changes do not silently claim continued capture. |
 | 1 · Record → pause/resume in app and notification → Finish → listen/edit → Copy/Share | Paused time is excluded; later audio is retained; saved edits and Unicode/paragraphs match the transferred text. All seven language choices persist for new sessions. |
-| 1 · Open editor with IME, reject an oversized paste, rotate portrait/landscape | Previous draft and visible warning survive; Save remains reachable. Save & next keeps the sheet stable. Legacy large text remains selectable/paged; refused large transfers preserve clipboard/source. |
+| 1 · Open editor with IME, reject an oversized paste, rotate portrait/landscape | Previous draft and visible warning survive; Save remains reachable. Save & next for an edited hint and Next hint for an unchanged one keep the sheet stable. Legacy large text remains selectable/paged; refused large transfers preserve clipboard/source. |
 | 1 · TalkBack, largest supported font, light/dark/system and reduced motion | Traverse and activate recording, language, review, seek, editor, large-text selection and dialogs. Labels/order/focus are useful; no trapped or unreachable control. Disabled animations stay static. |
 | 1 · Thirty minutes screen off; switch apps and swipe Focal's task away | Begin recording while Focal is visible, then leave/lock it. Use consented phrases before leaving, during the locked interval and before Finish, with ordinary pauses. Verify notification controls, duration, pending work and audible source continuity at each checkpoint. Report OEM restrictions explicitly. Task removal is separate from user force-stop. |
 | 2 · Controlled incoming call/other microphone user, permission revoke, force-stop and reboot | No silent loss disguised as recording. Existing audio/edits survive; reopening offers recovery without reopening the microphone. Use only test participants/content. |
@@ -126,6 +143,19 @@ manual and resource gates below.
 | 2 · Decoder/import failure or cancellation; unfinished recovery | Capture remains independent of inference. Retry seals durable audio and retains completed/manual text; failed model import preserves the working model. |
 | 3 · Sixty–ninety minutes with 1–5 minute pauses; battery saver and natural thermal pressure | Capture controls stay responsive, silence does not become invented speech, memory does not grow with queue length, and pending transcription finishes or remains recoverable. |
 | 3 · Low storage; remove audio/delete; search/filter/return | On a dedicated test setup, low storage stops capture visibly without harming existing notes. Confirmations match removal; audio removal retains text. Search/filter/scroll survive navigation and rotation. |
+
+On a completed test recording of at most 15 minutes, open **Recording options**
+and choose **Check background sound**. Listen to each suggested range and verify
+that opening or dismissing the check leaves the transcript unchanged. Use
+**Keep text** on one suggestion and **Exclude text** on another. After **Done**,
+check that **Copy text** and **Share text** include the kept text and any existing
+manual edits, and omit only the excluded passage. Inspect sharing with a local
+test target and keep the content on the test phone. Reopen the recording after
+Activity recreation, listen to the excluded range in the timeline, then open
+**View or restore text** and choose **Restore text**. Verify that Copy and Share
+again include the retained passage, and that the original audio and manual edits
+are unchanged. If either decision cannot be exercised, record that manual branch
+as open.
 
 Do not fill a personal phone's storage or induce overheating. Fault-injection
 results belong to the tested setup; lack of a reproducible condition remains an

@@ -12,12 +12,18 @@ these. Set `ANDROID_HOME`, or `sdk.dir` in your untracked `local.properties`.
 ```sh
 git submodule update --init --recursive
 python3 scripts/fetch-model.py
-./gradlew :core:test :app:lintDebug :app:assembleDebug
+python3 scripts/fetch-vad-model.py
+./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
 The model downloader verifies the upstream LFS SHA-256 and records the immutable
 upstream revision in the APK. Reproduce a model with
 `python3 scripts/fetch-model.py --revision <revision-from-model-provenance.json>`.
+The separate speech-presence model is pinned by `models/speech-presence.json`;
+the downloader verifies its exact size and SHA-256 before installation. To reuse
+an existing copy without another transfer, run
+`python3 scripts/fetch-vad-model.py --local-file /path/to/ggml-silero-v5.1.2.bin`.
+Both debug and release builds reject a missing or corrupt presence model.
 Never commit model binaries, private recordings, signing keys, or local SDK paths.
 
 An Android emulator or connected phone is needed for device tests:
@@ -92,8 +98,8 @@ Local UX previews use a distinct `ux-alpha-N` tag and a `local-emulator-qa`
 manifest in `releases/`. They promote the exact archived debug APK from a clean,
 successful `scripts/qa-local.py --release-checks` run, after focused review and
 manual checks. Publish through a new draft prerelease, verify the remote asset
-digest against the manifest, then publish the draft. Include `Focal.apk`,
-`SHA256SUMS`, model provenance and the public verification manifest; never attach
+digest against the manifest, then publish the draft. Include a versioned APK filename,
+checksums, model provenance and the public verification manifest; never attach
 private QA logs, recordings or signing keys. Do not rebuild or re-sign between QA
 and upload, overwrite an existing release, or infer Alpha 1 signing compatibility.
 The existing `v*` CI-artifact workflow and its verification requirements stay intact.

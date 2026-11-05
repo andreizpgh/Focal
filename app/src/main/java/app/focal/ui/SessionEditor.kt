@@ -77,6 +77,7 @@ import kotlinx.coroutines.launch
     passage: Passage, playing: Boolean, audio: Boolean, play: () -> Unit, dismiss: () -> Unit,
     hasNextReview: Boolean, audioUnavailableReason: String,
     onDirtyChange: (Boolean) -> Unit = {}, onSavingChange: (Boolean) -> Unit = {},
+    restore: suspend () -> Boolean = { false },
     save: suspend (String, Boolean) -> Boolean,
 ) {
     if (!fitsPassageDraftBudget(passage.text)) {
@@ -95,7 +96,7 @@ import kotlinx.coroutines.launch
     val keyboard = LocalSoftwareKeyboardController.current
     SideEffect { onDirtyChange(text != passage.text) }
     DisposableEffect(passage.id) { onDispose { onDirtyChange(false); onSavingChange(false) } }
-    val needsReview = passage.uncertain && !passage.reviewed
+    val needsReview = passage.uncertain && !passage.reviewed && !passage.excluded
     val canAdvance = needsReview && hasNextReview
     val dirty = text != passage.text
     val passageAlpha = remember { Animatable(1f) }
@@ -116,6 +117,7 @@ import kotlinx.coroutines.launch
     }
     fun commit(next: Boolean) {
         if (saving) return
+        if (passage.excluded && !dirty) { closeEditor(); return }
         focus.clearFocus(force = true); keyboard?.hide()
         saving = true; onSavingChange(true)
         scope.launch { try { saveFailed = !save(text, next) } finally { saving = false; onSavingChange(false) } }
@@ -146,6 +148,17 @@ import kotlinx.coroutines.launch
             }
             Text("${Transcript.time(passage.start)}–${Transcript.time(passage.end)}", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
+            if (passage.excluded) {
+                Text("Excluded from Copy and Share. The text and audio are retained.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(enabled = !saving && !dirty, onClick = {
+                    saving = true; onSavingChange(true)
+                    scope.launch {
+                        try { if (restore()) closeEditor() }
+                        finally { saving = false; onSavingChange(false) }
+                    }
+                }) { Text("Restore text") }
+            }
             if (audio) FilledTonalButton(onClick = play, modifier = Modifier.heightIn(min = 48.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
                 Glyph(if (playing) Symbol.Pause else Symbol.Play, Modifier.size(17.dp), MaterialTheme.colorScheme.onSecondaryContainer)

@@ -13,7 +13,64 @@ measured gain and must preserve what was spoken, including deliberate factual
 mistakes, unusual names, repetitions, and imperfect grammar. A text-only model
 cannot establish which of two plausible words was actually said.
 
-## What the measured checkpoint changes
+## New local comparison · 2026-11-05
+
+The current Android full-PCM check recovered words missed by the energy gate on
+one English recording, but a separate control introduced four words on previously
+skipped weak noise. Automatic gate bypass remains off; see the
+[framing report](benchmarks/2026-11-05-stt/report.md#whisper-framing-speech-recovery-and-a-noise-regression).
+
+The bounded [FUTO ACFT Base](https://github.com/futo-org/whisper-acft) comparison
+is complete. This model is trained for short encoder contexts and used in FUTO
+Voice Input. Its multilingual
+Q8_0 artifact was fetched once (81,768,602 bytes) and matches the
+[official catalog](https://github.com/futo-org/voice-input/blob/c0bbb05b47f02e1df089bed5bf63736ae1735d1a/shared/src/main/java/org/futo/voiceinput/shared/Models.kt#L190-L194)
+SHA-256 `e44f352c9aa2c3609dece20c733c4ad4a75c28cd9ab07d005383df55fa96efc4`.
+The [model card](https://huggingface.co/futo-org/acft-whisper-base) identifies
+Apache-2.0 and the intended dynamic-context use. This is a new configuration
+comparison, not a retry of shortening the stock model. It is not promoted:
+seven ordinary DEV pairs gave 25→28/210 word errors and 47→46/1,050 lexical
+character errors, with host process wall time 40.929→19.880s. Quiet instructions
+and noise remain problematic. The notebook-style context and the formula from
+FUTO's Android code were frozen and measured separately; neither stopped screen
+was retrospectively passed by the diagnostic completion. See the
+[comparison and limits](benchmarks/2026-11-05-stt/report.md#futo-acft-context-formulas-kept-separate).
+Keep the fresh held-out cohort unopened and stop this context sweep. FUTO's newer
+[asr4all-l](https://huggingface.co/futo-org/asr4all-l) explicitly supports English
+only, so it is not a replacement for the seven-language backend and was not
+downloaded.
+
+
+The [new aggregate report](benchmarks/2026-11-05-stt/report.md) records a Qwen3-ASR
+screen and a separate full-text correction experiment. Qwen reduced word errors
+on seven ordinary DEV clips, but generated a repeated paragraph on noise until
+its output cap; it is not promoted. Full-text Qwen3.5-2B correction repaired four
+synthetic typos and one reference-supported DEV word, but also accepted an
+incorrect spelling repair. Automatic edits remain disabled. These are new
+experiments; earlier failures below are not reclassified as successes.
+
+Parakeet TDT v3 INT8 completed the 21-case screen and a 42-clip DEV comparison,
+reusing the installed runtime and verified earlier outputs. DEV word errors
+fell 146 → 98 / 864, but Spanish worsened 15 → 44 / 177. Its language selection
+is automatic. The Kotlin replay on existing gate ranges has completed: 129
+speech and two noise chunks, normal word errors 223 → 102 / 864 and attenuated
+256 → 181 / 864. Quiet German WER and Portuguese CER worsened, the gate missed
+two normal and four quiet English clips, and no speech-overlap boundary was
+exercised. The earlier Spanish full-WAV translation did not recur on the frozen
+ranges; this does not prove a fix. Astra reviewed all 131 raw outputs and replay.
+The isolated Android prototype passed one test / three inputs in 25.844s; see
+[the probe guide](parakeet-android-probe.md). The app backend is unchanged;
+a 43-case gate-only audit rejected a global floor reduction because it activates
+more noise. The explicit alternative-transcript preview is now an opt-in debug
+experiment with original-data, rotation, Copy and cancellation checks. Its actual
+16s/500ms path failed the 18-input DEV screen: normal word errors 25 → 53 / 210,
+attenuated 31 → 52 / 210, dominated by the retained Spanish outlier. All four
+no-speech controls were blank. It is not promoted and does not replace the
+manual-language capture path. See [the exact-path report](benchmarks/2026-11-05-stt/report.md).
+The 42 unused held-out clips remain closed. Heavy work runs serially with an
+explicit memory/CPU limit after an unexpected host reboot of unverified cause.
+
+## What the earlier measured checkpoint changes
 
 The [fresh local continuation](benchmarks/2026-11-03-local/report.md) retains
 42 development clips and a separate unconsumed 42-clip cohort. Lower energy
@@ -164,11 +221,17 @@ before each request. Reuse verified files; a larger budget does not justify
 fetching whole corpus shards or every model variant.
 
 The [shared ledger](benchmarks/2026-11-03-stt/download-budget.json) now reserves
-**2,749,583,598 bytes**, leaving **2,250,416,402 bytes**. This retains the earlier
+**4,557,289,366 bytes**, leaving **442,710,634 bytes**. This retains the earlier
 881,742,333 bytes, including the 61,000,000-byte future CI reserve, and adds
 17,858 bytes of initial metadata, 196,608 bytes reserved for runtime/candidate
 metadata, two Qwen weight transfers of 396,705,472 and 1,280,835,840 bytes,
 and 190,085,487 bytes for the locally missing Whisper small research file.
+The November 5 continuation also includes 2,200,000 bytes reserved for metadata,
+1,001,817,053 bytes for Qwen-ASR files/runtime, 670,478,772 bytes for Parakeet,
+1,000,000 bytes Android runtime metadata and one verified 49,441,341-byte
+official Android AAR transfer. The ACFT comparison adds a 1,000,000-byte metadata
+reserve and one verified 81,768,602-byte model transfer. Existing model files
+were reused.
 The old cloud small transfer remains counted; this local transfer adds to it.
 The original allocation below is historical context, not an instruction to
 repeat downloads. The older corpus figures describe the previous cloud study;

@@ -175,8 +175,10 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
         }
         LazyColumn(
             Modifier.fillMaxWidth().weight(1f), state = listState,
-            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
         ) {
+            // Keep the top anchored before new recordings; readers below retain their note's key.
+            item(key = "library-start") { Spacer(Modifier.height(4.dp)) }
             if (error != null) item { DataReadError(if (loaded) "Couldn't refresh recordings" else "Couldn't load recordings", error, retryLoad) }
             if (!loaded && error == null) item {
                 LinearProgressIndicator(
@@ -199,8 +201,8 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
                     ) { Text("Clear filters") }
                 }
             }
-            groups.forEach { (day, sessions) ->
-                item(key = "day:$day") { SessionDayHeader(dayLabel(day, today), first = day == groups.keys.first(), modifier = Modifier.animateItem(
+            groups.entries.forEachIndexed { index, (day, sessions) ->
+                if (index > 0) item(key = "day:$day") { SessionDayHeader(dayLabel(day, today), modifier = Modifier.animateItem(
                     fadeInSpec = tween(140, delayMillis = 240), placementSpec = tween(240), fadeOutSpec = tween(80),
                 )) }
                 items(sessions, key = { it.id }) { note ->
@@ -217,10 +219,10 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     }
 }
 
-@Composable private fun SessionDayHeader(label: String, first: Boolean, modifier: Modifier = Modifier) {
+@Composable private fun SessionDayHeader(label: String, modifier: Modifier = Modifier) {
     val line = MaterialTheme.colorScheme.outlineVariant
     val dot = MaterialTheme.colorScheme.onSurface
-    Row(modifier.fillMaxWidth().padding(top = if (first) 6.dp else 18.dp).heightIn(min = 34.dp).height(IntrinsicSize.Min),
+    Row(modifier.fillMaxWidth().padding(top = 18.dp).heightIn(min = 34.dp).height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Canvas(Modifier.width(24.dp).fillMaxHeight()) {
@@ -293,10 +295,10 @@ internal fun sessionNeedsAttention(note: Note): Boolean =
     retryLoad: () -> Unit = {}, notificationsEnabled: Boolean = true,
     followSuspended: Boolean = false,
 ) {
-    val review = library.passages.count { it.uncertain && !it.reviewed }
+    val review = library.passages.count { it.uncertain && !it.reviewed && !it.excluded }
     val canRetryTranscription = library.pending > 0 || note.mayNeedRecovery
     val reviewing = live == null && reviewOnly
-    val passages = if (reviewing) library.passages.filter { it.uncertain && !it.reviewed } else library.passages
+    val passages = if (reviewing) library.passages.filter { it.uncertain && !it.reviewed && !it.excluded } else library.passages
     var following by rememberSaveable(note.id) { mutableStateOf(true) }
     var awaitingFinalNote by rememberSaveable(note.id) { mutableStateOf(false) }
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
@@ -480,7 +482,7 @@ private val liveNoteStates = setOf("RECORDING", "PAUSED", "PROCESSING")
     passage: Passage, active: Boolean, audioAvailable: Boolean, seek: () -> Unit, edit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val flagged = passage.uncertain && !passage.reviewed
+    val flagged = passage.uncertain && !passage.reviewed && !passage.excluded
     val timestamp = Transcript.time(passage.start)
     val fontScale = LocalDensity.current.fontScale
     val ink = MaterialTheme.colorScheme.onSurface
@@ -511,7 +513,7 @@ private val liveNoteStates = setOf("RECORDING", "PAUSED", "PROCESSING")
             .background(highlight)
             .clickable(
                 role = Role.Button,
-                onClickLabel = "${if (oversized) "Open full passage" else if (flagged) "Review passage" else "Edit passage"} at $timestamp",
+                onClickLabel = "${if (passage.excluded) "View or restore excluded text" else if (oversized) "Open full passage" else if (flagged) "Review passage" else "Edit passage"} at $timestamp",
                 onClick = edit,
             ).semantics {
                 if (active || flagged) stateDescription = listOfNotNull(
@@ -520,10 +522,14 @@ private val liveNoteStates = setOf("RECORDING", "PAUSED", "PROCESSING")
                 ).joinToString(", ")
             }.padding(12.dp)) {
             Text(
-                if (oversized) passageTextPart(passage.text, 0, 512) else passage.text.ifBlank { "Unclear speech" },
-                style = MaterialTheme.typography.bodyLarge,
+                if (passage.excluded) "Excluded background sound"
+                else if (oversized) passageTextPart(passage.text, 0, 512) else passage.text.ifBlank { "Unclear speech" },
+                style = if (passage.excluded) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
+                color = if (passage.excluded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 maxLines = if (oversized) 6 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis,
             )
+            if (passage.excluded) Text("View or restore text", style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(top = 4.dp))
             if (oversized) Text("Open full passage", style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.padding(top = 8.dp))
         }

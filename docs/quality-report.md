@@ -1,4 +1,268 @@
-# Product verification · 2026-11-04
+# Product verification · 2026-11-05
+
+## Alpha 7 candidate · full verification 2026-11-05
+
+Clean `4ac250d322849e4cc2ee29c034b4c8b28330a78c` passed the complete local
+`qa-local.py --release-checks` run: **129/0/0**, all ten required real-model
+checks, including the original oversized-editor rotation regression. JUnit:
+186.980s; runner wall: 187.992s. Both lint variants, 36 core and six app JVM
+checks (cached unchanged results), and debug/test/unsigned R8 builds passed in
+3m52s. Report: `20261105T051956.322657Z`.
+[Exact artifact identity](../releases/ux-alpha-7.json).
+
+The exact debug APK (77,396,931 bytes, SHA-256
+`5ba36437c0cd54ec446ab6890f8896ddfb8ff68b51ac1392a93984addb8d66ff`)
+and test APK match the earlier manual/focused build byte for byte. No rebuild or
+resigning is needed for delivery. The unsigned R8 build passed packaging/lint;
+it was not the instrumented APK. Exact APKs and diagnostics are archived under
+`build/local-diagnostics/noise-review-20261105/` (ignored).
+
+The combined KVM/Gradle job used a 4 GiB hard limit, 150% CPU quota and no cgroup
+swap. A saved instrumentation-time sample recorded a 3,758,620,672-byte peak,
+64 memory-high events and zero max/OOM/kill events. The service finished
+successfully and stopped its dedicated AVD. Other projects were untouched.
+No models were downloaded. Alpha 7 is [published](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-7).
+The remote asset digest matches the verified APK; its direct URL returns HTTP 200
+and the filename `Focal-0.1.0-alpha.7.apk`. Full-history Gitleaks passed on 115 commits. Physical-phone and seven-language quality,
+speed and mixed-term requirements remain open.
+
+## Background-sound decisions · focused verification 2026-11-05
+
+The optional check for finished recordings now proposes passages whose saved
+PCM has no detected speech. It never changes text automatically. Keep/Exclude
+are explicit decisions; excluded text stays available in the timeline with
+Restore and is omitted from Copy/Share. Original PCM and the first stored
+post-reconciliation transcript remain preserved; migrated historical passages
+with unknown originals are not assigned invented provenance. Automatic language
+correction and the ordinary Whisper decoding policy remain unchanged.
+
+The offline prebuild passed both lints, 36 core tests (cached), six app JVM
+tests, debug/test APKs and the unsigned R8 build in 14m08s. A focused Android
+run passed **21/0/0** in 9.685s instrumentation / 12.110s runner wall, including
+real Silero speech/reset and graph-abort failure handling, storage migration,
+cancellation/ownership, fresh Copy snapshots, and exclusion/restore across
+Activity recreation. Nineteen Python runner/summary checks passed. The subsequent complete
+clean-source QA is recorded above.
+
+Manual checks on the dedicated KVM emulator covered the synthetic three-part
+note (silence / public JFK speech / silence): only the two silent ranges were
+proposed. Contextual Edit, Exclude, Undo, persistent Restore, Copy feedback,
+and the native Share preview behaved as expected. Keep was visually inspected;
+its persistence is covered by automated storage tests, not a separately recorded
+manual tap. Original text remained in
+the excluded passage editor after recreation. Light/dark settings and the
+editor were inspected, including 200% font, landscape and the actual keyboard.
+Host audio was disabled; audible playback and real microphone input were not
+verified. Independent Astra source and screenshot reviews found no remaining
+blocker; Terra audited both model hashes, absence of Internet/Sherpa/ONNX,
+16 KB ZIP/ELF alignment and the absence of debug fault hooks in R8.
+
+Private evidence: `build/local-diagnostics/noise-review-20261105/`.
+The build stayed within its 4 GiB cgroup cap with no max/OOM events. Heavy jobs
+ran sequentially. The 885,098-byte verified Silero asset was reused locally;
+no new model transfer occurred and the cumulative download ledger is unchanged.
+Two bounded research follow-ups are recorded in the
+[benchmark report](benchmarks/2026-11-05-stt/report.md): cached-noise display
+filtering is counterfactual, and the measured sampler saving was below its
+predeclared threshold. Neither justifies a seven-language accuracy/speed claim.
+The subsequent Alpha 7 verification and publication state are recorded above.
+
+## ACFT comparison · completed 2026-11-05
+
+The FUTO ACFT Base candidate is **not promoted**. A separately frozen diagnostic
+completed the seven ordinary DEV pairs: word errors 25→28/210, lexical character
+errors 47→46/1,050. All seven fresh host-process calls were faster, with combined
+wall time 40.929→19.880s, but English/German word errors increased. One clip per
+language and a joint weights/quantization/context change do not establish phone
+performance or general accuracy. See the [full report](benchmarks/2026-11-05-stt/report.md#futo-acft-context-formulas-kept-separate).
+
+The preceding controls-first screens remain rejected: notebook-style context
+lost a short French negative answer, while the formula from FUTO's Android source
+preserved it and recovered short Portuguese. Both models still failed longer
+quiet instructions. Noise insertions fell 8→1 and 4→2 but remained nonzero.
+Astra independently checked all results, original stop decisions and the separate
+diagnostic completion. The last two jobs used about 217/213 MiB peak cgroup memory,
+zero swap and zero high/max/OOM events. The AVD stayed stopped.
+
+Only one new 81,768,602-byte model was fetched, once, with its official hash
+verified. The cumulative ledger remains 4,557,289,366/5,000,000,000 bytes.
+No app-source change, new APK, default-model change or automatic correction
+follows from this experiment. The latest ordinary QA below remains applicable.
+
+## Ordinary build after preview integration · verified 2026-11-05
+
+Clean `b4ea46bd36d2620df4ce7b471c88a0bcd52f8500` passed the complete local runner:
+**115 Android tests, zero failures/errors/skips**, including all eight mandatory
+real-model checks and the unchanged oversized-editor rotation assertions.
+Instrumentation: 181.677s; runner wall: 182.674s. The runner also passed 36 core
+and six app JVM tests (cached), both lint variants and debug/test/unsigned R8
+builds in 3m40s, after the 11m15s prebuild. Eighteen Python runner/summary tests
+passed separately. Report: `20261105T030356.823535Z`.
+
+Independent Terra inspection matched the exact APKs to the manifest and all 115
+source-discovered tests to the raw XML. Both APKs exclude Sherpa/ONNX Runtime,
+Parakeet assets and Internet permission; the ordinary factory is unavailable.
+The new controller tests run with fake decoders. Opt-in preview UI/model checks
+remain a separate result below, not part of the ordinary real-model test count.
+
+Verified ordinary app SHA-256:
+`20a3d96a5d3b3da8492bb22e126e1eaecf081361230fa957e79d67a9f096c708`;
+test APK: `30c988dfb830052787a509261c42dbb09edc32c8a1f5668d29d4a07573efe144`.
+Exact APKs are archived privately under
+`build/local-diagnostics/parakeet-preview-20261105/normal-verified-apks/`.
+The dedicated KVM AVD was stopped after the passing runner. Heavy work stayed
+sequential and within the documented limits. No new release or production
+speech-engine change is claimed; phone and speech-quality gates remain open.
+
+## Whisper framing: speech recovery and a noise regression
+
+The existing Android Transcriber was compared on unchanged SpeechGate ranges
+and complete original PCM, with the same model, explicit language and one
+thread. The 18-case attempt stopped at its shared 120-second case budget during
+the Russian full-source arm: only two pairs completed, both the same English
+DEV recording at normal and 0.1 gain. Normal word errors fell 26 → 2 / 28 and
+quiet errors 28 → 3 / 28; the gate had retained 18.56% and 0% of the audio.
+Russian has only a completed gated arm (4 / 26 errors, three calls totaling
+110.079s); its full arm did not have a standalone 90-second timeout. The failed
+attempt remains incomplete, with no seven-language claim.
+[Partial counts and exact artifact identities](benchmarks/2026-11-05-stt/whisper-framing-partial.json).
+
+A separate continuation completed both previously unrun varying-noise controls:
+30s seeded noise gave 40 → 2 inserted words, but 2s emulator noise gave 0 → 4.
+Four Transcriber calls passed in 167.232s instrumentation / 169.149s host wall.
+All nonempty results were marked uncertain; this does not remove invented text.
+**Automatic full-source bypass is rejected.**
+[Noise counts and identities](benchmarks/2026-11-05-stt/whisper-framing-noise.json).
+Independent Astra review verified inputs, ranges, receipts, binaries and scores.
+These are emulator observations, not phone performance or general noise rates.
+
+The first noise attempt failed before inference: its cleanup assumed an
+interrupted fixture still had a database owner, but the matching PCM was an
+orphan. The continuation verified and preserved that exact file. No production
+storage change follows from this harness failure; the disappearance of the row
+was not diagnosed. Prior failed results are retained. The AVD is stopped.
+
+## Saved-audio preview · experimental Android checkpoint
+
+The opt-in debug [alternative transcript](saved-audio-preview.md) passed **15/15
+focused Android tests**, no failures/skips, in 18.252s (20.243s runner wall).
+Seven existing ViewModel tests, six new controller tests and two real UI tests
+covered Main-thread publication, blocked-call cancellation/ownership, unchanged
+source audio and manual edits, rotation, exact Clipboard content and Home cancellation.
+The six JVM processor tests passed in 0.893s; subsequent unchanged checks were
+cached. First offline build: 5m33s; test synchronization/Home-test update: 2m37s.
+Debug lint passed. The preview release dry-run was rejected as intended.
+
+The public 11s JFK fixture produced substantive English with the selected original
+note language still `ru`. Menu action to ready UI was **9,280ms**, including sheet
+animation, model checksum verification/load, decoding, Activity recreation and
+publication. Process lifetime VmHWM was **1,038,360 KiB** when the first UI test
+finished, before the later Home test; this is neither isolated model RAM nor the
+whole batch's peak. The Home test proves foreground cancellation, not native abort.
+Astra independently verified raw status counts, both APK hashes, all 52 bound
+source files, fixture identity, receipt and the actual screenshot.
+
+Private evidence: `build/local-diagnostics/parakeet-preview-20261105/`.
+Experimental app SHA-256:
+`0317680064553effff99cc102a9a8a42037bf83ccfbfc40c1971ad1bed2b2da8`;
+test APK: `b19ff2508e27c2b8d7e46c5e4650b2c93140be843b56103b003f9cfbf63efd5f`.
+The AVD was stopped. All heavy checks ran sequentially with the documented limits;
+no model was downloaded. The actual saved-audio path subsequently completed an
+18-input DEV screen (seven languages at normal/0.1 gain and four controls): normal
+word errors **25 → 53 / 210**, attenuated **31 → 52 / 210** against matching-PCM
+Linux Whisper baselines. The screen rejects promotion; four blank controls and
+functional passes do not override the speech regressions. Candidate and baseline
+timings are not comparable. [Full results and artifact identities](benchmarks/2026-11-05-stt/saved-audio-preview.json).
+The normal offline build passed in 11m15s: 36 core tests (cached), six app JVM
+tests (0.993s), both lint variants and debug/test/unsigned R8 APKs. Eighteen
+Python runner/summary checks also passed. The normal full-app Android result is
+recorded above.
+Ordinary/release builds do not expose the experiment. No new release, default
+backend change, automatic correction or phone-performance claim is made.
+
+## Library insertion regression · verified 2026-11-05
+
+Clean `e6f4ca41e87ac0fa87d00e5c0b642472837d79a3` passed the full local runner:
+**109 Android tests, zero failures/skips**, including all eight mandatory real-model
+checks. JUnit: 180.147s; runner wall: 181.166s. Core tests (cached), both lint
+variants and debug/test/unsigned R8 builds passed; the prebuild took 11m03s and
+the runner's build/check stage 3m23s. Report: `20261105T015043.322971Z`.
+
+Removing the duplicate first date heading had exposed Compose's first-note key
+as the scroll anchor. When a new Today note arrived above Yesterday, the old
+first note moved to index 2 and remained at the top; the newly loaded note was
+hidden above it. Actual timeout screenshots, matching database/ViewModel rows,
+and scroll semantics confirmed this. A permanent keyed 4dp spacer now anchors
+the very top, replacing the former 4dp content padding. Readers farther down
+still keep their note's position. No duplicate date heading was restored.
+
+A new regression failed on the preceding app in 14.807s. The identical test APK
+then passed all 15 selected tests in 20.080s on the fix, including insertion,
+manual reading position, original layout/editor and contextual-action checks.
+The full suite also passed the original oversized-editor rotation assertions.
+Sol and Astra independently reviewed the cause and fix; actual fixed UI captures
+were inspected. Private evidence is under `build/local-diagnostics/library-insertion-20261105/`.
+
+The earlier full attempt `20261104T212244.904185Z` lost its emulator before
+instrumentation; `20261104T212832.915156Z` passed 106/108 with two new-title waits
+failing. Neither is a PASS. Their evidence remains preserved. The final run used
+KVM, two emulator vCPUs, a 4GiB hard cgroup limit and 3.5GiB memory-high threshold;
+a saved sample recorded zero high/max/OOM events and a 3,650,195,456-byte peak.
+The AVD was stopped after QA. This does not identify the laptop reboot's cause
+or establish physical-phone performance.
+
+Verified ordinary APK SHA-256:
+
+- App: `892b08753913c8601807d5d5bd9b1074726e4ef5e681117e8884825c9aabd363`.
+- Test: `ae0a59b6a80502321cca0f3b880b26bd2336e6d56071e2631f875d97058a9880`.
+- RED/GREEN test: `eefc60f554d81a9f320a71183be49be37059557bd08b38a8aa792ca9bf45fe2a`.
+
+No new APK release or production speech-engine change is claimed. Alpha 6 remains
+the published release; STT acceptance, owner UX review and physical-phone gates
+remain open.
+
+## Local STT research checkpoint · 2026-11-05
+
+The Parakeet host comparison completed 42 previously used DEV clips: word errors
+146 → 98 / 864 and lexical character errors 262 → 229 / 4,349 against Whisper.
+Spanish worsened 15 → 44 / 177, including one output mixing Spanish and English;
+six other languages improved in both aggregate measures. Thirty-five fresh cold
+pairs supplied matched host timings, while seven earlier pairs were reused for
+quality only. Independent review verified all raw-result hashes and reproduced
+the scores. A subsequent completed Kotlin pipeline replay used 129 speech and
+two noise chunks; normal word errors were 223 → 102 / 864, attenuated 256 → 181
+/ 864, with quiet German WER and Portuguese CER regressions. Two normal and four
+quiet English clips received no gate audio overlapping their speech. Independent
+Astra review covered all 131 raw outputs and replay; no speech-overlap boundary
+occurred. The isolated Android prototype then passed one test with three inputs
+in 25.844s: public English speech and two blank-output noise controls. Core
+(cached), debug lint and both APK builds passed in 2m46s; the release guard
+rejected the research flag. Exact runtime/model identities and test-only native
+dependencies were verified; see [the probe guide](parakeet-android-probe.md).
+A later 43-case gate-only replay rejected lowering the global threshold: one
+normal omission recovered at 0.001, four extra noise controls activated. No ASR
+was run for this audit and production thresholds stayed unchanged.
+The separate held-out cohort and real-phone gates remain open.
+See [the research report](benchmarks/2026-11-05-stt/report.md) for limits and
+earlier synthetic controls. The application backend is unchanged; no new APK was
+released.
+
+## Post-Alpha 6 UI checkpoint · unreleased
+
+The first library group no longer repeats its toolbar date; subsequent date
+boundaries remain visible. Speech model and Appearance share one settings
+group. Page movement is reduced to 4dp over 220ms with an ease-out curve;
+content stays opaque and only one page tree is composed. Review is unchanged
+pending the next speech-quality evaluation.
+
+Local core/debug lint/app/test build passed in 1m58s. Five focused date, motion
+and settings tests passed in 13.717s, with no failures or skips. Manual checks
+covered light/dark, 200% landscape scrolling and five recorded page transitions.
+Terra reviewed the date source; Astra reviewed source and consecutive actual
+frames. The brief note-loading indicator is still separate from the entrance
+animation. These checks do not establish phone frame timing or user acceptance.
+Private evidence: `build/local-diagnostics/ui-followup-stt-batch-20261104/`.
+The dedicated AVD was restored and stopped; no new APK release is claimed.
 
 ## UX Alpha 6 · 2026-11-04
 
@@ -217,7 +481,8 @@ regression prevents promotion; no remaining language sessions ran. Its 369.27 s
 host cost is not comparable to the cached baseline or phone performance.
 
 The [ledger](benchmarks/2026-11-03-stt/download-budget.json) retains all prior
-reservations under the owner's revised 5 GB ceiling. Current reservation:
+reservations under the owner's revised 5 GB ceiling. At this historical checkpoint,
+the reservation was:
 **2,749,583,598 bytes**, remaining **2,250,416,402 bytes**. Both Qwen files and
 Whisper small are verified local caches; no base STT model was downloaded again. The 42 fresh
 held-out clips remain unopened. Alpha 3 was published and merged through

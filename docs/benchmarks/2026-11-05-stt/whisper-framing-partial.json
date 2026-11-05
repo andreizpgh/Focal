@@ -1,0 +1,99 @@
+{
+  "schema": 1,
+  "scope": "Incomplete Android Whisper framing experiment on 18 preselected DEV and control cases; do not infer seven-language quality.",
+  "status": "FAIL: case watchdog forced app stop; incomplete experiment",
+  "completion": {
+    "total_cases": 18,
+    "completed_paired_cases": 2,
+    "partially_run_cases": 1,
+    "unrun_cases": 15,
+    "completed_arms": 5,
+    "planned_arms": 36,
+    "successful_transcriber_calls": 6,
+    "started_interrupted_calls": 1,
+    "planned_transcriber_calls": 58
+  },
+  "method": {
+    "comparison": "Identical Android Whisper on the same frozen PCM and explicit language; existing SpeechGate ranges versus the complete source chunk.",
+    "inputs": "Two completed paired cases use the same English DEV read-speech clip at normal gain and digital 0.1 gain; no other pair completed.",
+    "environment": "Android x86_64 emulator; timing is not physical-phone performance.",
+    "scoring": "Reference-based word and lexical character errors; no acoustic adjudication."
+  },
+  "completed_pairs": [
+    {
+      "language": "en",
+      "condition": "normal",
+      "reference_words": 28,
+      "gated_word_errors": 26,
+      "full_word_errors": 2,
+      "reference_lexical_characters": 120,
+      "gated_character_errors": 100,
+      "full_character_errors": 5,
+      "gated_pcm_coverage_percent": 18.562874,
+      "full_pcm_coverage_percent": 100.0
+    },
+    {
+      "language": "en",
+      "condition": "digital 0.1 gain",
+      "reference_words": 28,
+      "gated_word_errors": 28,
+      "full_word_errors": 3,
+      "reference_lexical_characters": 120,
+      "gated_character_errors": 120,
+      "full_character_errors": 13,
+      "gated_pcm_coverage_percent": 0.0,
+      "full_pcm_coverage_percent": 100.0
+    }
+  ],
+  "partial_case": {
+    "language": "ru",
+    "condition": "normal",
+    "completed_arm": "gated",
+    "reference_words": 26,
+    "word_errors": 4,
+    "reference_lexical_characters": 141,
+    "character_errors": 9,
+    "transcriber_calls": 3,
+    "transcriber_elapsed_seconds": 110.078770482,
+    "full_arm": "interrupted; no result"
+  },
+  "interruption": {
+    "type": "120-second per-case budget expired while the full arm was active; the app was force-stopped.",
+    "note": "The interrupted arm did not independently run for the 90-second per-call limit.",
+    "run_wall_seconds": 232.5702477019986
+  },
+  "provenance": {
+    "independent_audit": "PASS for collected evidence and scoring; execution itself failed.",
+    "source_head": "b4ea46bd36d2620df4ce7b471c88a0bcd52f8500",
+    "compiled_source_change_sha256": "553d1859a88f57b6009d049a67f3a6ee20d5f0800f6ea6537999a76066b49641",
+    "whisper_submodule_commit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+    "app_apk_sha256": "20a3d96a5d3b3da8492bb22e126e1eaecf081361230fa957e79d67a9f096c708",
+    "test_apk_sha256": "5fb069c06b9e3aa36a19b5dbd65f852cbaa6cd53021c2c758ff8c60e9c06a21a",
+    "native_library_sha256": {
+      "arm64-v8a": "04d8cb56d6d557a659f608389a65d6aee9c6dc89faf4c44c667e7e725ee0af50",
+      "x86_64": "0b067dfefc8be48852e12eb75ef581b6e172b20869cf88249904e04b6578c592"
+    },
+    "test_source_sha256": "0b35b2530a348e9b331f3407924b4a6969b21cfa801494d6675d4ae799c7039c",
+    "manifest_sha256": "2268b8394e8cad292a23cd974e76aff8dee7afc2a6024e08d9476f01613f64ad",
+    "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "runner_sha256": "def2d578c680e7ace3fcdadd69a8a5376a9b31afe032ddb40ef77d1929ffac20",
+    "gate_audit_sha256": "97781395e525269566de6ef184a9efa12290ca80c830848bf42268b53da1331e",
+    "sources_sha256": {
+      "build.gradle.kts": "cfc9dce91180da308dee6ac23d6fb50e6a28092fd3f626f6eebda8f99230543c",
+      "whisper_jni.cpp": "9c2542b62ca58a7969ea171fc987c1b0724e9a737d0160e873c847ec882693aa",
+      "NoteStore.kt": "4e228cc6e7c6b8c1bf6fc368428d972711da71d0a10f6bfb7f5e57ced14aae3c",
+      "NativeWhisper.kt": "18bf03671b8bbf3994ad64745bdf420bde5523503a0ff0ad16409f2af2c08ce1",
+      "Transcriber.kt": "03ffe625ea8da0712bbdd235e49aeca663010de9a9dfa3b02b8952e6d6d8f65e",
+      "DecodePolicy.kt": "18ee3721511788871589d3fe5100cdbb5e7dee3ac7dbebbe26da400e18594a30",
+      "SpeechGate.kt": "a76ddb7a8ee398a94086fd47092ee2cd7b0a12b7f2a483c47fe2dc15acb2f515",
+      "Transcript.kt": "92a2751a3b1e77ce4aefee54ad342c0f648e3364fa0a85f3d2df67f4ef2e2912"
+    }
+  },
+  "limitations": [
+    "The two completed pairs are correlated variants of one English clip, not a representative cohort.",
+    "No complete Russian pair or comparisons for the other five languages are available in this attempt.",
+    "No all-language model quality or general product verdict is supported.",
+    "A separate two-control continuation completed; see whisper-framing-noise.json. It is not part of the original attempt.",
+    "No continuous multiwindow recording, microphone behavior, physical-phone timing or acoustic adjudication was tested."
+  ]
+}

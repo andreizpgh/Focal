@@ -28,9 +28,16 @@ MODEL_TESTS = {
     ("app.focal.NativeWhisperTest", "constantPcmProducesNoSegmentsInAnyLanguageEvenWithContext"),
     ("app.focal.SpeechWorkflowTest", "quietVaryingSpeechStillReachesTheDecoder"),
     ("app.focal.SpeechWorkflowTest", "recoveryOfConstantAudioKeepsOriginalAndManualEditsWithoutAddingPassages"),
+    ("app.focal.speech.NoiseDetectorTest", "realModelDistinguishesSpeechFromConstantAndSeededNoiseAndResets"),
+    ("app.focal.speech.NoiseDetectorTest", "graphAbortIsAnErrorClearsStaleProbabilitiesAndContextCanBeReused"),
 }
 ANIMATIONS = ("window_animation_scale", "transition_animation_scale", "animator_duration_scale")
 MODEL_NAME = "ggml-base-q5_1.bin"
+PRESENCE_NAME = "ggml-silero-v5.1.2.bin"
+PRESENCE_BYTES = 885098
+PRESENCE_SHA256 = "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf"
+PRESENCE_REPOSITORY = "ggml-org/whisper-vad"
+PRESENCE_REVISION = "9ffd54a1e1ee413ddf265af9913beaf518d1639b"
 
 
 class QAError(Exception):
@@ -181,7 +188,19 @@ def verify_model_source():
     return lock
 
 
-def verify_apks(app_apk, test_apk, model):
+def verify_presence_model_source():
+    lock = json.loads((ROOT / "models/speech-presence.json").read_text(encoding="utf-8"))
+    if (lock.get("repository"), lock.get("revision"), lock.get("filename"), lock.get("bytes"), lock.get("sha256")) != (
+        PRESENCE_REPOSITORY, PRESENCE_REVISION, PRESENCE_NAME, PRESENCE_BYTES, PRESENCE_SHA256
+    ):
+        raise QAError("Speech presence model lock does not match the pinned model.")
+    asset = ROOT / "app/src/main/assets" / PRESENCE_NAME
+    if not asset.is_file() or asset.stat().st_size != PRESENCE_BYTES or file_hash(asset) != PRESENCE_SHA256:
+        raise QAError("Speech presence model is missing or differs from the committed lock.")
+    return lock
+
+
+def verify_apks(app_apk, test_apk, model, presence_model):
     with zipfile.ZipFile(app_apk) as apk:
         info = json.loads(apk.read("assets/model-provenance.json"))
         if any(info.get(key) != model.get(key) for key in ("repository", "revision", "filename", "sha256")):
@@ -190,6 +209,15 @@ def verify_apks(app_apk, test_apk, model):
             actual = sha_stream(stream)
         if actual != model["sha256"]:
             raise QAError("Built APK model SHA-256 does not match the lock.")
+        try:
+            presence = apk.getinfo("assets/" + PRESENCE_NAME)
+        except KeyError as error:
+            raise QAError("Built APK is missing the speech presence model.") from error
+        if presence.file_size != presence_model["bytes"]:
+            raise QAError("Built APK speech presence model size does not match the lock.")
+        with apk.open(presence) as stream:
+            if sha_stream(stream) != presence_model["sha256"]:
+                raise QAError("Built APK speech presence model SHA-256 does not match the lock.")
     with zipfile.ZipFile(test_apk) as apk:
         if "assets/jfk.wav" not in apk.namelist():
             raise QAError("The instrumentation APK is missing its real speech fixture.")
@@ -335,6 +363,7 @@ def main(argv=None):
         raise QAError("The selected emulator has not finished booting.")
     initial_source = source_snapshot()
     model = verify_model_source()
+    presence_model = verify_presence_model_source()
     expected = expected_instrumentation_tests()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     report = ROOT / "build/local-emulator-qa" / stamp
@@ -345,6 +374,7 @@ def main(argv=None):
     metadata = {"schema": 1, "source": initial_source, "serial": args.serial, "repeat": args.repeat,
                 "expected_instrumentation_tests": sorted(f"{a}.{b}" for a, b in expected),
                 "release_checks": args.release_checks, "model_sha256": model["sha256"],
+                "speech_presence_model": {key: presence_model[key] for key in ("repository", "revision", "filename", "bytes", "sha256")},
                 "host": {"os": platform.system(), "os_release": platform.release(), "arch": platform.machine(),
                          "logical_cpus": os.cpu_count(), "memory_bytes": host_memory_bytes()},
                 "device": {"api": adb("shell", "getprop", "ro.build.version.sdk"),
@@ -355,7 +385,7 @@ def main(argv=None):
                           "java": run(["java", "-version"]).splitlines()[0],
                           "python": platform.python_version()}}
     (report / "manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    tasks = [":core:test", ":app:lintDebug", ":app:assembleDebug", ":app:assembleDebugAndroidTest"]
+    tasks = [":core:test", ":app:testDebugUnitTest", ":app:lintDebug", ":app:assembleDebug", ":app:assembleDebugAndroidTest"]
     if args.release_checks:
         tasks += [":app:lintRelease", ":app:assembleRelease"]
     print("Building and running host checks once; see build.log.", flush=True)
@@ -364,6 +394,7 @@ def main(argv=None):
     if result.returncode:
         raise QAError(f"Gradle failed (exit {result.returncode}); see {report / 'build.log'}")
     shutil.copytree(ROOT / "core/build/test-results/test", report / "core-test-results")
+    shutil.copytree(ROOT / "app/build/test-results/testDebugUnitTest", report / "app-test-results")
     for name in ("lint-results-debug.html", "lint-results-debug.xml", "lint-results-release.html", "lint-results-release.xml"):
         if "release" in name and not args.release_checks:
             continue
@@ -372,7 +403,7 @@ def main(argv=None):
             shutil.copy2(source, report / name)
     app_apk = ROOT / "app/build/outputs/apk/debug/app-debug.apk"
     test_apk = ROOT / "app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
-    verify_apks(app_apk, test_apk, model)
+    verify_apks(app_apk, test_apk, model, presence_model)
     if source_snapshot() != initial_source:
         raise QAError("Source changed during the build; rerun QA against a stable checkout.")
     metadata["artifacts"] = {"debug_apk_sha256": file_hash(app_apk), "test_apk_sha256": file_hash(test_apk)}

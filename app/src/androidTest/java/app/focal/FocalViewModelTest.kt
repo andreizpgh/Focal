@@ -14,8 +14,10 @@ import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.Passage
 import app.focal.data.PassageSizeException
+import app.focal.data.transferableTranscript
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
 import app.focal.recording.SessionOperations
@@ -25,6 +27,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import org.junit.After
 import org.junit.Assert.*
@@ -36,6 +39,7 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class FocalViewModelTest {
@@ -50,7 +54,7 @@ class FocalViewModelTest {
     }
 
     @After fun cleanup() {
-        owners.forEach { it.clear() }
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { owners.forEach { it.clear() } }
         created.forEach { app.store.delete(it) }
     }
 
@@ -246,6 +250,75 @@ class FocalViewModelTest {
             assertTrue(message.contains("draft is still open"))
         }
         assertEquals(passage, app.store.passages(id).single())
+    }
+
+    @Test fun exclusionAndRestoreWaitForTheTransferSnapshot() = runBlocking {
+        val passage = completedPassage()
+        data class ReadGate(val excluded: Boolean, val entered: CountDownLatch = CountDownLatch(1),
+                            val release: CountDownLatch = CountDownLatch(1))
+        val next = AtomicReference<ReadGate?>()
+        val model = model(read = {
+            next.get()?.let { gate ->
+                if (app.store.passages(passage.noteId).single().excluded == gate.excluded) {
+                    gate.entered.countDown()
+                    check(gate.release.await(10, TimeUnit.SECONDS))
+                }
+            }
+        })
+        model.select(passage.noteId)
+        await(model) { it.note?.id == passage.noteId && it.passages == listOf(passage) && it.error == null }
+
+        suspend fun verify(exclude: Boolean, decide: suspend () -> Boolean) {
+            val gate = ReadGate(exclude)
+            next.set(gate)
+            val decision = async(Dispatchers.Main.immediate) { decide() }
+            try {
+                assertTrue("The database committed before the synthetic read stalled", gate.entered.await(10, TimeUnit.SECONDS))
+                assertEquals(exclude, app.store.passages(passage.noteId).single().excluded)
+                assertEquals(!exclude, model.library.value.passages.single().excluded)
+                assertNull(model.latestTransferSnapshot(passage.noteId))
+                assertNull("The action reported success with stale copy text", withTimeoutOrNull(200) { decision.await() })
+            } finally {
+                next.set(null)
+                gate.release.countDown()
+            }
+            assertTrue(withTimeout(10_000) { decision.await() })
+            val published = checkNotNull(model.latestTransferSnapshot(passage.noteId))
+            assertEquals(if (exclude) "" else passage.text, transferableTranscript(published.passages))
+        }
+
+        verify(exclude = true) { model.decideBackgroundSound(passage, exclude = true) }
+        verify(exclude = false) { model.restorePassage(app.store.passages(passage.noteId).single()) }
+    }
+
+    @Test fun refreshFailureKeepsTheCommittedDecisionAndDisablesTransfer() = runBlocking {
+        val passage = completedPassage()
+        val failing = AtomicBoolean(false)
+        val model = model(read = { if (failing.get()) throw IOException("Synthetic post-commit read failure") })
+        model.select(passage.noteId)
+        await(model) { it.note?.id == passage.noteId && it.passages == listOf(passage) && it.error == null }
+
+        failing.set(true)
+        assertTrue(withTimeout(10_000) { model.decideBackgroundSound(passage, exclude = true) })
+        assertTrue(app.store.passages(passage.noteId).single().excluded)
+        assertNotNull(model.library.value.error)
+        assertNull(model.latestTransferSnapshot(passage.noteId))
+
+        failing.set(false)
+        model.retryLibrary()
+        await(model) { it.note?.id == passage.noteId && it.passages.singleOrNull()?.excluded == true && it.error == null }
+        assertEquals("", transferableTranscript(checkNotNull(model.latestTransferSnapshot(passage.noteId)).passages))
+    }
+
+    private fun completedPassage(): Passage {
+        val id = app.store.create("en").also { created += it }
+        val chunk = app.store.beginChunk(id, 0, false)
+        app.store.finishChunk(chunk, 1000)
+        app.store.complete(checkNotNull(app.store.nextChunk(id)), listOf(
+            Passage(noteId = id, chunkId = chunk, start = 0, end = 1000, text = "Review this synthetic text", uncertain = true)
+        ))
+        app.store.state(id, "READY")
+        return app.store.passages(id).single()
     }
 
     @Test fun notificationLaunchIsNotReplayedOverSavedNavigation() {

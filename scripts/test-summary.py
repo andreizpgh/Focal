@@ -24,10 +24,13 @@ required_model_tests = {
     ("app.focal.NativeWhisperTest", "constantPcmProducesNoSegmentsInAnyLanguageEvenWithContext"),
     ("app.focal.SpeechWorkflowTest", "quietVaryingSpeechStillReachesTheDecoder"),
     ("app.focal.SpeechWorkflowTest", "recoveryOfConstantAudioKeepsOriginalAndManualEditsWithoutAddingPassages"),
+    ("app.focal.speech.NoiseDetectorTest", "realModelDistinguishesSpeechFromConstantAndSeededNoiseAndResets"),
+    ("app.focal.speech.NoiseDetectorTest", "graphAbortIsAnErrorClearsStaleProbabilitiesAndContextCanBeReused"),
 }
 model_outcomes = {test: [] for test in required_model_tests}
 rows = []
 for label, root in (("Core", Path("core/build/test-results/test")),
+                    ("App JVM", Path("app/build/test-results/testDebugUnitTest")),
                     ("Android", Path("app/build/outputs/androidTest-results/connected"))):
     totals = {key: 0 for key in ("tests", "failures", "errors", "skipped")}
     files = list(root.rglob("TEST-*.xml")) if root.exists() else []
