@@ -13,18 +13,28 @@ import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.security.MessageDigest
 
-/** The four pinned Parakeet Ultra INT8 files, installed once from the APK into no-backup storage. */
+/**
+ * The pinned speech model set (four Parakeet Ultra INT8 files and the Silero VAD model), installed
+ * once from the APK into no-backup storage.
+ */
 internal object UltraModel {
     data class ModelFile(val name: String, val bytes: Long, val sha256: String)
 
-    // Marmalade Parakeet Ultra INT8 v1, generated from models/parakeet-ultra.json at build time.
+    // Marmalade Parakeet Ultra INT8 v1 and Silero VAD, generated from models/parakeet-ultra.json at build time.
     private val models = BuildConfig.ULTRA_MODEL_FILES.split(';').map { entry ->
         val (name, bytes, sha256) = entry.split(':')
         ModelFile(name, bytes.toLong(), sha256)
     }
 
+    // File names in models/parakeet-ultra.json: the transducer and the voice activity model.
+    const val ENCODER = "encoder.int8.onnx"
+    const val DECODER = "decoder.int8.onnx"
+    const val JOINER = "joiner.int8.onnx"
+    const val TOKENS = "tokens.txt"
+    const val VAD = "silero_vad.onnx"
+
     /** Named by the encoder digest: an app update with the same model reuses the installed copy. */
-    val directoryName = "parakeet-ultra-v1-" + models.single { it.name == "encoder.int8.onnx" }.sha256.take(8)
+    val directoryName = "parakeet-ultra-v1-" + models.single { it.name == ENCODER }.sha256.take(8)
 
     /** Whether this APK carries the model files. Release builds always do. */
     fun isBundled(context: Context): Boolean =

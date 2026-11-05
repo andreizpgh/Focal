@@ -24,6 +24,9 @@ The optional Ultra build also includes:
   files unchanged. Original models: [Moondream](https://huggingface.co/moondream/parakeet-ultra/tree/73175eb7aeb0d82f1e2a6b53b3aabc10a90bcd0b)
   and [NVIDIA](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/tree/541d1f99c6b0c3cd0b11a95167540bb8edefd82b).
 - [sherpa-onnx 2.0.1](https://github.com/k2-fsa/sherpa-onnx/tree/af2d8d81dbfa61c4cea4c568da78f3982edca005): Apache License 2.0.
+- [Silero VAD](https://github.com/snakers4/silero-vad) v4 ONNX model (`silero_vad.onnx`, as published in
+  sherpa-onnx's [asr-models release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models)):
+  MIT License, Copyright (c) 2020-present Silero Team. Full text below.
 - [ONNX Runtime 1.28.2](https://github.com/microsoft/onnxruntime/tree/v1.28.2): MIT License, Copyright Microsoft Corporation;
   its upstream third-party dependency notices also apply.
 
@@ -34,7 +37,7 @@ Asset hashes and build instructions are in [Ultra transcription](docs/ultra-tran
 
 Focal's source and original artwork are covered by the root MIT license.
 
-Silero VAD 5.1.2 — https://github.com/snakers4/silero-vad/tree/v5.1.2
+Silero VAD — https://github.com/snakers4/silero-vad
 
 MIT License
 

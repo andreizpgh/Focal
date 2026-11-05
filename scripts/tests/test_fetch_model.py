@@ -206,6 +206,32 @@ class FetchModelTest(unittest.TestCase):
         self.assertFalse((self.model_dir / "tokens.txt").samefile(source / "tokens.txt"))
         self.assert_no_partial_files()
 
+    def test_each_file_comes_from_the_first_local_directory_that_has_it(self):
+        source = self.local_sources()
+        other = self.root / "other"
+        other.mkdir()
+        (source / "tokens.txt").rename(other / "tokens.txt")
+        (other / "encoder.int8.onnx").write_bytes(b"a different file that must not be used")
+        code, out, err = self.run_script("--from", str(source), "--from", str(other),
+                                         "--aar", str(source / "runtime.aar"))
+        self.assertEqual((0, ""), (code, err))
+        self.assertEqual([], self.requested)
+        self.assertTrue((self.model_dir / "encoder.int8.onnx").samefile(source / "encoder.int8.onnx"))
+        self.assertTrue((self.model_dir / "tokens.txt").samefile(other / "tokens.txt"))
+        self.assertEqual(3, out.count(": hard-linked"))
+        self.assert_no_partial_files()
+
+    def test_a_file_in_no_local_directory_is_reported_and_not_downloaded(self):
+        source = self.local_sources()
+        (source / "tokens.txt").unlink()
+        code, _, err = self.run_script("--from", str(source), "--from", str(self.root / "empty"),
+                                       "--aar", str(source / "runtime.aar"))
+        self.assertEqual(1, code)
+        self.assertIn(f"local tokens.txt: {source / 'tokens.txt'} is missing", err)
+        self.assertEqual([], self.requested)
+        self.assert_installed("encoder.int8.onnx")
+        self.assert_no_partial_files()
+
     def test_damaged_local_copy_is_refused(self):
         source = self.local_sources()
         (source / "tokens.txt").write_bytes(b"<blk> 0\nhullo 1\n")

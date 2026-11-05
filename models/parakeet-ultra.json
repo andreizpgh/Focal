@@ -1,10 +1,10 @@
 {
-  "description": "Parakeet Ultra INT8: Marmalade's ONNX conversion of Moondream Parakeet Ultra (post-trained NVIDIA Parakeet TDT 0.6B v3), published files unchanged.",
-  "license": "CC-BY-4.0",
+  "description": "Speech model set: Parakeet Ultra INT8 (Marmalade's ONNX conversion of Moondream Parakeet Ultra, post-trained NVIDIA Parakeet TDT 0.6B v3; CC-BY-4.0) and the Silero VAD v4 ONNX model used for segmentation (MIT). Published files unchanged.",
+  "license": "CC-BY-4.0 for the Parakeet Ultra files; per-file licenses override it.",
   "release": "https://github.com/maxwhipw/marmalade-stt-engines/releases/tag/v1",
   "conversion_revision": "beadd617a8c999476d6ae327cde78f3a59dfcc44",
   "upstream": "https://huggingface.co/moondream/parakeet-ultra/tree/73175eb7aeb0d82f1e2a6b53b3aabc10a90bcd0b",
-  "note": "The v1 release tag is not immutable: every file is verified by size and SHA-256.",
+  "note": "Neither release tag is immutable: every file is verified by size and SHA-256.",
   "directory": "models/parakeet-ultra",
   "files": [
     {
@@ -30,6 +30,14 @@
       "bytes": 93939,
       "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
       "url": "https://github.com/maxwhipw/marmalade-stt-engines/releases/download/v1/parakeet-ultra-tokens.txt"
+    },
+    {
+      "name": "silero_vad.onnx",
+      "bytes": 643854,
+      "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+      "license": "MIT",
+      "source": "Silero VAD v4 (https://github.com/snakers4/silero-vad) as redistributed by sherpa-onnx's asr-models release"
     }
   ]
 }

@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 """Fetch the pinned speech model and runtime, verifying every byte.
 
-Reads the lock files models/parakeet-ultra.json (the four Parakeet Ultra INT8 files) and
-models/sherpa-onnx.json (the sherpa-onnx Android AAR). Gradle reads the same files, so
-the paths, sizes and SHA-256 digests live in exactly one place.
+Reads the lock files models/parakeet-ultra.json (the speech model set: the four Parakeet
+Ultra INT8 files and the Silero VAD model) and models/sherpa-onnx.json (the sherpa-onnx
+Android AAR). Gradle reads the same files, so the paths, sizes and SHA-256 digests live in
+exactly one place.
 
 Each file is accepted only when its size and SHA-256 match the lock. Files that are
 already in place and verified are left alone. Otherwise a file is taken, in order, from
 a verified local copy (--from / --aar: hard-linked, or copied when linking is not
-possible) or downloaded over HTTPS. New files are written to a staging directory on
-the same filesystem (models/parakeet-ultra.partial/ for the model, which Gradle never
-packages; libs/ for the AAR), synced, verified and then renamed into place, so an
-interrupted run never leaves a partial file under the final name or in the packaged
-model directory. There are no automatic retries.
+possible) or downloaded over HTTPS. --from may be repeated: each model file is taken
+from the first directory that holds a file of that name. New files are written to a
+staging directory on the same filesystem (models/parakeet-ultra.partial/ for the model,
+which Gradle never packages; libs/ for the AAR), synced, verified and then renamed into
+place, so an interrupted run never leaves a partial file under the final name or in the
+packaged model directory. There are no automatic retries.
 
 Examples:
   python3 scripts/fetch-model.py                      # model and runtime (~720 MB)
   python3 scripts/fetch-model.py --runtime-only       # runtime only, enough for CI checks
   python3 scripts/fetch-model.py --from DIR --aar AAR # reuse verified local files
+  python3 scripts/fetch-model.py --from ULTRA_DIR --from VAD_DIR  # files in several places
   python3 scripts/fetch-model.py --check              # verify what is in place; no network
 """
 import argparse
@@ -136,6 +139,14 @@ def install(target, entry, name, local=None, offline=False, staging=None):
                 pass
 
 
+def local_copy(directories, name):
+    """The file called name in the first of directories that holds one (else in the first)."""
+    if not directories:
+        return None
+    candidates = [directory / name for directory in directories]
+    return next((path for path in candidates if path.exists()), candidates[0])
+
+
 def load(path):
     with path.open() as source:
         return json.load(source)
@@ -143,14 +154,15 @@ def load(path):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--from", dest="model_source", type=Path, metavar="DIR",
-                        help="directory that already holds the four verified model files")
+    parser.add_argument("--from", dest="model_sources", type=Path, metavar="DIR", action="append",
+                        help="directory that holds verified model files; repeat it for files in several "
+                             "places (each file comes from the first directory that has it)")
     parser.add_argument("--aar", type=Path, metavar="FILE", help="an already verified sherpa-onnx AAR to reuse")
     parser.add_argument("--runtime-only", action="store_true",
                         help="fetch only the runtime AAR; debug builds and checks work without the model")
     parser.add_argument("--check", action="store_true", help="only verify the files in place; no network")
     args = parser.parse_args(argv)
-    if args.runtime_only and args.model_source:
+    if args.runtime_only and args.model_sources:
         parser.error("--from has no effect with --runtime-only")
 
     runtime = load(RUNTIME_LOCK)
@@ -161,7 +173,7 @@ def main(argv=None):
     jobs = [("sherpa-onnx AAR", ROOT / runtime["path"], runtime, args.aar, None)]
     if not args.runtime_only:
         for entry in model["files"]:
-            local = args.model_source / entry["name"] if args.model_source else None
+            local = local_copy(args.model_sources, entry["name"])
             jobs.append((entry["name"], directory / entry["name"], entry, local, model_staging))
 
     failed = False
