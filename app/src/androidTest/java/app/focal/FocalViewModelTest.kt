@@ -180,7 +180,7 @@ class FocalViewModelTest {
             runBlocking {
                 val rejected = async(start = CoroutineStart.UNDISPATCHED) { withTimeout(10_000) { recovering.errors.first() } }
                 recovering.retry(id)
-                assertTrue(rejected.await().contains("busy"))
+                assertEquals("This note is being changed. Try again when it finishes.", rejected.await())
             }
             assertEquals("INTERRUPTED", app.store.note(id)!!.state)
             assertEquals(32_000L, app.store.audioBytes(id))

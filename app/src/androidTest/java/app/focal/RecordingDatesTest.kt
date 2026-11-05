@@ -94,9 +94,10 @@ class RecordingDatesTest {
             compose.onNodeWithContentDescription("Search recordings").performClick()
             compose.onNode(hasSetTextAction()).performTextReplacement("qxdates")
             compose.onNode(hasSetTextAction()).performImeAction()
+            // Recordings with the same time are listed newest first; only the top of the list is composed.
             compose.waitUntil(10_000) {
                 store.search("qxdates").size == 17 &&
-                    compose.onAllNodesWithText("qxdates today 0").fetchSemanticsNodes().isNotEmpty()
+                    compose.onAllNodesWithText("qxdates today 7").fetchSemanticsNodes().isNotEmpty()
             }
             waitForDay("Today")
             compose.onAllNodesWithText("Today").assertCountEquals(1)

@@ -178,7 +178,13 @@ class InterfaceTest {
         val progress = SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate)
         try {
             RecordingState.live.value = LiveSession(noteId = id, processing = true, message = "Transcribing")
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("Transcribing").fetchSemanticsNodes().isNotEmpty() }
+            // Only a capturing note opens by itself; a transcribing one is opened from its row.
+            waitForTitle("Processing fixture")
+            compose.onNodeWithText("Processing fixture").performClick()
+            compose.waitUntil(10_000) {
+                compose.onAllNodesWithContentDescription("Recording options").fetchSemanticsNodes().isNotEmpty() &&
+                    compose.onAllNodesWithText("Transcribing").fetchSemanticsNodes().isNotEmpty()
+            }
             compose.onNode(progress).assertIsDisplayed()
             compose.onNodeWithContentDescription("Pause recording").assertDoesNotExist()
             compose.onNodeWithContentDescription("Microphone level").assertDoesNotExist()
@@ -1091,12 +1097,11 @@ class InterfaceTest {
 
     @Test fun largeLegacyPassageUsesReadOnlyPagesAndSurvivesRotation() {
         val app = application()
-        val id = readySession(app.store, "Large legacy fixture", listOf("Initial text."))
+        // Older schemas had no size limit; the store itself never saves a draft this large.
         val legacy = "Legacy start🙂\r\n" + "a".repeat(2_100_000) + "\r\nLegacy end🙂"
+        val id = app.store.insertNoteForTests(listOf(legacy), 1_000, "Large legacy fixture", legacy = true)
         try {
-            val passage = app.store.paragraphs(id).single()
-            app.store.writableDatabase.execSQL("UPDATE passages SET text=? WHERE id=?", arrayOf<Any>(legacy, passage.id))
-            app.store.rename(id, "Large legacy fixture")
+            app.store.audioFile(id).writeBytes(ByteArray(32_000))
             waitForTitle("Large legacy fixture")
             compose.onNodeWithText("Large legacy fixture").performClick()
             waitForSessionReady("Large legacy fixture")
