@@ -26,6 +26,21 @@ class FormattingTest {
     }
 
     @Test
+    fun everyUnicodeSpaceSeparatesWords() {
+        val source = listOf(Word("мир!", 0, 400, 0.9, false, 0), Word("STRASSE", 500, 900, 0.3, false, 0),
+            Word("Hello,", 1_000, 1_400, 0.9, false, 0))
+        // No-break space, thin space and ideographic space, as pasted or typed on a phone keyboard.
+        val edited = "мир!\u00A0STRASSE\u2009Hello,\u3000"
+        val aligned = Alignment.align(source, edited)
+        assertEquals(listOf("мир!", "STRASSE", "Hello,"), aligned.map { it.text })
+        assertEquals(listOf(0L, 500L, 1_000L), aligned.map { it.startMs })
+        assertEquals(listOf(false, true, false), aligned.map { it.doubtful })
+        assertEquals(listOf(1..1, 3..4), TextWords.ranges("\u202Fa\tbc\n"))
+        assertEquals(listOf("a", "b"), TextWords.split(" a\u00A0\u00A0b "))
+        assertTrue(TextWords.ranges("\u00A0 \u2007").isEmpty())
+    }
+
+    @Test
     fun alignmentHandlesDeletionsMovesAndEmptyText() {
         val source = words("one", "two", "three", "four", "five")
         assertEquals(listOf(0, 1, 3, 4), Alignment.align(source, "one two four five").map { it.sourceIndex })

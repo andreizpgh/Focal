@@ -23,12 +23,11 @@ data class AlignedWord(
 object Alignment {
     /** Above this many cells the middle part of a heavy rewrite is left unmatched (bounded memory). */
     private const val MAX_TABLE_CELLS = 250_000L
-    private val TOKEN = Regex("\\S+")
 
     fun align(source: List<Word>, edited: String): List<AlignedWord> {
-        val tokens = TOKEN.findAll(edited).toList()
+        val tokens = TextWords.ranges(edited)
         val sourceKeys = source.map { key(it.text) }
-        val editedKeys = tokens.map { key(it.value) }
+        val editedKeys = tokens.map { key(edited.substring(it.first, it.last + 1)) }
         val match = arrayOfNulls<Int>(tokens.size)
         var head = 0
         while (head < tokens.size && head < source.size && editedKeys[head] == sourceKeys[head]) {
@@ -46,14 +45,15 @@ object Alignment {
         return tokens.mapIndexed { i, token ->
             val s = match[i]
             val word = s?.let(source::get)
+            val text = edited.substring(token.first, token.last + 1)
             AlignedWord(
-                text = token.value,
-                start = token.range.first,
-                end = token.range.last + 1,
+                text = text,
+                start = token.first,
+                end = token.last + 1,
                 sourceIndex = s,
                 startMs = word?.startMs,
                 endMs = word?.endMs,
-                doubtful = word != null && word.text == token.value && Doubt.isDoubtful(word),
+                doubtful = word != null && word.text == text && Doubt.isDoubtful(word),
             )
         }
     }
@@ -97,4 +97,28 @@ object Alignment {
             }
         }
     }
+}
+
+/**
+ * The words of user text: runs between Unicode spaces. No-break, thin and ideographic spaces separate words
+ * too, the same on the JVM and on Android (a `\s` regex class differs between them).
+ */
+object TextWords {
+    fun isSpace(c: Char): Boolean = Character.isWhitespace(c) || Character.isSpaceChar(c)
+
+    /** Char ranges of the words of [text], in order. */
+    fun ranges(text: CharSequence): List<IntRange> {
+        val out = ArrayList<IntRange>()
+        var start = -1
+        for (i in text.indices) {
+            if (isSpace(text[i])) {
+                if (start >= 0) { out += start until i; start = -1 }
+            } else if (start < 0) start = i
+        }
+        if (start >= 0) out += start until text.length
+        return out
+    }
+
+    /** The words of [text], in order. */
+    fun split(text: String): List<String> = ranges(text).map { text.substring(it.first, it.last + 1) }
 }

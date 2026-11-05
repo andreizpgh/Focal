@@ -1,6 +1,7 @@
 package app.focal.data
 
 import app.focal.core.Alignment
+import app.focal.core.TextWords
 import app.focal.core.Word
 
 /**
@@ -18,8 +19,6 @@ internal data class ParagraphContent(
 )
 
 internal object ParagraphEdits {
-    private val TOKEN = Regex("\\S+")
-
     /**
      * Splits [content] at char [offset] of its text. Source words and source text are divided where the
      * edited text was divided, using the word alignment that maps edits back onto the source.
@@ -37,10 +36,10 @@ internal object ParagraphEdits {
             sourceIsWords -> words!!.subList(0, wordCut!!).joinToString(" ") { it.text } to
                 words.subList(wordCut, words.size).joinToString(" ") { it.text }
             else -> {
-                val tokens = TOKEN.findAll(source).toList()
-                val pseudo = tokens.map { Word(it.value, 0, 0, null, false, 0) }
+                val tokens = TextWords.ranges(source)
+                val pseudo = tokens.map { Word(source.substring(it.first, it.last + 1), 0, 0, null, false, 0) }
                 val at = cut(pseudo, content.text, offset, leftText.isBlank())
-                val position = if (at < tokens.size) tokens[at].range.first else source.length
+                val position = if (at < tokens.size) tokens[at].first else source.length
                 source.substring(0, position).trimEnd() to source.substring(position).trimStart()
             }
         }

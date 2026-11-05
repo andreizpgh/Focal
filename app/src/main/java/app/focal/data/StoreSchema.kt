@@ -2,6 +2,7 @@ package app.focal.data
 
 import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
+import app.focal.core.TextWords
 import app.focal.core.Title
 import java.io.File
 
@@ -193,6 +194,6 @@ internal object StoreSchema {
     fun titleWords(db: SQLiteDatabase, noteId: String): List<String> =
         db.rawQuery("""SELECT substr(text,1,600) FROM paragraphs WHERE note_id=? AND hidden=0 AND trim(text)!=''
             ORDER BY ord LIMIT 3""", arrayOf(noteId)).use { c ->
-            buildList { while (c.moveToNext()) addAll(c.getString(0).split(Regex("\\s+")).filter { it.isNotEmpty() }) }
+            buildList { while (c.moveToNext()) addAll(TextWords.split(c.getString(0))) }
         }
 }

@@ -3,6 +3,7 @@ package app.focal.ui.state
 import androidx.compose.runtime.Immutable
 import app.focal.core.Alignment
 import app.focal.core.Doubt
+import app.focal.core.TextWords
 import app.focal.data.CaptureReason
 import app.focal.data.Note
 import app.focal.data.NoteState
@@ -212,13 +213,11 @@ data class ParagraphUi(
     }
 
     companion object {
-        private val TOKEN = Regex("\\S+")
-
         /** Words with times and doubt flags via [Alignment] (identity for unedited text). Off the main thread. */
         fun of(paragraph: Paragraph): ParagraphUi {
             val source = paragraph.sourceWords()
             val words = if (source == null) {
-                TOKEN.findAll(paragraph.text).map { WordUi(it.range.first, it.range.last + 1, null, null, false) }.toList()
+                TextWords.ranges(paragraph.text).map { WordUi(it.first, it.last + 1, null, null, false) }
             } else if (!paragraph.edited && source.joinToString(" ") { it.text } == paragraph.text) {
                 var at = 0
                 source.map { word ->
