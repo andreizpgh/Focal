@@ -13,6 +13,25 @@
   address (US public domain), from whisper.cpp's `samples/jfk.wav`. The test copy
   retains the original PCM samples with a minimal WAV header.
 
+
+The optional Ultra build also includes:
+
+- **Parakeet Ultra INT8 ONNX** — Moondream (M87 Labs, Inc.), based on NVIDIA's
+  Parakeet TDT 0.6B v3; licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode.en).
+  Marmalade [converted](https://github.com/maxwhipw/marmalade-stt-engines/blob/beadd617a8c999476d6ae327cde78f3a59dfcc44/NOTICE)
+  the model to ONNX, omitted the VAD head and quantized the transducer to INT8.
+  Focal uses its [release v1](https://github.com/maxwhipw/marmalade-stt-engines/releases/tag/v1)
+  files unchanged. Original models: [Moondream](https://huggingface.co/moondream/parakeet-ultra/tree/73175eb7aeb0d82f1e2a6b53b3aabc10a90bcd0b)
+  and [NVIDIA](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/tree/541d1f99c6b0c3cd0b11a95167540bb8edefd82b).
+- [sherpa-onnx 2.0.1](https://github.com/k2-fsa/sherpa-onnx/tree/af2d8d81dbfa61c4cea4c568da78f3982edca005): Apache License 2.0.
+- [ONNX Runtime 1.28.2](https://github.com/microsoft/onnxruntime/tree/v1.28.2): MIT License, Copyright Microsoft Corporation;
+  its upstream third-party dependency notices also apply.
+
+The Ultra APK includes the complete model attribution and license texts, Sherpa
+and ONNX Runtime licenses, and ONNX Runtime third-party notices in
+`assets/ultra-licenses.txt` (source: `app/src/ultra/assets/ultra-licenses.txt`).
+Asset hashes and build instructions are in [Ultra transcription](docs/ultra-transcription.md).
+
 Focal's source and original artwork are covered by the root MIT license.
 
 Silero VAD 5.1.2 — https://github.com/snakers4/silero-vad/tree/v5.1.2

@@ -84,7 +84,7 @@ internal enum class SessionAction { Rename, Share, CheckBackground, Alternative,
             SessionActionRow("Share text", Symbol.Share, loaded && shareReason == null && !closing, shareReason) { choose(SessionAction.Share) }
             SessionActionRow("Check background sound", Symbol.Audio,
                 loaded && backgroundReason == null && !closing, backgroundReason) { choose(SessionAction.CheckBackground) }
-            if (alternativeAvailable) SessionActionRow("Alternative transcript", Symbol.Audio,
+            if (alternativeAvailable) SessionActionRow("Transcribe with Ultra", Symbol.Audio,
                 loaded && alternativeReason == null && !closing, alternativeReason) { choose(SessionAction.Alternative) }
             SessionActionRow("Remove audio", Symbol.Audio, loaded && audioReason == null && !closing, audioReason) { choose(SessionAction.RemoveAudio) }
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)

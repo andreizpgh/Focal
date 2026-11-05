@@ -31,6 +31,29 @@ MODEL_TESTS = {
     ("app.focal.speech.NoiseDetectorTest", "realModelDistinguishesSpeechFromConstantAndSeededNoiseAndResets"),
     ("app.focal.speech.NoiseDetectorTest", "graphAbortIsAnErrorClearsStaleProbabilitiesAndContextCanBeReused"),
 }
+ULTRA_TESTS = {
+    ("app.focal.speech.UltraModelImportTest", "importBlocksPreviewAndCaptureUntilValidationFinishes"),
+    ("app.focal.speech.UltraModelFilesTest", "installsAllFilesTogetherAndReusesVerifiedCopy"),
+    ("app.focal.speech.UltraModelFilesTest", "insufficientStorageOpensNoAssetAndLeavesNoPartial"),
+    ("app.focal.speech.UltraModelFilesTest", "shortLongAndWrongChecksumAssetsNeverActivate"),
+    ("app.focal.speech.UltraModelFilesTest", "cancellationAfterFirstBufferCleansThePartialAndAllowsRetry"),
+    ("app.focal.speech.UltraModelFilesTest", "retriesAfterInterruptedCopyAndRepairsOnlyItsOwnCorruptVersion"),
+    ("app.focal.SavedAudioPreviewIntegrationTest", "copiesAlternativeFromSavedAudioAfterRecreationWithoutChangingTheRecording"),
+    ("app.focal.SavedAudioPreviewBackgroundIntegrationTest", "pressingHomeStopsTheAlternativeWithoutChangingTheSavedRecording"),
+}
+ULTRA_FILES = {
+    "encoder.int8.onnx": {"bytes": 652282526, "sha256": "7ef3ca4ffb49d60d4faa757b2930c8cec9927e73c24f6155d5b23a00229a7ed6"},
+    "decoder.int8.onnx": {"bytes": 11845274, "sha256": "1fab98fe6c12aded87d2da66272cc9e148d0a0044ce3850a12fe56302ec4a922"},
+    "joiner.int8.onnx": {"bytes": 6355277, "sha256": "8ba94c6919c17a6bd27368fb89533628a72ffc81d4acedebf3cdcb2cae331dbb"},
+    "tokens.txt": {
+        "bytes": 93939,
+        "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+    },
+}
+ULTRA_AAR_SHA256 = "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7"
+ULTRA_LIBRARIES = ("libonnxruntime.so", "libsherpa-onnx-c-api.so", "libsherpa-onnx-cxx-api.so", "libsherpa-onnx-jni.so")
+ULTRA_LICENSE_ASSET = "ultra-licenses.txt"
+ULTRA_LICENSE = {"bytes": 357104, "sha256": "9382a41d55759bf9276d8121011d891e64950bf0d71ea39652c89923e2f224e4"}
 ANIMATIONS = ("window_animation_scale", "transition_animation_scale", "animator_duration_scale")
 MODEL_NAME = "ggml-base-q5_1.bin"
 PRESENCE_NAME = "ggml-silero-v5.1.2.bin"
@@ -130,6 +153,13 @@ def gradle_environment():
     return env
 
 
+def build_tasks(*, ultra=False, release_checks=False):
+    tasks = [":core:test", ":app:testDebugUnitTest", ":app:lintDebug", ":app:assembleDebug", ":app:assembleDebugAndroidTest"]
+    if release_checks:
+        tasks += [":app:lintRelease", ":app:assembleRelease"]
+    return (["-PfocalUltra=true"] if ultra else []) + tasks
+
+
 def host_memory_bytes():
     if os.name == "nt":
         import ctypes
@@ -200,8 +230,45 @@ def verify_presence_model_source():
     return lock
 
 
-def verify_apks(app_apk, test_apk, model, presence_model):
+def verify_ultra_model_source():
+    folder = ROOT / "build/stt/parakeet-ultra-20261105/model"
+    if folder.is_symlink() or not folder.is_dir() or {path.name for path in folder.iterdir()} != set(ULTRA_FILES):
+        raise QAError("Ultra model directory must contain exactly the four pinned files.")
+    for name, identity in ULTRA_FILES.items():
+        path = folder / name
+        if path.is_symlink() or not path.is_file() or path.stat().st_size != identity["bytes"] or file_hash(path) != identity["sha256"]:
+            raise QAError(f"Ultra model is missing or corrupt: {name}")
+    aar = ROOT / "build/dependencies/sherpa-onnx-2.0.1.aar"
+    if aar.is_symlink() or not aar.is_file() or file_hash(aar) != ULTRA_AAR_SHA256:
+        raise QAError("Ultra speech runtime AAR is missing or corrupt.")
+    return {"model_files": ULTRA_FILES, "aar_sha256": ULTRA_AAR_SHA256}
+
+
+def verify_ultra_apk(apk_path, model_files):
+    with zipfile.ZipFile(apk_path) as apk:
+        names = apk.namelist()
+        for name, identity in {**model_files, ULTRA_LICENSE_ASSET: ULTRA_LICENSE}.items():
+            entry = "assets/" + name
+            if names.count(entry) != 1:
+                raise QAError(f"APK must contain exactly one Ultra asset: {name}")
+            info = apk.getinfo(entry)
+            if info.file_size != identity["bytes"]:
+                raise QAError(f"APK Ultra asset has the wrong size: {name}")
+            if name.endswith(".onnx") and info.compress_type != zipfile.ZIP_STORED:
+                raise QAError(f"APK Ultra ONNX asset must be uncompressed: {name}")
+            with apk.open(info) as stream:
+                if sha_stream(stream) != identity["sha256"]:
+                    raise QAError(f"APK Ultra asset SHA-256 mismatch: {name}")
+        for abi in ("arm64-v8a", "x86_64"):
+            for name in ULTRA_LIBRARIES:
+                if names.count(f"lib/{abi}/{name}") != 1:
+                    raise QAError(f"APK Ultra runtime library missing or duplicated: {abi}/{name}")
+
+
+def verify_apks(app_apk, test_apk, model, presence_model, *, ultra=False):
     with zipfile.ZipFile(app_apk) as apk:
+        if not ultra and "assets/" + ULTRA_LICENSE_ASSET in apk.namelist():
+            raise QAError("Non-Ultra APK unexpectedly contains the Ultra license asset.")
         info = json.loads(apk.read("assets/model-provenance.json"))
         if any(info.get(key) != model.get(key) for key in ("repository", "revision", "filename", "sha256")):
             raise QAError("Built APK model provenance does not match the lock.")
@@ -246,10 +313,25 @@ def verify_installed_model(adb, expected, *, deadline_seconds=180, poll_seconds=
             time.sleep(poll_seconds)
 
 
-def expected_instrumentation_tests():
-    root = ROOT / "app/src/androidTest/java"
+def verify_installed_apk(adb, package, expected):
+    result = adb("shell", "pm", "path", package, timeout=30).splitlines()
+    if len(result) != 1 or not result[0].startswith("package:"):
+        raise QAError("Expected exactly one installed base APK.")
+    path = result[0].removeprefix("package:").strip()
+    if not re.fullmatch(r"/data/app/[A-Za-z0-9._/~=+\-]+/base\.apk", path):
+        raise QAError("Unexpected installed base APK path.")
+    output = adb("shell", "sha256sum", path, timeout=120)
+    if not re.match(r"^" + re.escape(expected) + r"\s", output):
+        raise QAError(f"Installed {package} APK differs from the verified artifact.")
+    return expected
+
+
+def expected_instrumentation_tests(ultra=False):
+    roots = [ROOT / "app/src/androidTest/java"]
+    if ultra:
+        roots.extend((ROOT / "app/src/alternativeTest/java", ROOT / "app/src/ultraTest/java"))
     expected = set()
-    for path in root.rglob("*"):
+    for path in (path for root in roots for path in root.rglob("*")):
         if path.suffix not in (".kt", ".java"):
             continue
         text = path.read_text(encoding="utf-8")
@@ -269,6 +351,8 @@ def expected_instrumentation_tests():
             expected.add(case)
     if not MODEL_TESTS <= expected:
         raise QAError("The source suite is missing required real-model tests.")
+    if ultra and not ULTRA_TESTS <= expected:
+        raise QAError("The Ultra suite is missing required extraction or real-preview tests.")
     return expected
 
 
@@ -347,6 +431,7 @@ def argument_parser():
     parser.add_argument("--repeat", type=int, choices=range(1, 21), default=1, metavar="1..20")
     parser.add_argument("--timeout-minutes", type=int, choices=range(5, 121), default=30, metavar="5..120")
     parser.add_argument("--release-checks", action="store_true", help="Also build release lint and unsigned release APK")
+    parser.add_argument("--ultra", action="store_true", help="Verify the opt-in bundled Ultra variant and its additional tests")
     parser.add_argument("--adb", default="adb", help="Path to adb (default: adb on PATH)")
     return parser
 
@@ -364,7 +449,8 @@ def main(argv=None):
     initial_source = source_snapshot()
     model = verify_model_source()
     presence_model = verify_presence_model_source()
-    expected = expected_instrumentation_tests()
+    ultra_model = verify_ultra_model_source() if args.ultra else None
+    expected = expected_instrumentation_tests(ultra=args.ultra)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     report = ROOT / "build/local-emulator-qa" / stamp
     report.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -373,7 +459,8 @@ def main(argv=None):
     print(f"Private report directory: {report}", flush=True)
     metadata = {"schema": 1, "source": initial_source, "serial": args.serial, "repeat": args.repeat,
                 "expected_instrumentation_tests": sorted(f"{a}.{b}" for a, b in expected),
-                "release_checks": args.release_checks, "model_sha256": model["sha256"],
+                "release_checks": args.release_checks, "ultra_enabled": args.ultra, "ultra_model": ultra_model,
+                "model_sha256": model["sha256"],
                 "speech_presence_model": {key: presence_model[key] for key in ("repository", "revision", "filename", "bytes", "sha256")},
                 "host": {"os": platform.system(), "os_release": platform.release(), "arch": platform.machine(),
                          "logical_cpus": os.cpu_count(), "memory_bytes": host_memory_bytes()},
@@ -385,9 +472,7 @@ def main(argv=None):
                           "java": run(["java", "-version"]).splitlines()[0],
                           "python": platform.python_version()}}
     (report / "manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    tasks = [":core:test", ":app:testDebugUnitTest", ":app:lintDebug", ":app:assembleDebug", ":app:assembleDebugAndroidTest"]
-    if args.release_checks:
-        tasks += [":app:lintRelease", ":app:assembleRelease"]
+    tasks = build_tasks(ultra=args.ultra, release_checks=args.release_checks)
     print("Building and running host checks once; see build.log.", flush=True)
     with (report / "build.log").open("w", encoding="utf-8") as log:
         result = subprocess.run(gradle_command(tasks), cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=False, env=gradle_environment())
@@ -403,10 +488,19 @@ def main(argv=None):
             shutil.copy2(source, report / name)
     app_apk = ROOT / "app/build/outputs/apk/debug/app-debug.apk"
     test_apk = ROOT / "app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
-    verify_apks(app_apk, test_apk, model, presence_model)
+    verify_apks(app_apk, test_apk, model, presence_model, ultra=args.ultra)
+    if ultra_model is not None:
+        verify_ultra_apk(app_apk, ultra_model["model_files"])
+    if args.release_checks:
+        release_apk = ROOT / "app/build/outputs/apk/release/app-release-unsigned.apk"
+        verify_apks(release_apk, test_apk, model, presence_model, ultra=args.ultra)
+        if ultra_model is not None:
+            verify_ultra_apk(release_apk, ultra_model["model_files"])
     if source_snapshot() != initial_source:
         raise QAError("Source changed during the build; rerun QA against a stable checkout.")
     metadata["artifacts"] = {"debug_apk_sha256": file_hash(app_apk), "test_apk_sha256": file_hash(test_apk)}
+    if args.ultra and args.release_checks:
+        metadata["artifacts"]["release_apk_sha256"] = file_hash(release_apk)
     metadata["tools"]["gradle"] = run(gradle_command(["--version"]), env=gradle_environment(), timeout=60).split("Gradle ")[-1].splitlines()[0]
     emulator_name = "emulator.exe" if os.name == "nt" else "emulator"
     sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
@@ -417,8 +511,13 @@ def main(argv=None):
         metadata["tools"]["emulator"] = "unavailable"
     (report / "manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print("Installing verified debug and test APKs; existing app data is retained.", flush=True)
-    adb("install", "-r", str(app_apk), timeout=120)
+    adb("install", "-r", str(app_apk), timeout=300 if args.ultra else 120)
     adb("install", "-r", str(test_apk), timeout=120)
+    if args.ultra:
+        metadata["installed_apk_sha256"] = {
+            "app": verify_installed_apk(adb, "app.focal", metadata["artifacts"]["debug_apk_sha256"]),
+            "test": verify_installed_apk(adb, "app.focal.test", metadata["artifacts"]["test_apk_sha256"]),
+        }
     print("Verifying the model actually installed in the app.", flush=True)
     metadata["installed_model_sha256"] = verify_installed_model(adb, model["sha256"])
     adb("shell", "am", "force-stop", "app.focal")

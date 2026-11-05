@@ -22,9 +22,10 @@ import java.util.concurrent.atomic.AtomicReference
 class SavedAudioPreviewTest {
     @get:Rule val temporary = TemporaryFolder()
 
-    @Test fun completeQuietPcmUsesOverlappingWindowsAndKeepsTheUnpaddedTail() {
-        val starts = listOf(0, WINDOW - OVERLAP, 2 * (WINDOW - OVERLAP))
-        val ends = listOf(WINDOW, 2 * WINDOW - OVERLAP, 2 * WINDOW - OVERLAP + 19)
+    @Test fun continuousQuietPcmKeepsOverlapAndFiveSecondsOfNewTail() {
+        val total = 63 * RATE + 19
+        val starts = listOf(0, WINDOW - OVERLAP, total - TAIL - OVERLAP)
+        val ends = listOf(WINDOW, total - TAIL, total)
         val expected = listOf("Keep this ending.", "This ending continues.", "Continues here.")
         val file = pcm(ends.last(), ::quietSample)
         var calls = 0
@@ -46,11 +47,136 @@ class SavedAudioPreviewTest {
 
         assertEquals(expected, preview.map { it.text })
         assertTrue(preview.all { it.uncertain })
-        assertEquals(listOf(0L, 15_500L, 31_000L), preview.map { it.start })
-        assertEquals(listOf(16_000L, 31_500L, 31_502L), preview.map { it.end })
+        assertEquals(listOf(0L, 29_500L, 57_501L), preview.map { it.start })
+        assertEquals(listOf(30_000L, 58_002L, 63_002L), preview.map { it.end })
         assertEquals(ends.map { it to ends.last() }, progress)
         assertEquals(3, calls)
         assertEquals(1, closes)
+    }
+
+    @Test fun formerSeamAndThirtySecondLimitBothDecodeTheWholeSourceOnce() {
+        for (frames in listOf(17 * RATE + 19, WINDOW)) {
+            val file = pcm(frames, ::quietSample)
+            var calls = 0
+            val passages = SavedAudioPreview.process(file, decoderFactory = {
+                object : SavedAudioPreview.Decoder {
+                    override fun decode(samples: FloatArray): String {
+                        calls++
+                        assertEquals(frames, samples.size)
+                        assertTrue(samples.indices.all { samples[it] == quietSample(it) / 32768f })
+                        return "One complete phrase."
+                    }
+                    override fun close() = Unit
+                }
+            })
+            assertEquals(1, calls)
+            assertEquals(0L, passages.single().start)
+            assertEquals((frames + 15) / 16L, passages.single().end)
+        }
+    }
+
+    @Test fun oneFramePastThirtySecondsStillLeavesFiveSecondsOfNewAudio() {
+        val file = pcm(WINDOW + 1, ::quietSample)
+        val lengths = mutableListOf<Int>()
+        SavedAudioPreview.process(file, decoderFactory = {
+            object : SavedAudioPreview.Decoder {
+                override fun decode(samples: FloatArray): String {
+                    lengths += samples.size
+                    return "Phrase."
+                }
+                override fun close() = Unit
+            }
+        })
+        assertEquals(listOf(WINDOW + 1 - TAIL, TAIL + OVERLAP), lengths)
+    }
+
+    @Test fun cutsAtLatestQualifiedLowEnergyMidpointWithoutOverlap() {
+        val frame = RATE / 50
+        val latest = 28 * RATE
+        val later = 29 * RATE
+        fun sample(index: Int): Int {
+            val amplitude = when (index) {
+                in 26 * RATE + RATE / 2 until 26 * RATE + RATE / 2 + 12 * frame -> 0
+                in latest until latest + 12 * frame -> 0
+                in later + 6 * frame until later + 7 * frame -> 4
+                in later until later + 12 * frame -> 0
+                else -> 20
+            }
+            return 741 + if (index % 2 == 0) amplitude else -amplitude
+        }
+        val total = 38 * RATE + 11
+        val cut = latest + 6 * frame
+        val starts = listOf(0, cut)
+        val ends = listOf(cut, total)
+        val file = pcm(total, ::sample)
+        var calls = 0
+        val progress = mutableListOf<Int>()
+        val passages = SavedAudioPreview.process(file, decoderFactory = {
+            object : SavedAudioPreview.Decoder {
+                override fun decode(samples: FloatArray): String {
+                    val start = starts[calls]
+                    assertEquals(ends[calls] - start, samples.size)
+                    assertTrue(samples.indices.all { samples[it] == sample(start + it) / 32768f })
+                    return "Phrase ${++calls}."
+                }
+                override fun close() = Unit
+            }
+        }, onProgress = { covered, _ -> progress += covered })
+        assertEquals(2, calls)
+        assertEquals(ends, progress)
+        assertEquals(passages[0].end, passages[1].start)
+    }
+
+    @Test fun earlierPauseAvoidsHardCutAndPreservesRepeatedText() {
+        val frame = RATE / 50
+        val earlier = 39 * RATE + RATE / 2
+        val allowed = 44 * RATE
+        fun sample(index: Int): Int = when (index) {
+            in earlier until earlier + 12 * frame -> 0
+            in allowed until allowed + 12 * frame -> 0
+            else -> if (index % 2 == 0) 20 else -20
+        }
+        val total = 61 * RATE
+        val cut = allowed + 6 * frame
+        val starts = listOf(0, WINDOW - OVERLAP, cut)
+        val ends = listOf(WINDOW, cut, total)
+        var calls = 0
+        val passages = SavedAudioPreview.process(pcm(total, ::sample), decoderFactory = {
+            object : SavedAudioPreview.Decoder {
+                override fun decode(samples: FloatArray): String {
+                    val start = starts[calls]
+                    assertEquals(ends[calls] - start, samples.size)
+                    assertTrue(samples.indices.all { samples[it] == sample(start + it) / 32768f })
+                    calls++
+                    return "A deliberately repeated sentence."
+                }
+                override fun close() = Unit
+            }
+        })
+        assertEquals(3, calls)
+        assertEquals(List(3) { "A deliberately repeated sentence." }, passages.map { it.text })
+        assertEquals(passages[1].end, passages[2].start)
+    }
+
+    @Test fun pauseBeforeTenSecondsOfNewAudioCannotSplitTheWindow() {
+        val earlier = 39 * RATE + RATE / 2
+        val lengths = mutableListOf<Int>()
+        val source = pcm(61 * RATE) { index ->
+            if (index in earlier until earlier + 12 * (RATE / 50)) 0
+            else if (index % 2 == 0) 20 else -20
+        }
+        SavedAudioPreview.process(source, decoderFactory = {
+            object : SavedAudioPreview.Decoder {
+                override fun decode(samples: FloatArray): String {
+                    lengths += samples.size
+                    return "The recording continues."
+                }
+                override fun close() = Unit
+            }
+        })
+        // The second window starts at 29.5s, but new audio starts at 30s.
+        // The 39.5s pause must not qualify relative to the overlapping start.
+        assertEquals(listOf(30 * RATE, 26 * RATE + OVERLAP, TAIL + OVERLAP), lengths)
     }
 
     @Test fun exactZeroAndConstantOffsetSkipEvenOpeningTheDecoder() {
@@ -61,7 +187,7 @@ class SavedAudioPreviewTest {
                 error("Exact constant audio should not load the recognizer.")
             }, onProgress = { covered, total -> progress += covered to total })
             assertTrue(preview.isEmpty())
-            assertEquals(listOf(WINDOW to WINDOW + 1, WINDOW + 1 to WINDOW + 1), progress)
+            assertEquals(listOf(WINDOW + 1 - TAIL to WINDOW + 1, WINDOW + 1 to WINDOW + 1), progress)
         }
     }
 
@@ -169,7 +295,8 @@ class SavedAudioPreviewTest {
 
     private companion object {
         const val RATE = SavedAudioPreview.SAMPLE_RATE
-        const val WINDOW = 16 * RATE
+        const val WINDOW = 30 * RATE
         const val OVERLAP = RATE / 2
+        const val TAIL = 5 * RATE
     }
 }

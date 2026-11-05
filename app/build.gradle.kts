@@ -1,5 +1,6 @@
 import groovy.json.JsonSlurper
 import java.security.MessageDigest
+import java.nio.file.Files
 
 plugins {
     id("com.android.application")
@@ -21,11 +22,16 @@ require(parakeetPreviewOption == null || parakeetPreviewOption == "true") {
     "focalParakeetPreview must be true; omit it for a normal build."
 }
 val parakeetPreview = parakeetPreviewOption == "true"
-require(listOf(nativeFaultVariant != null, parakeetTests, parakeetPreview).count { it } <= 1) {
+val ultraOption = providers.gradleProperty("focalUltra").orNull
+require(ultraOption == null || ultraOption == "true") {
+    "focalUltra must be true; omit it for a normal build."
+}
+val ultra = ultraOption == "true"
+require(listOf(nativeFaultVariant != null, parakeetTests, parakeetPreview, ultra).count { it } <= 1) {
     "Choose only one research build option."
 }
 val parakeetRuntime = rootProject.file("build/dependencies/sherpa-onnx-2.0.1.aar")
-if (parakeetTests || parakeetPreview) {
+if (parakeetTests || parakeetPreview || ultra) {
     require(parakeetRuntime.isFile) { "Missing verified Parakeet test runtime. See docs/parakeet-android-probe.md." }
     val digest = MessageDigest.getInstance("SHA-256")
     parakeetRuntime.inputStream().use { input ->
@@ -50,8 +56,9 @@ android {
         applicationId = "app.focal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.1.0-alpha.7"
+        versionCode = 8
+        versionName = "0.1.0-alpha.8"
+        buildConfigField("boolean", "FOCAL_ULTRA_BUNDLED", ultra.toString())
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         externalNativeBuild {
             cmake {
@@ -66,7 +73,10 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
-    androidResources { noCompress += "bin" }
+    androidResources {
+        noCompress += "bin"
+        if (ultra) noCompress += "onnx"
+    }
     buildTypes {
         debug {
             externalNativeBuild { cmake { arguments += "-DFOCAL_ANDROID_DEBUG_BUILD=ON" } }
@@ -76,6 +86,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (ultra) proguardFile("ultra-proguard-rules.pro")
         }
     }
     if (nativeFaultVariant != null) {
@@ -88,9 +99,16 @@ android {
         sourceSets.getByName("androidTest").java.setSrcDirs(listOf("src/parakeetProbeTest/java"))
     }
     sourceSets.getByName("debug").java.srcDir(
-        if (parakeetPreview) "src/parakeetPreview/java" else "src/standard/java")
-    sourceSets.getByName("release").java.srcDir("src/standard/java")
+        if (parakeetPreview || ultra) "src/parakeetPreview/java" else "src/standard/java")
+    sourceSets.getByName("release").java.srcDir(
+        if (ultra) "src/parakeetPreview/java" else "src/standard/java")
+    if (ultra) {
+        sourceSets.getByName("main").assets.srcDir(rootProject.file("build/stt/parakeet-ultra-20261105/model"))
+        sourceSets.getByName("main").assets.srcDir("src/ultra/assets")
+    }
     if (parakeetPreview) sourceSets.getByName("androidTest").java.srcDir("src/parakeetPreviewTest/java")
+    if (parakeetPreview || ultra) sourceSets.getByName("androidTest").java.srcDir("src/alternativeTest/java")
+    if (ultra) sourceSets.getByName("androidTest").java.srcDir("src/ultraTest/java")
     lint { abortOnError = true }
 }
 
@@ -127,6 +145,7 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     if (parakeetTests) androidTestImplementation(files(parakeetRuntime))
     if (parakeetPreview) debugImplementation(files(parakeetRuntime))
+    if (ultra) implementation(files(parakeetRuntime))
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
@@ -172,4 +191,41 @@ val verifyBundledSpeechPresenceModel by tasks.registering {
 }
 tasks.matching { it.name in setOf("preDebugBuild", "preReleaseBuild") }.configureEach {
     dependsOn(verifyBundledSpeechPresenceModel)
+}
+
+// Opt-in only: source files remain in ignored local cache; no extra 670 MB staging copy.
+if (ultra) {
+    val verifyBundledUltraModel by tasks.registering {
+        group = "verification"
+        val folder = rootProject.file("build/stt/parakeet-ultra-20261105/model")
+        val expected = mapOf(
+            "encoder.int8.onnx" to (652_282_526L to "7ef3ca4ffb49d60d4faa757b2930c8cec9927e73c24f6155d5b23a00229a7ed6"),
+            "decoder.int8.onnx" to (11_845_274L to "1fab98fe6c12aded87d2da66272cc9e148d0a0044ce3850a12fe56302ec4a922"),
+            "joiner.int8.onnx" to (6_355_277L to "8ba94c6919c17a6bd27368fb89533628a72ffc81d4acedebf3cdcb2cae331dbb"),
+            "tokens.txt" to (93_939L to "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
+        )
+        doLast {
+            check(folder.isDirectory && !Files.isSymbolicLink(folder.toPath()) &&
+                folder.listFiles()?.map { it.name }?.toSet() == expected.keys) {
+                "Ultra asset directory must contain exactly the four pinned model files."
+            }
+            expected.forEach { (name, identity) ->
+                val model = folder.resolve(name)
+                check(model.isFile && !Files.isSymbolicLink(model.toPath()) && model.length() == identity.first) {
+                    "Missing or invalid Ultra file: $name"
+                }
+                val digest = MessageDigest.getInstance("SHA-256")
+                model.inputStream().use { input ->
+                    val buffer = ByteArray(65_536)
+                    while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
+                }
+                check(digest.digest().joinToString("") { "%02x".format(it) } == identity.second) {
+                    "Ultra file checksum mismatch: $name"
+                }
+            }
+        }
+    }
+    tasks.matching { it.name in setOf("preDebugBuild", "preReleaseBuild", "mergeDebugAssets", "mergeReleaseAssets") }.configureEach {
+        dependsOn(verifyBundledUltraModel)
+    }
 }

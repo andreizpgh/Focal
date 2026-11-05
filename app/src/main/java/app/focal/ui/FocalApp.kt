@@ -584,6 +584,7 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                     else -> null
                 }).takeUnless { loading },
                 alternativeReason = (audioReason ?: when {
+                    preparing -> "Wait for the speech model to finish preparing"
                     actionNote?.state != "READY" -> "Finish the original transcription first"
                     library.audioBytes > 180L * 16_000 * 2 -> "Available for recordings up to three minutes"
                     else -> null
@@ -603,7 +604,10 @@ internal fun fitsTextTransferBudget(text: String): Boolean =
                     SessionAction.Alternative -> {
                         val id = actionNote?.id
                         closeDialog()
-                        if (id != null && !model.alternativePreview.start(id)) notify("Finish the current operation first.")
+                        if (id != null) {
+                            if (model.preparing.value) notify("Wait for the speech model to finish preparing.")
+                            else if (!model.alternativePreview.start(id)) notify("Finish the current operation first.")
+                        }
                     }
                     SessionAction.RemoveAudio -> if (canRemoveAudio) dialog = "audio" else closeDialog()
                     SessionAction.Delete -> if (actionNote != null && !actionActive) dialog = "delete" else closeDialog()

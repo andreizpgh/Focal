@@ -1,0 +1,241 @@
+{
+  "schema": 1,
+  "cases": 42,
+  "cases_per_language": 6,
+  "overall": {
+    "base": {
+      "words": 961,
+      "word_errors": 184,
+      "characters": 5010,
+      "character_errors": 369,
+      "wer": 0.1914672216441207,
+      "lexical_cer": 0.07365269461077845
+    },
+    "ultra": {
+      "words": 961,
+      "word_errors": 51,
+      "characters": 5010,
+      "character_errors": 94,
+      "wer": 0.053069719042663895,
+      "lexical_cer": 0.0187624750499002
+    },
+    "word_error_change": -133,
+    "character_error_change": -275,
+    "relative_word_error_reduction": 0.7228260869565217
+  },
+  "per_language": {
+    "en": {
+      "base": {
+        "words": 123,
+        "word_errors": 12,
+        "characters": 609,
+        "character_errors": 38,
+        "wer": 0.0975609756097561,
+        "lexical_cer": 0.06239737274220033
+      },
+      "ultra": {
+        "words": 123,
+        "word_errors": 7,
+        "characters": 609,
+        "character_errors": 22,
+        "wer": 0.056910569105691054,
+        "lexical_cer": 0.0361247947454844
+      },
+      "word_error_change": -5,
+      "character_error_change": -16,
+      "relative_word_error_reduction": 0.4166666666666667
+    },
+    "ru": {
+      "base": {
+        "words": 123,
+        "word_errors": 31,
+        "characters": 754,
+        "character_errors": 51,
+        "wer": 0.25203252032520324,
+        "lexical_cer": 0.06763925729442971
+      },
+      "ultra": {
+        "words": 123,
+        "word_errors": 12,
+        "characters": 754,
+        "character_errors": 14,
+        "wer": 0.0975609756097561,
+        "lexical_cer": 0.01856763925729443
+      },
+      "word_error_change": -19,
+      "character_error_change": -37,
+      "relative_word_error_reduction": 0.6129032258064516
+    },
+    "de": {
+      "base": {
+        "words": 136,
+        "word_errors": 32,
+        "characters": 809,
+        "character_errors": 51,
+        "wer": 0.23529411764705882,
+        "lexical_cer": 0.0630407911001236
+      },
+      "ultra": {
+        "words": 136,
+        "word_errors": 6,
+        "characters": 809,
+        "character_errors": 9,
+        "wer": 0.04411764705882353,
+        "lexical_cer": 0.011124845488257108
+      },
+      "word_error_change": -26,
+      "character_error_change": -42,
+      "relative_word_error_reduction": 0.8125
+    },
+    "fr": {
+      "base": {
+        "words": 178,
+        "word_errors": 56,
+        "characters": 785,
+        "character_errors": 148,
+        "wer": 0.3146067415730337,
+        "lexical_cer": 0.18853503184713377
+      },
+      "ultra": {
+        "words": 178,
+        "word_errors": 14,
+        "characters": 785,
+        "character_errors": 32,
+        "wer": 0.07865168539325842,
+        "lexical_cer": 0.04076433121019108
+      },
+      "word_error_change": -42,
+      "character_error_change": -116,
+      "relative_word_error_reduction": 0.75
+    },
+    "es": {
+      "base": {
+        "words": 128,
+        "word_errors": 10,
+        "characters": 642,
+        "character_errors": 18,
+        "wer": 0.078125,
+        "lexical_cer": 0.028037383177570093
+      },
+      "ultra": {
+        "words": 128,
+        "word_errors": 5,
+        "characters": 642,
+        "character_errors": 7,
+        "wer": 0.0390625,
+        "lexical_cer": 0.010903426791277258
+      },
+      "word_error_change": -5,
+      "character_error_change": -11,
+      "relative_word_error_reduction": 0.5
+    },
+    "it": {
+      "base": {
+        "words": 116,
+        "word_errors": 26,
+        "characters": 628,
+        "character_errors": 31,
+        "wer": 0.22413793103448276,
+        "lexical_cer": 0.04936305732484077
+      },
+      "ultra": {
+        "words": 116,
+        "word_errors": 2,
+        "characters": 628,
+        "character_errors": 4,
+        "wer": 0.017241379310344827,
+        "lexical_cer": 0.006369426751592357
+      },
+      "word_error_change": -24,
+      "character_error_change": -27,
+      "relative_word_error_reduction": 0.9230769230769231
+    },
+    "pt": {
+      "base": {
+        "words": 157,
+        "word_errors": 17,
+        "characters": 783,
+        "character_errors": 32,
+        "wer": 0.10828025477707007,
+        "lexical_cer": 0.04086845466155811
+      },
+      "ultra": {
+        "words": 157,
+        "word_errors": 5,
+        "characters": 783,
+        "character_errors": 6,
+        "wer": 0.03184713375796178,
+        "lexical_cer": 0.007662835249042145
+      },
+      "word_error_change": -12,
+      "character_error_change": -26,
+      "relative_word_error_reduction": 0.7058823529411765
+    }
+  },
+  "quality_gates": {
+    "word_error_reduction_at_least_20_percent": true,
+    "lexical_cer_nonworse": true,
+    "all_languages_word_errors_improve": true,
+    "scope": "Quality component only; DEV noise/seam controls, release QA and physical-phone gates are separate."
+  },
+  "scope": "Same PCM; Base host full-PCM vs Android Ultra saved-audio; no cross-platform speed comparison.",
+  "limitations": [
+    "FLEURS read speech is not a phone or conversational-language acceptance test.",
+    "Cloud overlap check lacks raw PCM hashes; available WAV and reference hashes were checked.",
+    "No acoustic adjudication has been performed."
+  ],
+  "status": "COMPLETE_INDEPENDENT_RAW_AUDIT_PASS",
+  "provenance": {
+    "baseline_plan_sha256": "1d856425e152869193b00cc145e6bbb776449cba1332f8065c60b1644bc90a28",
+    "android_plan_sha256": "a216eab9e120fec5e6d5f2d485e16a9149a97da6cb741e333eaed54390f2ec16",
+    "scoring_script_sha256": "5ade87df73341d04a30250c3a2512ff09626a5124929b76cb4dbaf4a4ccc14fc",
+    "lexical_scorer_sha256": "dfde50ec467c30bfddabd19593ee00ba187caca0b1d202b557fa2b67a2946abb",
+    "metadata_cohort_sha256": "c26eacf2674cec6404cd2962bf88ba3f1cdcd61b8af2062372c7e1441317a950",
+    "source_snapshot_sha256": "63f3854e1d7a78476516fc18a912c40f98ffcf2383888fcc173464341a1f612c",
+    "source_archive_sha256": "3f05bcd845c444e14253c6c648a6261c73928ef9664d8e597b9d5c49d4ba4e3f",
+    "research_app_apk_sha256": "1280680e52b384f484d1b1ad367ca4a86247f80a3ff179c4704e4197ac93f104",
+    "research_test_apk_sha256": "96d4be5ead3e1ba3524acce198c8106b1fd5261684c2d18346f106fbc1fcaeb8",
+    "sherpa_onnx_aar_sha256": "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7",
+    "whisper_probe_sha256": "2c17f90bb6d322c413a914df1d5f7b193aa7b65926591c8d120724b0632fbf2b",
+    "whisper_base_model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "ultra_model_files": [
+      {
+        "name": "encoder.int8.onnx",
+        "sha256": "7ef3ca4ffb49d60d4faa757b2930c8cec9927e73c24f6155d5b23a00229a7ed6"
+      },
+      {
+        "name": "decoder.int8.onnx",
+        "sha256": "1fab98fe6c12aded87d2da66272cc9e148d0a0044ce3850a12fe56302ec4a922"
+      },
+      {
+        "name": "joiner.int8.onnx",
+        "sha256": "8ba94c6919c17a6bd27368fb89533628a72ffc81d4acedebf3cdcb2cae331dbb"
+      },
+      {
+        "name": "tokens.txt",
+        "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+      }
+    ]
+  },
+  "method": {
+    "base": "42 fresh cold full-PCM host calls; explicit language, beam 3, two CPU threads, empty context",
+    "ultra": "42 fresh saved-audio Android emulator calls; automatic language, greedy, two CPU threads, one unpadded window per input",
+    "audio": "identical verified PCM per pair; 42 disjoint FLEURS test clips, six per language",
+    "quality": "lexical word and character errors; no raw audio or text published"
+  },
+  "independent_audit": {
+    "raw_receipts_requests_and_recomputed_scores": "PASS",
+    "model_staging_environment_and_artifacts": "PASS",
+    "word_error_per_clip": {
+      "improved": 31,
+      "unchanged": 11,
+      "worsened": 0
+    },
+    "character_error_per_clip": {
+      "improved": 32,
+      "unchanged": 9,
+      "worsened": 1
+    },
+    "acoustic_adjudication": "not performed"
+  }
+}

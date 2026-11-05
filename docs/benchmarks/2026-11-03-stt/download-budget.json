@@ -1077,8 +1077,14 @@
       "bytes": 2588147712,
       "kind": "audio-language-model",
       "note": "One immutable-commit LiteRT E2B bundle with audio support; API/native Linux preflight passed. Published LFS SHA and size checked after download. Research only; no G5 alternative or repeated weight download."
+    },
+    {
+      "name": "ultra-android-license-original-texts-attempt-1",
+      "bytes": 512000,
+      "kind": "licenses",
+      "note": "Canonical full CC-BY-4.0 plus pinned Sherpa/ONNX license and third-party notices for bundled Ultra APK; capped combined transfer, no weights."
     }
   ],
-  "reserved_bytes": 7850106526,
+  "reserved_bytes": 7850618526,
   "note": "Conservative upper bounds: prior checkpoint transfers, local baseline model, disjoint FLEURS cohort, research-only Silero VAD, matching host sanitizer runtimes, metadata/retries, and one reserved publication CI. Carry the total forward; never reset it. On 2026-11-04 the owner increased the cumulative local, removable research-download ceiling to 5 GB. Reserve every attempt before transfer; no reset. On 2026-11-05 the owner increased the cumulative ceiling to 8.5 GB for Parakeet Ultra, Gemma 4 E2B audio, necessary runtimes and a small corpus; preserve all earlier reservations."
 }

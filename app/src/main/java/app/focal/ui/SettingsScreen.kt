@@ -4,8 +4,11 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -124,21 +127,42 @@ import kotlinx.coroutines.withContext
     }
 }
 
+private val licenseParagraphBreak = Regex("\\r?\\n(?:[ \\t]*\\r?\\n)+")
+
 @Composable private fun LicensesDialog(dismiss: () -> Unit) {
     val context = LocalContext.current
-    var text by remember { mutableStateOf<String?>(null) }
+    var paragraphs by remember { mutableStateOf<List<String>?>(null) }
     var failed by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
     LaunchedEffect(attempt) {
         failed = false
-        try { text = withContext(Dispatchers.IO) { context.assets.open("licenses.txt").bufferedReader().use { it.readText() } } }
+        try {
+            paragraphs = withContext(Dispatchers.IO) {
+                val names = if (BuildConfig.FOCAL_ULTRA_BUNDLED) listOf("licenses.txt", "ultra-licenses.txt")
+                else listOf("licenses.txt")
+                names.flatMap { name ->
+                    context.assets.open(name).bufferedReader().use { reader ->
+                        licenseParagraphBreak.split(reader.readText()).filter { it.isNotBlank() }
+                    }
+                }
+            }
+        }
         catch (e: Exception) { if (e is CancellationException) throw e; failed = true }
     }
     AlertDialog(
         onDismissRequest = dismiss, title = { Text("Open-source licenses") },
         text = {
             when {
-                text != null -> Text(text.orEmpty(), modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall)
+                paragraphs != null -> SelectionContainer {
+                    LazyColumn(
+                        Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(paragraphs.orEmpty()) { paragraph ->
+                            Text(paragraph, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
                 failed -> Column {
                     Text("Couldn't open the licenses.", style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { attempt++ }, contentPadding = PaddingValues(0.dp)) { Text("Try again") }

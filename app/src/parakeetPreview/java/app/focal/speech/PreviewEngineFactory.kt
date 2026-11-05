@@ -1,5 +1,7 @@
 package app.focal.speech
 
+import android.content.Context
+import android.content.res.AssetManager
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
@@ -7,25 +9,45 @@ import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineTransducerModelConfig
 import com.k2fsa.sherpa.onnx.VersionInfo
 import java.io.File
-import java.nio.file.Files
-import java.security.MessageDigest
+import java.io.FileNotFoundException
 
 /** Research source-set implementation; ordinary builds must use an unavailable factory. */
 internal object PreviewEngineFactory {
     const val available = true
 
-    /** Opens previously staged private files; does not install or modify them. */
-    fun open(directory: File, threads: Int, checkCancelled: () -> Unit = {}): SavedAudioPreview.Decoder {
+    /** Opens verified side-loaded research files without modifying them. */
+    fun open(directory: File, threads: Int, checkCancelled: () -> Unit = {}): SavedAudioPreview.Decoder =
+        open(threads, checkCancelled) { UltraModelFiles.verify(directory, checkCancelled) }
+
+    fun openBundled(context: Context, threads: Int, checkCancelled: () -> Unit): SavedAudioPreview.Decoder =
+        open(threads, checkCancelled) {
+            UltraModelFiles.install(
+                File(context.noBackupFilesDir, UltraModelFiles.directoryName),
+                openAsset = { name ->
+                    try {
+                        context.assets.open(name, AssetManager.ACCESS_STREAMING)
+                    } catch (error: FileNotFoundException) {
+                        throw IllegalStateException("The Ultra model is missing from this APK.", error)
+                    }
+                },
+                checkCancelled = checkCancelled,
+            )
+        }
+
+    private fun open(
+        threads: Int, checkCancelled: () -> Unit, modelFiles: () -> Map<String, File>,
+    ): SavedAudioPreview.Decoder {
         try {
-            return openChecked(directory, threads, checkCancelled)
+            require(threads in 1..2) { "Choose one or two inference threads." }
+            return openChecked(modelFiles(), threads, checkCancelled)
         } catch (error: LinkageError) {
             throw IllegalStateException("The experimental speech runtime could not be loaded.", error)
         }
     }
 
-    private fun openChecked(directory: File, threads: Int, checkCancelled: () -> Unit): SavedAudioPreview.Decoder {
-        require(threads in 1..2) { "Choose one or two inference threads." }
-        val files = verifiedModelFiles(directory, checkCancelled)
+    private fun openChecked(
+        files: Map<String, File>, threads: Int, checkCancelled: () -> Unit,
+    ): SavedAudioPreview.Decoder {
         checkCancelled()
         val revision = VersionInfo.gitSha1
         check(VersionInfo.version == "2.0.1" && revision.length >= 8 && SHERPA_REVISION.startsWith(revision) &&
@@ -92,37 +114,5 @@ private class ParakeetDecoder(private val recognizer: OfflineRecognizer) : Saved
     }
 }
 
-private data class ModelFile(val name: String, val bytes: Long, val sha256: String)
-
-private fun verifiedModelFiles(directory: File, checkCancelled: () -> Unit): Map<String, File> {
-    checkCancelled()
-    val root = directory.canonicalFile
-    check(root.isDirectory) { "Missing private Parakeet model directory." }
-    return MODELS.associate { model ->
-        val file = File(root, model.name)
-        check(file.isFile && !Files.isSymbolicLink(file.toPath()) && file.canonicalFile.parentFile == root &&
-            file.length() == model.bytes) { "Missing or wrong-sized model file: ${model.name}" }
-        val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(65_536)
-            while (true) {
-                checkCancelled()
-                val count = input.read(buffer)
-                if (count < 0) break
-                digest.update(buffer, 0, count)
-            }
-        }
-        val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        check(actual == model.sha256) { "Model checksum mismatch: ${model.name}" }
-        model.name to file
-    }
-}
-
 private const val SAMPLE_RATE = 16_000
 private const val SHERPA_REVISION = "af2d8d81dbfa61c4cea4c568da78f3982edca005"
-private val MODELS = listOf(
-    ModelFile("encoder.int8.onnx", 652_184_281, "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247"),
-    ModelFile("decoder.int8.onnx", 11_845_275, "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e"),
-    ModelFile("joiner.int8.onnx", 6_355_277, "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3"),
-    ModelFile("tokens.txt", 93_939, "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
-)

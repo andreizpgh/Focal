@@ -1,0 +1,605 @@
+{
+  "date": "2026-11-05",
+  "status": "DEV_DIAGNOSTICS_COMPLETE_TARGETED_BOUNDARY_RECHECK_PASSED",
+  "scope": "Staged Android emulator preview with Parakeet Ultra INT8 v1, automatic language, two CPU threads, greedy decoding and saved original PCM. All three runs used previously consumed DEV inputs.",
+  "paired_comparator": "Cached Whisper Base Q5_1 full-source quality with explicit language. Each paired comparison uses identical PCM. Whisper used its own framing and language conditioning.",
+  "scoring": "Frozen lexical WER and CER. CER joins normalized words without separators. Quiet is 0.1 digital gain applied to the same seven sources.",
+  "runs": {
+    "android18": {
+      "cases_completed": 18,
+      "recognizer_opens": 16,
+      "native_decode_calls": 23,
+      "source_sha256": {
+        "frozen_plan": "434794b020b90828412ed38252e2679f7540b5e01865fe8964397f47aa9b330e",
+        "scores": "2d77dc4f92f8af4ffd725254a44e0985aaa66b64ff634494f53e6bd0779db17e",
+        "app_apk": "e71032e55be7ff2340befcad1d96692f1c9203a71cb32c5fabfa89481e0c737c",
+        "instrumentation_apk": "6e0a5cd35270618aafea0273dc90ddadf201fedd2195d27fb0611e9899d16fac"
+      },
+      "window_max_seconds": 16,
+      "overlap_seconds": 0.5
+    },
+    "android20": {
+      "cases_completed": 20,
+      "recognizer_opens": 18,
+      "native_decode_calls": 28,
+      "source_sha256": {
+        "frozen_plan": "0664f07cf100bcc312bfa5a1dd39f2973319fe59650ab67420d954f3efaad6ce",
+        "scores": "f940cdc39073db3eebcf4c2397d73cdf04c53143371203f5d6cd115ae1574895",
+        "app_apk": "f0d923621045451efa2366c1c00bfc78fe310b9e56092100b6822ccb08dbeb05",
+        "instrumentation_apk": "fb8a2f361c4c6826a639e8aefbd3bd509c5596a8b32f73d1e89bdc939060e053"
+      },
+      "quality_status": "LONG_SPANISH_BOUNDARY_CHECK_FAILED",
+      "window_max_seconds": 30,
+      "hard_fallback_overlap_seconds": 0.5,
+      "minimum_new_final_seconds": 5
+    },
+    "targeted_long_recheck": {
+      "cases_completed": 2,
+      "recognizer_opens": 2,
+      "native_decode_calls": 12,
+      "source_sha256": {
+        "frozen_plan": "e1b2eb90ea3277f8b3f6152fc0b60f6c80f50edfbd5e8529e1196c6ead0b2db7",
+        "scores": "2b67b9844321024f65c0faba8498d74baf52084d7be0231d675d387376bf4e72",
+        "app_apk": "1280680e52b384f484d1b1ad367ca4a86247f80a3ff179c4704e4197ac93f104",
+        "instrumentation_apk": "96d4be5ead3e1ba3524acce198c8106b1fd5261684c2d18346f106fbc1fcaeb8",
+        "source_snapshot": "63f3854e1d7a78476516fc18a912c40f98ffcf2383888fcc173464341a1f612c",
+        "source_archive": "3f05bcd845c444e14253c6c648a6261c73928ef9664d8e597b9d5c49d4ba4e3f",
+        "archive_manifest": "8e1b189044add480ef709aeb81d676004e409952f1edf3d546d81b5ffa3bb3c6",
+        "processor_source": "09c16d69b84f0c9c6ac42b1349bb4fd4c7ff6fefd8fae2c18847e4efc5072d5b",
+        "batch_test_source": "47be79e717436015d4d92b435d83eb8a083838a52ff88c63cb7890606e350497",
+        "manifest": "c983d122983f958931df71fe36059055c13ffbee28958063ac04caa4bd5d1b32",
+        "runner": "3f1a065fda48f3d948d1b9cc51331521d811234cbdb7968564254e797a996200",
+        "previous_scores": "f940cdc39073db3eebcf4c2397d73cdf04c53143371203f5d6cd115ae1574895"
+      },
+      "quality_status": "TARGETED_BOUNDARY_CHECK_PASSED",
+      "window_max_seconds": 30,
+      "hard_fallback_overlap_seconds": 0.5,
+      "minimum_new_final_seconds": 5,
+      "minimum_new_audio_before_pause_search_seconds": 10
+    }
+  },
+  "exact_shared_inputs": {
+    "cases": 18,
+    "speech": 14,
+    "controls": 4,
+    "same_native_window_pcm_and_assembled_text": 11,
+    "changed_native_window_pcm": 7,
+    "android20_speech_full_input_in_one_window": 14
+  },
+  "paired_speech": {
+    "normal": {
+      "clips": 7,
+      "total": {
+        "reference_words": 210,
+        "reference_characters": 1050,
+        "metrics": {
+          "whisper_base": {
+            "word_errors": 25,
+            "character_errors": 47,
+            "wer_percent": 11.9,
+            "cer_percent": 4.48
+          },
+          "ultra_16s": {
+            "word_errors": 20,
+            "character_errors": 56,
+            "wer_percent": 9.52,
+            "cer_percent": 5.33
+          },
+          "ultra_30s": {
+            "word_errors": 12,
+            "character_errors": 29,
+            "wer_percent": 5.71,
+            "cer_percent": 2.76
+          }
+        }
+      },
+      "by_language": {
+        "en": {
+          "reference_words": 28,
+          "reference_characters": 120,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 2,
+              "character_errors": 5,
+              "wer_percent": 7.14,
+              "cer_percent": 4.17
+            },
+            "ultra_16s": {
+              "word_errors": 1,
+              "character_errors": 4,
+              "wer_percent": 3.57,
+              "cer_percent": 3.33
+            },
+            "ultra_30s": {
+              "word_errors": 1,
+              "character_errors": 4,
+              "wer_percent": 3.57,
+              "cer_percent": 3.33
+            }
+          }
+        },
+        "ru": {
+          "reference_words": 26,
+          "reference_characters": 141,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 8,
+              "character_errors": 13,
+              "wer_percent": 30.77,
+              "cer_percent": 9.22
+            },
+            "ultra_16s": {
+              "word_errors": 8,
+              "character_errors": 17,
+              "wer_percent": 30.77,
+              "cer_percent": 12.06
+            },
+            "ultra_30s": {
+              "word_errors": 4,
+              "character_errors": 7,
+              "wer_percent": 15.38,
+              "cer_percent": 4.96
+            }
+          }
+        },
+        "de": {
+          "reference_words": 19,
+          "reference_characters": 118,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 1,
+              "character_errors": 1,
+              "wer_percent": 5.26,
+              "cer_percent": 0.85
+            },
+            "ultra_16s": {
+              "word_errors": 0,
+              "character_errors": 0,
+              "wer_percent": 0.0,
+              "cer_percent": 0.0
+            },
+            "ultra_30s": {
+              "word_errors": 0,
+              "character_errors": 0,
+              "wer_percent": 0.0,
+              "cer_percent": 0.0
+            }
+          }
+        },
+        "fr": {
+          "reference_words": 32,
+          "reference_characters": 160,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 2,
+              "character_errors": 5,
+              "wer_percent": 6.25,
+              "cer_percent": 3.12
+            },
+            "ultra_16s": {
+              "word_errors": 0,
+              "character_errors": 0,
+              "wer_percent": 0.0,
+              "cer_percent": 0.0
+            },
+            "ultra_30s": {
+              "word_errors": 0,
+              "character_errors": 0,
+              "wer_percent": 0.0,
+              "cer_percent": 0.0
+            }
+          }
+        },
+        "es": {
+          "reference_words": 59,
+          "reference_characters": 279,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 4,
+              "character_errors": 3,
+              "wer_percent": 6.78,
+              "cer_percent": 1.08
+            },
+            "ultra_16s": {
+              "word_errors": 5,
+              "character_errors": 10,
+              "wer_percent": 8.47,
+              "cer_percent": 3.58
+            },
+            "ultra_30s": {
+              "word_errors": 2,
+              "character_errors": 3,
+              "wer_percent": 3.39,
+              "cer_percent": 1.08
+            }
+          }
+        },
+        "it": {
+          "reference_words": 25,
+          "reference_characters": 141,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 3,
+              "character_errors": 2,
+              "wer_percent": 12.0,
+              "cer_percent": 1.42
+            },
+            "ultra_16s": {
+              "word_errors": 1,
+              "character_errors": 10,
+              "wer_percent": 4.0,
+              "cer_percent": 7.09
+            },
+            "ultra_30s": {
+              "word_errors": 0,
+              "character_errors": 0,
+              "wer_percent": 0.0,
+              "cer_percent": 0.0
+            }
+          }
+        },
+        "pt": {
+          "reference_words": 21,
+          "reference_characters": 91,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 5,
+              "character_errors": 18,
+              "wer_percent": 23.81,
+              "cer_percent": 19.78
+            },
+            "ultra_16s": {
+              "word_errors": 5,
+              "character_errors": 15,
+              "wer_percent": 23.81,
+              "cer_percent": 16.48
+            },
+            "ultra_30s": {
+              "word_errors": 5,
+              "character_errors": 15,
+              "wer_percent": 23.81,
+              "cer_percent": 16.48
+            }
+          }
+        }
+      }
+    },
+    "quiet": {
+      "clips": 7,
+      "total": {
+        "reference_words": 210,
+        "reference_characters": 1050,
+        "metrics": {
+          "whisper_base": {
+            "word_errors": 31,
+            "character_errors": 63,
+            "wer_percent": 14.76,
+            "cer_percent": 6.0
+          },
+          "ultra_16s": {
+            "word_errors": 18,
+            "character_errors": 48,
+            "wer_percent": 8.57,
+            "cer_percent": 4.57
+          },
+          "ultra_30s": {
+            "word_errors": 15,
+            "character_errors": 32,
+            "wer_percent": 7.14,
+            "cer_percent": 3.05
+          }
+        }
+      },
+      "by_language": {
+        "en": {
+          "reference_words": 28,
+          "reference_characters": 120,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 6,
+              "character_errors": 19,
+              "wer_percent": 21.43,
+              "cer_percent": 15.83
+            },
+            "ultra_16s": {
+              "word_errors": 1,
+              "character_errors": 4,
+              "wer_percent": 3.57,
+              "cer_percent": 3.33
+            },
+            "ultra_30s": {
+              "word_errors": 1,
+              "character_errors": 4,
+              "wer_percent": 3.57,
+              "cer_percent": 3.33
+            }
+          }
+        },
+        "ru": {
+          "reference_words": 26,
+          "reference_characters": 141,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 8,
+              "character_errors": 12,
+              "wer_percent": 30.77,
+              "cer_percent": 8.51
+            },
+            "ultra_16s": {
+              "word_errors": 4,
+              "character_errors": 7,
+              "wer_percent": 15.38,
+              "cer_percent": 4.96
+            },
+            "ultra_30s": {
+              "word_errors": 4,
+              "character_errors": 7,
+              "wer_percent": 15.38,
+              "cer_percent": 4.96
+            }
+          }
+        },
+        "de": {
+          "reference_words": 19,
+          "reference_characters": 118,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 0,
+              "character_errors": 0,
+              "wer_percent": 0.0,
+              "cer_percent": 0.0
+            },
+            "ultra_16s": {
+              "word_errors": 0,
+              "character_errors": 0,
+              "wer_percent": 0.0,
+              "cer_percent": 0.0
+            },
+            "ultra_30s": {
+              "word_errors": 0,
+              "character_errors": 0,
+              "wer_percent": 0.0,
+              "cer_percent": 0.0
+            }
+          }
+        },
+        "fr": {
+          "reference_words": 32,
+          "reference_characters": 160,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 5,
+              "character_errors": 9,
+              "wer_percent": 15.62,
+              "cer_percent": 5.62
+            },
+            "ultra_16s": {
+              "word_errors": 0,
+              "character_errors": 0,
+              "wer_percent": 0.0,
+              "cer_percent": 0.0
+            },
+            "ultra_30s": {
+              "word_errors": 0,
+              "character_errors": 0,
+              "wer_percent": 0.0,
+              "cer_percent": 0.0
+            }
+          }
+        },
+        "es": {
+          "reference_words": 59,
+          "reference_characters": 279,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 4,
+              "character_errors": 3,
+              "wer_percent": 6.78,
+              "cer_percent": 1.08
+            },
+            "ultra_16s": {
+              "word_errors": 4,
+              "character_errors": 9,
+              "wer_percent": 6.78,
+              "cer_percent": 3.23
+            },
+            "ultra_30s": {
+              "word_errors": 2,
+              "character_errors": 3,
+              "wer_percent": 3.39,
+              "cer_percent": 1.08
+            }
+          }
+        },
+        "it": {
+          "reference_words": 25,
+          "reference_characters": 141,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 3,
+              "character_errors": 2,
+              "wer_percent": 12.0,
+              "cer_percent": 1.42
+            },
+            "ultra_16s": {
+              "word_errors": 1,
+              "character_errors": 10,
+              "wer_percent": 4.0,
+              "cer_percent": 7.09
+            },
+            "ultra_30s": {
+              "word_errors": 0,
+              "character_errors": 0,
+              "wer_percent": 0.0,
+              "cer_percent": 0.0
+            }
+          }
+        },
+        "pt": {
+          "reference_words": 21,
+          "reference_characters": 91,
+          "metrics": {
+            "whisper_base": {
+              "word_errors": 5,
+              "character_errors": 18,
+              "wer_percent": 23.81,
+              "cer_percent": 19.78
+            },
+            "ultra_16s": {
+              "word_errors": 8,
+              "character_errors": 18,
+              "wer_percent": 38.1,
+              "cer_percent": 19.78
+            },
+            "ultra_30s": {
+              "word_errors": 8,
+              "character_errors": 18,
+              "wer_percent": 38.1,
+              "cer_percent": 19.78
+            }
+          }
+        }
+      }
+    }
+  },
+  "controls": [
+    {
+      "kind": "exact_zero",
+      "seconds": 30.0,
+      "inserted_words": {
+        "ultra_16s": 0,
+        "ultra_30s": 0
+      },
+      "native_decode_calls": {
+        "ultra_16s": 0,
+        "ultra_30s": 0
+      }
+    },
+    {
+      "kind": "exact_dc_offset",
+      "seconds": 30.0,
+      "inserted_words": {
+        "ultra_16s": 0,
+        "ultra_30s": 0
+      },
+      "native_decode_calls": {
+        "ultra_16s": 0,
+        "ultra_30s": 0
+      }
+    },
+    {
+      "kind": "varying_noise_30s",
+      "seconds": 30.0,
+      "inserted_words": {
+        "ultra_16s": 0,
+        "ultra_30s": 0
+      },
+      "native_decode_calls": {
+        "ultra_16s": 2,
+        "ultra_30s": 1
+      }
+    },
+    {
+      "kind": "varying_noise_2s",
+      "seconds": 2.0,
+      "inserted_words": {
+        "ultra_16s": 0,
+        "ultra_30s": 0
+      },
+      "native_decode_calls": {
+        "ultra_16s": 1,
+        "ultra_30s": 1
+      }
+    }
+  ],
+  "unpaired_long": {
+    "scope": "Each constructed stream repeats six previously used source clips in order, with fixed silent gaps. No matching Base or 16-second Android run.",
+    "by_language": {
+      "ru": {
+        "digital_gain": 1.0,
+        "seconds": 138.4,
+        "reference_words": 210,
+        "reference_characters": 1174,
+        "word_errors": 22,
+        "character_errors": 48,
+        "wer_percent": 10.48,
+        "cer_percent": 4.09,
+        "native_decode_calls": 5,
+        "low_energy_cuts": 4,
+        "hard_fallback_cuts": 0,
+        "exact_cross_cut_repeats": 0
+      },
+      "es": {
+        "digital_gain": 0.1,
+        "seconds": 179.08,
+        "reference_words": 354,
+        "reference_characters": 1706,
+        "word_errors": 11,
+        "character_errors": 41,
+        "wer_percent": 3.11,
+        "cer_percent": 2.4,
+        "native_decode_calls": 7,
+        "low_energy_cuts": 2,
+        "hard_fallback_cuts": 4,
+        "exact_cross_cut_repeats": 2,
+        "observed_extra_completions_at_hard_cut": 1
+      }
+    },
+    "span_coverage_verified": true,
+    "boundary_finding": "Android20 failed the long Spanish boundary check. The quiet stream had two repeated two-word phrases across hard cuts and one spurious completion at another hard cut. Repeated source sequences were intentional. The finding comes from text and recorded window bounds.",
+    "targeted_recheck": {
+      "scope": "Same two long PCM streams and references with a broader low-energy search. No short inputs rerun.",
+      "by_language": {
+        "ru": {
+          "seconds": 138.4,
+          "reference_words": 210,
+          "reference_characters": 1174,
+          "previous_30s": {
+            "word_errors": 22,
+            "character_errors": 48,
+            "wer_percent": 10.48,
+            "cer_percent": 4.09
+          },
+          "broader_pause_search": {
+            "word_errors": 22,
+            "character_errors": 48,
+            "wer_percent": 10.48,
+            "cer_percent": 4.09
+          },
+          "native_decode_calls": 5,
+          "low_energy_cuts": 4,
+          "hard_fallback_cuts": 0,
+          "exact_cross_cut_repeats": 0
+        },
+        "es": {
+          "seconds": 179.08,
+          "reference_words": 354,
+          "reference_characters": 1706,
+          "previous_30s": {
+            "word_errors": 11,
+            "character_errors": 41,
+            "wer_percent": 3.11,
+            "cer_percent": 2.4
+          },
+          "broader_pause_search": {
+            "word_errors": 7,
+            "character_errors": 10,
+            "wer_percent": 1.98,
+            "cer_percent": 0.59
+          },
+          "native_decode_calls": 7,
+          "low_energy_cuts": 6,
+          "hard_fallback_cuts": 0,
+          "exact_cross_cut_repeats": 0
+        }
+      },
+      "span_coverage_verified": true,
+      "boundary_finding": "The Spanish hard cuts were replaced by low-energy cuts and the flagged repeats and extra completion were absent on review. Russian PCM windows and output were identical to Android20."
+    }
+  },
+  "limitations": [
+    "No unused held-out material, matched speed comparison, physical-phone, battery, thermal or release-APK result.",
+    "Counts on paired short clips do not establish long-recording quality or exact-language reliability.",
+    "The targeted recheck covers two previously used long inputs. The earlier Android20 boundary failure remains part of the evidence."
+  ]
+}

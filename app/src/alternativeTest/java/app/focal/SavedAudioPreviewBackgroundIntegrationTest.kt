@@ -41,7 +41,9 @@ class SavedAudioPreviewBackgroundIntegrationTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = ApplicationProvider.getApplicationContext<FocalApplication>()
         runBlocking { app.storageReady.await(); app.initialized.await() }
-        check(File(app.filesDir, "parakeet-probe/model").isDirectory) { "Stage the verified Parakeet model files first." }
+        if (!BuildConfig.FOCAL_ULTRA_BUNDLED) {
+            check(File(app.filesDir, "parakeet-probe/model").isDirectory) { "Stage the verified Parakeet model files first." }
+        }
         val wav = instrumentation.context.assets.open("jfk.wav").use { it.readBytes() }
         check(wav.size == 352_044 && sha256(wav) == JFK_SHA256) { "The bundled public WAV fixture changed." }
         val pcm = wav.copyOfRange(44, wav.size)
@@ -89,7 +91,7 @@ class SavedAudioPreviewBackgroundIntegrationTest {
                 compose.onAllNodesWithContentDescription("Recording options").fetchSemanticsNodes().isNotEmpty()
             }
             compose.onNodeWithContentDescription("Recording options").performClick()
-            val alternative = hasText("Alternative transcript") and hasClickAction()
+            val alternative = hasText("Transcribe with Ultra") and hasClickAction()
             compose.waitUntil(10_000) { compose.onAllNodes(alternative and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
             compose.onNode(alternative).assertIsDisplayed().performClick()
             compose.waitUntil(10_000) {

@@ -1,8 +1,8 @@
 # Device validation
 
 Phone checks are **pending** and will be performed with the owner present, after
-the owner connects the test phone. Their absence does not block development or
-the [local emulator QA](local-emulator-qa.md). Emulator results do not establish
+the owner connects the Pixel 10 or another test phone. Their absence does not
+block development or the [local emulator QA](local-emulator-qa.md). Emulator results do not establish
 phone recognition quality, microphone behavior, battery use or thermals. Stable
 release evidence needs a midrange and an older ARM64 phone, including a 4 GB device.
 
@@ -51,10 +51,17 @@ release evidence needs a midrange and an older ARM64 phone, including a 4 GB dev
 
 Use the exact debug/test APK hashes from a successful local QA manifest and keep
 the checkout unchanged during testing. Rebuild and repeat local QA if they differ.
+For the optional Alpha 8 Ultra APK, use the verified pair from the `--ultra` run
+and confirm its manifest has `ultra_enabled` set to `true`. Before updating an
+existing installation, check that the prior and candidate APKs have the same
+signing certificate. On the dedicated test setup, keep a saved test recording with
+an edit and verify its audio and text after `install -r`. Stop on a signing or
+installation error and retain the existing app data.
 `scripts/qa-local.py` deliberately rejects physical phones; do not bypass that
 guard or describe a direct phone run as an emulator-runner result.
 
 ```sh
+FOCAL_PHONE_QA_MANIFEST='PATH_TO_VERIFIED_LOCAL_QA_MANIFEST_JSON'
 adb -s "$FOCAL_PHONE_SERIAL" install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s "$FOCAL_PHONE_SERIAL" install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb -s "$FOCAL_PHONE_SERIAL" shell am start -n app.focal/.MainActivity
@@ -89,19 +96,30 @@ adb -s "$FOCAL_PHONE_SERIAL" shell am instrument -r -w \
 An ADB exit code alone is insufficient. Require all source-discovered tests,
 including all ten required real-model checks, with zero failures/skips and a
 completed runner. These include speech detection, detector reset and graph-error
-recovery. The existing parser can validate the direct phone log:
+recovery. At Alpha 8 the ordinary suite expects 129 tests. The bundled Ultra
+suite expects 137, with two real Ultra preview tests, five extraction tests and
+one import ownership test in addition to the ordinary suite. Use the verified
+APK pair's local QA manifest to select the expected test set.
 
 ```sh
-python3 - "$FOCAL_PHONE_REPORT" <<'PY'
+python3 - "$FOCAL_PHONE_REPORT" "$FOCAL_PHONE_QA_MANIFEST" <<'PY'
 import importlib.util
+import json
 from pathlib import Path
 import sys
 spec = importlib.util.spec_from_file_location("focal_qa", "scripts/qa-local.py")
 qa = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(qa)
 report = Path(sys.argv[1])
+manifest = json.loads(Path(sys.argv[2]).read_text())
+if manifest.get("ultra_enabled", False):
+    expected = qa.expected_instrumentation_tests(ultra=True)
+else:
+    expected = qa.expected_instrumentation_tests()
+if sorted(f"{cls}.{test}" for cls, test in expected) != manifest["expected_instrumentation_tests"]:
+    raise SystemExit("Phone QA source test set differs from the verified APK pair.")
 outcomes, problems = qa.parse_instrumentation(
-    (report / "instrumentation.txt").read_text(), qa.expected_instrumentation_tests())
+    (report / "instrumentation.txt").read_text(), expected)
 qa.write_junit(report / "results.xml", outcomes, problems)
 if problems:
     raise SystemExit("Phone QA failed: " + "; ".join(problems))
@@ -162,6 +180,33 @@ results belong to the tested setup; lack of a reproducible condition remains an
 open check, not a pass. Restore permissions, audio routes, animation/font/theme
 and battery settings with the owner when the session ends.
 
+### Optional Ultra Alpha 8 on Pixel 10
+
+Use a completed test recording of up to three minutes with consented audio,
+a saved edit and an excluded passage. After the same-certificate update, finish
+a new recording through the ordinary Whisper flow, save an edit and verify its
+clipboard text. Then choose **Recording options → Transcribe with Ultra** on a
+completed recording while offline.
+
+1. On first use with no extracted model, allow the [private copy](ultra-transcription.md)
+   to finish and record the cold time and free space used. Repeat the action with
+   the verified copy present and record the warm time separately. Distinguish
+   extraction from a new recognizer load when measurements support it.
+2. Rotate during an active preview and verify that the same request completes.
+   On separate attempts, use **Stop** and press Home during active work. Verify
+   that the cancelled result stays closed and recording can start again after
+   the worker has returned. Retain any private preparation error.
+3. Verify **Ultra · Automatic language**, read the actual result and use **Copy
+   text**. Compare the clipboard with the visible alternative. Close it and
+   verify the original audio, saved transcript, selected language, manual edit
+   and exclusion decision. Ultra reprocesses the full original audio, including
+   audio from excluded passages.
+4. Capture short natural clips in all seven languages, with quiet onsets and
+   endings and a short negation. Include Russian speech with **HTML**, **API**
+   and **guardrails**, and a noise-only control. Check omissions, changed
+   negation, wrong-language output and words invented during noise. Include one
+   natural recording over 30 seconds and check words around the joins.
+
 ## Seven-language accuracy and phone resources
 
 For **English, Russian, German, French, Spanish, Italian and Portuguese**, obtain
@@ -170,8 +215,9 @@ quiet onset/endings, room noise, pauses, restarts, names, numbers and negation.
 Add continuous speech crossing real gate boundaries; include the owner's Russian
 dictation when consented. This small screen alone does not establish release accuracy.
 
-Compare baseline/candidate on identical immutable PCM with explicit language and
-separate speaker/session development and held-out sets. Freeze code, model hashes,
+Compare baseline/candidate on identical immutable PCM and separate speaker/session
+development and held-out sets. Record the language setting for each arm. Whisper
+uses an explicit language and Ultra selects it automatically. Freeze code, model hashes,
 settings and acceptance thresholds before viewing test scores. Prior FLEURS test
 clips are already consumed and cannot become fresh validation. Report paired
 WER/CER per language, boundary omissions/repetition, silence insertions and critical
@@ -184,6 +230,13 @@ charge, temperature, screen state, route and background load. Record sample coun
 P50/P95 first-text and Finish-to-ready latency, model-load/queue/decode time where
 observable, and wall time versus audio duration. Do not infer a component time
 from a total; mark unavailable measurements explicitly.
+
+Run the Pixel 10 trials sequentially. For Ultra, measure menu-action-to-ready
+latency for cold extraction and a cached repeat. Sample RAM during both, after
+Stop or Home and after cooldown. Separately verify foreground and background
+capture continuity and pending Whisper work, then measure thermal and battery
+behavior with the procedure below. Host and emulator figures are separate
+evidence from these phone measurements.
 
 During a 30-minute speech-plus-silence trial, sample app memory at start, after
 model load, every minute, after Finish and after cooldown; repeat sessions to check

@@ -15,40 +15,44 @@ Branch: `codex/sessions-stt-handoff`. Baseline before the redesign:
 The redesign and reliability work are implemented and reviewed. The branch is a
 development checkpoint, not a verified stable distribution release. Alpha 1
 assets are unchanged; the newer UX preview is described below. Seven-language
-read-speech results are measured on the host;
-ARM phone performance and full application acceptance remain open.
+read-speech results have been measured on the host and Android emulator; ARM
+phone performance and full application acceptance remain open.
 
 ## Current checkpoint · 2026-11-05
 
-The owner has explicitly prioritized core STT and renewed model/LLM research.
-Read [the decision review](stt-decision-review-2026-11-05.md) before continuing.
-Do not wait for UX feedback or spend the next batch polishing Review. Historical
-failed screens remain failed, but they do not disprove whole model families.
-The completed, independently audited research now selects **Ultra as the primary
-Android candidate**: 42 consumed DEV recordings, word errors **146 → 51 / 864**,
-with lower WER and lexical CER than Base in all seven languages. Seven results
-were reused; only 35 additional DEV calls were made. The 18-input diagnostic
-also gives normal/quiet errors 15/14 versus Base 25/31 and Small 18/19; noise
-insertions are 0 versus 12/4. Portuguese numeric errors and short selected-language
-failures remain. Synthetic HTML improves, API/guardrails remain unresolved.
+The owner prioritizes core STT over further Review polish. Ultra is now an
+explicit optional saved-audio alternative in the working source; live Whisper,
+original recordings and manual edits remain intact. The model chooses language
+automatically, not from the recording's selected language. See
+[Ultra transcription](ultra-transcription.md). The bundled variant has not yet
+completed the full 137-test QA or release/R8 smoke; Alpha 7 remains the latest
+published APK.
 
-Gemma 4 E2B audio was actually tested in direct-ASR, Base-draft and Ultra-draft
-modes. The Base screen remains incomplete (35/36 returned, one invalid);
-Ultra-draft correction completes 18/18 but changes normal/quiet word errors only
-15 → 14 and 14 → 14, worsens lexical CER and invents 30 words on two empty noise
-drafts. Median added host call is 9.86 s. Keep these results separate; no blanket
-LLM rejection or automatic correction follows. See the [full report](benchmarks/2026-11-05-stt/report.md).
+The frozen held-out comparison uses 42 FLEURS test clips, six per language, with
+identical PCM: Base full-PCM host versus the Android Ultra saved-audio path. Word
+errors **184 → 51 / 961** and lexical character errors **369 → 94 / 5,010**;
+both measures improved in each language aggregate. The independent raw-output,
+input, scoring and model-staging audit passed; no acoustic adjudication was
+performed.
+This read-speech quality result does not establish phone speed, battery, thermal
+behavior, quiet Portuguese, natural language switching or overall all-language
+acceptance. The cloud56 disjointness check lacks raw PCM hashes and used its
+available WAV/reference identities.
 
-Next: bind the existing debug-only Parakeet preview to the verified Ultra graphs
-and evaluate its actual 16-second window/overlap path on the same audio, plus
-long-boundary controls. Input coverage and framing are separate from model
-quality. Do not repeat completed host screens, download weights again or open
-the 42 held-out recordings before the selected pipeline is frozen. Models and
-private receipts are under `build/stt/parakeet-ultra-20261105/` and
-`build/stt/gemma4-audio-20261105/`. All heavy jobs ended; the AVD is stopped.
-The cumulative ledger reserves **7,850,106,526 of 8,500,000,000 bytes**; never
-reset it. Ordinary ASR, automatic-correction policy and the delivered APK are
-unchanged. This checkpoint changes research documentation only.
+The 20-case DEV screen produced normal/quiet Ultra errors 12/15 / 210 words and
+four blank noise controls. Its original Spanish long-window seams failed; the
+revised pause-search follow-up on the same two long DEV clips passed exact
+12-window coverage and independent seam review. Keep that original failure in
+the record and retain the hard-cut fallback limitation.
+
+Next, complete the bounded prebuild and full Ultra QA, verify the exact
+debug/test/release artifacts, and smoke the minified release path on a dedicated
+AVD. The phone and owner UX checks remain open. Reserve or reuse assets without
+redownload; the cumulative budget is
+**7,850,618,526 / 8,500,000,000 bytes**. Automatic correction remains disabled.
+See the [Android quality report](benchmarks/2026-11-05-stt/ultra-android-report.md)
+and [the decision review](stt-decision-review-2026-11-05.md) for earlier LLM and
+model results.
 
 [Alpha 7 is published](https://github.com/andreizpgh/Focal/releases/tag/ux-alpha-7) from clean `4ac250d322849e4cc2ee29c034b4c8b28330a78c`:
 **129/0/0**, ten required real-model checks, 186.980s JUnit / 187.992s runner wall.
@@ -60,7 +64,7 @@ Optional background-sound checking uses explicit Keep/Exclude, retained original
 audio/text and persistent Restore. Automatic correction and ordinary decoding
 remain unchanged. Original oversized-draft and capture/storage assertions passed.
 Source, actual screenshots and artifact checks were reviewed independently.
-The dedicated AVD and all heavy jobs are stopped. Phone and all-language
+Phone and all-language
 quality/speed/mixed-term gates remain open; see [device-validation](device-validation.md).
 PR #1–9 are merged. The remote digest and
 HTTP 200 download filename match `Focal-0.1.0-alpha.7.apk`; signing matches

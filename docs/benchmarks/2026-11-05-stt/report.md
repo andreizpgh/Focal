@@ -2,7 +2,18 @@
 
 Exploratory CPU measurements, not phone acceptance. Automatic correction remains
 disabled. Source audio and recognizer output are retained privately; this report
-contains aggregate results only. The 42 unused held-out clips remain unopened.
+contains aggregate results only. The later held-out Android comparison is linked below.
+
+## Current Android Ultra evaluation
+
+On 42 frozen held-out FLEURS clips, the same PCM produced Base host → Android
+Ultra word errors **184 → 51 / 961** and lexical character errors **369 → 94 /
+5,010**. Each of the seven language aggregates improved on both measures. An
+independent audit checked the raw outputs, source identities and scoring; no
+acoustic adjudication was performed. The research model was staged separately,
+so the bundled APK, complete application QA, release smoke and phone acceptance
+remain open. The earlier DEV long-Spanish seam failure and the targeted follow-up
+are both retained in the [Android evaluation](ultra-android-report.md).
 
 ## Gemma 4 E2B audio · correction of the stronger Ultra draft
 
@@ -40,7 +51,7 @@ The added resident-model call takes a median 9.86 host seconds across these
 18 inputs; the bounded service took 183.04 s, reported 1.3G peak memory and no
 swap. This is not Pixel 10 latency. The small lexical gain, mixed edit quality
 and extra cost do not establish a benefit sufficient to enable automatic edits.
-The next implementation experiment is Ultra in the actual Android audio path,
+The next experiment at that checkpoint was Ultra in the Android audio path,
 without a mandatory LLM stage. Keep the cached Gemma artifact and evidence;
 this result does not reject every local correction model or future approach.
 

@@ -16,20 +16,26 @@ import java.security.MessageDigest
 class BatchSavedAudioPreviewTest {
     @Test fun evaluateSavedAudioPreviewBatch() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val runId = requireNotNull(InstrumentationRegistry.getArguments().getString("runId"))
+        val arguments = InstrumentationRegistry.getArguments()
+        val runId = requireNotNull(arguments.getString("runId"))
         require(Regex("[a-z0-9-]{1,40}").matches(runId)) { "Invalid batch ID." }
         val root = File(instrumentation.targetContext.filesDir, "parakeet-batch/$runId").canonicalFile
         val inputDir = File(root, "inputs").canonicalFile
         val outputDir = File(root, "results")
         require(inputDir.parentFile == root && outputDir.mkdirs()) { "Batch input missing or output already exists." }
-        val manifestBytes = File(root, "manifest.json").readBytes()
-        val manifestHash = requireNotNull(InstrumentationRegistry.getArguments().getString("manifestSha256"))
+        val manifestFile = File(root, "manifest.json")
+        require(manifestFile.length() in 1L..65_536L) { "Invalid manifest size." }
+        val manifestBytes = manifestFile.readBytes()
+        val manifestHash = requireNotNull(arguments.getString("manifestSha256"))
         require(Regex("[0-9a-f]{64}").matches(manifestHash) && sha256(manifestBytes) == manifestHash) {
             "Manifest checksum mismatch."
         }
         val manifest = JSONObject(manifestBytes.toString(Charsets.UTF_8))
         val cases = manifest.getJSONArray("cases")
-        require(cases.length() == 18) { "Unexpected case count." }
+        val caseCount = cases.length()
+        require(caseCount in 1..64 && caseCount == (arguments.getString("caseCount") ?: "18").toIntOrNull()) {
+            "Unexpected case count."
+        }
         val modelDir = File(instrumentation.targetContext.filesDir, "parakeet-probe/model")
         val progress = AtomicFile(File(outputDir, "progress.json"))
         val status = JSONObject().put("status", "RUNNING").put("completed", 0)
@@ -38,21 +44,23 @@ class BatchSavedAudioPreviewTest {
             val seen = HashSet<String>()
             var totalLoads = 0
             var totalDecodes = 0
-            for (index in 0 until cases.length()) {
+            for (index in 0 until caseCount) {
                 val item = cases.getJSONObject(index)
                 val id = item.getString("id")
                 require(Regex("[a-z0-9_-]{1,100}").matches(id) && seen.add(id)) { "Invalid case ID." }
                 status.put("case", id).put("phase", "validating")
                 save(progress, status)
-                require(item.getLong("frames") in 1L..480_000L) { "Invalid case length." }
+                val maxFrames = SavedAudioPreview.MAX_DURATION_SECONDS * SavedAudioPreview.SAMPLE_RATE.toLong()
+                require(item.getLong("frames") in 1L..maxFrames) { "Invalid case length." }
                 val file = File(inputDir, "$id.pcm").canonicalFile
                 require(file.parentFile == inputDir && file.isFile && file.length() == item.getLong("frames") * 2) {
                     "Missing or invalid case file."
                 }
-                require(sha256(file.readBytes()) == item.getString("pcm_sha256")) { "Case checksum mismatch." }
+                require(sha256(file) == item.getString("pcm_sha256")) { "Case checksum mismatch." }
                 val recordFile = AtomicFile(File(outputDir, "$id.json"))
                 val windows = JSONArray()
                 val positions = JSONArray()
+                var measuredWindows = 0
                 val record = JSONObject().put("id", id).put("status", "RUNNING")
                     .put("frames", item.getLong("frames")).put("pcm_sha256", item.getString("pcm_sha256"))
                     .put("windows", windows).put("progress", positions).put("loads", 0)
@@ -63,13 +71,13 @@ class BatchSavedAudioPreviewTest {
                 try {
                     val segments = SavedAudioPreview.process(file, decoderFactory = { checkCancelled ->
                         require(id != "control-zero" && id != "control-dc") { "Constant control opened decoder." }
-                        require(++totalLoads <= 16) { "Decoder load budget exceeded." }
+                        require(record.getInt("loads") == 0 && ++totalLoads <= caseCount) { "Decoder load budget exceeded." }
                         record.put("loads", record.getInt("loads") + 1)
                         save(recordFile, record)
                         val engine = PreviewEngineFactory.open(modelDir, 2, checkCancelled)
                         object : SavedAudioPreview.Decoder {
                             override fun decode(samples: FloatArray): String {
-                                require(++totalDecodes <= 23) { "Decode budget exceeded." }
+                                require(windows.length() < 18 && ++totalDecodes <= 18 * caseCount) { "Decode budget exceeded." }
                                 val hash = MessageDigest.getInstance("SHA-256")
                                 val block = ByteBuffer.allocate(8192).order(ByteOrder.BIG_ENDIAN)
                                 for (sample in samples) {
@@ -89,6 +97,10 @@ class BatchSavedAudioPreviewTest {
                             override fun close() = engine.close()
                         }
                     }, onProgress = { covered, total ->
+                        if (measuredWindows < windows.length()) {
+                            val window = windows.getJSONObject(measuredWindows++)
+                            window.put("start_frame", covered - window.getInt("frames")).put("end_frame", covered)
+                        }
                         positions.put(JSONArray().put(covered).put(total))
                         status.put("covered_frames", covered).put("total_frames", total)
                         save(progress, status)
@@ -135,6 +147,19 @@ class BatchSavedAudioPreviewTest {
     }
 
     private fun sha256(bytes: ByteArray) = hex(MessageDigest.getInstance("SHA-256").digest(bytes))
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return hex(digest.digest())
+    }
+
     private fun hex(bytes: ByteArray) = bytes.joinToString("") { "%02x".format(it) }
 
     private fun memorySnapshot(): JSONObject {

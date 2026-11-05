@@ -1,32 +1,32 @@
 # Product verification · 2026-11-05
 
-## STT research · new evidence, production unchanged
+## Optional Ultra · Android research and held-out quality
 
-The [decision review](stt-decision-review-2026-11-05.md) separates prior failed
-configurations from model-family conclusions and records additional primary-source
-research. **Ultra is the primary Android candidate** after 42 consumed DEV clips:
-word errors 146 → 51 / 864, with WER and lexical CER improved over Base in all
-seven languages. Seven exact outputs were reused and 35 additional calls made.
-[Per-language results and provenance](benchmarks/2026-11-05-stt/parakeet-ultra-dev-42.json).
+A frozen paired screen of 42 disjoint FLEURS read-speech clips (six per language)
+compares the same PCM through full-input Base on the host and the Ultra
+saved-audio path on Android. Base → Ultra word errors were **184 → 51 / 961**
+and lexical character errors **369 → 94 / 5,010**. Word errors and lexical
+CER improved in each of the seven language aggregates. This meets the
+predeclared aggregate quality thresholds; it is not a phone-speed comparison or
+acceptance for natural speech. An independent audit verified all raw receipts,
+scoring, input identities and model staging; no acoustic adjudication was performed.
 
-The separate 18-input comparison gives Base/Small/Ultra normal errors 25/18/15,
-attenuated 31/19/14 and noise insertions 12/4/0. Portuguese quantities and short
-selected-language fidelity remain concerns. Five synthetic RU+EN canaries
-improve HTML matches but do not solve API/guardrails or natural mixed speech.
-Gemma 4 E2B audio was tested directly and as correction. The Base-draft screen
-remains incomplete (35/36 returned, one invalid); the separate Ultra-draft
-18/18 diagnostic gives normal errors 15 → 14, quiet 14 → 14, worse lexical CER
-and 30 inserted noise words. Median added host call: 9.86 s. Automatic correction
-is not justified by this result. [Full comparison and controls](benchmarks/2026-11-05-stt/report.md).
+On the earlier 20-case DEV screen, normal/quiet Ultra errors were 12/15 / 210
+words and four no-speech controls were blank. The first long Spanish framing
+failed the seam review. A revised bounded pause search was checked on the same
+long Russian and Spanish DEV inputs: 12 total decoder windows, complete verified
+coverage, and the previously observed Spanish repeated joins and invented tail
+were absent in that review. This does not prove all long boundaries are safe;
+the fallback overlap and difficult quiet or mixed-language speech remain open.
 
-Independent audits bind inputs, raw outputs, scoring and completed/reused calls.
-Heavy jobs ran sequentially under CPU150%, 4GiB hard memory and no-swap limits;
-all have ended. Downloads carry forward the cumulative ledger: 7,850,106,526
-reserved of 8.5 GB. Existing weights were reused. No app source changed, so no
-new Android build/test pass is claimed; Alpha 7 verification below describes
-the delivered app. Next is Ultra in the actual Android framing. The 42 unopened
-held-out clips, natural mixed-language speech and physical-phone acceptance
-remain open; host results do not establish phone speed or resource use.
+The current source offers Ultra as an explicit copy-only alternative for saved
+recordings up to three minutes, while live Whisper and the original audio, ASR
+and edits are preserved. The Android research tests staged the model separately;
+the new bundled build still needs its own complete 137-test QA, release/R8 smoke
+and owner-present phone checks. No new APK is claimed as verified or published.
+The existing published release is Alpha 7. Automatic LLM correction remains off.
+The cumulative download ledger is **7,850,618,526 / 8,500,000,000 bytes**. See the
+[Android quality report](benchmarks/2026-11-05-stt/ultra-android-report.md).
 
 ## Alpha 7 candidate · full verification 2026-11-05
 
