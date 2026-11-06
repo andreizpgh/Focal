@@ -712,6 +712,12 @@ private fun Timer(scene: SceneUi, frame: State<MorphFrame>, timers: TimerStyles,
             lerp(Scene.hi, lerp(colors.stageRecede, colors.sceneRecede, p), paused.value)
         },
         modifier = Modifier
+            // At the window's left edge in every layout direction, so the layer's translation lands on the frame's
+            // centre: the surface's own (start) alignment would put it at the right edge in a mirrored layout.
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+                layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
+            }
             .graphicsLayer {
                 val f = frame.value
                 val k = f.timerScale
