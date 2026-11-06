@@ -39,6 +39,7 @@ import app.focal.ui.components.FocalPrimaryPill
 import app.focal.ui.components.FocalTextButton
 import app.focal.ui.components.NineBars
 import app.focal.ui.components.RecordDot
+import app.focal.ui.components.SheetMetrics
 import app.focal.ui.components.WaveDress
 import app.focal.ui.components.WaveMode
 import app.focal.ui.components.markBox
@@ -151,9 +152,9 @@ fun RecordFlowSheet(flow: RecordFlow) {
     }
 }
 
-/** The sheet's static mark (40 dp) sits 36 dp from its top (spec 4.19), under the 12 dp grab handle. */
+/** The sheet's static mark (40 dp) sits 36 dp from its top (spec 4.19), under the grab handle (12 dp down, 4 dp tall). */
 private val SheetMark = Grid.x40
-private val SheetTop = Grid.x24
+private val SheetTop = Grid.x36 - SheetMetrics.handleTop - SheetMetrics.handleHeight
 
 private fun Context.hasMicrophone(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
