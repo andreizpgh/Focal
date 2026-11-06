@@ -54,7 +54,13 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
             "(SELECT substr(text,1,$PREVIEW_CHARS) FROM paragraphs p WHERE p.note_id=n.id AND p.hidden=0 " +
             "AND trim(p.text)!='' ORDER BY p.ord LIMIT 1) AS preview," +
             "(SELECT count(*) FROM windows w WHERE w.note_id=n.id AND w.state='FAILED') AS failed"
-        const val PARAGRAPH_COLUMNS = "id,note_id,ord,start_ms,end_ms,edited,hidden,open,revision,words," +
+        /**
+         * A row must fit one cursor window (2 MB): text, source and words each come inline only up to
+         * [INLINE_TEXT_BYTES] and are otherwise read in blocks ([longText]).
+         */
+        const val PARAGRAPH_COLUMNS = "id,note_id,ord,start_ms,end_ms,edited,hidden,open,revision," +
+            "words IS NOT NULL AS has_words," +
+            "CASE WHEN length(CAST(words AS BLOB))<=$INLINE_TEXT_BYTES THEN words END AS inline_words," +
             "CASE WHEN length(CAST(text AS BLOB))<=$INLINE_TEXT_BYTES THEN text END AS inline_text," +
             "length(CAST(text AS BLOB)) AS text_bytes," +
             "CASE WHEN source_text IS NULL THEN 0 WHEN source_text=text THEN 1 " +
@@ -544,15 +550,17 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
                         2 -> c.nullableString("inline_source")
                         else -> longText(db, id, "source_text")
                     }
+                    // Timed words of a long paragraph (one merged by hand, or an open one stored before paragraphs
+                    // had a word cap) can outgrow a cursor window; the worker's commit reads the open one too.
+                    val words = if (c.int("has_words") == 0) null else c.nullableString("inline_words") ?: longText(db, id, "words")
                     add(Paragraph(id, c.string("note_id"), c.int("ord"), c.long("start_ms"), c.long("end_ms"), text, source,
-                        c.nullableString("words"), c.int("edited") == 1, c.int("hidden") == 1, c.int("open") == 1,
-                        c.long("revision")))
+                        words, c.int("edited") == 1, c.int("hidden") == 1, c.int("open") == 1, c.long("revision")))
                 }
             }
         }
     }
 
-    /** Text too large for one cursor window is read in blocks of characters. */
+    /** Text (or words JSON) too large for one cursor window is read in blocks of characters. */
     private fun longText(db: SQLiteDatabase, id: Long, column: String): String {
         val length = db.rawQuery("SELECT length($column) FROM paragraphs WHERE id=?", arrayOf(id.toString())).use {
             if (it.moveToFirst()) it.getLong(0) else 0L

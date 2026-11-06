@@ -9,11 +9,14 @@ import app.focal.Synthetic.plan
 import app.focal.Synthetic.savedAudio
 import app.focal.Synthetic.speech
 import app.focal.core.EndKind
+import app.focal.core.SpeechTuning
 import app.focal.core.WindowGate
+import app.focal.core.Word
 import app.focal.data.EditResult
 import app.focal.data.NoteState
 import app.focal.data.NoteStore
 import app.focal.data.RawAsr
+import app.focal.data.TranscriptJson
 import app.focal.data.ULTRA_ENGINE
 import app.focal.data.WindowState
 import org.junit.After
@@ -29,6 +32,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.nio.file.Files
+import kotlin.math.exp
 
 @RunWith(AndroidJUnit4::class)
 class NoteStoreTest {
@@ -253,6 +257,50 @@ class NoteStoreTest {
         val joined = (store.mergeParagraphs(blank.id, blank.revision, edited.id, edited.revision) as EditResult.Saved).paragraphs.single()
         assertEquals("Recognised text." to "Recognized text.", joined.text to joined.sourceText)
         assertTrue(joined.canRestore)
+        assertSearchIndexIntact(store)
+    }
+
+    /**
+     * Four hours of unpunctuated speech once made one open paragraph whose words JSON (2.2 MB here) did not fit a
+     * cursor window: reading the note failed, and so did every later window commit, which reads the open
+     * paragraph. Such a stored paragraph now reads in blocks, and the next window closes it at the word cap.
+     */
+    @Test fun anOpenParagraphLargerThanACursorWindowStillReadsAndTakesTheNextWindow() {
+        val id = store.create()
+        val endMs = 14_000_000L
+        commit(store, id, plan(0, 0, endMs, EndKind.PAUSE), speech("we keep talking", startSec = 1.0))
+        val open = store.paragraphs(id).single()
+        assertTrue(open.open)
+        val vocabulary = listOf("одновременно", "обсуждаем", "следующую", "приблизительно", "продолжение", "and",
+            "consequently", "measurements", "встречу")
+        val words = (0 until 35_000).map { n ->
+            Word(vocabulary[n % vocabulary.size], n * 400L, n * 400L + 320, exp(-0.01 * (1 + n % 7)), false, 0)
+        }
+        val json = TranscriptJson.encodeWords(words)
+        assertTrue("larger than a cursor window", json.toByteArray().size > 2 * 1024 * 1024)
+        val text = words.joinToString(" ") { it.text }
+        store.writableDatabase.execSQL("UPDATE paragraphs SET text=?,source_text=?,words=?,start_ms=0,end_ms=? WHERE id=?",
+            arrayOf<Any>(text, text, json, words.last().endMs, open.id))
+
+        val stored = store.paragraphs(id).single()
+        assertEquals(text, stored.text)
+        assertEquals(words, stored.sourceWords())
+        assertEquals(words.size, store.paragraph(open.id)!!.sourceWords()!!.size)
+
+        commit(store, id, plan(1, endMs, endMs + 20_000, EndKind.FINAL, EndKind.PAUSE), speech("and then more", startSec = 1.0))
+        val paragraphs = store.paragraphs(id)
+        assertEquals(2, paragraphs.size)
+        val (closed, next) = paragraphs
+        assertFalse(closed.open)
+        assertTrue(next.open)
+        // The cap closed the stored paragraph near its end; at most its last words carried over.
+        assertTrue(next.sourceWords()!!.size <= SpeechTuning.PARAGRAPH_CAP_LOOKBACK_WORDS + 3)
+        val all = closed.sourceWords()!! + next.sourceWords()!!
+        assertEquals(words, all.dropLast(3))
+        assertEquals(listOf("and", "then", "more"), all.takeLast(3).map { it.text })
+        store.duration(id, endMs + 20_000)
+        assertTrue(store.markReady(id))
+        assertEquals("$text and then more", store.transcript(id).replace("\n\n", " "))
         assertSearchIndexIntact(store)
     }
 
