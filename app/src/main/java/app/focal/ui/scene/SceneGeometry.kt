@@ -342,8 +342,13 @@ object Morph {
         else -> if (p0 >= HALF) 1f else 0f
     }
 
-    /** Predictive back on the scene (T29): a full back swipe previews exactly the release threshold. */
-    fun backPreview(progress: Float, ease: (Float) -> Float): Float = 1 - FocalGestures.BACK_PREVIEW * ease(progress)
+    /**
+     * Predictive back on the scene (T29): a full back swipe previews exactly the release threshold. The gesture scales
+     * p from [from], where it was when the gesture began (1 at rest; less while an expand is still settling), so a back
+     * never jumps the surface open.
+     */
+    fun backPreview(progress: Float, from: Float = 1f, ease: (Float) -> Float): Float =
+        from * (1 - FocalGestures.BACK_PREVIEW * ease(progress))
 
     private const val STAGE_TEXT_FROM = 0.1f
     private const val STAGE_TEXT_TO = 0.35f

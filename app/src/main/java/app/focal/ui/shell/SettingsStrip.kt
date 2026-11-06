@@ -107,7 +107,8 @@ fun settingsTravel(widthPx: Float, density: Density): Float = widthPx + with(den
  * The library and the settings page side by side (spec 4.23.1-4.23.2): the library at x = -s * D_s, settings at
  * (1 - s) * D_s, the 8 dp `s2` seam between them and 28 dp seam-side corners while 0 < s < 1. Under reduced motion
  * nothing travels: a fade-through on paper. The page that is off screen is inert (no semantics, no focus). Back and
- * predictive back close settings with the same motion: s = 1 - progress, commit on `move`, cancel back to 1.
+ * predictive back close settings with the same motion: s = 1 - progress, commit on `move`, cancel back to 1. Back is
+ * settings' only while it is open or opening: the peek and a close in flight leave it to the library (the app).
  */
 @Composable
 fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, settings: @Composable () -> Unit, modifier: Modifier = Modifier) {
@@ -123,17 +124,24 @@ fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, se
     // follows at once stops it before it can undo the close.
     val scope = rememberCoroutineScope()
     val springBack = remember { PendingJob() }
-    PredictiveBackHandler(enabled = !settingsHidden) { events ->
+    // The gesture's own previews move s's target below 1; the handler stays with the gesture it started.
+    var backing by remember { mutableStateOf(false) }
+    PredictiveBackHandler(enabled = state.isOpen || backing) { events ->
         springBack.cancel()
+        backing = true
+        // From where s is (1 at rest; less while an opening swipe still settles), so a back never snaps the page in.
+        val from = state.progress.value
         var committed = false
         try {
-            events.collect { event -> state.progress.snapTo(1f - event.progress) }
+            events.collect { event -> state.progress.snapTo(from * (1f - event.progress)) }
             committed = true
             state.close(reduced)
         } catch (cancelled: CancellationException) {
             // Only a cancelled gesture springs back; a committed close may end by disabling this handler.
             if (!committed) springBack.job = scope.launch { state.settle(1f, reduced) }
             throw cancelled
+        } finally {
+            backing = false
         }
     }
     Box(

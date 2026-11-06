@@ -22,10 +22,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.zIndex
-import app.focal.ui.design.FocalGestures
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FullMotion
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.scene.Morph
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
@@ -256,7 +256,7 @@ val BackEase = CubicBezierEasing(0f, 0f, 0f, 1f)
  * while it settles into it, T7). Back on the scene drives the morph itself: p = 1 - 0.4 * BackEase(progress), so a
  * full back swipe previews exactly the release threshold; commit folds on `stage`, cancel springs back on `move`. API
  * 33 and below (no progress) fold directly. The handler is registered when the scene appears, so it is the first
- * back layer while the scene is up (spec 2.8.5).
+ * back layer while the scene is open or opening (spec 2.8.5); while it folds, Back belongs to the layer under it.
  */
 @Composable
 fun LiveSurfaceHost(state: LiveSurfaceState, scene: @Composable () -> Unit) {
@@ -265,12 +265,17 @@ fun LiveSurfaceHost(state: LiveSurfaceState, scene: @Composable () -> Unit) {
     // follows at once (the dispatcher may cancel, then complete) stops it before it can undo the fold.
     val scope = rememberCoroutineScope()
     val springBack = remember { PendingJob() }
+    // The gesture's own previews move p's target below 1; the handler stays with the gesture it started.
+    var backing by remember { mutableStateOf(false) }
     if (!state.visible) return
-    PredictiveBackHandler(enabled = state.landingNote == null) { events ->
+    PredictiveBackHandler(enabled = state.landingNote == null && (state.expansion.targetValue >= 1f || backing)) { events ->
         springBack.cancel()
+        backing = true
+        // From where p is: an expand still settling previews from there, never from a surface snapped open.
+        val from = state.expansion.value
         var committed = false
         try {
-            events.collect { event -> state.expansion.snapTo(1f - FocalGestures.BACK_PREVIEW * BackEase.transform(event.progress)) }
+            events.collect { event -> state.expansion.snapTo(Morph.backPreview(event.progress, from, BackEase::transform)) }
             committed = true
             state.collapse(reduced)
         } catch (cancelled: CancellationException) {
@@ -279,6 +284,8 @@ fun LiveSurfaceHost(state: LiveSurfaceState, scene: @Composable () -> Unit) {
                 if (reduced || !state.spatial) state.settle(1f, true) else state.expansion.animateTo(1f, FocalMotion.move())
             }
             throw cancelled
+        } finally {
+            backing = false
         }
     }
     Box(Modifier.fillMaxSize().zIndex(if (state.landingNote != null) LANDING_Z else 0f)) { scene() }

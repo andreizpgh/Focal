@@ -3,6 +3,7 @@ package app.focal.ui.scene
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Density
+import app.focal.ui.shell.BackEase
 import app.focal.ui.state.LiveParagraph
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -155,8 +156,13 @@ class MorphTest {
     }
 
     @Test fun predictiveBackPreviewsTheThreshold() {
-        near(0.6f, Morph.backPreview(1f) { it })
-        near(1f, Morph.backPreview(0f) { it })
+        near(0.6f, Morph.backPreview(1f, ease = BackEase::transform))
+        near(1f, Morph.backPreview(0f, ease = BackEase::transform))
+        // Halfway through the gesture the eased curve is already most of the way (PathInterpolator(0, 0, 0, 1)).
+        assertTrue(Morph.backPreview(0.5f, ease = BackEase::transform) < 0.7f)
+        // A back while an expand still settles scales p from where it was: it never jumps the surface open.
+        near(0.3f, Morph.backPreview(0f, from = 0.3f, ease = BackEase::transform))
+        near(0.18f, Morph.backPreview(1f, from = 0.3f, ease = BackEase::transform))
     }
 
     @Test fun rtlMirrorsTheStageRow() {
