@@ -11,6 +11,7 @@ import android.view.KeyboardShortcutInfo
 import android.view.Menu
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
@@ -18,8 +19,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
-import app.focal.recording.ServiceEvent
-import app.focal.recording.StartFailure
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalSettle
 import app.focal.ui.shell.FocalApp
@@ -28,6 +27,7 @@ import app.focal.ui.shell.NightMode
 import app.focal.ui.shell.ShellCommand
 import app.focal.ui.state.EntryRequest
 import app.focal.ui.state.EntryRequests
+import app.focal.ui.state.RecordingViewModel
 import app.focal.ui.state.ThemeMode
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -37,6 +37,8 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val shellCommands = MutableSharedFlow<ShellCommand>(extraBufferCapacity = 1)
+    /** The same view model the interface uses: a start from here is STARTING there too (the tick, spec 5.13). */
+    private val recording: RecordingViewModel by viewModels()
 
     /** API 26-30: the theme setting reaches values-night before any resource is read (no flash on a cold start). */
     override fun attachBaseContext(newBase: Context) {
@@ -137,12 +139,10 @@ class MainActivity : ComponentActivity() {
             EntryRequests.post(EntryRequest.Record)
             return
         }
-        try {
-            RecordingService.command(this, RecordingService.START)
-            EntryRequests.post(EntryRequest.ShowRecording(null))
-        } catch (error: Exception) {
-            RecordingState.events.tryEmit(ServiceEvent.StartFailed(StartFailure.OTHER, RecordingService.refusal(error) ?: getString(R.string.error_start)))
-        }
+        // Through the interface's own Record: the start is STARTING until the service confirms it, so the tick and
+        // the notification permission follow exactly as for Record in the app. A failure arrives as StartFailed.
+        recording.record()
+        if (recording.starting) EntryRequests.post(EntryRequest.ShowRecording(null))
     }
 
     companion object {

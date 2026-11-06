@@ -37,7 +37,10 @@ import kotlinx.coroutines.launch
 class RecordingViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as FocalApplication
     private val store = app.store
-    private val starting = MutableStateFlow(false)
+    private val startRequested = MutableStateFlow(false)
+
+    /** A start was sent and the service has neither confirmed nor refused it yet. */
+    val starting: Boolean get() = startRequested.value
     private val finishingNote = MutableStateFlow<String?>(null)
 
     /** Service outcomes without a note: "Nothing was recorded", storage or microphone problems at Record. */
@@ -66,7 +69,7 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
             }.distinctUntilChanged()
         }.flowOn(Dispatchers.IO)
 
-    val state: StateFlow<RecordingUiState> = combine(session, paragraphs, starting, finishingNote) { live, text, isStarting, finishing ->
+    val state: StateFlow<RecordingUiState> = combine(session, paragraphs, startRequested, finishingNote) { live, text, isStarting, finishing ->
         val phase = when {
             live.capturing -> if (live.paused) RecordingPhase.PAUSED else RecordingPhase.RECORDING
             finishing != null && live.noteId == finishing && live.processing -> RecordingPhase.FINISHING
@@ -86,8 +89,8 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         // STARTING ends when the service publishes the note or reports that it could not start.
-        viewModelScope.launch { RecordingState.live.collect { if (it.capturing) starting.value = false } }
-        viewModelScope.launch { RecordingState.events.collect { if (it is ServiceEvent.StartFailed) starting.value = false } }
+        viewModelScope.launch { RecordingState.live.collect { if (it.capturing) startRequested.value = false } }
+        viewModelScope.launch { RecordingState.events.collect { if (it is ServiceEvent.StartFailed) startRequested.value = false } }
     }
 
     /**
@@ -98,7 +101,7 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         if (RecordingState.live.value.capturing) return
         try {
             RecordingService.command(app, RecordingService.START)
-            starting.value = true
+            startRequested.value = true
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             RecordingState.events.tryEmit(ServiceEvent.StartFailed(
