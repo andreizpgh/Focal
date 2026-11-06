@@ -137,10 +137,13 @@ fun BottomColumn(
             },
             {
                 val graphics = Modifier.graphicsLayer {
+                    // Hiding, the dock goes as far as the keyboard has risen or its own springs have run, whichever
+                    // leads: it follows a keyboard that moves, and still hides when a requested keyboard never shows
+                    // (a hardware keyboard, a refused IME). It never comes back while it is meant to be hidden.
                     val target = imeTarget.getBottom(density)
-                    val keyboard = if (dockHidden && target > 0) (ime.getBottom(density).toFloat() / target).coerceIn(0f, 1f) else null
-                    translationY = (keyboard ?: slide.value) * hideDistance
-                    alpha = 1 - (keyboard ?: fade.value)
+                    val keyboard = if (dockHidden && target > 0) (ime.getBottom(density).toFloat() / target).coerceIn(0f, 1f) else 0f
+                    translationY = maxOf(keyboard, slide.value) * hideDistance
+                    alpha = 1 - maxOf(keyboard, fade.value)
                 }
                 Box(graphics) { dock() }
             },
