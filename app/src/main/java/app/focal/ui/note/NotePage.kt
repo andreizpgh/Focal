@@ -340,6 +340,16 @@ fun NotePage(
         }
         focusField(CaretAt(stored.id, current.text.selection.start.coerceAtMost(stored.text.length)))
     }
+    // The note stopped being editable under Edit (it started transcribing again): Edit ends after one last save of
+    // the draft, which the store may refuse; then the pill says so.
+    val notSaved = stringResource(R.string.error_save)
+    LaunchedEffect(note.loaded, note.editable) {
+        if (!note.loaded || note.editable || !page.editing) return@LaunchedEffect
+        val current = page.field
+        val saved = current == null || session.save(current.id, current.text.text.toString())
+        exitEdit()
+        if (!saved) bottom.feedback.show(notSaved)
+    }
     fun withDraft(block: suspend (FieldFocus?) -> CaretAt?) {
         scope.launch { block(page.field)?.takeIf { it.id >= 0 }?.let { focusField(it) } }
     }
@@ -586,7 +596,7 @@ fun NotePage(
     )
 
     // Strings for the head, notices and the paragraphs' actions.
-    val head = headUi(note, paragraphs, dates, today, captureElsewhere, actions)
+    val head = headUi(note, paragraphs, dates, today, captureElsewhere, actions, interactive = !page.editing && !find.open)
     val labels = ParagraphLabels(
         play = stringResource(R.string.a11y_play_here), edit = stringResource(R.string.a11y_edit),
         copy = stringResource(R.string.a11y_copy_paragraph), restore = stringResource(R.string.menu_restore),

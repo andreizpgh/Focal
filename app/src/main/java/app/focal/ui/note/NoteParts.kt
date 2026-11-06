@@ -280,7 +280,10 @@ internal fun LazyItemScope.ParagraphItem(
     }
 }
 
-/** The head's content from the note's state (spec 5.5, 5.9, 7.5). */
+/**
+ * The head's content from the note's state (spec 5.5, 5.9, 7.5). Without [interactive] (Edit, Find) the notices keep
+ * their text but offer no Retry: transcribing again would take the note out of Edit from under the user.
+ */
 @Composable
 internal fun headUi(
     note: NoteUiState,
@@ -289,6 +292,7 @@ internal fun headUi(
     today: LocalDate,
     captureElsewhere: Boolean,
     actions: NoteActions,
+    interactive: Boolean = true,
 ): HeadUi {
     val fallback = stringResource(R.string.title_fallback, dates.time(note.created))
     val leading = paragraphs.take(TITLE_PARAGRAPHS).map { it.text }
@@ -306,12 +310,12 @@ internal fun headUi(
             null -> Unit
         }
         if (note.phase == NotePhase.PARTIAL_FAILURE) {
-            add(Notice(stringResource(R.string.partial_failure), action = retry.takeIf { note.canRetry }, onAction = actions.retry))
+            add(Notice(stringResource(R.string.partial_failure), action = retry.takeIf { note.canRetry && interactive }, onAction = actions.retry))
         }
         if (note.phase == NotePhase.WAITING) when {
             captureElsewhere -> add(Notice(stringResource(R.string.waiting_after_recording)))
             note.waitingReason != null -> add(
-                Notice(stringResource(R.string.model_failed), action = tryAgain.takeIf { note.canRetry }, onAction = actions.retry),
+                Notice(stringResource(R.string.model_failed), action = tryAgain.takeIf { note.canRetry && interactive }, onAction = actions.retry),
             )
         }
     }
