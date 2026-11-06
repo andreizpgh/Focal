@@ -396,6 +396,7 @@ private const val HALF_TURN = 180f
  */
 @Composable
 private fun LiveStage(stage: StageUi.Live, meter: WaveMeter) {
+    val shell = LocalShell.current
     val colors = FocalTheme.colors
     val density = LocalDensity.current
     // The scene's timer at the stage's size (spec 4.22.7), with the same reserved widths (R5): the morph scales one
@@ -412,7 +413,11 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter) {
             {
                 Row(Modifier.clearAndSetSemantics { }, verticalAlignment = Alignment.CenterVertically) {
                     Box {
-                        NineBars(WaveMode.Live(meter, stage.paused), WaveDress.Material, Modifier.markBox(StageMetrics.wave))
+                        // Under the open scene the stage is covered (the scene draws the same meter): no frames.
+                        NineBars(
+                            WaveMode.Live(meter, stage.paused), WaveDress.Material, Modifier.markBox(StageMetrics.wave),
+                            active = { !shell.live.open },
+                        )
                         val k = StageMetrics.wave.value / Mark.BADGE_REFERENCE_HEIGHT
                         PauseBadge(
                             diameter = { PauseBadgeMetrics.stage },

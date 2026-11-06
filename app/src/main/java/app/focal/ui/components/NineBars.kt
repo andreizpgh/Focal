@@ -22,8 +22,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.FrameRateCategory
 import androidx.compose.ui.Modifier
@@ -54,6 +57,7 @@ import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.LocalThemeFade
 import app.focal.ui.design.Scene
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.abs
@@ -219,8 +223,9 @@ enum class WaveRenderer {
 
 /**
  * The nine bars. The caller sizes the box (`Modifier.markBox`). Live and working waves read their level in the draw
- * phase from a frame loop that runs only while the lifecycle is STARTED, so nothing recomposes per frame. Every wave
- * is hidden from accessibility: the merged node next to it carries the meaning.
+ * phase from a frame loop that runs only while the lifecycle is STARTED and the wave is [active] (a wave covered by
+ * another surface asks for no frames), so nothing recomposes per frame. Every wave is hidden from accessibility: the
+ * merged node next to it carries the meaning.
  */
 @Composable
 fun NineBars(
@@ -229,14 +234,15 @@ fun NineBars(
     modifier: Modifier = Modifier,
     renderer: WaveRenderer = WaveRenderer.live,
     entry: WaveEntry? = null,
+    active: () -> Boolean = { true },
 ) {
     // Drawing only, with no semantics of its own: accessibility services never see it, and nothing leaks into the
     // merged stage or timer node that speaks the state (a hidden child would hide that whole node).
     when (mode) {
         WaveMode.Static -> StillBars(1f, dress, modifier)
         WaveMode.Rest -> StillBars(Mark.REST, dress, modifier)
-        is WaveMode.Live -> MovingBars(mode, mode.paused, dress, modifier, renderer, entry)
-        is WaveMode.Working -> MovingBars(mode, mode.paused, dress, modifier, renderer, null)
+        is WaveMode.Live -> MovingBars(mode, mode.paused, dress, modifier, renderer, entry, active)
+        is WaveMode.Working -> MovingBars(mode, mode.paused, dress, modifier, renderer, null, active)
     }
 }
 
@@ -276,7 +282,15 @@ private class WaveFrame {
 }
 
 @Composable
-private fun MovingBars(mode: WaveMode, paused: Boolean, dress: WaveDress, modifier: Modifier, renderer: WaveRenderer, entry: WaveEntry?) {
+private fun MovingBars(
+    mode: WaveMode,
+    paused: Boolean,
+    dress: WaveDress,
+    modifier: Modifier,
+    renderer: WaveRenderer,
+    entry: WaveEntry?,
+    active: () -> Boolean,
+) {
     val reduced = LocalReducedMotion.current
     val frame = remember { WaveFrame() }
     val tick = remember { mutableLongStateOf(0L) }
@@ -293,13 +307,18 @@ private fun MovingBars(mode: WaveMode, paused: Boolean, dress: WaveDress, modifi
         else -> false
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val shown by rememberUpdatedState(active)
     if (animated) LaunchedEffect(mode, reduced, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             // A paused wave is still once it has eased to the full profile: no frames until it resumes.
-            while (!paused || toProfile.isRunning || toProfile.value < 1f) withFrameNanos { nanos ->
-                val nowMs = nanos / NANOS_PER_MS
-                if (mode is WaveMode.Live) mode.meter.advance(nowMs)
-                tick.longValue = nowMs
+            while (!paused || toProfile.isRunning || toProfile.value < 1f) {
+                // Covered: no frames until it shows again (it draws its last frame meanwhile).
+                if (!shown()) snapshotFlow { shown() }.first { it }
+                withFrameNanos { nanos ->
+                    val nowMs = nanos / NANOS_PER_MS
+                    if (mode is WaveMode.Live) mode.meter.advance(nowMs)
+                    tick.longValue = nowMs
+                }
             }
         }
     }
