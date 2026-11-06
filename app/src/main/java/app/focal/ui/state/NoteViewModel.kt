@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.focal.FocalApplication
+import app.focal.R
 import app.focal.data.EditResult
 import app.focal.data.NoteState
 import app.focal.data.ReplaceUndo
@@ -120,7 +121,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
             Loaded(note, paragraphs, gaps, store.progress(noteId).remainingMs, null)
         } catch (error: Exception) {
             if (error is CancellationException) throw error
-            Loaded(null, emptyList(), emptyList(), 0, error.message ?: "Could not load this note.")
+            Loaded(null, emptyList(), emptyList(), 0, app.getString(R.string.error_load_note))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -202,7 +203,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
             outcome(result.outcome)
         } catch (error: Exception) {
             if (error is CancellationException) throw error
-            EditOutcome.Failed(error.message ?: "Could not replace.")
+            EditOutcome.Failed(app.getString(R.string.error_replace))
         }
     }
 
@@ -221,7 +222,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         try { RecordingService.command(app, RecordingService.RECOVER, noteId, retryFailed = true) }
         catch (error: Exception) {
             if (error is CancellationException) throw error
-            eventFlow.tryEmit(NoteEvent.Error(error.message ?: "Could not continue transcription."))
+            eventFlow.tryEmit(NoteEvent.Error(RecordingService.refusal(error) ?: app.getString(R.string.error_retry)))
         }
     }
 
@@ -258,7 +259,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         try { outcome(block()) }
         catch (error: Exception) {
             if (error is CancellationException) throw error
-            EditOutcome.Failed(error.message ?: "Could not save your edit.")
+            EditOutcome.Failed(app.getString(R.string.error_save))
         }
     }
 
@@ -273,7 +274,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
     private fun launch(block: suspend () -> Unit) = viewModelScope.launch(Dispatchers.IO) {
         try { block() } catch (error: Exception) {
             if (error is CancellationException) throw error
-            eventFlow.emit(NoteEvent.Error(error.message ?: "Something went wrong. Your note is still on this device."))
+            eventFlow.emit(NoteEvent.Error(app.getString(R.string.error_note)))
         }
     }
 

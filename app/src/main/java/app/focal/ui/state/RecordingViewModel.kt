@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.focal.FocalApplication
+import app.focal.R
 import app.focal.recording.AudioLevel
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
@@ -102,7 +103,7 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
             if (error is CancellationException) throw error
             RecordingState.events.tryEmit(ServiceEvent.StartFailed(
                 if (error is SecurityException) StartFailure.PERMISSION else StartFailure.OTHER,
-                error.message ?: "Could not start recording."))
+                RecordingService.refusal(error) ?: app.getString(R.string.error_start)))
         }
     }
 
@@ -122,7 +123,7 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         try { RecordingService.command(app, action) }
         catch (error: Exception) {
             if (error is CancellationException) throw error
-            RecordingState.events.tryEmit(ServiceEvent.StartFailed(StartFailure.OTHER, error.message ?: "Focal could not reach the recording."))
+            RecordingState.events.tryEmit(ServiceEvent.StartFailed(StartFailure.OTHER, app.getString(R.string.error_recording_unreachable)))
         }
     }
 }

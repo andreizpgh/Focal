@@ -118,6 +118,30 @@
     <string name="feedback_restored">Original restored</string>
     <string name="feedback_save_failed">Couldn’t save your edit. Free up some space, then tap Retry.</string>
 
+    <!-- Failures in the feedback pill: what went wrong and what to do; never an exception's own text. -->
+    <string name="error_start">Couldn’t start recording. Try again.</string>
+    <string name="error_finishing">Finishing the previous recording. Try again in a moment.</string>
+    <string name="error_already_recording">A recording is already running.</string>
+    <string name="error_note_busy">This note is busy. Try again in a moment.</string>
+    <string name="error_recording_unreachable">Couldn’t reach the recording. Try again.</string>
+    <string name="error_load_notes">Couldn’t load your notes. Try again when storage is available.</string>
+    <string name="error_notes">Something went wrong. Your notes are still on this device.</string>
+    <string name="error_note">Something went wrong. Your note is still on this device.</string>
+    <string name="error_load_note">Couldn’t load this note.</string>
+    <string name="error_delete">Couldn’t delete this note.</string>
+    <string name="error_delete_active">Finish this recording or transcription before deleting it.</string>
+    <string name="error_note_gone">This note is no longer available.</string>
+    <string name="error_no_audio">This note has no audio.</string>
+    <string name="error_remove_transcribing">Finish transcription before removing the audio.</string>
+    <string name="error_remove_failed_parts">Part of this note couldn’t be transcribed. Retry it before removing the audio.</string>
+    <string name="error_remove_audio">Couldn’t remove the audio.</string>
+    <string name="error_remove_audio_later">Couldn’t delete the audio file yet. Focal will try again when it next opens.</string>
+    <string name="error_replace">Couldn’t replace the matches.</string>
+    <string name="error_retry">Couldn’t continue transcription.</string>
+    <string name="error_save">Couldn’t save your edit.</string>
+    <string name="error_playback">Couldn’t play the audio.</string>
+    <string name="error_playback_recording">Finish recording before playing audio.</string>
+
     <!-- The note, Edit and Find (design 7.5). -->
     <string name="meta">%1$s · %2$s</string>
     <string name="meta_text_only">Text only</string>

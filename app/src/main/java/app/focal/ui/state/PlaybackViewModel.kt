@@ -1,9 +1,11 @@
 package app.focal.ui.state
 
 import android.app.Application
+import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.focal.FocalApplication
+import app.focal.R
 import app.focal.recording.RecordingState
 import app.focal.speech.SpeechPlayer
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -24,7 +26,9 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
     private val app = application as FocalApplication
     private val player = SpeechPlayer(app, app.store, viewModelScope)
     private val errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /** Playback failures, as the app's own sentence (the player's reasons are internal). */
     val errors: SharedFlow<String> = errorFlow.asSharedFlow()
+    private val failed: (String) -> Unit = { report(R.string.error_playback) }
 
     val session: StateFlow<PlaybackSession> = player.playback
         .map { PlaybackSession(it.noteId, it.isPlaying, it.durationMs) }
@@ -42,19 +46,19 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
 
     fun playFrom(noteId: String, positionMs: Long) {
         if (blocked()) return
-        player.playFrom(noteId, positionMs, ::report)
+        player.playFrom(noteId, positionMs, failed)
     }
 
     /** Plays exactly [startMs, endMs), for example a gap that could not be transcribed. */
     fun playRange(noteId: String, startMs: Long, endMs: Long) {
         if (blocked()) return
-        player.playRange(noteId, startMs, endMs, ::report)
+        player.playRange(noteId, startMs, endMs, failed)
     }
 
     /** ▶ / ‖: pauses this note's playback, or resumes it where it stopped. */
     fun toggle(noteId: String) {
         if (blocked()) return
-        player.toggle(noteId, ::report)
+        player.toggle(noteId, failed)
     }
 
     fun seek(noteId: String, positionMs: Long) = playFrom(noteId, positionMs)
@@ -66,11 +70,11 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
 
     private fun blocked(): Boolean {
         // The speaker must never leak into a recording.
-        if (RecordingState.live.value.capturing) { report("Finish recording before playing audio."); return true }
+        if (RecordingState.live.value.capturing) { report(R.string.error_playback_recording); return true }
         return false
     }
 
-    private fun report(message: String) { errorFlow.tryEmit(message) }
+    private fun report(@StringRes message: Int) { errorFlow.tryEmit(app.getString(message)) }
 
     override fun onCleared() = player.stop()
 

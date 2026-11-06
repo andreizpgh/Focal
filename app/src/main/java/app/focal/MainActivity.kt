@@ -141,7 +141,7 @@ class MainActivity : ComponentActivity() {
             RecordingService.command(this, RecordingService.START)
             EntryRequests.post(EntryRequest.ShowRecording(null))
         } catch (error: Exception) {
-            RecordingState.events.tryEmit(ServiceEvent.StartFailed(StartFailure.OTHER, error.message ?: "Could not start recording."))
+            RecordingState.events.tryEmit(ServiceEvent.StartFailed(StartFailure.OTHER, RecordingService.refusal(error) ?: getString(R.string.error_start)))
         }
     }
 

@@ -18,10 +18,12 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
 import android.os.SystemClock
+import android.text.format.Formatter
 import android.util.Log
 import androidx.core.content.ContextCompat
 import app.focal.BuildConfig
 import app.focal.FocalApplication
+import app.focal.R
 import app.focal.core.DecodePolicy
 import app.focal.core.LevelMeter
 import app.focal.core.MeterMath
@@ -177,9 +179,7 @@ class RecordingService : Service() {
         catch (error: RuntimeException) {
             // The microphone type can be refused (permission removed, or a start from the background).
             RecordingState.events.tryEmit(ServiceEvent.StartFailed(
-                if (error is SecurityException) StartFailure.PERMISSION else StartFailure.OTHER,
-                if (error is SecurityException) "Allow microphone access and start recording while Focal is open."
-                else "Recording could not start. Open Focal and try again."))
+                if (error is SecurityException) StartFailure.PERMISSION else StartFailure.OTHER, getString(R.string.error_start)))
             // Processing promotion opens no microphone and disarms the foreground-start deadline.
             runCatching { promote(processingType(), notifications.transcribing(processingNote, "", 0, null, false)) }
             SessionOperations.releasePending(token)
@@ -445,11 +445,12 @@ class RecordingService : Service() {
             @Suppress("UsableSpace")
             val short = StorageReserve.shortfall(filesDir.usableSpace, StorageReserve.START_BYTES)
             if (short > 0) {
-                fail(session, ServiceEvent.StartFailed(StartFailure.STORAGE, "Free up some space to record.", short))
+                fail(session, ServiceEvent.StartFailed(StartFailure.STORAGE,
+                    getString(R.string.feedback_storage, Formatter.formatShortFileSize(this, short)), short))
                 return
             }
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                fail(session, ServiceEvent.StartFailed(StartFailure.PERMISSION, "Microphone access is required."))
+                fail(session, ServiceEvent.StartFailed(StartFailure.PERMISSION, getString(R.string.perm_title)))
                 return
             }
             // The microphone is opened before a note exists: a busy microphone creates no note.
@@ -457,7 +458,7 @@ class RecordingService : Service() {
             if (device == null || !device.initialized) {
                 runCatching { device?.close() }
                 device = null
-                fail(session, ServiceEvent.StartFailed(StartFailure.MICROPHONE, "Another app is using the microphone."))
+                fail(session, ServiceEvent.StartFailed(StartFailure.MICROPHONE, getString(R.string.feedback_mic_busy)))
                 return
             }
             val id = store.create()
@@ -470,9 +471,8 @@ class RecordingService : Service() {
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             runCatching { device?.close() }
-            val message = error.message ?: "Could not start recording."
-            if (session.noteId == null) fail(session, ServiceEvent.StartFailed(StartFailure.OTHER, message))
-            else session.failure = session.failure ?: message
+            if (session.noteId == null) fail(session, ServiceEvent.StartFailed(StartFailure.OTHER, getString(R.string.error_start)))
+            else session.failure = session.failure ?: (error.message ?: "Could not start recording.")
         } finally {
             withContext(NonCancellable + Dispatchers.IO) { finishCapture(session) }
         }
@@ -1204,6 +1204,12 @@ class RecordingService : Service() {
         @Volatile internal var decoderFactoryForTests: (() -> RecordingDecoder)? = null
         @Volatile internal var metadataCapacityForTests: Int? = null
 
+        /** A command the service turns down for now, with the sentence that says why (strings.xml). */
+        class Refused(message: String) : IllegalStateException(message)
+
+        /** The sentence of a [Refused] command, for the feedback pill; null for any other failure. */
+        fun refusal(error: Throwable): String? = (error as? Refused)?.message
+
         /**
          * Sends a command. START needs the microphone permission and a visible activity; RECOVER claims
          * [id] for transcription ([retryFailed]: its failed windows get new attempts); DRAIN continues
@@ -1222,10 +1228,9 @@ class RecordingService : Service() {
                     if (claim == null) {
                         // The microphone slot is still held while the previous recording closes its note:
                         // nothing would start, so say so instead of accepting the tap silently.
-                        if (capture && SessionOperations.captureFinishing())
-                            error("Finishing the previous recording. Try again in a moment.")
+                        if (capture && SessionOperations.captureFinishing()) throw Refused(context.getString(R.string.error_finishing))
                         if (SessionOperations.matchesSession(capture, id)) return
-                        error(if (capture) "A recording is already running." else "This note is being changed. Try again when it finishes.")
+                        throw Refused(context.getString(if (capture) R.string.error_already_recording else R.string.error_note_busy))
                     }
                     intent.putExtra(OPERATION, claim.token)
                     try { ContextCompat.startForegroundService(context, intent) }

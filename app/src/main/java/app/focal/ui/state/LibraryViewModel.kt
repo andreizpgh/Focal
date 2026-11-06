@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.focal.FocalApplication
+import app.focal.R
 import app.focal.data.Note
 import app.focal.data.NoteState
 import app.focal.data.SearchResult
@@ -78,7 +79,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             store.library().also { loadError.value = null }
         } catch (error: Exception) {
             if (error is CancellationException) throw error
-            loadError.value = "Could not load notes. Try again when storage is available."
+            loadError.value = app.getString(R.string.error_load_notes)
             null
         }
     }.flowOn(Dispatchers.IO)
@@ -156,7 +157,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private fun launch(block: suspend () -> Unit) = viewModelScope.launch(Dispatchers.IO) {
         try { block() } catch (error: Exception) {
             if (error is CancellationException) throw error
-            eventFlow.emit(LibraryEvent.Error(error.message ?: "Something went wrong. Your notes are still on this device."))
+            eventFlow.emit(LibraryEvent.Error(app.getString(R.string.error_notes)))
         }
     }
 

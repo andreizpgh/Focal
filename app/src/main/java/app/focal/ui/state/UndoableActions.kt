@@ -1,6 +1,8 @@
 package app.focal.ui.state
 
+import androidx.annotation.StringRes
 import app.focal.FocalApplication
+import app.focal.R
 import app.focal.data.NoteState
 import app.focal.recording.RecordingState
 import app.focal.recording.ServiceNotifications
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
 
 /**
  * Delete and Remove audio with Undo ("Note deleted · Undo", "Audio removed · Undo"). Delete moves the note
@@ -30,7 +33,8 @@ import kotlinx.coroutines.withContext
  * An undo and a commit never both succeed: the store purges only a note that is still in the trash, and
  * a removal is committed or undone by whichever takes it from the schedule first. A late undo returns false
  * ("Too late to undo"). Shared by the library and note screens; process-wide, because the snackbar outlives
- * a screen.
+ * a screen. Refusals and failures reach `onError` as the app's own sentences (strings.xml), never as an
+ * exception's text.
  */
 object UndoableActions {
     /** Longer than any snackbar, including Android's longest "time to take action" (2 minutes). */
@@ -46,13 +50,13 @@ object UndoableActions {
     /** Moves [noteId] to the trash. False (with [onError]) when it is busy or not deletable now. */
     suspend fun delete(app: FocalApplication, noteId: String, onError: (String) -> Unit): Boolean {
         val claim = SessionOperations.tryDestructive(noteId)
-            ?: return false.also { onError("This note is busy. Try again when its current operation finishes.") }
+            ?: return false.also { onError(app.getString(R.string.error_note_busy)) }
         val deleted = try { withContext(Dispatchers.IO) { app.store.deleteWithUndo(noteId) } }
         catch (error: Exception) {
             if (error is CancellationException) throw error
-            onError("Could not delete this note."); false
+            onError(app.getString(R.string.error_delete)); false
         } finally { claim.release() }
-        if (!deleted) { onError("Finish this recording or transcription before deleting it."); return false }
+        if (!deleted) { onError(app.getString(R.string.error_delete_active)); return false }
         ServiceNotifications.cancelReady(app, noteId)
         synchronized(this) {
             deletions.remove(noteId)?.cancel()
@@ -90,9 +94,9 @@ object UndoableActions {
         val refusal = try { withContext(Dispatchers.IO) { removalRefusal(app, noteId) } }
         catch (error: Exception) {
             if (error is CancellationException) throw error
-            error.message ?: "Could not remove the audio."
+            R.string.error_remove_audio
         }
-        if (refusal != null) { onError(refusal); return false }
+        if (refusal != null) { onError(app.getString(refusal)); return false }
         synchronized(this) {
             removals.remove(noteId)?.cancel()
             pendingRemovals.update { it + noteId }
@@ -123,29 +127,34 @@ object UndoableActions {
         try { commitRemoval(app, noteId) }
         catch (error: Exception) {
             if (error is CancellationException) throw error
-            onError(error.message ?: "Could not remove the audio.")
+            onError(app.getString(when (error) {
+                is Refused -> error.reason
+                // The text is gone from the note; only deleting the file failed, and the store retries that.
+                is IOException -> R.string.error_remove_audio_later
+                else -> R.string.error_remove_audio
+            }))
         } finally { pendingRemovals.update { it - noteId } }
     }
 
-    /** Why the audio of [noteId] cannot be removed now, or null. */
-    private fun removalRefusal(app: FocalApplication, noteId: String): String? {
-        val note = app.store.note(noteId) ?: return "This note is no longer available."
-        if (!note.audioPresent) return "This note has no audio."
+    /** Why the audio of [noteId] cannot be removed now (a sentence's resource), or null. */
+    @StringRes private fun removalRefusal(app: FocalApplication, noteId: String): Int? {
+        val note = app.store.note(noteId) ?: return R.string.error_note_gone
+        if (!note.audioPresent) return R.string.error_no_audio
         if (RecordingState.live.value.noteId == noteId || note.state != NoteState.READY || app.store.hasUntranscribedAudio(note))
-            return "Finish transcription before removing its source audio."
-        if (note.failedWindows > 0) return FAILED_PARTS_MESSAGE
+            return R.string.error_remove_transcribing
+        if (note.failedWindows > 0) return R.string.error_remove_failed_parts
         return null
     }
 
     private fun commitRemoval(app: FocalApplication, noteId: String) {
-        val claim = checkNotNull(SessionOperations.tryDestructive(noteId)) { "This note is busy. Its audio was kept." }
+        val claim = SessionOperations.tryDestructive(noteId) ?: throw Refused(R.string.error_note_busy)
         try {
-            val note = checkNotNull(app.store.note(noteId)) { "This note is no longer available." }
-            check(note.state == NoteState.READY) { "Finish transcription before removing its source audio." }
+            val note = app.store.note(noteId) ?: throw Refused(R.string.error_note_gone)
+            if (note.state != NoteState.READY) throw Refused(R.string.error_remove_transcribing)
             app.store.removeAudio(noteId)
         } finally { claim.release() }
     }
 
-    internal const val FAILED_PARTS_MESSAGE =
-        "Part of this note couldn't be transcribed. Retry it before removing the audio."
+    /** A removal the note's state refuses, with the sentence that says why. */
+    private class Refused(@param:StringRes val reason: Int) : IllegalStateException()
 }
