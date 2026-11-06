@@ -292,7 +292,9 @@ internal fun ParagraphText(
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    // A touch that stops a fling: the list consumed its down on the Initial pass. It only stops the list.
+                    if (down.isConsumed) return@awaitEachGesture
                     // Taps fire on pointer-up; a long-press belongs to the system selection (spec 2.8.3, 5.5).
                     val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation() }
                         ?: return@awaitEachGesture
