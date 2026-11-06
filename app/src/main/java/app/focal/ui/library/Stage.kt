@@ -587,7 +587,8 @@ private val StageTextStyle = FocalType.stageText.copy(lineBreak = LineBreak.Para
 /**
  * The note's length (spec 4.22.4): thin numerals in `stageLength`, each unit small after them ("12 min",
  * "1 h 12 min", "42 s"), baseline-aligned. The first numeral is pulled left by its left side bearing, so its ink
- * lands on the text column's edge.
+ * lands on the text column's edge. Each unit sits 5 dp after its numerals' advance as CSS lays it out (every figure's
+ * tabular advance plus its tracking), not after the text box Android measures, which ends 1.5 to 3 dp later.
  */
 @Composable
 private fun StageLength(durationMs: Long) {
@@ -598,36 +599,73 @@ private fun StageLength(durationMs: Long) {
         LengthUnit.Minutes to stringResource(R.string.len_min),
         LengthUnit.Hours to stringResource(R.string.len_h),
     )
-    val first = parts.first().value.toString()
-    val bearing = leftSideBearing(first.first())
-    Row(Modifier.offset(x = -bearing).clearAndSetSemantics { }) {
-        parts.forEachIndexed { index, part ->
-            if (index > 0) Spacer(Modifier.width(StageMetrics.groupGap))
-            Text(part.value.toString(), style = FocalType.stageLength, color = colors.stageInk, modifier = Modifier.alignByBaseline())
-            Spacer(Modifier.width(StageMetrics.unitGap))
-            Text(
-                units.getValue(part.unit), style = FocalType.meta.copy(fontWeight = FocalWeight.Medium), color = colors.stageRecede,
-                modifier = Modifier.alignByBaseline(),
-            )
+    val numerals = parts.map { it.value.toString() }
+    val figures = rememberFigureMetrics()
+    val bearing = figures.leftSideBearing(numerals.first().first())
+    Layout(
+        content = {
+            parts.forEachIndexed { index, part ->
+                Text(numerals[index], style = FocalType.stageLength, color = colors.stageInk)
+                Text(units.getValue(part.unit), style = FocalType.meta.copy(fontWeight = FocalWeight.Medium), color = colors.stageRecede)
+            }
+        },
+        modifier = Modifier.clearAndSetSemantics { },
+    ) { measurables, _ ->
+        val placeables = measurables.map { it.measure(Constraints()) }
+        val baseline = placeables.maxOf { it[FirstBaseline] }
+        val xs = IntArray(placeables.size)
+        var x = -bearing
+        placeables.forEachIndexed { index, placeable ->
+            val group = index / 2
+            if (index % 2 == 0) {
+                if (group > 0) x += StageMetrics.groupGap.toPx()
+                xs[index] = x.roundToInt()
+                x += figures.advance(numerals[group])
+            } else {
+                x += StageMetrics.unitGap.toPx()
+                xs[index] = x.roundToInt()
+                x += placeable.width
+            }
+        }
+        val height = placeables.maxOf { baseline - it[FirstBaseline] + it.height }
+        layout(max(0, x.roundToInt()), height) {
+            placeables.forEachIndexed { index, placeable -> placeable.place(xs[index], baseline - placeable[FirstBaseline]) }
         }
     }
 }
 
-/** The ink's left side bearing of [glyph] in the thin display numerals at the stage's length size. */
+/** Ink and advance metrics of the thin display figures at the stage's length size, in pixels. */
+private class FigureMetrics(private val paint: android.graphics.Paint?, private val trackingPx: Float) {
+    private val bounds = Rect()
+
+    /** The ink's left side bearing of [glyph]. */
+    fun leftSideBearing(glyph: Char): Float {
+        val p = paint ?: return 0f
+        p.getTextBounds(glyph.toString(), 0, 1, bounds)
+        return bounds.left.coerceAtLeast(0).toFloat()
+    }
+
+    /** The advance of [figures] as CSS lays it out: the tabular advances plus the tracking after every figure. */
+    fun advance(figures: String): Float {
+        val p = paint ?: return 0f
+        return p.measureText(figures) + figures.length * trackingPx
+    }
+}
+
 @Composable
-private fun leftSideBearing(glyph: Char): androidx.compose.ui.unit.Dp {
+private fun rememberFigureMetrics(): FigureMetrics {
     val density = LocalDensity.current
     val resolver = LocalFontFamilyResolver.current
     val typeface = resolver.resolve(FocalDisplay, FocalWeight.Thin, FontStyle.Normal, FontSynthesis.None).value as? Typeface
-    return remember(glyph, typeface, density) {
-        if (typeface == null) return@remember 0.dp
-        val paint = android.graphics.Paint().apply {
-            this.typeface = typeface
-            textSize = with(density) { FocalType.stageLength.fontSize.toPx() }
-            fontFeatureSettings = FocalType.stageLength.fontFeatureSettings
+    return remember(typeface, density) {
+        val size = with(density) { FocalType.stageLength.fontSize.toPx() }
+        val paint = typeface?.let {
+            android.graphics.Paint().apply {
+                this.typeface = it
+                textSize = size
+                fontFeatureSettings = FocalType.stageLength.fontFeatureSettings
+            }
         }
-        val bounds = Rect()
-        paint.getTextBounds(glyph.toString(), 0, 1, bounds)
-        with(density) { bounds.left.coerceAtLeast(0).toDp() }
+        FigureMetrics(paint, FocalType.stageLength.letterSpacing.value * size)
     }
 }
