@@ -146,7 +146,22 @@ internal data class PageChange(
     val edge: Int = NavigationEvent.EDGE_LEFT,
     /** Tells two changes of the same kind apart. */
     val serial: Int = 0,
+    /** Where it starts: from rest, or from what the change it replaced mid-flight had drawn. */
+    val start: ChangeStart = if (push) ChangeStart.Push else ChangeStart.Pop,
 )
+
+/**
+ * Where a page change starts: the upper page's v, its body's alpha, the other rows' alpha (T16), the title's flight
+ * progress and the origin's content alpha. A change that replaces one still in flight (Back during an open, a tap
+ * during a fold) starts from what was on screen, so the page reverses where it is instead of jumping to an end.
+ */
+@Immutable
+internal data class ChangeStart(val v: Float, val body: Float, val rows: Float, val title: Float, val content: Float) {
+    companion object {
+        val Push = ChangeStart(v = 0f, body = 0f, rows = 1f, title = 1f, content = 1f)
+        val Pop = ChangeStart(v = 1f, body = 1f, rows = 0f, title = 0f, content = 0f)
+    }
+}
 
 /** Where a page grows out of and folds into: the stage card or a row, with its title. */
 internal class Origin {
@@ -254,7 +269,9 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     /** [destination] opens on top with [motion], timed from now. */
     internal fun push(destination: Destination, motion: PageMotion) {
         opened[destination] = motion
-        val c = PageChange(motion, destination, push = true, serial = ++serial)
+        val interrupted = inFlight(destination, push = true)
+        val c = PageChange(motion, destination, push = true, serial = ++serial, start = interrupted?.let(::startOf) ?: ChangeStart.Push)
+        carryDecision(interrupted, c)
         change = c
         arriving = originOf(c)?.dock?.let { destination to it }
         if (motion == PageMotion.Cut || motion == PageMotion.LiveStage) {
@@ -278,10 +295,30 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
                 resolvedFor = committed
             }
         } else {
-            change = PageChange(reverse(opened[top]), top, push = false, serial = ++serial)
+            val interrupted = inFlight(top, push = false)
+            val c = PageChange(reverse(opened[top]), top, push = false, serial = ++serial, start = interrupted?.let(::startOf) ?: ChangeStart.Pop)
+            carryDecision(interrupted, c)
+            change = c
             startClock()
         }
         opened.remove(top)
+    }
+
+    /** The change still in flight that a [push] (or pop) of [document] reverses, if any. */
+    private fun inFlight(document: Destination, push: Boolean): PageChange? =
+        change?.takeIf { !it.predictive && it.motion != PageMotion.Cut && it.document == document && it.push != push && active(it) }
+
+    /** What [c] has drawn this frame, for the change that reverses it. */
+    private fun startOf(c: PageChange): ChangeStart = ChangeStart(
+        v = documentProgress(), body = body(c), rows = rows(c), title = titleProgress(c),
+        content = if (c.push) content(c) else smoothstep(CONTENT_FROM, 1f, progress(c)),
+    )
+
+    /** A reversal of the same transform keeps its decision: its origin is on screen, so it starts without a hold. */
+    private fun carryDecision(interrupted: PageChange?, next: PageChange) {
+        if (interrupted != null && interrupted.motion == next.motion && interrupted.motion in CONTAINERS && resolvedFor === interrupted) {
+            resolvedFor = next
+        }
     }
 
     /** A predictive back started on [top] (NavDisplay seeks the pop with the gesture's progress). */
@@ -364,8 +401,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      */
     internal fun titleProgress(c: PageChange): Float {
         if (!c.push) return progress(c)
-        if (titleFrom.isNaN()) return 1f
-        return 1 - move(elapsed - titleFrom)
+        if (titleFrom.isNaN()) return c.start.title
+        return c.start.title * (1 - move(elapsed - titleFrom))
     }
 
     /** How long a change's clock runs: until its slowest part has settled (spec 2.8). */
@@ -375,14 +412,15 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         PageMotion.Stage, PageMotion.Row, PageMotion.LiveStage -> FocalSettle.MOVE_MS.toFloat()
     }
 
-    /** The upper page's progress v on the clock: 0 → 1 as it opens, 1 → 0 as it folds. */
+    /** The upper page's progress v on the clock: 0 → 1 as it opens, 1 → 0 as it folds (from where it started). */
     private fun clockProgress(c: PageChange): Float {
-        val opened = when (c.motion) {
+        val t = when (c.motion) {
             PageMotion.Cut -> 1f
             PageMotion.FadeThrough -> fade(elapsed)
             PageMotion.Stage, PageMotion.Row, PageMotion.LiveStage -> move(elapsed)
         }
-        return if (c.push) opened else 1 - opened
+        val from = c.start.v
+        return if (c.push) from + (1 - from) * t else from * (1 - t)
     }
 
     /** A page that landed from the scene or the live stage folds back into the stage, which now holds its note. */
@@ -511,23 +549,28 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      * they leave on `fadeFast`, and folding into a row they fade through with the returning rows ([rows]). The overlay
      * keeps them clear of the flying title, so two typesettings are never drawn over each other.
      */
-    private fun body(c: PageChange): Float = when {
-        c.predictive -> predictiveBody.value
-        !c.push && c.motion == PageMotion.Row -> 1 - smoothstep(0f, HALF, fadeFast(elapsed))
-        !c.push -> 1 - fadeFast(elapsed)
-        c.motion == PageMotion.Stage || c.motion == PageMotion.Row -> fade(elapsed - BODY_DELAY_MS)
-        else -> 1f
+    private fun body(c: PageChange): Float {
+        val from = c.start.body
+        return when {
+            c.predictive -> predictiveBody.value
+            !c.push && c.motion == PageMotion.Row -> from * (1 - smoothstep(0f, HALF, fadeFast(elapsed)))
+            !c.push -> from * (1 - fadeFast(elapsed))
+            c.motion == PageMotion.Stage || c.motion == PageMotion.Row -> from + (1 - from) * fade(elapsed - BODY_DELAY_MS)
+            else -> 1f
+        }
     }
 
     /**
      * T16: the other rows around a row that opens leave on `fadeFast` (spec 6.1); on Back they return as the page's
      * text leaves, a fade-through on the same `fadeFast`.
      */
-    private fun rows(c: PageChange): Float =
-        if (c.push) 1 - fadeFast(elapsed) else smoothstep(HALF, 1f, fadeFast(elapsed))
+    private fun rows(c: PageChange): Float {
+        val from = c.start.rows
+        return if (c.push) from * (1 - fadeFast(elapsed)) else from + (1 - from) * smoothstep(HALF, 1f, fadeFast(elapsed))
+    }
 
     /** The origin's own content as the page opens out of it (T16′, T7b): the time, text and footer leave on `fadeFast`. */
-    internal fun content(c: PageChange): Float = 1 - fadeFast(elapsed)
+    internal fun content(c: PageChange): Float = c.start.content * (1 - fadeFast(elapsed))
 
     /**
      * How far the page's text stays clear of the flying title (and, folding into a row, the rows around it):
