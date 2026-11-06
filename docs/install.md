@@ -1,60 +1,70 @@
 # Install Focal
 
-**[Download Focal-0.1.0-alpha.9.apk](https://github.com/andreizpgh/Focal/releases/download/stt-alpha-9/Focal-0.1.0-alpha.9.apk)**
+**[Download Focal-0.2.0.apk](https://github.com/andreizpgh/Focal/releases/download/v0.2.0/Focal-0.2.0.apk)**
 
-Android 8.0 or newer and an ARM64 phone. Alpha 9 is an approximately **816 MB**
-testing APK, version `0.1.0-alpha.9`, with its speech models included. It works
-offline, without an account or extra downloads. The first Ultra transcription needs
-about **705 MB of free private storage** in addition to the installed app;
-installation and updates also need temporary space. Later recordings reuse
-the verified private model copy.
+Focal is distributed as an APK on its
+[release page](https://github.com/andreizpgh/Focal/releases/tag/v0.2.0), under
+**Assets**. You don’t need a GitHub account, Android Studio or a ZIP archive.
+Earlier versions stay on their own release pages.
+
+## Requirements
+
+- Android 8.0 or newer on an ARM64 phone.
+- About 0.7 GB for the download. The speech model is inside the APK; nothing else
+  is downloaded, ever.
+- About 0.7 GB more of free storage for the model’s working copy, which Focal makes
+  once, in the background, on first launch. The copy starts only when there is
+  also 200 MB to spare. Installing and updating need temporary space too.
+- Room for your recordings: audio takes about 115 MB per hour until you remove it
+  from a note.
+
+## Install
 
 1. Open the download link on your phone.
-2. Open **Focal-0.1.0-alpha.9.apk** from your browser’s downloads or the Files app.
-3. If Android asks, allow **Install unknown apps** for that browser or file manager,
-   then return to the APK and tap **Install**. You can turn that permission off afterward.
+2. Open **Focal-0.2.0.apk** from your browser’s downloads or the Files app.
+3. If Android asks, allow **Install unknown apps** for that browser or file
+   manager, go back and tap **Install**. You can turn the permission off
+   afterwards.
 
-Open Focal, allow microphone access and notifications, and tap **Record**.
-The speech language shows **Automatic**: Ultra detects it and writes the transcript
-into the same note. The interface is English. Tap **Finish** and wait for the
-remaining audio to be transcribed, then listen, edit and copy.
+Open Focal and tap **Record**. Android asks for the microphone. On Android 13 and
+later it then asks once whether Focal may show notifications, which carry Pause
+and Finish. Talk; text appears after each pause. Tap **Finish**, wait for
+the last part to be transcribed, then **Copy**.
 
-The APK is also available under **Assets** on the
-[release page](https://github.com/andreizpgh/Focal/releases/tag/stt-alpha-9).
-You don’t need a GitHub account, Android Studio, or a ZIP archive.
-The versioned filename identifies this download. Earlier release assets remain available
-on their own release pages.
+On first launch the recording screen may say **Preparing speech model** while the
+model is copied. Recording works during that time, and the text catches up when
+the copy is done.
 
-## If you tried the previous download
+## Updating from an earlier alpha
 
-Alpha 9 is a locally verified, development-signed build. The exact APK passed
-146 Android tests on the dedicated emulator; see the [release verification](../releases/stt-alpha-9.json).
-Its signing certificate matches Alpha 2–8, so installing over those versions should update it in place.
-Compatibility with Alpha 1's cloud-generated certificate remains unverified.
+Version 0.2.0 is signed with the same development certificate as Alpha 2 to
+Alpha 9, so installing it over one of them updates the app in place and keeps
+your notes, edits and audio.
 
-If Android refuses the update, keep the old installation if it contains important
-recordings. Uninstalling deletes Focal's private notes and audio; copying text does
-not preserve the original recording. For a disposable test installation, remove
-the old alpha and install the new APK. Keep important transcripts exported while testing.
+- The first launch converts your notes to the new format. Text, edits, custom
+  titles and audio are kept. Older notes have no word timings, so playback starts
+  at the beginning of the paragraph you tap.
+- A note that was still waiting for transcription is finished with the new speech
+  model, for the parts that were missing.
+- The Whisper model and older research files are deleted, which frees space.
+- The speech-language setting is gone: the model detects the language itself.
+
+Alpha 1 was signed with a different certificate, so Android refuses to install
+0.2.0 over it. Uninstalling deletes Focal’s notes and audio: copy any text you
+want to keep first.
 
 ## While testing
 
-Ultra is the primary engine for new recordings. During recording, the first
-block waits for 35 seconds of saved audio; Pause and Finish make the remaining
-audio eligible immediately, with time still needed for model preparation and
-decoding. Each window is up to 30 seconds. There is no three-minute recording
-limit; available storage and Android service limits still apply.
+- Recording continues when you leave the app, lock the phone or dismiss Focal from
+  recent apps. Force-stopping Focal or restarting the phone ends the recording;
+  everything saved until then is kept, and the note says where it stopped. Some
+  manufacturers stop background apps more aggressively.
+- A call, another app taking the microphone or nearly full storage pauses the
+  recording and says why; tap **Resume** when ready.
+- On Android 15 and later, Android may pause a long transcription in the
+  background. Open Focal and it continues.
+- Quiet speech can be missed, and a very short reply can come out in the wrong
+  language. Check important text against the audio.
 
-Existing Whisper notes preserve their original audio, text, edits and selected
-language. **Continue transcription** uses the engine saved with that note.
-Only these older notes retain the separate **Transcribe with Ultra** preview
-for saved recordings up to three minutes. Automatic LLM correction is off.
-
-Recording continues when you leave the app or dismiss its task. Force-stopping
-Focal or restarting the phone ends recording; manufacturer restrictions can also
-stop background apps.
-
-Review cues can miss errors. Quiet speech may be omitted and noise may produce
-invented text. Seven-language quality, battery use and long recordings still
-need measurements on real phones. See the
-[device checklist](device-validation.md) for useful test scenarios.
+Phone performance, battery use and long recordings have not been measured yet;
+see [testing](testing.md#phone-validation).
