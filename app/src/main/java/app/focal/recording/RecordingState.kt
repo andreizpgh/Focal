@@ -6,6 +6,7 @@ import android.os.Bundle
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /** Whether recorded speech can be transcribed right now. Recording never depends on it. */
 enum class SpeechAvailability {
@@ -59,8 +60,33 @@ sealed interface ServiceEvent {
 enum class StartFailure { STORAGE, MICROPHONE, PERMISSION, OTHER }
 
 object RecordingState {
+    /** The service's session. Only the service changes it, through [publish]. */
     val live = MutableStateFlow(LiveSession())
     val events = MutableSharedFlow<ServiceEvent>(extraBufferCapacity = 8)
+
+    private val generations = AtomicLong()
+    /** The generation of the service instance that last changed [live]; guarded by this object. */
+    private var publisher = 0L
+
+    /** A generation for a new service instance: newer than every instance before it. */
+    internal fun newGeneration(): Long = generations.incrementAndGet()
+
+    /**
+     * Changes [live] for the service instance of [generation], unless a newer instance has changed it since.
+     * A destroyed instance finishes its teardown asynchronously (after onTimeout, for example) while Android may
+     * already run a new instance for the next recording: the old one may still clear the session it published,
+     * but never the newer instance's. [transform] runs under a short lock and must not block (no storage).
+     */
+    internal fun publish(generation: Long, transform: (LiveSession) -> LiveSession) {
+        synchronized(this) {
+            if (generation < publisher) return
+            val current = live.value
+            val next = transform(current)
+            if (next == current) return
+            publisher = generation
+            live.value = next
+        }
+    }
 }
 
 /**

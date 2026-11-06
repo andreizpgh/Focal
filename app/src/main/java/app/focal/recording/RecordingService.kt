@@ -52,7 +52,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -116,6 +115,8 @@ class RecordingService : Service() {
     private val captureAwake = AtomicBoolean(false)
     private val decoderAwake = AtomicBoolean(false)
     @Volatile private var destroyed = false
+    /** This instance's generation: its teardown never changes what a newer instance published. */
+    private val liveGeneration = RecordingState.newGeneration()
     /** The latest start id (main thread): stopping with it never cancels a newer queued command. */
     private var lastStartId = 0
 
@@ -293,6 +294,9 @@ class RecordingService : Service() {
      * transcription update that lands after a new recording started cannot replace its chronometer and
      * Pause/Finish actions.
      */
+    /** Changes the published session as this instance ([RecordingState.publish]); [transform] must not block. */
+    private fun updateLive(transform: (LiveSession) -> LiveSession) = RecordingState.publish(liveGeneration, transform)
+
     private fun refreshNotification() = synchronized(notificationLock) {
         if (!destroyed) notifications.update(foregroundNotification())
     }
@@ -464,7 +468,8 @@ class RecordingService : Service() {
             val id = store.create()
             session.noteId = id
             session.claim.bindNote(id)
-            RecordingState.live.value = LiveSession(id, speech = speechAvailability())
+            val started = LiveSession(id, speech = speechAvailability())
+            updateLive { started }
             val opened = device
             device = null
             captureAudio(session, id, opened)
@@ -517,7 +522,7 @@ class RecordingService : Service() {
                 metadata.enqueue(CaptureEvent.Duration(samplesWritten / 16))
             }
             fun publishPaused() {
-                RecordingState.live.update {
+                updateLive {
                     if (it.noteId == id) it.copy(paused = true, pauseReason = session.pauseReason, storageShortBytes = session.storageShort,
                         duration = samplesWritten / 16) else it
                 }
@@ -580,7 +585,7 @@ class RecordingService : Service() {
                     acknowledgedPause = false
                     session.started = true
                     metadata.enqueue(CaptureEvent.State(NoteState.RECORDING))
-                    RecordingState.live.update {
+                    updateLive {
                         if (it.noteId == id) it.copy(paused = false, pauseReason = null, storageShortBytes = 0) else it
                     }
                     refreshNotification()
@@ -609,7 +614,7 @@ class RecordingService : Service() {
                 if (current.silenced) session.pauseAutomatically(silencedReason())
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastUi >= 100) {
-                    RecordingState.live.update { if (it.noteId == id) it.copy(duration = samplesWritten / 16) else it }
+                    updateLive { if (it.noteId == id) it.copy(duration = samplesWritten / 16) else it }
                     lastUi = now
                 }
                 if (now - lastSync >= 1000) {
@@ -635,7 +640,7 @@ class RecordingService : Service() {
             AudioLevel.publish(0f)
             notifications.cancelAutoPause()
             session.claim.finishCapture()
-            RecordingState.live.update {
+            updateLive {
                 if (it.noteId == id) it.copy(processing = true, paused = false, pauseReason = null, storageShortBytes = 0) else it
             }
             // The microphone and original file are closed before waiting on any database work.
@@ -661,10 +666,10 @@ class RecordingService : Service() {
                 if (store.discardIfEmpty(id)) {
                     // No bytes, or exactly constant samples: nothing was recorded.
                     RecordingState.events.tryEmit(ServiceEvent.NothingRecorded)
-                    RecordingState.live.update { if (it.noteId == id) LiveSession() else it }
+                    updateLive { if (it.noteId == id) LiveSession() else it }
                 } else {
                     store.state(id, NoteState.PROCESSING, session.failure.orEmpty())
-                    RecordingState.live.update { if (it.noteId == id) it.copy(duration = duration) else it }
+                    updateLive { if (it.noteId == id) it.copy(duration = duration) else it }
                     queued = true
                 }
             }
@@ -757,7 +762,7 @@ class RecordingService : Service() {
         }
         if (destroyed) return
         if (more) { ensureWorker(); return }
-        RecordingState.live.update { if (it.noteId != null) LiveSession() else it }
+        updateLive { if (it.noteId != null) LiveSession() else it }
         stopSelfResult(lastStartId)
     }
 
@@ -834,7 +839,7 @@ class RecordingService : Service() {
                         dequeue(target.noteId)
                     }
                 }
-                if (outcome != Outcome.Continue) RecordingState.live.update {
+                if (outcome != Outcome.Continue) updateLive {
                     if (it.noteId == target.noteId && it.processing) LiveSession() else it
                 }
             }
@@ -917,7 +922,10 @@ class RecordingService : Service() {
                         if (live) { decoderAwake.set(false); reconcileWake() }
                     }
                     if (!live) lastProgress = publishProgress(id, lastProgress)
-                    else RecordingState.live.update { if (it.noteId == id) it.copy(pending = store.pendingCount(id)) else it }
+                    else {
+                        val pending = store.pendingCount(id)
+                        updateLive { if (it.noteId == id) it.copy(pending = pending) else it }
+                    }
                     val warm = DeviceSpeechPolicy.warm(this)
                     val cooldown = DecodePolicy.cooldownMs(SystemClock.elapsedRealtime() - started, power.isPowerSaveMode, warm)
                     if (cooldown > 0 && !feed.complete) delay(cooldown)
@@ -942,7 +950,7 @@ class RecordingService : Service() {
     private fun complete(id: String): Outcome {
         if (!store.markReady(id)) return Outcome.Blocked("Saved audio can still be transcribed.")
         store.note(id)?.let { note -> notifications.ready(id, note.title, note.created, partial = note.failedWindows > 0) }
-        RecordingState.live.update { if (it.noteId == id) it.copy(progress = 1f, pending = 0) else it }
+        updateLive { if (it.noteId == id) it.copy(progress = 1f, pending = 0) else it }
         return Outcome.Done
     }
 
@@ -955,13 +963,13 @@ class RecordingService : Service() {
             progress = progress, speech = engine.availabilityOrPreparing(),
             pending = runCatching { store.pendingCount(id) }.getOrDefault(0))
         // A recording that started since this note was picked owns the live state: never overwrite it.
-        RecordingState.live.update { if (it.capturing) it else session }
+        updateLive { if (it.capturing) it else session }
         refreshNotification()
     }
 
     private fun publishSpeech(id: String, speech: SpeechAvailability) {
         if (RecordingState.live.value.let { it.noteId == id && it.speech != speech }) {
-            RecordingState.live.update { if (it.noteId == id) it.copy(speech = speech) else it }
+            updateLive { if (it.noteId == id) it.copy(speech = speech) else it }
             refreshNotification()
         }
     }
@@ -974,9 +982,8 @@ class RecordingService : Service() {
     /** Publishes progress; the notification changes only at whole percents. */
     private fun publishProgress(id: String, previous: Float): Float {
         val progress = progressOf(id) ?: return previous
-        RecordingState.live.update {
-            if (it.noteId == id) it.copy(progress = progress, pending = runCatching { store.pendingCount(id) }.getOrDefault(it.pending)) else it
-        }
+        val pending = runCatching { store.pendingCount(id) }.getOrNull()
+        updateLive { if (it.noteId == id) it.copy(progress = progress, pending = pending ?: it.pending) else it }
         if ((progress * 100).toInt() != (previous * 100).toInt()) {
             // The automatic title appears with the first words.
             store.note(id)?.title?.let { processingTitle = it }
@@ -1166,7 +1173,7 @@ class RecordingService : Service() {
                         Log.w(TAG, "Could not mark a note as waiting", error)
                     }
                 }
-                RecordingState.live.update { if (it.noteId != null) LiveSession() else it }
+                updateLive { if (it.noteId != null) LiveSession() else it }
             } finally {
                 synchronized(workLock) {
                     owned.values.forEach { it.release() }
