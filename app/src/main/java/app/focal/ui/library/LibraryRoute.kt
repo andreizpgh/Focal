@@ -137,6 +137,7 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
                 onBack = { scope.launch { shell.settings.close(reduced) } },
                 onLicenses = { shell.open(Destination.Licenses) },
                 headingFocus = headingFocus,
+                visible = { shell.settings.progress.value > 0f },
             )
         },
     )
