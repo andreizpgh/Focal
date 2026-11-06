@@ -90,7 +90,25 @@ object Title {
         words: Iterable<String>,
         maxChars: Int = SpeechTuning.TITLE_MAX_CHARS,
         minChars: Int = SpeechTuning.TITLE_MIN_CHARS,
+    ): String = derive(words, maxChars, minChars).first
+
+    /**
+     * What follows a derived title in [text]: the words after the ones the title shows (a clipped title shows fewer
+     * words than its sentence, and the rest of the sentence follows). Rows and the stage start their preview here,
+     * so a derived title is never repeated under itself. Empty when the title takes every word.
+     */
+    fun remainder(
+        text: String,
+        maxChars: Int = SpeechTuning.TITLE_MAX_CHARS,
+        minChars: Int = SpeechTuning.TITLE_MIN_CHARS,
     ): String {
+        val ranges = TextWords.ranges(text)
+        val shown = derive(ranges.map { text.substring(it.first, it.last + 1) }, maxChars, minChars).second
+        return if (shown >= ranges.size) "" else text.substring(ranges[shown].first)
+    }
+
+    /** The title and how many of the leading words it shows. */
+    private fun derive(words: Iterable<String>, maxChars: Int, minChars: Int): Pair<String, Int> {
         val first = ArrayList<String>()
         var length = -1
         for (word in words) {
@@ -99,23 +117,28 @@ object Title {
             if (TextRules.sentenceEnd(word) && length >= minChars) break
             if (length > maxChars) break
         }
-        if (first.isEmpty()) return ""
+        if (first.isEmpty()) return "" to 0
         val text = first.joinToString(" ")
         if (text.length <= maxChars) {
             // A final period goes; '?' and '!' stay, and so does the period of an ordinal or abbreviation.
             val stem = TextRules.periodStem(first.last())
-            if (stem == null || TextRules.sentenceAbbreviation(stem)) return text
+            if (stem == null || TextRules.sentenceAbbreviation(stem)) return text to first.size
             val stripped = TextRules.stripClosers(text)
-            return text.removeRange(stripped.length - 1, stripped.length)
+            return text.removeRange(stripped.length - 1, stripped.length) to first.size
         }
         var out = ""
+        var shown = 0
         for (word in first) {
             val candidate = if (out.isEmpty()) word else "$out $word"
             if (candidate.length > maxChars - 1) break
             out = candidate
+            shown++
         }
-        if (out.isEmpty()) out = Transcript.truncateUtf16(first[0], maxChars - 1)
-        return out.trimEnd { it in CLIP_TRIM } + "…"
+        if (out.isEmpty()) {
+            out = Transcript.truncateUtf16(first[0], maxChars - 1)
+            shown = 1
+        }
+        return out.trimEnd { it in CLIP_TRIM } + "…" to shown
     }
 }
 

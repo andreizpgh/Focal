@@ -88,6 +88,21 @@ class FormattingTest {
     }
 
     @Test
+    fun aPreviewContinuesAfterTheWordsOfItsDerivedTitle() {
+        val text = "So the plan for Saturday is simple. We meet at the trailhead at eight."
+        assertEquals("So the plan for Saturday is simple", Title.of(TextWords.split(text)))
+        assertEquals("We meet at the trailhead at eight.", Title.remainder(text))
+        // A clipped title shows fewer words than its sentence: the preview picks up the rest of the sentence.
+        val long = "Start with the recording screen because that is the moment people decide whether to trust it"
+        val clipped = Title.of(TextWords.split(long))
+        assertTrue(clipped.endsWith("…"))
+        val shown = clipped.removeSuffix("…").trimEnd()
+        assertEquals(long.removePrefix(shown).trimStart(), Title.remainder(long))
+        assertEquals("", Title.remainder("Pick up the prescription before six."))
+        assertEquals("", Title.remainder("   "))
+    }
+
+    @Test
     fun assemblerStartsANewParagraphAfterLegacyText() {
         val window = DecodedWindow(0, null, null, listOf(AsrToken(" Hello", 0.24, 0.16, 0.0), AsrToken(".", 0.4, 0.08, 0.0)))
         val update = TranscriptAssembler().append(window, 3)
