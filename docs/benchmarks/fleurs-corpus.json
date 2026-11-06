@@ -47,7 +47,7 @@
       }
     }
   },
-  "test_status": "Selected by provenance only; references/audio/results unconsumed in this report.",
+  "test_status": "The held-out set of docs/speech-quality.md. Used for the engine decision and then for the segmentation, confidence and formatting choices, so every figure from it is in-sample; no unused hold-out remains.",
   "identity_audit": {
     "previous_cohort_overlap": {
       "id": 0,

@@ -26,7 +26,8 @@ measurement first and then what the app does with it.
 The engine, segmentation, confidence and formatting figures use 84 clips of
 [FLEURS](https://huggingface.co/datasets/google/fleurs) read speech: six clips per
 language from the official dev split (the **DEV set**, 864 reference words) and
-six per language from the test split (the **held-out set**, 961 words). Clip IDs, reference texts and hashes are in
+six per language from the test split (the **held-out set**, 961 words). Clip IDs,
+reference texts and hashes are in
 [`fleurs-references.json`](benchmarks/fleurs-references.json) and
 [`fleurs-corpus.json`](benchmarks/fleurs-corpus.json).
 
@@ -91,9 +92,10 @@ Weaknesses that showed up in the same work:
   Portuguese one-word negatives were transcribed as English "No", and a Russian
   "Нет" decoded on its own came out as a fragment.
 - Quiet Portuguese was worse than Whisper Base on the one attenuated fixture.
-- In five synthetic Russian sentences with English technical terms, Ultra got 4 of
-  8 terms right (Whisper Base 1 of 8). "HTML" was recognised; "API" and
-  "guardrails" were not.
+- Russian with English technical terms was tried on two synthetic (eSpeak)
+  sentences, each at normal and one-tenth volume, for eight term occurrences,
+  plus one control sentence without terms. Ultra matched 4 of 8 terms, "HTML"
+  each time; "API" and "guardrails" never (Whisper Base 1 of 8).
 
 **Decision:** Parakeet Ultra is the only engine. Whisper, its model and its
 research tooling were removed. The earlier comparisons, including candidates that
@@ -113,16 +115,17 @@ stream at one tenth of the volume ("quiet"), and pink-noise gaps. That gives 3,4
 reference words per DEV variant set and 3,844 per held-out set. Latency is
 simulated at a real-time factor of 0.15, not measured.
 
-| Policy | DEV word errors | Held-out word errors | Dropped sentences | Text after a pause (p50) | Finish to ready |
+| Policy | DEV word errors | Held-out word errors | Dropped sentences | Text after a pause (p50) | Finish to ready (mean) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Whole stream, one window (comparator) | 263 | 393 | 4 / 7 | 9.8 s | 8.9 s |
-| Alpha 9 planner (30 s windows) | 244 | 335 | 4 / 7 | 10.5 s | 3.4 s |
-| Energy detector, 6–20 s windows | 230 | 274 | 1 / 2 | 2.0 s | 1.1 s |
-| Silero VAD, 6–20 s windows | 221 | 244 | 2 / 0 | 1.9 s | 1.0 s |
-| **Silero VAD, 6–20 s, 1 s right context** | **227** | **237** | **2 / 0** | **2.6 s** | **1.3 s** |
+| Whole stream, one window (comparator) | 263 | 393 | 4 / 7 | 9.8 / 12.6 s | 8.9 / 10.2 s |
+| Alpha 9 planner (30 s windows) | 244 | 335 | 4 / 7 | 10.5 / 10.4 s | 3.4 / 3.4 s |
+| Energy detector, 6–20 s windows | 230 | 274 | 1 / 2 | 2.0 / 1.9 s | 1.1 / 1.1 s |
+| Silero VAD, 6–20 s windows | 221 | 244 | 2 / 0 | 1.9 / 1.9 s | 1.0 / 0.9 s |
+| **Silero VAD, 6–20 s, 1 s right context** | **227** | **237** | **2 / 0** | **2.6 / 2.6 s** | **1.3 / 1.4 s** |
 
-Dropped sentences are counted as DEV / held-out. Every dropped sentence in the
-DEV set came from the quiet English stream.
+The last three columns are DEV / held-out; the two timing columns are simulated,
+as above. Every dropped sentence in the DEV set came from the quiet English
+stream.
 
 Right context fixes sentence ends at window cuts: a window decoded without the
 audio after it tends to end its last word with a period. False sentence breaks
