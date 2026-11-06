@@ -117,7 +117,7 @@ internal fun timedParagraphs(texts: List<String>, totalMs: Long, timed: Boolean 
 
 private const val DESIGN_MS = 12 * 60_000L + 4_000
 
-private fun design(timed: Boolean = true, edited: Boolean = false, replaced: Boolean = false): NoteUiState {
+internal fun design(timed: Boolean = true, edited: Boolean = false, replaced: Boolean = false): NoteUiState {
     var texts = DesignText
     if (edited) texts = texts.toMutableList().also { it[2] = EDITED_THIRD }
     if (replaced) texts = texts.map { it.replace("screen", "page") }

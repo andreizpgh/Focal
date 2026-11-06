@@ -60,7 +60,7 @@ internal fun paragraphs(texts: List<String>) = texts.mapIndexed { i, text -> Liv
 
 private fun start() = SceneUi(elapsedSeconds = 4, hint = true)
 internal fun live() = SceneUi(elapsedSeconds = 256, paragraphs = paragraphs(FakeScene))
-private fun paused(reason: PauseReason? = null) =
+internal fun paused(reason: PauseReason? = null) =
     SceneUi(elapsedSeconds = 768, paused = true, pauseReason = reason, paragraphs = paragraphs(FakeLive))
 /** Enough text to scroll back by more than a paragraph. */
 private fun long() = SceneUi(elapsedSeconds = 1_384, paragraphs = paragraphs(FakeScene + FakeLive + FakeScene))
@@ -81,7 +81,7 @@ internal fun SceneLayer(shell: ShellState, scene: SceneUi, list: LazyListState =
 
 /** The live library with the surface at a fixed [p] (the morph is a pure function of p). */
 @Composable
-private fun SceneFrame(p: Float, scene: SceneUi, reduced: Boolean = false, scrollTo: Int? = null) {
+internal fun SceneFrame(p: Float, scene: SceneUi, reduced: Boolean = false, scrollTo: Int? = null) {
     CompositionLocalProvider(LocalReducedMotion provides reduced) {
         val shell = rememberShellState()
         val list = rememberLazyListState()

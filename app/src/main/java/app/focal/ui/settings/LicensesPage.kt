@@ -31,6 +31,7 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.collapse
@@ -148,6 +149,7 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
                             .clickable(source, indication = EntryPlate, role = Role.Button) { toggle() }
                             // TalkBack says whether the text is shown and offers the opposite.
                             .semantics { if (open) collapse { toggle(); true } else expand { toggle(); true } }
+                            .testTag("$LICENSE_ENTRY_TAG:$index")
                             .padding(horizontal = FocalLayout.gutter, vertical = SettingsMetrics.rowPadding),
                     ) {
                         Text(stringResource(entry.name), style = FocalType.rowTitle, color = colors.ink)
@@ -179,6 +181,9 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 private val EntryPlate = PressPlate(FocalShapes.block, insetX = SettingsMetrics.plateInset)
+
+/** Test tag prefix of the entries ("license-entry:0" is the speech model), for the screenshot gallery. */
+const val LICENSE_ENTRY_TAG = "license-entry"
 
 /** The expanded entries survive a configuration change (an ArrayList, which a Bundle can hold). */
 private fun listSaver() = androidx.compose.runtime.saveable.Saver<androidx.compose.runtime.snapshots.SnapshotStateList<Int>, ArrayList<Int>>(

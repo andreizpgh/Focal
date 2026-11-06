@@ -165,7 +165,7 @@ private fun noSpeechModel(): LibraryModel = LibraryModel(
     days = days(rows()),
 )
 
-private fun searchResults(): SearchUiState {
+internal fun searchResults(): SearchUiState {
     val all = rows()
     fun result(row: NoteRow, snippet: String): SearchRow {
         val at = snippet.indexOf("Friday")
@@ -245,7 +245,7 @@ private fun Settings() {
 
 /** The strip at [s]: the library and the settings page beside it. */
 @Composable
-private fun Strip(s: Float, model: LibraryModel = idleModel()) {
+internal fun Strip(s: Float, model: LibraryModel = idleModel()) {
     val shell = rememberShellState()
     LaunchedEffect(shell) { shell.settings.track(s) }
     val actions = remember { LibraryActions() }
