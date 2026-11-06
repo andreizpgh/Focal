@@ -2,7 +2,6 @@ package app.focal.ui.settings
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -86,14 +85,15 @@ private fun Segments(labels: List<String>, style: androidx.compose.ui.text.TextS
     val thumb = remember { Animatable(index.toFloat()) }
     LaunchedEffect(index) { thumb.animateTo(index.toFloat(), FocalMotion.move()) }
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    // The thumb's rect in the track, in pixels, for the label clip and its own fill.
+    // The thumb's rect in the track, in pixels, for the label clip and its own fill: the three equal segments divide
+    // the track inside its 4 dp inset, so the thumb is (364 - 8) / 3 = 118.7 dp wide on a phone.
     fun thumbRect(width: Float, height: Float, inset: Float): Pair<Offset, Size> {
-        val segment = width / themes.size
+        val segment = (width - 2 * inset) / themes.size
         val position = if (rtl) themes.size - 1 - thumb.value else thumb.value
-        return Offset(segment * position + inset, inset) to Size(segment - 2 * inset, height - 2 * inset)
+        return Offset(inset + segment * position, inset) to Size(segment, height - 2 * inset)
     }
     val labelRow: @Composable (androidx.compose.ui.graphics.Color, Boolean) -> Unit = { color, interactive ->
-        Row(Modifier.fillMaxWidth().then(if (interactive) Modifier.selectableGroup() else Modifier)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = SegmentMetrics.inset).then(if (interactive) Modifier.selectableGroup() else Modifier)) {
             themes.forEachIndexed { i, mode ->
                 val source = remember { MutableInteractionSource() }
                 Box(
