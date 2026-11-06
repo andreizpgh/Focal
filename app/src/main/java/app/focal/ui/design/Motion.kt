@@ -221,6 +221,12 @@ object FocalTiming {
     const val LIGHT_UP_TIMER_DELAY_MS = 40L
     const val EMPTY_TIMER_DELAY_MS = 160L
     const val RACK_STAGGER_MS = 24L
+    /** At most this many paragraphs stagger (rack focus, the settle's develop); the others need none. */
+    const val STAGGER_MAX = 12
+    /** T7, T7b: the page under the settling scene develops its title, meta and paragraphs this long after Finish. */
+    const val SETTLE_TITLE_DELAY_MS = 120L
+    const val SETTLE_META_DELAY_MS = 200L
+    const val SETTLE_PARAGRAPH_DELAY_MS = 180L
     const val PEEK_HOLD_MS = 400L
     const val PEEK_IDLE_MS = 1200L
     const val PEEK_MAX = 2

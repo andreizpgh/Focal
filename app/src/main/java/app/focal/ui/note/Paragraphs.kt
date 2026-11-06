@@ -57,6 +57,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.focal.core.SpeechTuning
+import app.focal.ui.design.FocalClock
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
@@ -64,6 +65,7 @@ import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.shell.LocalPageReveal
 import app.focal.ui.state.ParagraphUi
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -150,7 +152,8 @@ private class Lens {
  * character offset ([onTap]); long-press is left to the system selection around the list.
  *
  * [arrival] develops new text (2.8.1): a new paragraph rises 8 dp, fades in and inks from `faint`, from +60 ms; an
- * extended one inks its new range only. [entrance] is T7's: the paragraph fades in (`fadeSlow`) after that many ms.
+ * extended one inks its new range only. [entrance] is T7's: the paragraph fades in (`fadeSlow`) that many ms after
+ * Finish.
  */
 @Composable
 internal fun ParagraphText(
@@ -205,12 +208,9 @@ internal fun ParagraphText(
         launch { rise.animateTo(0f, FocalMotion.move()) }
         developed.animateTo(1f, FocalMotion.develop())
     }
-    val entered = remember { Animatable(if (entrance == null || reduced) 1f else 0f) }
-    LaunchedEffect(Unit) {
-        if (entrance == null || reduced) return@LaunchedEffect
-        delay(entrance)
-        entered.animateTo(1f, FocalMotion.fadeSlow())
-    }
+    // T7's develop, counted from Finish: `fadeSlow` from the paragraph's place in the stagger.
+    val develop = LocalPageReveal.current.develop
+    val entered = { if (entrance == null) 1f else FocalClock.fadeSlow(develop() - entrance) }
 
     val matches by remember(id, find) { derivedStateOf { find.matchesIn(id) } }
     val current by remember(id, find) {
@@ -260,7 +260,7 @@ internal fun ParagraphText(
         modifier = modifier
             .fillMaxWidth()
             .graphicsLayer {
-                alpha = shown.value * entered.value
+                alpha = shown.value * entered()
                 translationY = rise.value * ParagraphMetrics.developRise.toPx()
             }
             .editSheet(colors.s1, sheet)

@@ -1,6 +1,5 @@
 package app.focal.ui.note
 
-import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -50,15 +49,6 @@ internal const val THIRDS = 3f
 
 /** A scroll farther than this many screens crossfades instead (spec 4.11, 5.8). */
 private const val FAR_SCREENS = 3
-
-/** At most this many paragraphs on screen stagger (T7's develop, rack focus). */
-private const val STAGGER_MAX = 12
-
-/** T7: paragraphs fade in from this delay (`settleParagraphDelay`, spec 2.8.2), the bottom one first. */
-private const val SETTLE_PARAGRAPH_MS = 180L
-
-/** T7's develop applies to paragraphs composed this soon after the page arrived. */
-private const val ENTRANCE_WINDOW_MS = 600L
 
 /** The note's rows: the head, paragraphs with the gap rows after the paragraph they follow, the writing head. */
 internal fun noteItems(paragraphs: List<ParagraphUi>, gaps: List<GapUi>, writing: Boolean, noSpeech: Boolean): List<NoteItem> = buildList {
@@ -171,10 +161,10 @@ internal fun Modifier.inert(on: Boolean): Modifier = if (!on) this else this
     }
 
 /** T7: a paragraph of the first screen fades in from +180 ms, the bottom one first, 24 ms apart. */
-internal fun entranceDelay(landing: Boolean, arrivedAt: Long, index: Int, count: Int): Long? {
-    if (!landing || index >= STAGGER_MAX || SystemClock.uptimeMillis() - arrivedAt > ENTRANCE_WINDOW_MS) return null
-    val shown = minOf(count, STAGGER_MAX)
-    return SETTLE_PARAGRAPH_MS + (shown - 1 - index).coerceAtLeast(0) * FocalTiming.RACK_STAGGER_MS
+internal fun entranceDelay(landing: Boolean, index: Int, count: Int): Long? {
+    if (!landing || index >= FocalTiming.STAGGER_MAX) return null
+    val shown = minOf(count, FocalTiming.STAGGER_MAX)
+    return FocalTiming.SETTLE_PARAGRAPH_DELAY_MS + (shown - 1 - index).coerceAtLeast(0) * FocalTiming.RACK_STAGGER_MS
 }
 
 /** The paragraph actions' labels (spec 8.2). */

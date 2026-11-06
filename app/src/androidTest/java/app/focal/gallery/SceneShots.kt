@@ -16,6 +16,7 @@ import app.focal.ui.scene.RecordingSurface
 import app.focal.ui.scene.SceneActions
 import app.focal.ui.scene.SceneUi
 import app.focal.ui.shell.Destination
+import app.focal.ui.shell.PageMotion
 import app.focal.ui.shell.FocalShell
 import app.focal.ui.shell.SceneBottom
 import app.focal.ui.shell.ShellState
@@ -119,7 +120,7 @@ private fun SettleFrame() {
     LaunchedEffect(shell) {
         shell.live.expansion.snapTo(1f)
         shell.live.prepareLanding(saturday.id)
-        shell.live.land(reducedMotion = false) { shell.open(Destination.Note(saturday.id)) }
+        shell.live.land(reducedMotion = false) { shell.open(Destination.Note(saturday.id), PageMotion.Cut) }
     }
     FocalShell(
         shell,

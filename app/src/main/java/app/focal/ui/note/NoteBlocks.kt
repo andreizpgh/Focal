@@ -51,10 +51,12 @@ import app.focal.ui.components.WaveMode
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.markBox
 import app.focal.ui.components.pressScale
+import app.focal.ui.design.FocalClock
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
+import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.Grid
@@ -64,9 +66,6 @@ import app.focal.ui.shell.LocalPageReveal
 import app.focal.ui.shell.pageTitle
 import app.focal.ui.shell.rememberPageTitle
 import app.focal.ui.state.GapUi
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /** The note's head and inline blocks (spec 4.13, 4.14, 4.16, 5.4, 5.5). */
@@ -134,20 +133,10 @@ internal fun NoteHead(
         val target = if (titleInks) 0f else 1f
         if (reduced) receded.snapTo(target) else receded.animateTo(target, FocalMotion.develop())
     }
-    val titleShown = remember { Animatable(if (entrance && !reduced) 0f else 1f) }
-    val metaShown = remember { Animatable(if (entrance && !reduced) 0f else 1f) }
-    LaunchedEffect(Unit) {
-        if (!entrance || reduced) return@LaunchedEffect
-        coroutineScope {
-            launch {
-                delay(SETTLE_TITLE_MS)
-                titleShown.animateTo(1f, FocalMotion.fade())
-            }
-            delay(SETTLE_META_MS)
-            metaShown.animateTo(1f, FocalMotion.fade())
-        }
-    }
     val reveal = LocalPageReveal.current
+    // T7's develop, counted from Finish: the title from +120 and the meta from +200 (`fade`).
+    val titleShown = { if (entrance) FocalClock.fade(reveal.develop() - FocalTiming.SETTLE_TITLE_DELAY_MS) else 1f }
+    val metaShown = { if (entrance) FocalClock.fade(reveal.develop() - FocalTiming.SETTLE_META_DELAY_MS) else 1f }
     val flight = rememberPageTitle(
         noteId, head.title, head.titleFallback, if (large) NoteBlockMetrics.TITLE_LINES_LARGE else NoteBlockMetrics.TITLE_LINES,
     )
@@ -157,7 +146,7 @@ internal fun NoteHead(
             .fillMaxWidth()
             .onGloballyPositioned { onTitleBottom(it.positionInWindow().y + it.size.height) }
             .pageTitle(flight)
-            .graphicsLayer { alpha = titleShown.value * reveal.title() }
+            .graphicsLayer { alpha = titleShown() * reveal.title() }
         if (renaming) {
             RenameField(
                 initial = if (head.titleFallback) "" else head.title,
@@ -187,7 +176,7 @@ internal fun NoteHead(
         Spacer(Modifier.height(NoteBlockMetrics.headGap))
         Text(
             head.meta, style = FocalType.meta, color = colors.recede, maxLines = 2,
-            modifier = Modifier.graphicsLayer { alpha = metaShown.value },
+            modifier = Modifier.graphicsLayer { alpha = metaShown() },
         )
         head.notices.forEach { notice ->
             Spacer(Modifier.height(NoteBlockMetrics.headGap))
@@ -196,11 +185,8 @@ internal fun NoteHead(
     }
 }
 
-private const val SETTLE_TITLE_MS = 120L
-
 /** The note title wraps in balanced lines, as a heading (the renders' "Notes for Thursday’s / design review"). */
 private val TitleStyle = FocalType.title.copy(lineBreak = LineBreak.Heading)
-private const val SETTLE_META_MS = 200L
 
 /** A notice line (spec 4.16) and its small pill ("Retry", "Try again"). */
 @Composable

@@ -170,7 +170,6 @@ fun NotePage(
     val listFade = remember { Animatable(1f) }
     val scroller = remember(listState) { NoteScroller(listState, listFade) }
     val selection = rememberSelectionState()
-    val arrivedAt = remember { SystemClock.uptimeMillis() }
     val status = WindowInsets.statusBars
     // Inside a container transform the chrome has the paper's alpha and the body arrives on its own (spec 6.1).
     val reveal = LocalPageReveal.current
@@ -687,7 +686,7 @@ fun NotePage(
                                 is NoteItem.Text -> ParagraphItem(
                                     item, page, placement,
                                     arrival = page.arrivals.of(item.paragraph.id, SystemClock.uptimeMillis()),
-                                    entrance = entranceDelay(landing, arrivedAt, item.index, paragraphs.size),
+                                    entrance = entranceDelay(landing, item.index, paragraphs.size),
                                     onTap = onTap, tapBlocked = { selection.selectedTexts.any { it.isNotEmpty() } },
                                     actions = paragraphActions(
                                         item.paragraph, labels, note, canPlay, page.editing, play = playFromWord,

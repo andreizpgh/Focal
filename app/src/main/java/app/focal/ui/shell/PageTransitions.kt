@@ -77,6 +77,7 @@ import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
+import app.focal.ui.design.TriggerClock
 import app.focal.ui.design.smoothstep
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -110,10 +111,19 @@ enum class PageMotion {
  * it flies between the origin and the page) and its body (meta and text).
  */
 @Stable
-class PageReveal internal constructor(val chrome: () -> Float, val title: () -> Float, val body: () -> Float)
+class PageReveal internal constructor(
+    val chrome: () -> Float,
+    val title: () -> Float,
+    val body: () -> Float,
+    /**
+     * Milliseconds since Finish for a page that develops under the settling scene (T7) or out of the live stage
+     * (T7b), infinity otherwise: its title, meta and paragraphs arrive at fixed times after it (spec 2.8.2).
+     */
+    val develop: () -> Float,
+)
 
 /** What the current page shows of itself; outside a transform everything is at full alpha. */
-val LocalPageReveal = staticCompositionLocalOf { PageReveal({ 1f }, { 1f }, { 1f }) }
+val LocalPageReveal = staticCompositionLocalOf { PageReveal({ 1f }, { 1f }, { 1f }, { Float.POSITIVE_INFINITY }) }
 
 /** One page change: the page that opens or folds ([document], always the upper of the two) and how it plays. */
 @Immutable
@@ -228,12 +238,20 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     /** The dock [destination] will show, while it opens out of the stage or a row and has not registered its own. */
     internal fun arrivingDock(destination: Destination): DockState? = arriving?.takeIf { it.first == destination }?.second
 
+    /** T7, T7b: the time since Finish, for [developing] (see [PageReveal.develop]). */
+    private val developClock = TriggerClock(scope, DEVELOP_MS)
+    private var developing: Destination? = null
+
     /** [destination] opens on top with [motion], timed from now. */
     internal fun push(destination: Destination, motion: PageMotion) {
         opened[destination] = motion
         val c = PageChange(motion, destination, push = true, serial = ++serial)
         change = c
         arriving = originOf(c)?.dock?.let { destination to it }
+        if (motion == PageMotion.Cut || motion == PageMotion.LiveStage) {
+            developing = destination
+            developClock.start()
+        }
         startClock()
     }
 
@@ -469,6 +487,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
             if (c == null || c.document != destination || !transforms(c) || !active(c) || c.motion == PageMotion.LiveStage) 1f
             else body(c)
         },
+        develop = { if (developing == destination && !reduced) developClock.elapsed else Float.POSITIVE_INFINITY },
     )
 
     /**
@@ -574,6 +593,9 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         val CONTAINERS = setOf(PageMotion.Stage, PageMotion.Row, PageMotion.LiveStage)
         /** The seekable length of a predictive back: the gesture maps onto it, and its release runs what remains. */
         const val PREDICTIVE_MS = 500
+        /** T7, T7b: the develop runs until the last staggered paragraph has arrived (spec 2.8.2). */
+        val DEVELOP_MS = FocalTiming.SETTLE_PARAGRAPH_DELAY_MS + (FocalTiming.STAGGER_MAX - 1) * FocalTiming.RACK_STAGGER_MS +
+            FocalSettle.FADE_SLOW_MS
         /** NavDisplay keeps the outgoing page this much longer than the clock runs: it starts up to two frames late. */
         const val HOLD_MARGIN_MS = 3 * FocalTiming.TRIGGER_LEAD_MS.toInt()
         /** `bodyFadeDelay` (spec 2.8.3): the page's meta and text start to arrive this long after the trigger. */
