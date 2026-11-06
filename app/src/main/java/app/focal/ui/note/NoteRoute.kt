@@ -22,6 +22,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.focal.R
 import app.focal.ui.components.FeedbackAction
+import app.focal.ui.components.FeedbackResult
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.library.confirmsCopyInApp
 import app.focal.ui.library.copyNoteText
@@ -102,8 +103,13 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
         }
     }
     LaunchedEffect(player) { player.errors.collect { message -> appScope.launch { feedback.show(message) } } }
-    // A note deleted elsewhere (or from here) leaves the screen; a read failure offers a reload.
+    // A note deleted elsewhere (or from here) leaves the screen; a read failure says so and offers to read it again.
     LaunchedEffect(state.missing) { if (state.missing) leave() }
+    val tryAgain = stringResource(R.string.action_try_again)
+    LaunchedEffect(state.error) {
+        val message = state.error ?: return@LaunchedEffect
+        if (feedback.show(message, FeedbackAction(tryAgain)) == FeedbackResult.ActionPerformed) note.reload()
+    }
     // "Note ready" is not posted for the note on screen (spec 5.12); playback pauses app-wide on stop (AppEffects).
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle, note) {
