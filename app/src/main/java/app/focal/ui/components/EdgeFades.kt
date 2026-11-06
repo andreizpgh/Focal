@@ -1,17 +1,23 @@
 package app.focal.ui.components
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.Grid
@@ -61,6 +67,31 @@ fun LibraryTopFade(stageBottom: () -> Float, modifier: Modifier) {
         },
     )
 }
+
+/**
+ * A single-line field's text that scrolls inside its box ([scroll], the field's own scroll state) fades out over
+ * [width] at each side where text runs on beyond it, instead of being cut mid-glyph (spec 2.6: edge fades replace hard
+ * edges). Nothing is drawn differently while the text fits.
+ */
+fun Modifier.scrollEdgeFade(scroll: ScrollState, width: Dp = FocalLayout.topFade): Modifier =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+        drawContent()
+        val fade = width.toPx().coerceAtMost(size.width / 2)
+        val rtl = layoutDirection == LayoutDirection.Rtl
+        // The scroll offset runs from the text's start: in RTL the start is the right edge.
+        val startHidden = scroll.value > 0
+        val endHidden = scroll.value < scroll.maxValue
+        val leftHidden = if (rtl) endHidden else startHidden
+        val rightHidden = if (rtl) startHidden else endHidden
+        if (leftHidden) drawRect(
+            Brush.horizontalGradient(0f to Color.Black, 1f to Color.Transparent, startX = 0f, endX = fade),
+            size = Size(fade, size.height), blendMode = BlendMode.DstOut,
+        )
+        if (rightHidden) drawRect(
+            Brush.horizontalGradient(0f to Color.Transparent, 1f to Color.Black, startX = size.width - fade, endX = size.width),
+            topLeft = Offset(size.width - fade, 0f), size = Size(fade, size.height), blendMode = BlendMode.DstOut,
+        )
+    }
 
 private fun DrawScope.drawEdge(paper: Color, solidEnd: Float, fadeEnd: Float, alpha: Float) {
     if (alpha <= 0f) return

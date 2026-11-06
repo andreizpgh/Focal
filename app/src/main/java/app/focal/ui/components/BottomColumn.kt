@@ -7,10 +7,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.navigationBars
@@ -213,11 +216,15 @@ object KeyboardRowMetrics {
     val columnGap = Grid.x8
 }
 
+/**
+ * A find or replace row: the field cell and the control cell on the two-column grid. The row grows as one (spec 8.4):
+ * it is as tall as its taller cell, and both cells fill that height (each with `fillMaxHeight`).
+ */
 @Composable
 fun KeyboardRow(field: @Composable RowScope.() -> Unit, control: @Composable RowScope.() -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, content = field)
+    Row(modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically, content = field)
         Spacer(Modifier.width(KeyboardRowMetrics.columnGap))
-        Row(Modifier.width(KeyboardRowMetrics.controls), verticalAlignment = Alignment.CenterVertically, content = control)
+        Row(Modifier.width(KeyboardRowMetrics.controls).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically, content = control)
     }
 }

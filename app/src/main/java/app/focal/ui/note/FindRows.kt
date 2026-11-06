@@ -4,16 +4,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.KeyboardActionHandler
@@ -27,7 +28,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.IntrinsicMeasurable
+import androidx.compose.ui.layout.IntrinsicMeasureScope
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.layout.MultiContentMeasurePolicy
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -42,7 +49,10 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import app.focal.R
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.Glyph
@@ -51,11 +61,13 @@ import app.focal.ui.components.KeyboardRowMetrics
 import app.focal.ui.components.PressPlate
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.pressScale
+import app.focal.ui.components.scrollEdgeFade
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.Grid
 import app.focal.ui.design.tabular
+import kotlin.math.max
 
 /** Find row geometry (spec 4.9.2): fields 24-244, controls 252-388, 48 dp rows. */
 object FindMetrics {
@@ -65,9 +77,10 @@ object FindMetrics {
     val countEnd = Grid.x16
     val countGap = Grid.x8
     val replacePadding = Grid.x8
-    /** From this font scale the count stacks under the query, inside a field that grows. */
-    const val STACK_FONT = 1.5f
+    /** Stacked under the query, the count and the query keep this much room above and below them. */
     val stackPadding = Grid.x8
+    /** The caret the query's end must still show (BasicTextField's 2 dp cursor, spec 4.9.1). */
+    val caret = Grid.x2
 }
 
 /** What the find rows do. */
@@ -81,7 +94,8 @@ internal class FindActions(
 /**
  * The two find rows riding the keyboard (spec 4.9.2, 5.8): the find field with "2 of 4" and the ∧ ∨ pill, then the
  * replace field and "Replace all (N)". Search on the keyboard moves to the next match; Done in the replace field
- * hides the keyboard and the rows drop to the dock's place.
+ * hides the keyboard and the rows drop to the dock's place. When a cell grows (a stacked count, a wrapped "Replace
+ * all" at large font sizes), both cells of its row take the row's height (spec 8.4).
  */
 @Composable
 internal fun ColumnScope.FindRows(find: FindState, actions: FindActions) {
@@ -107,8 +121,15 @@ private fun RowScope.FindField(find: FindState, actions: FindActions) {
         find.matches.isEmpty() -> stringResource(R.string.find_none)
         else -> stringResource(R.string.find_count, find.current + 1, find.matches.size)
     }
+    // The query's own width decides whether the count fits beside it (spec 4.9.2: at least 8 dp after the text).
+    val measurer = rememberTextMeasurer()
+    val queryText = find.query.text.toString()
+    val queryWidth = remember(queryText, measurer) {
+        measurer.measure(queryText, FocalType.field, maxLines = 1, softWrap = false).size.width
+    }
+    val scroll = rememberScrollState()
     Row(
-        Modifier.weight(1f).heightIn(min = KeyboardRowMetrics.row).background(colors.s1, FocalShapes.pill),
+        Modifier.weight(1f).fillMaxHeight().heightIn(min = KeyboardRowMetrics.row).background(colors.s1, FocalShapes.pill),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val back = remember { MutableInteractionSource() }
@@ -121,44 +142,93 @@ private fun RowScope.FindField(find: FindState, actions: FindActions) {
                 .semantics { contentDescription = close },
             contentAlignment = Alignment.Center,
         ) { Glyph(FocalIcon.Back, colors.ink) }
-        val query: @Composable (Modifier) -> Unit = { modifier ->
-            BasicTextField(
-                state = find.query,
-                textStyle = FocalType.field.copy(color = colors.ink),
-                cursorBrush = SolidColor(colors.ink),
-                lineLimits = TextFieldLineLimits.SingleLine,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                onKeyboardAction = KeyboardActionHandler { actions.next() },
-                modifier = modifier
-                    .focusRequester(find.queryFocus)
-                    .semantics { contentDescription = hint },
-                decorator = TextFieldDecorator { field ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (find.query.text.isEmpty()) Text(hint, style = FocalType.field, color = colors.recede, maxLines = 1)
-                        field()
-                    }
-                },
-            )
-        }
-        val counter: @Composable () -> Unit = {
-            if (count != null) Text(
-                count, style = FocalType.meta, color = colors.recede, maxLines = 1,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
-        }
-        // At large font scales the count goes under the query, so the query keeps the field's width (spec 8.4).
-        if (LocalDensity.current.fontScale >= FindMetrics.STACK_FONT) {
-            Column(Modifier.weight(1f).padding(vertical = FindMetrics.stackPadding)) {
-                query(Modifier.fillMaxWidth())
-                counter()
-            }
-        } else {
-            query(Modifier.weight(1f))
-            if (count != null) Spacer(Modifier.width(FindMetrics.countGap))
-            counter()
-        }
+        QueryAndCount(
+            queryWidth = queryWidth,
+            query = {
+                BasicTextField(
+                    state = find.query,
+                    textStyle = FocalType.field.copy(color = colors.ink),
+                    cursorBrush = SolidColor(colors.ink),
+                    lineLimits = TextFieldLineLimits.SingleLine,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    onKeyboardAction = KeyboardActionHandler { actions.next() },
+                    scrollState = scroll,
+                    modifier = Modifier
+                        .scrollEdgeFade(scroll)
+                        .focusRequester(find.queryFocus)
+                        .semantics { contentDescription = hint },
+                    decorator = TextFieldDecorator { field ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (find.query.text.isEmpty()) Text(hint, style = FocalType.field, color = colors.recede, maxLines = 1)
+                            field()
+                        }
+                    },
+                )
+            },
+            count = {
+                if (count != null) Text(
+                    count, style = FocalType.meta, color = colors.recede, maxLines = 1,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            },
+            modifier = Modifier.weight(1f),
+        )
         Spacer(Modifier.width(FindMetrics.countEnd))
     }
+}
+
+/**
+ * The query and its count (spec 4.9.2, 8.4): side by side while the query's text, its caret, 8 dp and the count fit
+ * the field; otherwise, at any font scale, the count goes under the query and the field grows, so the query is never
+ * cut by its own count. [queryWidth] is the query's text as laid out on one line, in pixels.
+ */
+@Composable
+private fun QueryAndCount(queryWidth: Int, query: @Composable () -> Unit, count: @Composable () -> Unit, modifier: Modifier) {
+    val policy = remember(queryWidth) { QueryCountPolicy(queryWidth) }
+    Layout(contents = listOf(query, count), modifier = modifier, measurePolicy = policy)
+}
+
+private class QueryCountPolicy(private val queryWidth: Int) : MultiContentMeasurePolicy {
+    private fun Density.stacked(width: Int, countWidth: Int?): Boolean =
+        countWidth != null && queryWidth + FindMetrics.caret.roundToPx() + FindMetrics.countGap.roundToPx() + countWidth > width
+
+    private fun Density.inlineQueryWidth(width: Int, countWidth: Int?): Int =
+        if (countWidth == null) width else (width - FindMetrics.countGap.roundToPx() - countWidth).coerceAtLeast(0)
+
+    override fun MeasureScope.measure(measurables: List<List<Measurable>>, constraints: Constraints): MeasureResult {
+        val width = constraints.maxWidth
+        val countPlaceable = measurables[1].firstOrNull()?.measure(Constraints(maxWidth = width))
+        val pad = FindMetrics.stackPadding.roundToPx()
+        if (stacked(width, countPlaceable?.width)) {
+            val queryPlaceable = measurables[0].first().measure(Constraints.fixedWidth(width))
+            val height = max(constraints.minHeight, pad + queryPlaceable.height + countPlaceable!!.height + pad)
+            return layout(width, height) {
+                queryPlaceable.place(0, pad)
+                countPlaceable.place(0, pad + queryPlaceable.height)
+            }
+        }
+        val queryPlaceable = measurables[0].first().measure(Constraints.fixedWidth(inlineQueryWidth(width, countPlaceable?.width)))
+        val height = max(constraints.minHeight, max(queryPlaceable.height, countPlaceable?.height ?: 0))
+        return layout(width, height) {
+            queryPlaceable.place(0, (height - queryPlaceable.height) / 2)
+            countPlaceable?.place(width - countPlaceable.width, (height - countPlaceable.height) / 2)
+        }
+    }
+
+    // The rows give both cells one height (spec 8.4), which asks the field for its height at a width: the same rule.
+    private fun IntrinsicMeasureScope.height(measurables: List<List<IntrinsicMeasurable>>, width: Int): Int {
+        val query = measurables[0].first()
+        val count = measurables[1].firstOrNull()
+        val countWidth = count?.maxIntrinsicWidth(Constraints.Infinity)
+        if (stacked(width, countWidth)) {
+            return 2 * FindMetrics.stackPadding.roundToPx() + query.minIntrinsicHeight(width) + count!!.minIntrinsicHeight(countWidth!!)
+        }
+        return max(query.minIntrinsicHeight(inlineQueryWidth(width, countWidth)), count?.minIntrinsicHeight(countWidth!!) ?: 0)
+    }
+
+    override fun IntrinsicMeasureScope.minIntrinsicHeight(measurables: List<List<IntrinsicMeasurable>>, width: Int): Int = height(measurables, width)
+
+    override fun IntrinsicMeasureScope.maxIntrinsicHeight(measurables: List<List<IntrinsicMeasurable>>, width: Int): Int = height(measurables, width)
 }
 
 @Composable
@@ -166,8 +236,9 @@ private fun RowScope.ReplaceField(state: TextFieldState) {
     val colors = FocalTheme.colors
     val keyboard = LocalSoftwareKeyboardController.current
     val hint = stringResource(R.string.replace_hint)
+    val scroll = rememberScrollState()
     Row(
-        Modifier.weight(1f).heightIn(min = KeyboardRowMetrics.row).background(colors.s1, FocalShapes.pill),
+        Modifier.weight(1f).fillMaxHeight().heightIn(min = KeyboardRowMetrics.row).background(colors.s1, FocalShapes.pill),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(FindMetrics.lead).semantics { hideFromAccessibility() }, contentAlignment = Alignment.Center) {
@@ -180,7 +251,8 @@ private fun RowScope.ReplaceField(state: TextFieldState) {
             lineLimits = TextFieldLineLimits.SingleLine,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             onKeyboardAction = KeyboardActionHandler { keyboard?.hide() },
-            modifier = Modifier.weight(1f).padding(end = FindMetrics.countEnd).semantics { contentDescription = hint },
+            scrollState = scroll,
+            modifier = Modifier.weight(1f).padding(end = FindMetrics.countEnd).scrollEdgeFade(scroll).semantics { contentDescription = hint },
             decorator = TextFieldDecorator { field ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (state.text.isEmpty()) Text(hint, style = FocalType.field, color = colors.recede, maxLines = 1)
@@ -196,7 +268,7 @@ private fun RowScope.ReplaceField(state: TextFieldState) {
 private fun RowScope.NavPill(enabled: Boolean, actions: FindActions) {
     val colors = FocalTheme.colors
     Row(
-        Modifier.fillMaxWidth().heightIn(min = KeyboardRowMetrics.row).background(colors.s1, FocalShapes.pill),
+        Modifier.fillMaxWidth().fillMaxHeight().heightIn(min = KeyboardRowMetrics.row).background(colors.s1, FocalShapes.pill),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         NavButton(FocalIcon.Up, stringResource(R.string.cd_find_prev), enabled, actions.previous)
@@ -211,6 +283,7 @@ private fun RowScope.NavButton(icon: FocalIcon, description: String, enabled: Bo
     Box(
         Modifier
             .weight(1f)
+            .fillMaxHeight()
             .heightIn(min = KeyboardRowMetrics.row)
             .clearAndSetSemantics {
                 contentDescription = description
@@ -233,6 +306,7 @@ private fun RowScope.ReplaceAll(count: Int, enabled: Boolean, onClick: () -> Uni
     Box(
         Modifier
             .fillMaxWidth()
+            .fillMaxHeight()
             .heightIn(min = KeyboardRowMetrics.row)
             .clearAndSetSemantics {
                 contentDescription = spoken
