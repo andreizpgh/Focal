@@ -72,6 +72,7 @@ import app.focal.ui.components.FeedbackResult
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.NotePill
 import app.focal.ui.components.PaperTopFade
+import app.focal.ui.components.rememberRowPlacement
 import app.focal.ui.components.PlayCircle
 import app.focal.ui.components.ProgressPhase
 import app.focal.ui.design.FocalLayout
@@ -191,6 +192,7 @@ fun NotePage(
     val writing = transcribing && !note.noSpeech
     val items = remember(paragraphs, note.gaps, writing, note.noSpeech) { noteItems(paragraphs, note.gaps, writing, note.noSpeech) }
     val indexOf = remember(items) { items.withIndex().associate { (index, item) -> item.key to index } }
+    val placement = rememberRowPlacement(remember(items) { items.map { it.key } })
 
     // Modes and the focus rule.
     val audio = playback.session
@@ -690,10 +692,10 @@ fun NotePage(
                                     },
                                     onTitleBottom = { page.titleBottom = it },
                                     entrance = landing,
-                                    modifier = Modifier.animateItem(fadeInSpec = null, placementSpec = FocalMotion.move(), fadeOutSpec = null),
+                                    modifier = Modifier.animateItem(fadeInSpec = null, placementSpec = placement, fadeOutSpec = null),
                                 )
                                 is NoteItem.Text -> ParagraphItem(
-                                    item, page,
+                                    item, page, placement,
                                     arrival = page.arrivals.of(item.paragraph.id, SystemClock.uptimeMillis()),
                                     entrance = entranceDelay(landing, arrivedAt, item.index, paragraphs.size),
                                     onTap = onTap, tapBlocked = { selection.selectedTexts.any { it.isNotEmpty() } },
@@ -720,11 +722,11 @@ fun NotePage(
                                         page.playerDismissed = false
                                         playback.playRange(item.gap.startMs, item.gap.endMs)
                                     },
-                                    modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()),
+                                    modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
                                 )
                                 NoteItem.Writing -> WritingHead(
                                     working = note.phase != NotePhase.WAITING,
-                                    modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()),
+                                    modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
                                 )
                                 NoteItem.NoSpeech -> NoSpeechLine()
                             }

@@ -71,6 +71,7 @@ import app.focal.ui.components.LibraryTopFade
 import app.focal.ui.components.MenuAnchor
 import app.focal.ui.components.StickyLabelOverlay
 import app.focal.ui.components.WaveMeter
+import app.focal.ui.components.rememberRowPlacement
 import app.focal.ui.components.rememberStickyLabels
 import app.focal.ui.components.stickyLabelSource
 import app.focal.ui.design.FocalLayout
@@ -384,6 +385,17 @@ private fun LibraryList(
     val status = WindowInsets.statusBars
     val top = with(density) { status.getTop(this).toDp() } + FocalLayout.topFade
     val isLive = model.stage is StageUi.Live
+    val placement = rememberRowPlacement(
+        remember(model.stage?.key, model.days) {
+            buildList {
+                if (model.stage != null) add(STAGE_KEY)
+                model.days.forEach { day ->
+                    add(dayKey(day.epochDay))
+                    day.rows.forEach { add(it.id) }
+                }
+            }
+        },
+    )
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -440,13 +452,13 @@ private fun LibraryList(
                             .padding(horizontal = FocalLayout.gutter)
                             .padding(top = if (index == 0) firstLabelGap(model.stage != null) else SECTION_GAP, bottom = LABEL_TO_TITLE)
                             .stickyLabelSource(labels, key)
-                            .animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()),
+                            .animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
                     )
                 }
                 items(day.rows, key = { it.id }, contentType = { ROW_TYPE }) { row ->
                     NoteRowItem(
                         row, dates, rowActions,
-                        modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()),
+                        modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
                         menu = { noteMenu(row) },
                         title = if (renaming == row.id) { { renameField(row, false) } } else null,
                     )

@@ -3,6 +3,7 @@ package app.focal.ui.note
 import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
@@ -23,6 +24,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.IntOffset
 import app.focal.R
 import app.focal.core.SpeechTuning
 import app.focal.core.TextWords
@@ -223,6 +225,7 @@ private const val UNCLEAR_SEPARATOR = ", "
 internal fun LazyItemScope.ParagraphItem(
     item: NoteItem.Text,
     page: NotePageState,
+    placement: FiniteAnimationSpec<IntOffset>?,
     arrival: Arrivals.Arrival?,
     entrance: Long?,
     onTap: (ParagraphUi, Int) -> Unit,
@@ -249,7 +252,7 @@ internal fun LazyItemScope.ParagraphItem(
     val unclear = unclearDescription(paragraph)
     Column(
         Modifier
-            .animateItem(fadeInSpec = null, placementSpec = FocalMotion.move(), fadeOutSpec = null)
+            .animateItem(fadeInSpec = null, placementSpec = placement, fadeOutSpec = null)
             .padding(horizontal = FocalLayout.gutter),
     ) {
         if (field != null) {
