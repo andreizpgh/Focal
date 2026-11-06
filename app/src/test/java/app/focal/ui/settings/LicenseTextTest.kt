@@ -15,6 +15,31 @@ class LicenseTextTest {
         assertEquals(listOf("Focal", "MIT License line two"), LicenseText.paragraphs(LicenseText.section(file, null, "Apache")))
     }
 
+    /** Column wraps of prose join; headings, labelled URLs, lists and rules keep their own lines (spec 5.10). */
+    @Test fun reflowJoinsOnlyWrappedProse() {
+        val attribution = "Parakeet Ultra, INT8 ONNX (Marmalade release v1)\n" +
+            "Moondream (M87 Labs, Inc.) created Parakeet Ultra by post-training NVIDIA's Parakeet TDT 0.6B v3.\n" +
+            "Moondream model: https://huggingface.co/moondream/parakeet-ultra/tree/73175eb7\n" +
+            "NVIDIA base model: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/tree/541d1f99"
+        assertEquals(attribution, LicenseText.reflow(attribution))
+        val prose = "Creative Commons Corporation (\"Creative Commons\") is not a law firm and\n" +
+            "does not provide legal services or legal advice. Distribution of\n" +
+            "Creative Commons public licenses does not create a lawyer-client or\n" +
+            "other relationship.\n" +
+            "Using Creative Commons Public Licenses"
+        assertEquals(
+            "Creative Commons Corporation (\"Creative Commons\") is not a law firm and does not provide legal services or " +
+                "legal advice. Distribution of Creative Commons public licenses does not create a lawyer-client or other " +
+                "relationship.\nUsing Creative Commons Public Licenses",
+            LicenseText.reflow(prose),
+        )
+        assertEquals("=====\nCreative Commons", LicenseText.reflow("=====\nCreative Commons"))
+        val hanging = "      (a) You must give any other recipients of the Work or\n          Derivative Works a copy of this License; and"
+        assertEquals("(a) You must give any other recipients of the Work or Derivative Works a copy of this License; and", LicenseText.reflow(hanging))
+        val release = "Focal distributes the four v1 files as published.\nMarmalade release: https://github.com/maxwhipw/releases/tag/v1"
+        assertEquals(release, LicenseText.reflow(release))
+    }
+
     /** Every entry on the page opens its own text in the notices the APK ships, the model's attribution included. */
     @Test fun everyEntryFindsItsTextInTheShippedNotices() {
         val files = listOf(LicenseText.APP, LicenseText.ULTRA).associateWith { File("src/main/assets/$it").readText() }

@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.LineBreak
 import app.focal.R
 import app.focal.ui.components.PaperTopFade
 import app.focal.ui.components.PressPlate
@@ -81,7 +82,6 @@ object LicenseText {
     const val APP = "licenses.txt"
     const val ULTRA = "ultra-licenses.txt"
     private val paragraphBreak = Regex("\\r?\\n(?:[ \\t]*\\r?\\n)+")
-    private val softBreak = Regex("[ \\t]*\\r?\\n[ \\t]*")
 
     /**
      * The text from the paragraph whose first line starts with [start] (the file's start when null) to the paragraph
@@ -95,9 +95,39 @@ object LicenseText {
         return paragraphs.subList(from, to).joinToString("\n\n")
     }
 
-    /** Paragraphs reflowed for a phone's measure: the files' 80-column line breaks become spaces. */
-    fun paragraphs(section: String): List<String> =
-        paragraphBreak.split(section).map { it.trim().replace(softBreak, " ") }.filter { it.isNotEmpty() }
+    /** Paragraphs reflowed for a phone's measure: only the files' column wraps of prose become spaces ([reflow]). */
+    fun paragraphs(section: String): List<String> = paragraphBreak.split(section).map(::reflow).filter { it.isNotEmpty() }
+
+    /**
+     * One paragraph of a notice with its column wraps joined and every other line break kept. A break is a column wrap
+     * only where the next line's first word would not have fitted on this line. It stays where the line ended by
+     * itself (a heading, a list item, a name, a sentence closing early), before a line that starts with a URL or with
+     * "Label: URL", after a line that ends with a URL, around rules ("====="), and before an indented line that
+     * opens after a full stop or a colon. Hanging indents and wrapped sentences still join.
+     */
+    internal fun reflow(paragraph: String): String {
+        val lines = paragraph.lines().map { it.trimEnd() }.filter { it.isNotBlank() }
+        if (lines.isEmpty()) return ""
+        val out = StringBuilder(lines.first().trim())
+        for (i in 1 until lines.size) out.append(if (keepsBreak(lines[i - 1], lines[i])) '\n' else ' ').append(lines[i].trim())
+        return out.toString()
+    }
+
+    private fun keepsBreak(previous: String, next: String): Boolean {
+        if (urlLine.containsMatchIn(next) || urlEnd.containsMatchIn(previous)) return true
+        if (rule.matches(previous) || rule.matches(next)) return true
+        val nextWord = next.trim().substringBefore(' ')
+        if (previous.length + 1 + nextWord.length <= next.length) return true
+        return indent(next) > indent(previous) && previous.last() in SENTENCE_ENDS
+    }
+
+    private fun indent(line: String): Int = line.length - line.trimStart().length
+
+    private const val URL = """(?:https?://|www\.)\S+"""
+    private const val SENTENCE_ENDS = ".:"
+    private val urlLine = Regex("""^\s*(?:<?$URL|[^\s:][^:]{0,60}:\s+<?$URL)""")
+    private val urlEnd = Regex("""$URL>?$""")
+    private val rule = Regex("""\s*[=\-_*]{3,}\s*""")
 
     suspend fun load(context: Context): Map<String, String> = withContext(Dispatchers.IO) {
         listOf(APP, ULTRA).associateWith { name -> runCatching { context.assets.open(name).bufferedReader().use { it.readText() } }.getOrDefault("") }
@@ -164,7 +194,7 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
                             Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()),
                         ) {
                             Text(
-                                paragraph, style = FocalType.secondary, color = colors.recede,
+                                paragraph, style = LicenseStyle, color = colors.recede,
                                 modifier = Modifier.padding(horizontal = FocalLayout.gutter).padding(bottom = Grid.x12),
                             )
                         }
@@ -181,6 +211,12 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 private val EntryPlate = PressPlate(FocalShapes.block, insetX = SettingsMetrics.plateInset)
+
+/**
+ * The notices' text: `secondary`, broken for the whole paragraph at once, so a long URL that must wrap at its slashes
+ * does not leave a short piece ("/tree") alone on a line when moving one more piece down evens the lines.
+ */
+private val LicenseStyle = FocalType.secondary.copy(lineBreak = LineBreak.Paragraph)
 
 /** Test tag prefix of the entries ("license-entry:0" is the speech model), for the screenshot gallery. */
 const val LICENSE_ENTRY_TAG = "license-entry"
