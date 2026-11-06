@@ -91,16 +91,29 @@ object LicenseText {
      * The text from the paragraph whose first line starts with [start] (the file's start when null) to the paragraph
      * whose first line starts with [end] (the file's end when null).
      */
-    fun section(text: String, start: String?, end: String?): String {
-        val paragraphs = paragraphBreak.split(text)
-        val from = if (start == null) 0 else paragraphs.indexOfFirst { it.trimStart().startsWith(start) }.takeIf { it >= 0 } ?: return ""
-        val to = if (end == null) paragraphs.size else paragraphs.drop(from + 1).indexOfFirst { it.trimStart().startsWith(end) }
-            .let { if (it < 0) paragraphs.size else from + 1 + it }
-        return paragraphs.subList(from, to).joinToString("\n\n")
-    }
+    fun section(text: String, start: String?, end: String?): String = slice(paragraphBreak.split(text), start, end).joinToString("\n\n")
 
     /** Paragraphs reflowed for a phone's measure: only the files' column wraps of prose become spaces ([reflow]). */
     fun paragraphs(section: String): List<String> = paragraphBreak.split(section).map(::reflow).filter { it.isNotEmpty() }
+
+    /**
+     * Every entry's reflowed paragraphs, in [LicenseEntries] order, from the loaded [files]: each file is split once.
+     * The notices are large (the speech runtime's alone is thousands of lines): call it off the main thread.
+     */
+    fun entries(files: Map<String, String>): List<List<String>> {
+        val split = files.mapValues { (_, text) -> paragraphBreak.split(text) }
+        return LicenseEntries.map { entry ->
+            slice(split[entry.asset].orEmpty(), entry.start, entry.end).flatMap { paragraphBreak.split(it) }.map(::reflow).filter { it.isNotEmpty() }
+        }
+    }
+
+    /** The file's paragraphs from the one whose first line starts with [start] to the one before [end] (see [section]). */
+    private fun slice(paragraphs: List<String>, start: String?, end: String?): List<String> {
+        val from = if (start == null) 0 else paragraphs.indexOfFirst { it.trimStart().startsWith(start) }.takeIf { it >= 0 } ?: return emptyList()
+        val to = if (end == null) paragraphs.size else paragraphs.drop(from + 1).indexOfFirst { it.trimStart().startsWith(end) }
+            .let { if (it < 0) paragraphs.size else from + 1 + it }
+        return paragraphs.subList(from, to)
+    }
 
     /**
      * One paragraph of a notice with its column wraps joined and every other line break kept. A break is a column wrap
@@ -153,7 +166,10 @@ object LicenseText {
 fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val colors = FocalTheme.colors
     val context = LocalContext.current
-    val files by produceState<Map<String, String>?>(null) { value = LicenseText.load(context) }
+    // Read and reflowed once, off the main thread; expanding an entry only shows its list.
+    val texts by produceState<List<List<String>>?>(null) {
+        value = LicenseText.load(context).let { files -> withContext(Dispatchers.Default) { LicenseText.entries(files) } }
+    }
     val expanded = rememberSaveable(saver = listSaver()) { mutableStateListOf<Int>() }
     val list = rememberLazyListState()
     val density = LocalDensity.current
@@ -197,8 +213,7 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     }
                 }
                 if (index in expanded) {
-                    val text = files?.get(entry.asset)
-                    val paragraphs = if (text == null) emptyList() else LicenseText.paragraphs(LicenseText.section(text, entry.start, entry.end))
+                    val paragraphs = texts?.getOrNull(index).orEmpty()
                     items(paragraphs.withIndex().toList(), key = { "text:$index:${it.index}" }) { (_, paragraph) ->
                         SelectionContainer(
                             Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()),

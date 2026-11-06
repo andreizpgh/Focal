@@ -66,5 +66,7 @@ class LicenseTextTest {
             assertFalse("The shared Apache text stops before Inter", apache.contains("SIL OPEN FONT"))
         }
         assertTrue(sections.last().startsWith("Focal") && !sections.last().contains("Apache License"))
+        // The page's precomputed paragraphs (each file split once) are exactly each section's own.
+        assertEquals(sections.map(LicenseText::paragraphs), LicenseText.entries(files))
     }
 }
