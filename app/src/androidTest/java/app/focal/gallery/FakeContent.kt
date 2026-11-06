@@ -1,25 +1,10 @@
 package app.focal.gallery
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.dp
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.FocalWeight
-import app.focal.ui.design.Grid
 import app.focal.ui.design.tabular
 
 /** Synthetic notes (the design renders' sample content); never user data. */
@@ -54,27 +39,6 @@ val FakeScene = listOf(
     "Anna brings the stove and the big pot. I’ll carry the tent and the first-aid kit, and Mark can take the water filter if someone lends him a bigger pack.",
     "If the forecast still says rain after lunch, we turn back at the lake instead of going over the ridge.",
 )
-
-/** A library row as the design draws it (spec 4.12.2), for context around the components. */
-@Composable
-fun FakeRow(note: FakeNote, modifier: Modifier = Modifier) {
-    val colors = FocalTheme.colors
-    Column(modifier.fillMaxWidth().padding(horizontal = Grid.x24), verticalArrangement = Arrangement.spacedBy(Grid.x4)) {
-        Row(verticalAlignment = Alignment.Top) {
-            Text(note.title, style = FocalType.rowTitle, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(Grid.x16))
-            Text(note.duration, style = FocalType.meta, color = colors.muted, modifier = Modifier.padding(top = 2.dp))
-        }
-        Text(
-            buildAnnotatedString {
-                withStyle(SpanStyle(color = colors.ink, fontWeight = FocalWeight.Medium, fontFeatureSettings = "tnum")) { append(note.time) }
-                append(" ")
-                append(note.preview)
-            },
-            style = FocalType.secondary, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
 
 @Composable
 fun FakeCaption(text: String, modifier: Modifier = Modifier) {

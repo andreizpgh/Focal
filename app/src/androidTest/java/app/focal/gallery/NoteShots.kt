@@ -133,7 +133,7 @@ internal fun design(timed: Boolean = true, edited: Boolean = false, replaced: Bo
 
 private const val THIRD = 3L
 
-private fun saturdayNote(phase: NotePhase) = NoteUiState(
+internal fun saturdayNote(phase: NotePhase) = NoteUiState(
     noteId = "saturday", loaded = true, title = "So the plan for Saturday is simple", created = at("14:32"),
     durationMs = 4 * 60_000L, phase = phase, progress = 0.64f, audioPresent = true, canPlay = true,
     paragraphs = timedParagraphs(SaturdayText, 4 * 60_000L),
@@ -194,20 +194,28 @@ internal fun Note(
     captureElsewhere: Boolean = false,
     scroll: Pair<Int, Int>? = null,
     landing: Boolean = false,
+    states: PageStates = PageStates(),
 ) {
     val shell = rememberShellState()
     val destination = remember(note.noteId) { Destination.Note(note.noteId) }
     LaunchedEffect(shell) { shell.open(destination) }
     FocalShell(shell, destination = { current ->
         if (current is Destination.Note) {
-            NoteDestination(note, destination, playing, edit, find, nextMatch, replaced, captureElsewhere, scroll, landing)
+            NoteDestination(note, destination, playing, edit, find, nextMatch, replaced, captureElsewhere, scroll, landing, states)
             if (menu) NoteMenuInline()
         } else Box(Modifier.fillMaxSize())
     })
 }
 
+/** Page states the gallery sets up: an inline rename, Edit with no focused paragraph, follow off. */
+internal data class PageStates(
+    val rename: Boolean = false,
+    val editField: Boolean = true,
+    val followOff: Boolean = false,
+)
+
 @Composable
-private fun NoteDestination(
+internal fun NoteDestination(
     note: NoteUiState,
     destination: Destination.Note,
     playing: Boolean,
@@ -218,13 +226,22 @@ private fun NoteDestination(
     captureElsewhere: Boolean,
     scroll: Pair<Int, Int>?,
     landing: Boolean,
+    states: PageStates = PageStates(),
 ) {
     val shell = app.focal.ui.shell.LocalShell.current
     val list: LazyListState = rememberLazyListState()
     scroll?.let { (index, offset) -> LaunchedEffect(list) { list.scrollToItem(index, offset) } }
     val third = note.paragraphs.getOrNull(2)
-    val field = if (edit && third != null) remember { FieldFocus(third.id, third.text, "The welcome screen can lose the subtitle entirely.".length) } else null
-    val page: NotePageState = rememberNotePageState(field = field, takesFocus = false)
+    val field = if (edit && states.editField && third != null) {
+        remember { FieldFocus(third.id, third.text, "The welcome screen can lose the subtitle entirely.".length) }
+    } else null
+    val page: NotePageState = rememberNotePageState(editing = edit, field = field, takesFocus = false)
+    if (states.rename) LaunchedEffect(page) { page.renaming = true }
+    if (states.followOff) LaunchedEffect(page) {
+        delay(FIND_SETTLE_MS)
+        page.followSuspended = true
+        list.scrollToItem(note.paragraphs.size)
+    }
     val word = note.paragraphs.getOrNull(1)?.let { p -> p.words.firstOrNull { p.text.substring(it.start, it.end) == "permission" } }
     val playback = remember(playing) {
         StillPlayback(

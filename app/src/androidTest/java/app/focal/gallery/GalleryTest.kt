@@ -66,6 +66,12 @@ class GalleryTest {
     @Test
     fun finish() = render("finish", FinishShots.all)
 
+    @Test
+    fun coverage() = render("coverage", CoverageShots.all)
+
+    @Test
+    fun transitions() = render("transitions", TransitionShots.all)
+
     private fun render(stage: String, shots: List<Shot>) {
         val directory = File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "gallery/$stage")
             .apply { deleteRecursively(); mkdirs() }

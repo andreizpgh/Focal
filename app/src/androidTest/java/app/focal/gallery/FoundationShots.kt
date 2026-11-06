@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -21,8 +20,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,15 +46,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.focal.ui.components.BottomColumn
-import app.focal.ui.components.BottomFade
-import app.focal.ui.components.DayLabel
 import app.focal.ui.components.Dock
 import app.focal.ui.components.DockActions
 import app.focal.ui.components.DockState
 import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FeedbackPill
 import app.focal.ui.components.FixedMeter
-import app.focal.ui.components.FocalBottomSheet
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.FocalIconButton
 import app.focal.ui.components.FocalMenuDivider
@@ -66,7 +60,6 @@ import app.focal.ui.components.FocalPrimaryPill
 import app.focal.ui.components.FocalTextButton
 import app.focal.ui.components.FeedbackHostState
 import app.focal.ui.components.Glyph
-import app.focal.ui.components.LibraryTopFade
 import app.focal.ui.components.Mark
 import app.focal.ui.components.MenuSurface
 import app.focal.ui.components.NineBars
@@ -76,15 +69,12 @@ import app.focal.ui.components.PauseBadgeMetrics
 import app.focal.ui.components.PlayCircle
 import app.focal.ui.components.ProgressPhase
 import app.focal.ui.components.RecordDot
-import app.focal.ui.components.StickyLabelOverlay
 import app.focal.ui.components.WaveDress
 import app.focal.ui.components.WaveMode
 import app.focal.ui.components.WaveRenderer
 import app.focal.ui.components.markBox
 import app.focal.ui.components.rememberBottomColumnState
-import app.focal.ui.components.rememberStickyLabels
 import app.focal.ui.components.sceneMaterial
-import app.focal.ui.components.stickyLabelSource
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
@@ -92,12 +82,6 @@ import app.focal.ui.design.Grid
 import app.focal.ui.design.Scene
 import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.Stage
-import app.focal.ui.shell.Destination
-import app.focal.ui.shell.DestinationBottom
-import app.focal.ui.shell.FocalShell
-import app.focal.ui.shell.SettingsStrip
-import app.focal.ui.shell.rememberShellState
-import app.focal.ui.shell.rememberSettingsStripState
 import kotlinx.coroutines.delay
 
 /** The foundation stage's renders: tokens, every control state, the bars, the material, the shell's layers. */
@@ -112,16 +96,8 @@ object FoundationShots {
         add(Shot("scene-live", dark = false) { SceneMock(paused = false) })
         add(Shot("scene-paused", dark = false) { SceneMock(paused = true) })
         addAll(themed("empty") { EmptyMock() })
-        add(Shot("paused-light", dark = false) { PausedMock() })
-        addAll(themed("feedback") { FeedbackMock() })
-        add(Shot("sticky-light", dark = false) { StickyMock() })
-        add(Shot("settings-swipe-50-light", dark = false) { SwipeMock(0.5f) })
-        add(Shot("peek-light", dark = false) { SwipeMock(32f / 420f) })
-        addAll(themed("sheet") { SheetMock() })
         add(Shot("ready-morph-light", dark = false, settleMs = READY_AT_MS + 80) { ReadyMorph() })
         add(Shot("copied-light", dark = false, settleMs = 300, click = COPY_TAG) { CopiedDock() })
-        addAll(themed("shell-library") { ShellMock(openNote = false) })
-        add(Shot("shell-note-light", dark = false) { ShellMock(openNote = true) })
         add(Shot("controls-library-light-200", dark = false, fontScale = 2f) { LibraryControls() })
         add(Shot("controls-note-light-200", dark = false, fontScale = 2f) { NoteControls() })
         add(Shot("empty-light-200", dark = false, fontScale = 2f) { EmptyMock() })
@@ -413,158 +389,11 @@ private fun EmptyMock() {
     }
 }
 
-/** The library while paused (spec 5.1.4): the stage with the dimmed wave and its badge, the rows, Resume | Finish. */
-@Composable
-private fun PausedMock() {
-    val c = FocalTheme.colors
-    val meter = remember { FixedMeter(previewLevels) }
-    val bottom = rememberBottomColumnState()
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(top = Grid.x16)) {
-            Box(Modifier.padding(horizontal = Grid.x24).fillMaxWidth().height(240.dp).sceneMaterial(FocalShapes.sheetRadius, ring = c.stageRing)) {
-                Box(Modifier.offset(Grid.x20, Grid.x20)) {
-                    WithBadge(56.dp, PauseBadgeMetrics.stage) { NineBars(WaveMode.Live(meter, paused = true), WaveDress.Material, Modifier.markBox(56.dp)) }
-                }
-                Text(
-                    "12:48", style = FocalType.sceneTimer.copy(fontSize = 48.sp, lineHeight = 53.sp), color = Stage.muted,
-                    modifier = Modifier.offset(108.dp, 22.dp),
-                )
-                Column(
-                    Modifier.padding(start = Grid.x20, end = Grid.x20, top = 92.dp).height(128.dp)
-                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, endY = 34.dp.toPx()), blendMode = BlendMode.DstIn)
-                        },
-                    verticalArrangement = Arrangement.spacedBy(Grid.x12, Alignment.Bottom),
-                ) {
-                    FakeLive.forEachIndexed { index, text ->
-                        Text(text, style = FocalType.stageText, color = if (index == FakeLive.lastIndex) Scene.ink else Stage.muted)
-                    }
-                }
-            }
-            Spacer(Modifier.height(Grid.x32))
-            DayLabel("Today", Modifier.padding(horizontal = Grid.x24))
-            Spacer(Modifier.height(Grid.x16))
-            Column(verticalArrangement = Arrangement.spacedBy(Grid.x24)) { FakeNotes.take(3).forEach { FakeRow(it) } }
-        }
-        BottomFade(bottom, Modifier.fillMaxSize())
-        BottomColumn(bottom, dock = { Dock(DockState.Live(paused = true), noActions) }, modifier = Modifier.fillMaxSize())
-    }
-}
 
-@Composable
-private fun LibraryRows(modifier: Modifier = Modifier) {
-    Column(modifier.windowInsetsPadding(WindowInsets.statusBars).padding(top = Grid.x16)) {
-        var day = ""
-        FakeNotes.forEach { note ->
-            if (note.day != day) {
-                if (day.isNotEmpty()) Spacer(Modifier.height(Grid.x12))
-                DayLabel(note.day, Modifier.padding(horizontal = Grid.x24))
-                Spacer(Modifier.height(Grid.x16))
-                day = note.day
-            }
-            FakeRow(note)
-            Spacer(Modifier.height(Grid.x24))
-        }
-    }
-}
 
-@Composable
-private fun FeedbackMock() {
-    val bottom = rememberBottomColumnState()
-    LaunchedEffect(bottom) { bottom.feedback.show("Note deleted", FeedbackAction("Undo", FocalIcon.Undo)) }
-    Box(Modifier.fillMaxSize()) {
-        LibraryRows()
-        BottomFade(bottom, Modifier.fillMaxSize())
-        BottomColumn(bottom, dock = { Dock(DockState.LibraryIdle, noActions) }, modifier = Modifier.fillMaxSize())
-    }
-}
 
-/** The list scrolled so "Today" is pinned and "Yesterday" pushes it (spec 4.12.1). */
-@Composable
-private fun StickyMock() {
-    val c = FocalTheme.colors
-    val state = rememberLazyListState()
-    val sections = remember {
-        FakeNotes.mapIndexed { index, note -> "row:$index" to "day:${note.day}" }.toMap() +
-            FakeNotes.map { "day:${it.day}" }.associateWith { it }
-    }
-    val labels = rememberStickyLabels(state) { key -> sections[key] }
-    LaunchedEffect(state) { state.scrollToItem(2, 140) }
-    // The stage's window bottom while it is laid out; NaN once it has scrolled away (the pin band is fully on).
-    val stageBottom = {
-        val info = state.layoutInfo
-        info.visibleItemsInfo.firstOrNull { it.key == "stage" }?.let { (it.offset + it.size - info.viewportStartOffset).toFloat() } ?: Float.NaN
-    }
-    val bottom = rememberBottomColumnState()
-    Box(Modifier.fillMaxSize()) {
-        LazyColumn(state = state, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 56.dp, bottom = 160.dp)) {
-            item(key = "stage") {
-                Box(Modifier.padding(horizontal = Grid.x24).fillMaxWidth().height(240.dp).sceneMaterial(FocalShapes.sheetRadius, ring = c.stageRing))
-            }
-            var day = ""
-            FakeNotes.forEachIndexed { index, note ->
-                if (note.day != day) {
-                    day = note.day
-                    val key = "day:$day"
-                    item(key = key) {
-                        DayLabel(note.day, Modifier.padding(start = Grid.x24, end = Grid.x24, top = Grid.x32, bottom = Grid.x16).stickyLabelSource(labels, key))
-                    }
-                }
-                item(key = "row:$index") { FakeRow(note, Modifier.padding(bottom = Grid.x24)) }
-            }
-        }
-        LibraryTopFade(stageBottom, Modifier.fillMaxSize())
-        StickyLabelOverlay(labels, { key -> (key as String).removePrefix("day:") }, Modifier.fillMaxSize())
-        BottomFade(bottom, Modifier.fillMaxSize())
-        BottomColumn(bottom, dock = { Dock(DockState.LibraryIdle, noActions) }, modifier = Modifier.fillMaxSize())
-    }
-}
 
-/** The settings strip at [s] (spec 4.23.2): both pages, the seam and the seam-side corners. */
-@Composable
-private fun SwipeMock(s: Float) {
-    val c = FocalTheme.colors
-    val strip = rememberSettingsStripState()
-    LaunchedEffect(strip) { strip.track(s) }
-    SettingsStrip(
-        strip,
-        library = { Box(Modifier.fillMaxSize().background(c.paper)) { LibraryRows() } },
-        settings = {
-            Column(
-                Modifier.fillMaxSize().background(c.paper).windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = Grid.x24),
-            ) {
-                Box(Modifier.padding(top = Grid.x8).offset(x = -Grid.x12)) { FocalIconButton(FocalIcon.Back, "Back", {}) }
-                Text("Settings", style = FocalType.title, color = c.ink, modifier = Modifier.padding(top = Grid.x16))
-                Head("Theme")
-                Spacer(Modifier.height(Grid.x48))
-                Head("Storage")
-                Text("Audio", style = FocalType.field.copy(fontWeight = FocalWeight.Medium), color = c.ink)
-                Text("Kept for 38 notes. To free space, remove audio from a note in its menu. The text stays.", style = FocalType.secondary, color = c.muted)
-            }
-        },
-    )
-}
 
-@Composable
-private fun SheetMock() {
-    val c = FocalTheme.colors
-    Box(Modifier.fillMaxSize()) {
-        LibraryRows()
-        FocalBottomSheet(visible = true, onDismiss = {}) {
-            Spacer(Modifier.height(Grid.x24))
-            NineBars(WaveMode.Static, WaveDress.paper(c), Modifier.markBox(40.dp))
-            Text("Focal needs the microphone", style = FocalType.headline, color = c.ink, textAlign = TextAlign.Center, modifier = Modifier.padding(top = Grid.x16))
-            Text(
-                "Focal turns speech into text on this phone. It has no internet access, so your audio never leaves the device.",
-                style = FocalType.secondary, color = c.muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = Grid.x8),
-            )
-            FocalPrimaryPill("Allow microphone", {}, Modifier.fillMaxWidth().padding(top = Grid.x32))
-            FocalTextButton("Not now", {}, Modifier.padding(top = Grid.x8))
-        }
-    }
-}
 
 /** T8: the dock's progress pill a few frames into its one morph into Copy. */
 @Composable
@@ -587,32 +416,3 @@ private fun CopiedDock() {
     )
 }
 
-/** The real shell (Navigation 3, the root bottom column, the settings strip, the overlay host) over fake pages. */
-@Composable
-private fun ShellMock(openNote: Boolean) {
-    val c = FocalTheme.colors
-    val shell = rememberShellState()
-    LaunchedEffect(shell) { if (openNote) shell.open(Destination.Note("fake")) }
-    FocalShell(shell, destination = { destination ->
-        when (destination) {
-            Destination.Library -> {
-                DestinationBottom(destination, DockState.LibraryIdle, remember { DockActions() })
-                SettingsStrip(
-                    shell.settings,
-                    library = { Box(Modifier.fillMaxSize()) { LibraryRows(); BottomFade(shell.bottom, Modifier.fillMaxSize()) } },
-                    settings = { Box(Modifier.fillMaxSize()) },
-                )
-            }
-            is Destination.Note -> {
-                DestinationBottom(destination, DockState.Note(PlayCircle.Play, NotePill.Copy()), remember { DockActions() })
-                Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = Grid.x24)) {
-                    Box(Modifier.padding(top = Grid.x8).offset(x = -Grid.x12)) { FocalIconButton(FocalIcon.Back, "Back", {}) }
-                    Text(FakeNotes.first().title, style = FocalType.title, color = c.ink, modifier = Modifier.padding(top = Grid.x8))
-                    Text("Today, 16:05 · 12 min", style = FocalType.meta, color = c.muted, modifier = Modifier.padding(top = Grid.x8))
-                    Text(FakeScene.joinToString("\n\n"), style = FocalType.body, color = c.ink, modifier = Modifier.padding(top = Grid.x24))
-                }
-            }
-            Destination.Licenses -> Box(Modifier.fillMaxSize())
-        }
-    })
-}

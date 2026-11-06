@@ -133,7 +133,7 @@ internal fun idleModel(): LibraryModel {
     return LibraryModel(loaded = true, stage = StageUi.Note(all.first(), fresh = false), days = days(all.drop(1)))
 }
 
-private fun liveModel(paused: Boolean, reason: PauseReason? = null, text: Boolean = true): LibraryModel {
+internal fun liveModel(paused: Boolean, reason: PauseReason? = null, text: Boolean = true): LibraryModel {
     val all = rows()
     val paragraphs = if (!text) emptyList() else (if (paused) FakeLive else FakeScene).mapIndexed { i, t -> LiveParagraph(i.toLong(), t, open = false) }
     return LibraryModel(
@@ -150,13 +150,13 @@ internal val saturday = NoteRow(
     phase = NotePhase.READY, progress = null, audioPresent = true, failedParts = 0, canRemoveAudio = true,
 )
 
-private fun workingModel(phase: NotePhase): LibraryModel {
+internal fun workingModel(phase: NotePhase): LibraryModel {
     val all = rows()
     val note = saturday.copy(phase = phase, progress = if (phase == NotePhase.TRANSCRIBING) 0.82f else null)
     return LibraryModel(loaded = true, stage = StageUi.Note(note, fresh = false), days = days(all))
 }
 
-private fun readyModel(fresh: Boolean): LibraryModel =
+internal fun readyModel(fresh: Boolean): LibraryModel =
     LibraryModel(loaded = true, stage = StageUi.Note(saturday, fresh = fresh), days = days(rows()))
 
 private fun noSpeechModel(): LibraryModel = LibraryModel(
@@ -187,12 +187,13 @@ internal fun Library(
     search: SearchUiState? = null,
     menu: Boolean = false,
     feedback: Boolean = false,
+    rename: String? = null,
 ) {
     val shell = rememberShellState()
     val list = rememberLazyListState()
     if (scroll) LaunchedEffect(list) { list.scrollToItem(2, 140) }
     if (feedback) LaunchedEffect(shell) { shell.bottom.feedback.show("Note deleted", FeedbackAction("Undo", FocalIcon.Undo)) }
-    FocalShell(shell, destination = { LibraryDestination(model, list, search, menu) })
+    FocalShell(shell, destination = { LibraryDestination(model, list, search, menu, rename = rename) })
 }
 
 /** The Library destination (the page and the settings strip) inside whatever shell is current. */
@@ -202,9 +203,10 @@ internal fun LibraryDestination(
     list: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     search: SearchUiState? = null,
     menu: Boolean = false,
+    actions: LibraryActions = remember { LibraryActions(copy = { true }) },
+    rename: String? = null,
 ) {
     val shell = app.focal.ui.shell.LocalShell.current
-    val actions = remember { LibraryActions(copy = { true }) }
     LibraryHost(
         strip = shell.settings, preferences = null, armed = { true }, hasNotes = !model.empty, capturing = model.live != null,
         blocked = false, layer = remember { SettingsLayerState() },
@@ -213,6 +215,7 @@ internal fun LibraryDestination(
                 model, search ?: SearchUiState(), meter, dates, today, actions, listState = list,
                 searchState = rememberLibrarySearchState(open = search != null),
                 query = rememberTextFieldState(search?.query.orEmpty()),
+                initialRename = rename,
             )
             if (menu) RowMenu()
         },

@@ -138,13 +138,15 @@ fun LibraryPage(
     searchState: LibrarySearchState = rememberLibrarySearchState(),
     query: TextFieldState = rememberTextFieldState(search.query),
     stageFocus: FocusRequester? = null,
+    /** A note whose title starts out renamed in place (the stage's or a row's). */
+    initialRename: String? = null,
 ) {
     val shell = LocalShell.current
     val bottom = shell.bottom
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     var menu by remember { mutableStateOf<MenuTarget?>(null) }
-    var renaming by rememberSaveable { mutableStateOf<String?>(null) }
+    var renaming by rememberSaveable { mutableStateOf(initialRename) }
     val renameBounds = remember { RenameBounds() }
     val imeVisible = WindowInsets.isImeVisible
 
