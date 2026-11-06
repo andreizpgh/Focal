@@ -5,6 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -14,9 +19,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -37,7 +46,8 @@ import java.io.File
  * the app's external files (`gallery/<stage>/<shot>.png`) for side-by-side review with the design renders.
  *
  * Run it on a display of at least 824 x 1830 px at 320 dpi (`adb shell wm size 824x1830; adb shell wm density 320`),
- * so the frame is on screen in full; then `adb pull /sdcard/Android/data/app.focal/files/gallery`.
+ * so the frame is on screen in full; then `adb pull /sdcard/Android/data/app.focal/files/gallery`. To re-render a few
+ * shots, pass their name prefixes: `-e shots t16-open,now-playing` (the others in the stage's folder are kept).
  */
 @RunWith(AndroidJUnit4::class)
 class GalleryTest {
@@ -72,11 +82,15 @@ class GalleryTest {
     @Test
     fun transitions() = render("transitions", TransitionShots.all)
 
-    private fun render(stage: String, shots: List<Shot>) {
+    private fun render(stage: String, all: List<Shot>) {
+        // `-e shots t16-,now-playing` renders only the shots whose names start with one of these, over the others.
+        val only = InstrumentationRegistry.getArguments().getString(SHOTS_ARGUMENT)?.split(',')?.filter { it.isNotBlank() }
+        val shots = if (only == null) all else all.filter { shot -> only.any { shot.name.startsWith(it) } }
         val directory = File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "gallery/$stage")
-            .apply { deleteRecursively(); mkdirs() }
+            .apply { if (only == null) deleteRecursively(); mkdirs() }
         rule.mainClock.autoAdvance = false
         rule.setContent {
+            KeyboardProbe(keyboard)
             val current = shot ?: return@setContent
             key(current.name) {
                 CompositionLocalProvider(LocalDensity provides Density(DENSITY, current.fontScale)) {
@@ -104,8 +118,27 @@ class GalleryTest {
             }
             rule.mainClock.advanceTimeBy(next.settleMs)
             rule.waitForIdle()
+            // The keyboard moves in real time, not on the test's clock: a shot with a focused field is taken with the
+            // keyboard fully open, every other one with it at rest.
+            val typing = rule.onAllNodes(isFocused() and hasSetTextAction(), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+            awaitKeyboard { keyboard.atRest && (!typing || keyboard.bottom > 0) }
             val image = rule.onNodeWithTag(FRAME).captureToImage().asAndroidBitmap()
             File(directory, "${next.name}.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, it) }
+            // ... and the next shot starts with it closed, so no list is resized under it while it plays.
+            shot = null
+            rule.mainClock.advanceTimeByFrame()
+            rule.waitForIdle()
+            awaitKeyboard { keyboard.atRest && keyboard.bottom == 0 }
+        }
+    }
+
+    private val keyboard = KeyboardState()
+
+    private fun awaitKeyboard(condition: () -> Boolean) {
+        try {
+            rule.waitUntil(KEYBOARD_TIMEOUT_MS, condition)
+        } catch (_: ComposeTimeoutException) {
+            // A keyboard that never shows (or never leaves) does not hold the gallery up.
         }
     }
 
@@ -116,7 +149,31 @@ class GalleryTest {
         val FRAME_HEIGHT = 915.dp
         const val SETTLE_MS = 1_000L
         const val PNG_QUALITY = 100
+        const val SHOTS_ARGUMENT = "shots"
+        const val KEYBOARD_TIMEOUT_MS = 3_000L
     }
+}
+
+/** Where the keyboard is, read in the layout phase as the window's insets change (plain fields: the test polls them). */
+private class KeyboardState {
+    @Volatile var bottom = 0
+    @Volatile var atRest = true
+}
+
+/** Reports the keyboard's inset and whether it has reached the end of its animation. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun KeyboardProbe(state: KeyboardState) {
+    val ime = WindowInsets.ime
+    val target = WindowInsets.imeAnimationTarget
+    Spacer(
+        Modifier.layout { measurable, constraints ->
+            state.bottom = ime.getBottom(this)
+            state.atRest = state.bottom == target.getBottom(this)
+            val placeable = measurable.measure(constraints)
+            layout(0, 0) { placeable.place(0, 0) }
+        },
+    )
 }
 
 /** One gallery render: [content] in a fresh composition, captured after [settleMs] of animation time. */
