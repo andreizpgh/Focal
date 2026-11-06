@@ -59,6 +59,9 @@ object UndoableActions {
         if (!deleted) { onError(app.getString(R.string.error_delete_active)); return false }
         ServiceNotifications.cancelReady(app, noteId)
         synchronized(this) {
+            // A removal still waiting for its Undo goes with the note: the note's own Undo brings the audio back.
+            removals.remove(noteId)?.cancel()
+            pendingRemovals.update { it - noteId }
             deletions.remove(noteId)?.cancel()
             deletions[noteId] = app.scope.launch {
                 delay(FALLBACK_COMMIT_MS)
@@ -149,7 +152,8 @@ object UndoableActions {
     private fun commitRemoval(app: FocalApplication, noteId: String) {
         val claim = SessionOperations.tryDestructive(noteId) ?: throw Refused(R.string.error_note_busy)
         try {
-            val note = app.store.note(noteId) ?: throw Refused(R.string.error_note_gone)
+            // Deleted (or trashed) since the removal was scheduled: there is nothing left to remove, and nothing to say.
+            val note = app.store.note(noteId) ?: return
             if (note.state != NoteState.READY) throw Refused(R.string.error_remove_transcribing)
             app.store.removeAudio(noteId)
         } finally { claim.release() }
