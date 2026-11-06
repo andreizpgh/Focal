@@ -1,0 +1,606 @@
+package app.focal.ui.components
+
+import android.graphics.Paint
+import android.os.Build
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.animateBounds
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.LookaheadScope
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import app.focal.R
+import app.focal.ui.design.FocalMotion
+import app.focal.ui.design.FocalShapes
+import app.focal.ui.design.FocalTheme
+import app.focal.ui.design.FocalTiming
+import app.focal.ui.design.FocalType
+import app.focal.ui.design.Grid
+import app.focal.ui.design.Scene
+import app.focal.ui.design.rememberFocalHaptics
+import app.focal.ui.design.smoothstep
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+/** What the dock holds (spec 4.3). The geometry is the bottom column's; only contents, widths and dress change. */
+@Immutable
+sealed interface DockState {
+    /** Record alone, x 24-388: there is nothing to search yet. */
+    data object LibraryEmpty : DockState
+    /** Search circle + Record. */
+    data object LibraryIdle : DockState
+    /** While a capture runs (library and scene): Pause + Finish, or Resume pill + Finish while paused. */
+    data class Live(val paused: Boolean) : DockState
+    /** A note: Play or Pause playback (or nothing for text only) + the progress pill or Copy. */
+    data class Note(val circle: PlayCircle, val pill: NotePill) : DockState
+}
+
+enum class PlayCircle { Play, PausePlayback, Unavailable, None }
+
+enum class ProgressPhase { Transcribing, Waiting, Preparing }
+
+@Immutable
+sealed interface NotePill {
+    /** [fraction] is resolved audio over total audio; Waiting and Preparing keep a static fill. */
+    data class Progress(val phase: ProgressPhase, val fraction: Float) : NotePill
+    data class Copy(val enabled: Boolean = true) : NotePill
+}
+
+/**
+ * What the dock's controls do. [copy] performs the copy and returns whether `setPrimaryClip` succeeded; the pill
+ * then confirms (haptic, check, "Copied"). [finish] fires its own `Confirm` once the service accepts the command
+ * (spec 2.9), so the dock adds none. [openSettings] adds the accessibility action on Record and Finish in the
+ * library (spec 4.23.6).
+ */
+@Stable
+class DockActions(
+    val search: () -> Unit = {},
+    val record: () -> Unit = {},
+    val pause: () -> Unit = {},
+    val resume: () -> Unit = {},
+    val finish: () -> Unit = {},
+    val play: () -> Unit = {},
+    val pausePlayback: () -> Unit = {},
+    val copy: suspend () -> Boolean = { false },
+    val openSettings: (() -> Unit)? = null,
+)
+
+/** The dock's two dresses: on paper, or on the recording material (spec 4.7). */
+enum class Dress { Paper, Material }
+
+/** Dock geometry (spec 4.3, 4.7). */
+object DockMetrics {
+    val height = Grid.x56
+    val circle = Grid.x56
+    val gap = Grid.x12
+    /** The labelled Resume pill that the circle widens into while paused (x 24-172). */
+    val resume = 148.dp
+    val glyphGap = Grid.x8
+    /** The material's Finish pill: shadow 0 8 28 (CSS blur, so sigma 14) and a 1 dp ring. */
+    val actionShadowY = Grid.x8
+    val actionShadowSigma = 14.dp
+    val ring = 1.dp
+}
+
+private enum class CircleFace { None, Search, Pause, Resume, Play, PausePlayback, PlayUnavailable }
+
+private enum class PillFace { Record, Finish, NotePrimary }
+
+private fun circleFace(state: DockState) = when (state) {
+    DockState.LibraryEmpty -> CircleFace.None
+    DockState.LibraryIdle -> CircleFace.Search
+    is DockState.Live -> if (state.paused) CircleFace.Resume else CircleFace.Pause
+    is DockState.Note -> when (state.circle) {
+        PlayCircle.Play -> CircleFace.Play
+        PlayCircle.PausePlayback -> CircleFace.PausePlayback
+        PlayCircle.Unavailable -> CircleFace.PlayUnavailable
+        PlayCircle.None -> CircleFace.None
+    }
+}
+
+private fun pillFace(state: DockState) = when (state) {
+    DockState.LibraryEmpty, DockState.LibraryIdle -> PillFace.Record
+    is DockState.Live -> PillFace.Finish
+    is DockState.Note -> PillFace.NotePrimary
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+private val MoveBounds = BoundsTransform { _, _ -> FocalMotion.move() }
+
+/**
+ * The dock (spec 4.3): at most a 56 dp circle and a 56 dp pill on the bottom column. Bounds animate on `move`
+ * (`animateBounds` in a `LookaheadScope`); glyphs and labels fade through; containers that change crossfade without
+ * a coverage dip. While a capture runs, [materialEdge] (the window y of the recording material's bottom edge, read in
+ * the draw phase) wipes each control from its paper dress to its material dress (spec 2.8.6), so a drag never
+ * recomposes the dock. Touch and semantics belong to the control, never to a dress.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun Dock(state: DockState, actions: DockActions, modifier: Modifier = Modifier, materialEdge: (() -> Float)? = null) {
+    val circle = circleFace(state)
+    val pill = pillFace(state)
+    val circleWidth = when (circle) {
+        CircleFace.None -> 0.dp
+        CircleFace.Resume -> DockMetrics.resume
+        else -> DockMetrics.circle
+    }
+    val edge = if (state is DockState.Live) materialEdge else null
+    LookaheadScope {
+        Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            CircleSlot(
+                face = circle,
+                actions = actions,
+                edge = edge,
+                modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
+                    .width(circleWidth).height(DockMetrics.height),
+            )
+            Spacer(Modifier.width(if (circleWidth > 0.dp) DockMetrics.gap else 0.dp))
+            PillSlot(
+                face = pill,
+                notePill = (state as? DockState.Note)?.pill,
+                actions = actions,
+                edge = edge,
+                modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
+                    .weight(1f).heightIn(min = DockMetrics.height),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CircleSlot(face: CircleFace, actions: DockActions, edge: (() -> Float)?, modifier: Modifier) {
+    val source = remember { MutableInteractionSource() }
+    val description = when (face) {
+        CircleFace.None -> null
+        CircleFace.Search -> stringResource(R.string.cd_search_open)
+        CircleFace.Pause -> stringResource(R.string.action_pause)
+        CircleFace.Resume -> stringResource(R.string.action_resume)
+        CircleFace.Play -> stringResource(R.string.action_play)
+        CircleFace.PausePlayback -> stringResource(R.string.action_pause_playback)
+        CircleFace.PlayUnavailable -> stringResource(R.string.a11y_play_unavailable)
+    }
+    val onClick: (() -> Unit)? = when (face) {
+        CircleFace.Search -> actions.search
+        CircleFace.Pause -> actions.pause
+        CircleFace.Resume -> actions.resume
+        CircleFace.Play -> actions.play
+        CircleFace.PausePlayback -> actions.pausePlayback
+        CircleFace.None, CircleFace.PlayUnavailable -> null
+    }
+    val control = if (description == null) modifier else modifier
+        .clearAndSetSemantics {
+            contentDescription = description
+            role = Role.Button
+            if (onClick == null) disabled()
+        }
+        .pressScale(source)
+        .focusRing(FocalShapes.pill)
+        .clickable(source, indication = null, enabled = onClick != null, onClick = { onClick?.invoke() })
+    DressWipe(edge, control) { dress ->
+        SlotSwap(face) { shown, containerAlpha, contentAlpha ->
+            if (shown != CircleFace.None) {
+                TonalContainer(dress, containerAlpha)
+                // Unbounded: "● Resume" keeps its width (never wraps) while the circle widens under it.
+                Box(
+                    Modifier.wrapContentWidth(unbounded = true).heightIn(min = DockMetrics.height).graphicsLayer { alpha = contentAlpha() },
+                    contentAlignment = Alignment.Center,
+                ) { CircleContent(shown, dress) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CircleContent(face: CircleFace, dress: Dress) {
+    val colors = FocalTheme.colors
+    val ink = if (dress == Dress.Material) Scene.ink else colors.ink
+    when (face) {
+        CircleFace.Search -> Glyph(FocalIcon.Search, ink)
+        CircleFace.Pause -> Glyph(FocalIcon.Pause, ink)
+        CircleFace.Play -> Glyph(FocalIcon.Play, ink)
+        CircleFace.PausePlayback -> Glyph(FocalIcon.Pause, ink)
+        CircleFace.PlayUnavailable -> Glyph(FocalIcon.Play, colors.faint)
+        CircleFace.Resume -> LabelRow(stringResource(R.string.action_resume), ink) { RecordDot(ink) }
+        CircleFace.None -> Unit
+    }
+}
+
+@Composable
+private fun PillSlot(face: PillFace, notePill: NotePill?, actions: DockActions, edge: (() -> Float)?, modifier: Modifier) {
+    val source = remember { MutableInteractionSource() }
+    val scope = rememberCoroutineScope()
+    val haptics = rememberFocalHaptics()
+    var copied by remember { mutableStateOf(false) }
+    val copyEnabled = (notePill as? NotePill.Copy)?.enabled == true
+    val settingsLabel = stringResource(R.string.a11y_open_settings)
+    val copyLabel = stringResource(R.string.action_copy)
+    val copiedLabel = stringResource(R.string.action_copied)
+    val progress = notePill as? NotePill.Progress
+    val progressDescription = progress?.let { progressDescription(it) }
+    val description = when (face) {
+        PillFace.Record -> stringResource(R.string.action_record)
+        PillFace.Finish -> stringResource(R.string.action_finish)
+        PillFace.NotePrimary -> progressDescription ?: if (copied) copiedLabel else copyLabel
+    }
+    val onClick: (() -> Unit)? = when (face) {
+        PillFace.Record -> actions.record
+        PillFace.Finish -> actions.finish
+        PillFace.NotePrimary -> if (copyEnabled && !copied) {
+            {
+                scope.launch {
+                    if (actions.copy()) {
+                        haptics.copy()
+                        copied = true
+                        delay(FocalTiming.COPIED_HOLD_MS)
+                        copied = false
+                    }
+                }
+            }
+        } else null
+    }
+    val control = modifier
+        .clearAndSetSemantics {
+            contentDescription = description
+            if (progress != null) {
+                progressBarRangeInfo = ProgressBarRangeInfo(announcedStep(progress.fraction), 0f..1f)
+            } else {
+                role = Role.Button
+            }
+            // The progress pill is not a button (spec 8.2: disabled, with its range); Copied is a moment, not a state.
+            if (onClick == null && !copied) disabled()
+            if (face == PillFace.NotePrimary && progress == null) liveRegion = LiveRegionMode.Polite
+            val openSettings = actions.openSettings
+            if (openSettings != null && face != PillFace.NotePrimary) {
+                customActions = listOf(CustomAccessibilityAction(settingsLabel) { openSettings(); true })
+            }
+        }
+        .pressScale(source)
+        .focusRing(FocalShapes.pill)
+        .clickable(source, indication = null, enabled = onClick != null, onClick = { onClick?.invoke() })
+    DressWipe(edge, control) { dress ->
+        SlotSwap(face) { shown, containerAlpha, contentAlpha ->
+            when (shown) {
+                PillFace.Record -> {
+                    PrimaryContainer(dress, containerAlpha)
+                    PillContent(dress, contentAlpha) { ink -> LabelRow(stringResource(R.string.action_record), ink) { RecordDot(ink) } }
+                }
+                PillFace.Finish -> {
+                    PrimaryContainer(dress, containerAlpha)
+                    PillContent(dress, contentAlpha) { ink -> LabelRow(stringResource(R.string.action_finish), ink) { FinishSquare(ink) } }
+                }
+                PillFace.NotePrimary -> NotePrimaryPill(notePill ?: NotePill.Copy(), copied, containerAlpha, contentAlpha)
+            }
+        }
+    }
+}
+
+/** The progress pill is announced at 25 % steps only (spec 4.5.3). */
+private fun announcedStep(fraction: Float): Float = (fraction.coerceIn(0f, 1f) * ANNOUNCE_STEPS).toInt() / ANNOUNCE_STEPS
+private const val ANNOUNCE_STEPS = 4f
+private const val PERCENT = 100
+
+@Composable
+private fun progressDescription(progress: NotePill.Progress): String = when (progress.phase) {
+    ProgressPhase.Transcribing -> stringResource(R.string.a11y_transcribing, (announcedStep(progress.fraction) * PERCENT).roundToInt())
+    ProgressPhase.Waiting -> stringResource(R.string.stage_waiting)
+    ProgressPhase.Preparing -> stringResource(R.string.stage_preparing)
+}
+
+@Composable
+private fun PillContent(dress: Dress, alpha: () -> Float, content: @Composable (Color) -> Unit) {
+    val ink = if (dress == Dress.Material) Scene.actionLabel else FocalTheme.colors.onInv
+    // Sized by its content, so a label that wraps at a large font scale grows the pill (min 56 dp).
+    Box(Modifier.fillMaxWidth().heightIn(min = DockMetrics.height).graphicsLayer { this.alpha = alpha() }, contentAlignment = Alignment.Center) {
+        content(ink)
+    }
+}
+
+/** A centred glyph + 8 dp + `label`: the 56 dp pills' content (spec 4.5.1). Wraps at large font scales. */
+@Composable
+private fun LabelRow(text: String, color: Color, glyph: @Composable () -> Unit) {
+    Row(Modifier.padding(horizontal = Grid.x16), verticalAlignment = Alignment.CenterVertically) {
+        glyph()
+        Spacer(Modifier.width(DockMetrics.glyphGap))
+        Text(text, style = FocalType.label, color = color, textAlign = TextAlign.Center)
+    }
+}
+
+/**
+ * The Note dock's pill (spec 4.5.3, T8): the progress pill and Copy are one control, so readiness is one morph. The
+ * fill moves on `move` at each commit and never backwards; at Ready it reaches 100 %, the background goes `s1` to
+ * `inv` on `fade` and the label fades through to the copy glyph + "Copy"; `Confirm` fires on that first frame.
+ * Copy confirms with the check and "Copied" for 1600 ms.
+ */
+@Composable
+private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerAlpha: () -> Float, contentAlpha: () -> Float) {
+    val colors = FocalTheme.colors
+    val haptics = rememberFocalHaptics()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val target = when (pill) {
+        is NotePill.Progress -> pill.fraction.coerceIn(0f, 1f)
+        is NotePill.Copy -> 1f
+    }
+    val ready = pill is NotePill.Copy
+    val fill = remember { Animatable(target) }
+    val inverted = remember { Animatable(if (ready) 1f else 0f) }
+    val copyShown = remember { Animatable(if (ready) 1f else 0f) }
+    var wasReady by remember { mutableStateOf(ready) }
+    LaunchedEffect(target) { if (target > fill.value) fill.animateTo(target, FocalMotion.move()) }
+    LaunchedEffect(ready) {
+        if (ready && !wasReady && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) haptics.ready()
+        wasReady = ready
+        launch { inverted.animateTo(if (ready) 1f else 0f, FocalMotion.fade()) }
+        copyShown.animateTo(if (ready) 1f else 0f, FocalMotion.fade())
+    }
+    val enabled = pill !is NotePill.Copy || pill.enabled
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    // Container: the `s1` track, the `inv` fill from the start edge (its leading end straight), clipped to the pill.
+    Box(
+        Modifier.matchParentSize().drawWithCache {
+            val outline = FocalShapes.pill.createOutline(size, layoutDirection, this)
+            val clip = Path().apply { addOutline(outline) }
+            onDrawBehind {
+                val a = containerAlpha()
+                val base = if (enabled) lerp(colors.s1, colors.inv, inverted.value) else colors.s1
+                drawOutline(outline, base, alpha = a)
+                if (enabled) clipPath(clip) {
+                    val width = size.width * fill.value
+                    val left = if (rtl) size.width - width else 0f
+                    drawRect(colors.inv, topLeft = Offset(left, 0f), size = Size(width, size.height), alpha = a)
+                }
+            }
+        },
+    )
+    val label = when (pill) {
+        is NotePill.Progress -> when (pill.phase) {
+            ProgressPhase.Transcribing -> stringResource(R.string.action_transcribing)
+            ProgressPhase.Waiting -> stringResource(R.string.stage_waiting)
+            ProgressPhase.Preparing -> stringResource(R.string.stage_preparing)
+        }
+        is NotePill.Copy -> stringResource(R.string.action_transcribing)
+    }
+    // The progress label twice: ink underneath, onInv on top clipped to the fill, so it reads at every percentage.
+    Box(
+        Modifier.fillMaxWidth().heightIn(min = DockMetrics.height)
+            .graphicsLayer { alpha = contentAlpha() * (1 - smoothstep(0f, 0.5f, copyShown.value)) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = FocalType.label, color = colors.ink, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = Grid.x16))
+        Box(
+            Modifier.matchParentSize().drawWithContent {
+                val width = size.width * fill.value
+                clipRect(left = if (rtl) size.width - width else 0f, right = if (rtl) size.width else width) { this@drawWithContent.drawContent() }
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(label, style = FocalType.label, color = colors.onInv, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = Grid.x16))
+        }
+    }
+    val ink = if (enabled) colors.onInv else colors.faint
+    Box(
+        Modifier.matchParentSize().graphicsLayer { alpha = contentAlpha() * smoothstep(0.5f, 1f, copyShown.value) },
+        contentAlignment = Alignment.Center,
+    ) { CopyContent(copied, ink) }
+}
+
+/**
+ * Copy and Copied (spec 4.5.1): the copy glyph turns into a check with a 0.7 to 1 scale (`press`) while the labels
+ * crossfade (`fadeFast`). Both labels share one slot as wide as the wider, so the glyph never shifts.
+ */
+@Composable
+private fun CopyContent(copied: Boolean, ink: Color) {
+    val check = remember { Animatable(if (copied) 1f else 0f) }
+    val checkScale = remember { Animatable(1f) }
+    LaunchedEffect(copied) {
+        if (copied) launch { checkScale.snapTo(CHECK_START_SCALE); checkScale.animateTo(1f, FocalMotion.press()) }
+        check.animateTo(if (copied) 1f else 0f, FocalMotion.fadeFast())
+    }
+    Row(Modifier.padding(horizontal = Grid.x16), verticalAlignment = Alignment.CenterVertically) {
+        Box(contentAlignment = Alignment.Center) {
+            Glyph(FocalIcon.Copy, ink, size = GlyphSize.inPill, modifier = Modifier.graphicsLayer { alpha = 1 - check.value })
+            Glyph(
+                FocalIcon.Check, ink, size = GlyphSize.inPill,
+                modifier = Modifier.graphicsLayer { alpha = check.value; scaleX = checkScale.value; scaleY = checkScale.value },
+            )
+        }
+        Spacer(Modifier.width(DockMetrics.glyphGap))
+        Box {
+            Text(stringResource(R.string.action_copy), style = FocalType.label, color = ink, modifier = Modifier.graphicsLayer { alpha = 1 - check.value })
+            Text(stringResource(R.string.action_copied), style = FocalType.label, color = ink, modifier = Modifier.graphicsLayer { alpha = check.value })
+        }
+    }
+}
+
+private const val CHECK_START_SCALE = 0.7f
+
+/**
+ * Keeps the outgoing face during a swap (spec 4.3, Q7): the incoming container beneath at full alpha and the
+ * outgoing one on top at 1 - q, so the coverage never dips; contents fade through. q runs on `fadeFast`.
+ */
+@Composable
+private fun <F : Any> SlotSwap(target: F, face: @Composable BoxScope.(F, containerAlpha: () -> Float, contentAlpha: () -> Float) -> Unit) {
+    var shown by remember { mutableStateOf(target) }
+    var leaving by remember { mutableStateOf<F?>(null) }
+    val q = remember { Animatable(1f) }
+    LaunchedEffect(target) {
+        if (target == shown) return@LaunchedEffect
+        if (leaving == null || q.value >= 0.5f) leaving = shown
+        shown = target
+        q.snapTo(0f)
+        q.animateTo(1f, FocalMotion.fadeFast())
+        leaving = null
+    }
+    Box(Modifier.fillMaxWidth().heightIn(min = DockMetrics.height), contentAlignment = Alignment.Center) {
+        key(shown) { face(shown, { 1f }, { if (leaving == null) 1f else smoothstep(0.5f, 1f, q.value) }) }
+        leaving?.let { old -> key(old) { face(old, { 1 - q.value }, { 1 - smoothstep(0f, 0.5f, q.value) }) } }
+    }
+}
+
+/** Search, Pause, Play circles and the Resume pill: `s1` on paper, glass on the material. */
+@Composable
+private fun BoxScope.TonalContainer(dress: Dress, alpha: () -> Float) {
+    val colors = FocalTheme.colors
+    Box(
+        Modifier.matchParentSize().drawWithCache {
+            val outline = FocalShapes.pill.createOutline(size, layoutDirection, this)
+            val highlight = glassHighlight(outline, DockMetrics.ring.toPx())
+            onDrawBehind {
+                val a = alpha()
+                if (dress == Dress.Paper) drawOutline(outline, colors.s1, alpha = a) else {
+                    drawOutline(outline, Scene.glass, alpha = a)
+                    drawPath(highlight, Scene.glassHighlight, alpha = a)
+                }
+            }
+        },
+    )
+}
+
+/** Record, Finish and Copy: `inv` on paper; the material's white gradient with ring and shadow (spec 2.2). */
+@Composable
+private fun BoxScope.PrimaryContainer(dress: Dress, alpha: () -> Float) {
+    val colors = FocalTheme.colors
+    Box(
+        Modifier.matchParentSize().drawWithCache {
+            val outline = FocalShapes.pill.createOutline(size, layoutDirection, this)
+            val gradient = Brush.verticalGradient(listOf(Scene.actionTop, Scene.actionBottom))
+            val ring = DockMetrics.ring.toPx()
+            val shadow = actionShadowPaint(DockMetrics.actionShadowY.toPx(), DockMetrics.actionShadowSigma.toPx(), Scene.actionShadow)
+            val radius = size.height / 2
+            onDrawBehind {
+                val a = alpha()
+                if (dress == Dress.Paper) drawOutline(outline, colors.inv, alpha = a) else {
+                    if (shadow != null && a > 0f) {
+                        shadow.alpha = (Scene.actionShadow.alpha * a * 255).roundToInt()
+                        drawIntoCanvas { it.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, radius, radius, shadow) }
+                    }
+                    drawRoundRect(
+                        Scene.actionRing, topLeft = Offset(-ring, -ring),
+                        size = Size(size.width + 2 * ring, size.height + 2 * ring),
+                        cornerRadius = CornerRadius(radius + ring), alpha = a,
+                    )
+                    drawOutline(outline, gradient, alpha = a)
+                }
+            }
+        },
+    )
+}
+
+/**
+ * A soft drop shadow drawn with the platform's shadow layer (API 28+ draws it on hardware canvases for any shape).
+ * Below API 28 the pill has no shadow: it is decorative (spec 9).
+ */
+internal fun actionShadowPaint(offsetY: Float, sigma: Float, color: Color): Paint? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
+    return Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = android.graphics.Color.TRANSPARENT
+        setShadowLayer(blurRadius(sigma), 0f, offsetY, color.copy(alpha = 1f).toArgb())
+    }
+}
+
+/** The 1 dp inner top highlight on glass: the shape minus itself moved down by [width]. */
+internal fun glassHighlight(outline: Outline, width: Float): Path {
+    val shape = Path().apply { addOutline(outline) }
+    val shifted = Path().apply { addOutline(outline); translate(Offset(0f, width)) }
+    return Path().apply { op(shape, shifted, PathOperation.Difference) }
+}
+
+/** Where the slot sits in the window, for the dress wipe. */
+private class SlotPlacement { var coordinates: LayoutCoordinates? = null }
+
+/**
+ * Draws [content] in both dresses split at the material's edge (window y from [edge]): paper below it, the material
+ * above it, glyphs and labels included (`dockDress`, spec 2.8.6). Without an edge only the paper dress exists.
+ */
+@Composable
+private fun DressWipe(edge: (() -> Float)?, modifier: Modifier, content: @Composable BoxScope.(Dress) -> Unit) {
+    if (edge == null) {
+        Box(modifier, contentAlignment = Alignment.Center) { content(Dress.Paper) }
+        return
+    }
+    val placement = remember { SlotPlacement() }
+    fun local(windowY: Float): Float = windowY - (placement.coordinates?.takeIf { it.isAttached }?.positionInWindow()?.y ?: 0f)
+    Box(modifier.onPlaced { placement.coordinates = it }, contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.drawWithContent {
+                val e = local(edge())
+                if (e < size.height) clipRect(top = e.coerceAtLeast(0f), left = -size.width, right = 2 * size.width, bottom = 2 * size.height) {
+                    this@drawWithContent.drawContent()
+                }
+            },
+            contentAlignment = Alignment.Center,
+        ) { content(Dress.Paper) }
+        Box(
+            Modifier.matchParentSize().drawWithContent {
+                val e = local(edge())
+                if (e > 0f) clipRect(top = -size.height, left = -size.width, right = 2 * size.width, bottom = e.coerceAtMost(2 * size.height)) {
+                    this@drawWithContent.drawContent()
+                }
+            },
+            contentAlignment = Alignment.Center,
+        ) { content(Dress.Material) }
+    }
+}

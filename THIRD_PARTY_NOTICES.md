@@ -11,6 +11,8 @@
 - [Inter 4.1](https://github.com/rsms/inter/releases/tag/v4.1) (`app/src/main/res/font/inter_var.ttf`, a
   subset of `InterVariable.ttf` made by `scripts/subset-inter.py`): SIL Open Font License 1.1, Copyright (c)
   2016 The Inter Project Authors. The licence text ships in the app's `assets/licenses.txt`.
+- [Material Symbols](https://github.com/google/material-design-icons) (Rounded; the `ic_*.xml` icon vectors in
+  `app/src/main/res/drawable`): Apache License 2.0.
 - Gradle wrapper: Apache License 2.0.
 - Android speech-test fixture: excerpt of John F. Kennedy's 1961 inaugural
   address (US public domain), from whisper.cpp's `samples/jfk.wav`. The test copy

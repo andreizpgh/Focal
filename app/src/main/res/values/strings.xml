@@ -35,6 +35,20 @@
     <string name="action_pause">Pause</string>
     <string name="action_resume">Resume</string>
     <string name="action_finish">Finish</string>
+    <string name="action_record">Record</string>
+    <string name="action_play">Play</string>
+    <string name="action_pause_playback">Pause playback</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_copied">Copied</string>
+    <string name="action_transcribing">Transcribing</string>
+
+    <string name="cd_search_open">Search notes</string>
+    <string name="stage_waiting">Waiting to transcribe</string>
+    <string name="stage_preparing">Preparing speech model</string>
+
+    <string name="a11y_transcribing">Transcribing, %d percent</string>
+    <string name="a11y_play_unavailable">Play, unavailable while recording</string>
+    <string name="a11y_open_settings">Open settings</string>
 
     <string name="shortcut_short">Record</string>
     <string name="shortcut_long">New recording</string>
