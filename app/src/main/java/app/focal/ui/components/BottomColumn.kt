@@ -90,9 +90,9 @@ fun rememberBottomColumnState(): BottomColumnState {
  * The bottom column (spec 2.5, 4.8, 4.9): one layout for everything touched often, on the gutter-to-gutter column
  * (capped at 600 dp and centred on wide windows). Bottom up: the dock, navigation inset + 16; the player [strip], 8
  * above it; keyboard-riding [rows], whose lowest edge is min(IME top, navigation top - 8) - 8; the feedback pill, 8
- * above the topmost of them and drawn behind the dock. Positions read the IME inset in the layout phase, so on API
- * 30+ the rows follow the keyboard's own curve frame by frame; on API 26-29 they appear where the keyboard settles,
- * fading in on `fadeFast`. The dock hides (24 dp down and out) while rows are open (or [dockHidden]), following the
+ * above the topmost of them (above the keyboard while the dock is hidden) and drawn behind the dock. Positions read
+ * the IME inset in the layout phase, so on API 30+ the rows follow the keyboard's own curve frame by frame; on API
+ * 26-29 they appear where the keyboard settles, fading in on `fadeFast`. The dock hides (24 dp down and out) while rows are open (or [dockHidden]), following the
  * keyboard when it drives the change. It never moves for any other reason.
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -175,7 +175,9 @@ fun BottomColumn(
         }
         val feedbackPlaceables = feedbackMeasurables.map { it.measure(childConstraints) }
         val feedbackHeight = feedbackPlaceables.maxOfOrNull { it.height } ?: 0
-        val feedbackBottom = topmost - gap
+        // With the dock hidden and nothing riding the keyboard (Edit, a rename), the pill rides it as a row would:
+        // the keyboard is then the topmost visible bottom element (spec 2.5, 4.1.3).
+        val feedbackBottom = if (dockHidden && rows == null) rowsBottom else topmost - gap
         state.windowHeight = height.toFloat()
         state.topTarget = (if (state.feedback.current != null) feedbackBottom - feedbackHeight else topmost).toFloat()
         layout(width, height) {
