@@ -36,17 +36,18 @@ fun FocalTheme(dark: Boolean, content: @Composable () -> Unit) {
     val highContrastText = rememberHighContrastText(context)
     val reducedMotion = rememberReducedMotion()
     val colors = animatedColors(FocalColors.of(dark, contrast, highContrastText), reducedMotion)
-    val selection = remember(colors.ink, colors.select) { TextSelectionColors(colors.ink, colors.select) }
+    val selection = remember(colors.ink, colors.select) { TextSelectionColors(handleColor = colors.ink, backgroundColor = colors.select) }
     CompositionLocalProvider(
         LocalFocalColors provides colors,
         LocalReducedMotion provides reducedMotion,
-        LocalTextSelectionColors provides selection,
     ) {
         MaterialTheme(colorScheme = colors.toColorScheme(), typography = FocalType.material, shapes = FocalShapes.material) {
-            // After MaterialTheme, which provides its ripple: Focal presses are plates and scales, never ripples.
+            // After MaterialTheme, which provides its own ripple and selection colours (primary at 40 %): Focal presses
+            // are plates and scales, never ripples, and selected text sits on `select` with ink handles (spec 2.1, 4.14).
             CompositionLocalProvider(
                 LocalIndication provides PressPlate,
                 LocalContentColor provides colors.ink,
+                LocalTextSelectionColors provides selection,
                 content = content,
             )
         }

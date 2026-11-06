@@ -168,6 +168,12 @@ object Stage {
     val mutedContrast = Color(0xFFB0B0B0)
     val actionShadow = Color.Black.copy(alpha = 0.40f)
     val track = Color.White.copy(alpha = 0.22f)
+    /**
+     * Selected text on the material (a title renamed on the stage): `stageInk` handles on a light veil, the track's
+     * white at 22 %. It measures about 2:1 against the material wherever the title can sit, and `stageInk` text on it
+     * at least 5.4:1, so a select-all reads at once without dimming the title.
+     */
+    val selection = Color.White.copy(alpha = 0.22f)
     /** The pause badge: a [Scene.ink] disc, cut out of the bars by a ring in the material's colour. */
     val badgeRing = Color(0xFF121212).copy(alpha = 0.55f)
     val badgeGlyph = Color(0xFF161616)
