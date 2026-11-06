@@ -12,24 +12,36 @@ import androidx.compose.runtime.toMutableStateList
 @Immutable
 sealed interface Destination {
     data object Library : Destination
-    data class Note(val id: String) : Destination
+
+    /** A note; opened from a search result, [hit] is where the note scrolls to and what it highlights (spec 5.2). */
+    data class Note(val id: String, val hit: NoteHit? = null) : Destination
     data object Licenses : Destination
 
     companion object {
         private const val LIBRARY = "library"
         private const val LICENSES = "licenses"
         private const val NOTE = "note:"
+        private const val NOTE_AT_HIT = "hit:"
+        private const val HIT_FIELDS = 3
 
         fun encode(destination: Destination): String = when (destination) {
             Library -> LIBRARY
             Licenses -> LICENSES
-            is Note -> NOTE + destination.id
+            is Note -> destination.hit?.let { "$NOTE_AT_HIT${it.paragraphId},${it.start},${it.end}:${destination.id}" }
+                ?: (NOTE + destination.id)
         }
 
         fun decode(value: String): Destination? = when {
             value == LIBRARY -> Library
             value == LICENSES -> Licenses
             value.startsWith(NOTE) -> Note(value.removePrefix(NOTE))
+            value.startsWith(NOTE_AT_HIT) -> {
+                val rest = value.removePrefix(NOTE_AT_HIT)
+                val fields = rest.substringBefore(':').split(',').mapNotNull { it.toLongOrNull() }
+                val id = rest.substringAfter(':', "")
+                if (fields.size != HIT_FIELDS || id.isEmpty()) null
+                else Note(id, NoteHit(fields[0], fields[1].toInt(), fields[2].toInt()))
+            }
             else -> null
         }
 
@@ -43,3 +55,8 @@ sealed interface Destination {
         )
     }
 }
+
+/** A search hit inside a note: chars [start, end) of paragraph [paragraphId]'s text. */
+@Immutable
+data class NoteHit(val paragraphId: Long, val start: Int, val end: Int)
+

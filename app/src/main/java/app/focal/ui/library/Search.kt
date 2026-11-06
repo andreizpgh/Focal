@@ -1,0 +1,298 @@
+package app.focal.ui.library
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.KeyboardActionHandler
+import androidx.compose.foundation.text.input.TextFieldDecorator
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.util.lerp
+import app.focal.R
+import app.focal.ui.components.BottomColumnState
+import app.focal.ui.components.FocalIcon
+import app.focal.ui.components.Glyph
+import app.focal.ui.components.KeyboardRowMetrics
+import app.focal.ui.components.focusRing
+import app.focal.ui.design.FocalLayout
+import app.focal.ui.design.FocalMotion
+import app.focal.ui.design.FocalShapes
+import app.focal.ui.design.FocalTheme
+import app.focal.ui.design.FocalType
+import app.focal.ui.design.Grid
+import app.focal.ui.design.smoothstep
+import app.focal.ui.state.SearchRow
+import app.focal.ui.state.SearchUiState
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import kotlin.math.roundToInt
+
+/** Search geometry (spec 4.9.1, 5.2). */
+object SearchMetrics {
+    /** The field's leading ← and trailing × are 56 dp targets; the text runs between them. */
+    val target = Grid.x56
+    /** The last result ends this far above the field; the count head and the "no results" line sit 16 above. */
+    val resultsGap = Grid.x24
+    val headGap = Grid.x16
+}
+
+/**
+ * Library search (spec 5.2, T17). Opening it grows the dock's search circle into the keyboard-riding field while the
+ * stage and the list fade out; closing reverses it, and the dock fades back in under the shrunk field before the
+ * field leaves, so nothing dips. [grow] is the field's width (0 = the 56 dp circle, 1 = the column); [content]
+ * crossfades the library (out) and the results (in).
+ */
+@Stable
+class LibrarySearchState internal constructor(open: Boolean) {
+    var open by mutableStateOf(open)
+        private set
+    /** The field is in the bottom column (it stays while it shrinks back into the circle). */
+    var fieldShown by mutableStateOf(open)
+        private set
+    var dockHidden by mutableStateOf(open)
+        private set
+    /** Set by [open]: the field takes focus (and the keyboard opens) once it is composed. A restored search does not. */
+    internal var focusPending by mutableStateOf(false)
+    val grow = Animatable(if (open) 1f else 0f)
+    val content = Animatable(if (open) 1f else 0f)
+    val focus = FocusRequester()
+
+    suspend fun open() = coroutineScope {
+        if (open) return@coroutineScope
+        open = true
+        fieldShown = true
+        dockHidden = true
+        focusPending = true
+        launch { content.animateTo(1f, FocalMotion.fade()) }
+        grow.animateTo(1f, FocalMotion.move())
+    }
+
+    /** Closes back into the circle; [clear] then empties the query. */
+    suspend fun close(clear: () -> Unit) = coroutineScope {
+        if (!open) return@coroutineScope
+        open = false
+        launch { content.animateTo(0f, FocalMotion.fade()) }
+        grow.animateTo(0f, FocalMotion.move())
+        dockHidden = false
+        // The dock fades in on `fade` over the circle-sized field; the field leaves once it is covered.
+        Animatable(0f).animateTo(1f, FocalMotion.fade())
+        fieldShown = false
+        clear()
+    }
+
+    companion object {
+        val Saver: Saver<LibrarySearchState, Boolean> = Saver(save = { it.open }, restore = { LibrarySearchState(it) })
+    }
+}
+
+/** [open]: start with search open (a restored state, or a screenshot); the field then waits in the dock slot. */
+@Composable
+fun rememberLibrarySearchState(open: Boolean = false): LibrarySearchState =
+    rememberSaveable(saver = LibrarySearchState.Saver) { LibrarySearchState(open) }
+
+/**
+ * The search field (spec 4.9.1): `s1`, 56 dp, the column's width once grown. ← "Close search" sits where the
+ * search glyph was (x 24-80) and crossfades from it; the query in `field`, "Search notes" as the placeholder; ×
+ * "Clear" only while there is a query. The IME's Search hides the keyboard and keeps the results.
+ */
+@Composable
+fun SearchField(search: LibrarySearchState, query: TextFieldState, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = FocalTheme.colors
+    val keyboard = LocalSoftwareKeyboardController.current
+    val circle = with(LocalDensity.current) { KeyboardRowMetrics.searchField.roundToPx() }
+    val hint = stringResource(R.string.search_hint)
+    LaunchedEffect(search.focusPending) {
+        if (!search.focusPending) return@LaunchedEffect
+        search.focusPending = false
+        search.focus.requestFocus()
+    }
+    Box(
+        modifier
+            .layout { measurable, constraints ->
+                val width = lerp(circle.toFloat(), constraints.maxWidth.toFloat(), search.grow.value).roundToInt()
+                val placeable = measurable.measure(Constraints.fixed(width, circle))
+                layout(constraints.maxWidth, circle) { placeable.place(0, 0) }
+            }
+            .background(colors.s1, FocalShapes.pill),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val back = remember { MutableInteractionSource() }
+            Box(
+                Modifier
+                    .size(SearchMetrics.target)
+                    .focusRing(FocalShapes.pill)
+                    .clickable(back, indication = null, role = Role.Button, onClick = onClose),
+                contentAlignment = Alignment.Center,
+            ) {
+                Glyph(FocalIcon.Search, colors.ink, Modifier.graphicsLayer { alpha = 1 - smoothstep(0f, HALF, search.grow.value) })
+                Glyph(
+                    FocalIcon.Back, colors.ink, contentDescription = stringResource(R.string.cd_search_close),
+                    modifier = Modifier.graphicsLayer { alpha = smoothstep(HALF, 1f, search.grow.value) },
+                )
+            }
+            BasicTextField(
+                state = query,
+                textStyle = FocalType.field.copy(color = colors.ink),
+                cursorBrush = SolidColor(colors.ink),
+                lineLimits = TextFieldLineLimits.SingleLine,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                onKeyboardAction = KeyboardActionHandler { keyboard?.hide() },
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(search.focus)
+                    .semantics { contentDescription = hint }
+                    .graphicsLayer { alpha = smoothstep(HALF, 1f, search.grow.value) },
+                decorator = TextFieldDecorator { field ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (query.text.isEmpty()) Text(hint, style = FocalType.field, color = colors.recede, maxLines = 1)
+                        field()
+                    }
+                },
+            )
+            ClearButton(query)
+        }
+    }
+}
+
+private const val HALF = 0.5f
+
+/** × "Clear", shown only while there is a query (`fadeFast`). */
+@Composable
+private fun ClearButton(query: TextFieldState) {
+    val colors = FocalTheme.colors
+    val visible = query.text.isNotEmpty()
+    val alpha = remember { Animatable(if (visible) 1f else 0f) }
+    LaunchedEffect(visible) { alpha.animateTo(if (visible) 1f else 0f, FocalMotion.fadeFast()) }
+    val source = remember { MutableInteractionSource() }
+    val description = stringResource(R.string.cd_search_clear)
+    Box(
+        Modifier
+            .size(SearchMetrics.target)
+            .graphicsLayer { this.alpha = alpha.value }
+            .then(
+                if (visible) Modifier.focusRing(FocalShapes.pill)
+                    .clickable(source, indication = null, role = Role.Button) { query.clearText() }
+                    .clearAndSetSemantics { contentDescription = description; role = Role.Button }
+                else Modifier.clearAndSetSemantics { },
+            ),
+        contentAlignment = Alignment.Center,
+    ) { Glyph(FocalIcon.Close, colors.ink) }
+}
+
+/** Keeps the view model's query in step with the field (the view model debounces it). */
+@Composable
+fun SyncQuery(query: TextFieldState, onQuery: (String) -> Unit) {
+    LaunchedEffect(query) { snapshotFlow { query.text.toString() }.collect(onQuery) }
+}
+
+/**
+ * The results (spec 5.2): a stack that grows upward from the field (`reverseLayout`, the most recent match nearest
+ * the field), its last row 24 dp above the field and the count head 16 dp above the topmost title. An empty query
+ * leaves the paper empty; no match leaves one line 16 dp above the field. The stack's bottom follows the field as it
+ * rides the keyboard, read in the layout phase.
+ */
+@Composable
+fun SearchResults(
+    search: SearchUiState,
+    bottom: BottomColumnState,
+    dates: LibraryDates,
+    today: LocalDate,
+    onOpen: (SearchRow) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = FocalTheme.colors
+    val status = WindowInsets.statusBars
+    val results = remember(search.results) { search.results.sortedByDescending { it.row.created } }
+    val list = rememberLazyListState()
+    // A new query starts at the field.
+    LaunchedEffect(search.resultsQuery) { list.scrollToItem(0) }
+    Box(
+        modifier.fillMaxSize().layout { measurable, constraints ->
+            val fieldTop = bottom.fieldTop(constraints.maxHeight)
+            // The last row's hit area reaches 12 dp below its text, so the stack ends 24 - 12 dp above the field.
+            val height = (fieldTop - (SearchMetrics.resultsGap - RowMetrics.hitPad).roundToPx()).coerceIn(0, constraints.maxHeight)
+            val placeable = measurable.measure(Constraints.fixed(constraints.maxWidth, height))
+            layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
+        },
+    ) {
+        when {
+            search.resultsQuery.isBlank() -> Unit
+            results.isEmpty() && !search.searching -> Text(
+                stringResource(R.string.search_none, search.resultsQuery), style = FocalType.secondary, color = colors.recede,
+                modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = FocalLayout.gutter)
+                    .padding(bottom = SearchMetrics.headGap - RowMetrics.hitPad),
+            )
+            else -> LazyColumn(
+                state = list,
+                reverseLayout = true,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = with(LocalDensity.current) { status.getTop(this).toDp() } + FocalLayout.topFade),
+            ) {
+                items(results, key = { it.row.id }, contentType = { "result" }) { result ->
+                    SearchResultItem(result, dates, today, onOpen, Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()))
+                }
+                item(key = "count", contentType = "head") {
+                    Text(
+                        pluralStringResource(R.plurals.search_count, results.size, results.size), style = FocalType.section,
+                        color = colors.recede,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = FocalLayout.gutter)
+                            .padding(bottom = SearchMetrics.headGap - RowMetrics.hitPad).semantics { heading() },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The search field's top in the window: the topmost bottom element (the field, or the feedback pill above it). */
+internal fun BottomColumnState.fieldTop(windowHeight: Int): Int {
+    val value = top.value
+    return if (value.isNaN()) windowHeight else value.roundToInt()
+}
