@@ -45,7 +45,6 @@ import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -139,6 +138,8 @@ class LiveMeter(private val input: () -> Float) : WaveMeter {
     override val animated: Boolean get() = true
 
     override fun advance(nowMs: Long) {
+        // Several waves may share one meter (the stage and the morph): the first advance of a frame counts.
+        if (nowMs == lastMs) return
         val target = input()
         smoothed = if (lastMs < 0) target else MeterMath.smooth(smoothed, target, (nowMs - lastMs).toDouble())
         lastMs = nowMs
@@ -166,6 +167,19 @@ class FixedMeter(private val levels: FloatArray) : WaveMeter {
     override val animated: Boolean get() = false
     override fun advance(nowMs: Long) = Unit
     override fun level(distance: Int, nowMs: Long, history: Boolean): Float = levels[if (history) distance else 0]
+}
+
+/**
+ * How a live wave arrives (spec 3.2 "entering", T1′, T1′e): pair d of bars arrives with [pair] (0..1, read in the
+ * draw phase); the glow with [glow]. With [restLevel] null the bars arrive by alpha (the light-up, and on API 31+ the
+ * outer bars' blur grows with it); otherwise they rise from that share of the profile to the live level (the resting
+ * instrument waking up).
+ */
+@Stable
+interface WaveEntry {
+    fun pair(distance: Int): Float
+    val glow: Float
+    val restLevel: Float?
 }
 
 /** What the bars show (spec 3.2). */
@@ -209,25 +223,35 @@ enum class WaveRenderer {
  * is hidden from accessibility: the merged node next to it carries the meaning.
  */
 @Composable
-fun NineBars(mode: WaveMode, dress: WaveDress, modifier: Modifier = Modifier, renderer: WaveRenderer = WaveRenderer.live) {
+fun NineBars(
+    mode: WaveMode,
+    dress: WaveDress,
+    modifier: Modifier = Modifier,
+    renderer: WaveRenderer = WaveRenderer.live,
+    entry: WaveEntry? = null,
+) {
     val described = modifier.semantics { hideFromAccessibility() }
     when (mode) {
         WaveMode.Static -> StillBars(1f, dress, described)
         WaveMode.Rest -> StillBars(Mark.REST, dress, described)
-        is WaveMode.Live -> MovingBars(mode, mode.paused, dress, described, renderer)
-        is WaveMode.Working -> MovingBars(mode, mode.paused, dress, described, renderer)
+        is WaveMode.Live -> MovingBars(mode, mode.paused, dress, described, renderer, entry)
+        is WaveMode.Working -> MovingBars(mode, mode.paused, dress, described, renderer, null)
     }
 }
 
-/** Per-frame values of a moving wave: heights in units of the mark's box, the alpha factor and the glow's alpha. */
+/**
+ * Per-frame values of a moving wave: heights in units of the mark's box, the alpha factor, each distance pair's
+ * arrival alpha and the glow's alpha.
+ */
 private class WaveFrame {
     val heights = FloatArray(Mark.BARS)
+    val pairs = FloatArray(Mark.CENTRE + 1) { 1f }
     var alpha = 1f
     var glow = 1f
 }
 
 @Composable
-private fun MovingBars(mode: WaveMode, paused: Boolean, dress: WaveDress, modifier: Modifier, renderer: WaveRenderer) {
+private fun MovingBars(mode: WaveMode, paused: Boolean, dress: WaveDress, modifier: Modifier, renderer: WaveRenderer, entry: WaveEntry?) {
     val reduced = LocalReducedMotion.current
     val frame = remember { WaveFrame() }
     val tick = remember { mutableLongStateOf(0L) }
@@ -257,6 +281,7 @@ private fun MovingBars(mode: WaveMode, paused: Boolean, dress: WaveDress, modifi
     val update: () -> Unit = {
         val nowMs = tick.longValue
         val profile = toProfile.value
+        val rest = entry?.restLevel
         for (bar in 0 until Mark.BARS) {
             val full = Mark.height(bar)
             val moving = when (mode) {
@@ -264,16 +289,22 @@ private fun MovingBars(mode: WaveMode, paused: Boolean, dress: WaveDress, modifi
                 is WaveMode.Working -> if (reduced) full else full * sweep(mode.frozenAtMs ?: nowMs, bar)
                 else -> full
             }
-            frame.heights[bar] = moving + (full - moving) * profile
+            val shown = moving + (full - moving) * profile
+            // Waking from rest: pair d rises from the resting height to the live one as it arrives.
+            frame.heights[bar] = if (rest == null) shown else {
+                val from = full * rest
+                from + (shown - from) * entry.pair(Mark.distance(bar))
+            }
         }
+        for (distance in 0..Mark.CENTRE) frame.pairs[distance] = if (entry == null || rest != null) 1f else entry.pair(distance)
         val still = mode is WaveMode.Working && reduced
         frame.alpha = (1 - (1 - Mark.PAUSED_ALPHA) * dim.value) * (if (still) Mark.WORKING_STATIC_ALPHA else 1f)
-        frame.glow = if (mode is WaveMode.Live) 1 - dim.value else 0f
+        frame.glow = (if (mode is WaveMode.Live) 1 - dim.value else 0f) * (entry?.glow ?: 1f)
     }
     val painter = remember(dress) { BarPainter(dress) }
     val framed = modifier.preferredFrameRate(FrameRateCategory.Normal)
     when (renderer) {
-        WaveRenderer.Layers -> LayeredBars(frame, update, painter, framed)
+        WaveRenderer.Layers -> LayeredBars(frame, update, painter, framed, entry)
         WaveRenderer.Sprites -> Spacer(framed.drawBehind { update(); painter.drawSprites(this, frame) })
         WaveRenderer.AlphaOnly -> Spacer(framed.drawBehind { update(); painter.drawPlain(this, frame) })
     }
@@ -292,10 +323,13 @@ private fun sweep(timeMs: Long, bar: Int): Float {
  * each one subscribes to the frame tick and redraws on its own.
  */
 @Composable
-private fun LayeredBars(frame: WaveFrame, update: () -> Unit, painter: BarPainter, modifier: Modifier) {
+private fun LayeredBars(frame: WaveFrame, update: () -> Unit, painter: BarPainter, modifier: Modifier, entry: WaveEntry?) {
     Box(modifier) {
         for (distance in Mark.CENTRE downTo 1) {
-            BlurredLayer(sigmaUnits = Mark.sigma(distance)) { margin -> update(); painter.drawPair(this, frame, distance, margin) }
+            // During a light-up the outer bars' blur grows with their arrival (spec 3.4, API 31+): only then does the
+            // layer read a changing value, so a wave at rest never re-creates its RenderEffect.
+            val growth: (() -> Float)? = if (entry == null || entry.restLevel != null) null else { { entry.pair(distance) } }
+            BlurredLayer(sigmaUnits = Mark.sigma(distance), growth = growth) { margin -> update(); painter.drawPair(this, frame, distance, margin) }
         }
         if (painter.dress.glow != null) {
             BlurredLayer(sigmaUnits = Mark.GLOW_SIGMA) { margin -> update(); painter.drawGlow(this, frame, margin) }
@@ -309,7 +343,7 @@ private class LayerMargin { var px = 0 }
 
 /** A child layer as large as the box plus three blur sigmas each side, blurred by a RenderEffect. */
 @Composable
-private fun BlurredLayer(sigmaUnits: Float, draw: DrawScope.(marginPx: Float) -> Unit) {
+private fun BlurredLayer(sigmaUnits: Float, growth: (() -> Float)? = null, draw: DrawScope.(marginPx: Float) -> Unit) {
     val margin = remember { LayerMargin() }
     Spacer(
         Modifier
@@ -323,7 +357,7 @@ private fun BlurredLayer(sigmaUnits: Float, draw: DrawScope.(marginPx: Float) ->
             }
             .graphicsLayer {
                 val unit = (size.height - 2 * margin.px) / Mark.BOX_HEIGHT
-                val radius = blurRadius(sigmaUnits * unit)
+                val radius = blurRadius(sigmaUnits * unit * (growth?.invoke() ?: 1f))
                 renderEffect = if (radius > 0f) BlurEffect(radius, radius, TileMode.Decal) else null
             }
             .drawBehind { draw(margin.px.toFloat()) },
@@ -341,7 +375,8 @@ internal fun blurRadius(sigmaPx: Float): Float = ((sigmaPx - 0.5f) / 0.57735f).c
  * filters for sprites. Nothing is allocated per frame.
  */
 private class BarPainter(val dress: WaveDress) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    /** Filtered, so sprites drawn smaller than they were rendered stay smooth. */
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val centrePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = LinearGradient(0f, 0f, 0f, 1f, dress.centreTop.toArgb(), dress.centreBottom.toArgb(), Shader.TileMode.CLAMP)
     }
@@ -401,21 +436,19 @@ private class BarPainter(val dress: WaveDress) {
             val native = canvas.nativeCanvas
             val glow = dress.glow
             if (glow != null && frame.glow > 0f) {
-                val height = (frame.heights[Mark.CENTRE] + 2 * Mark.GLOW_EXTEND) * unit
                 val centreX = (Mark.FIRST_X + Mark.PITCH * Mark.CENTRE + Mark.BAR_WIDTH / 2) * unit
                 paint.shader = null
                 paint.colorFilter = glowTint
                 paint.alpha = (glow.alpha * frame.alpha * frame.glow * MAX_ALPHA).roundToInt()
-                drawSprite(native, centreX, centreY, Mark.GLOW_WIDTH * unit, height, Mark.GLOW_SIGMA * unit)
+                drawSprite(native, centreX, centreY, unit, Mark.GLOW_WIDTH, frame.heights[Mark.CENTRE] + 2 * Mark.GLOW_EXTEND, Mark.GLOW_SIGMA)
             }
             for (bar in 0 until Mark.BARS) {
                 if (bar == Mark.CENTRE) continue
-                val height = frame.heights[bar] * unit
                 val centreX = (Mark.FIRST_X + Mark.PITCH * bar + Mark.BAR_WIDTH / 2) * unit
                 paint.shader = null
                 paint.colorFilter = barTint
-                paint.alpha = (dress.bar.alpha * Mark.alpha(bar) * frame.alpha * MAX_ALPHA).roundToInt()
-                drawSprite(native, centreX, centreY, Mark.BAR_WIDTH * unit, height, Mark.sigma(Mark.distance(bar)) * unit)
+                paint.alpha = (dress.bar.alpha * Mark.alpha(bar) * frame.alpha * frame.pairs[Mark.distance(bar)] * MAX_ALPHA).roundToInt()
+                drawSprite(native, centreX, centreY, unit, Mark.BAR_WIDTH, frame.heights[bar], Mark.sigma(Mark.distance(bar)))
             }
             centreBar(native, frame, unit, 0f)
         }
@@ -430,7 +463,7 @@ private class BarPainter(val dress: WaveDress) {
         paint.shader = null
         paint.colorFilter = null
         paint.color = dress.bar.toArgb()
-        paint.alpha = (dress.bar.alpha * Mark.alpha(bar) * frame.alpha * MAX_ALPHA).roundToInt()
+        paint.alpha = (dress.bar.alpha * Mark.alpha(bar) * frame.alpha * frame.pairs[Mark.distance(bar)] * MAX_ALPHA).roundToInt()
         canvas.drawRoundRect(rect, width / 2, width / 2, paint)
     }
 
@@ -443,39 +476,43 @@ private class BarPainter(val dress: WaveDress) {
         matrix.setScale(1f, height.coerceAtLeast(1f))
         matrix.postTranslate(0f, top)
         centrePaint.shader.setLocalMatrix(matrix)
-        centrePaint.alpha = (frame.alpha * MAX_ALPHA).roundToInt()
+        centrePaint.alpha = (frame.alpha * frame.pairs[0] * MAX_ALPHA).roundToInt()
         rect.set(left, top, left + width, top + height)
         canvas.drawRoundRect(rect, width / 2, width / 2, centrePaint)
     }
 
     /**
-     * A blurred capsule of [width] x [height] centred on ([centreX], [centreY]). Tall capsules are three slices of one
-     * sprite (top half, its middle row stretched, bottom half): exact, because a blurred capsule's middle rows are
-     * identical. Short ones use a sprite per 2 dp height bucket.
+     * A blurred capsule, [widthUnits] by [heightUnits] of the mark's units and blurred by [sigmaUnits], centred on
+     * ([centreX], [centreY]) at [unit] pixels per unit. Its sprite is rendered once at a reference scale and drawn
+     * scaled: a Gaussian blur scales with its shape, so one sprite serves every size a wave passes through and the
+     * morph never renders a sprite per frame. Tall capsules are three slices of one sprite (top half, its middle row
+     * stretched, bottom half): exact, because a blurred capsule's middle rows are identical. Short ones use a sprite
+     * per half unit of height.
      */
-    private fun drawSprite(canvas: Canvas, centreX: Float, centreY: Float, width: Float, height: Float, sigma: Float) {
-        val sprite = BarSprites.get(width, height, sigma, tall = height >= BarSprites.tallMinimum(width, sigma))
-        val margin = sprite.margin
-        val left = centreX - width / 2 - margin
-        val top = centreY - height / 2 - margin
-        val right = centreX + width / 2 + margin
+    private fun drawSprite(canvas: Canvas, centreX: Float, centreY: Float, unit: Float, widthUnits: Float, heightUnits: Float, sigmaUnits: Float) {
+        val sprite = BarSprites.get(widthUnits, heightUnits, sigmaUnits)
+        val scale = unit / sprite.unit
+        val margin = sprite.margin * scale
+        val left = centreX - widthUnits * unit / 2 - margin
+        val right = centreX + widthUnits * unit / 2 + margin
+        val top = centreY - heightUnits * unit / 2 - margin
+        val bottom = centreY + heightUnits * unit / 2 + margin
         val bitmap = sprite.bitmap
         if (sprite.tall) {
             val middle = sprite.middleRow
-            src.set(0, 0, bitmap.width, middle)
-            dst.set(left, top, right, top + middle)
-            canvas.drawBitmap(bitmap, src, dst, paint)
             val lowerRows = bitmap.height - middle - 1
-            val bottom = centreY + height / 2 + margin
+            src.set(0, 0, bitmap.width, middle)
+            dst.set(left, top, right, top + middle * scale)
+            canvas.drawBitmap(bitmap, src, dst, paint)
             src.set(0, middle + 1, bitmap.width, bitmap.height)
-            dst.set(left, bottom - lowerRows, right, bottom)
+            dst.set(left, bottom - lowerRows * scale, right, bottom)
             canvas.drawBitmap(bitmap, src, dst, paint)
             src.set(0, middle, bitmap.width, middle + 1)
-            dst.set(left, top + middle, right, bottom - lowerRows)
+            dst.set(left, top + middle * scale, right, bottom - lowerRows * scale)
             if (dst.height() > 0f) canvas.drawBitmap(bitmap, src, dst, paint)
         } else {
             src.set(0, 0, bitmap.width, bitmap.height)
-            dst.set(left, top, right, centreY + height / 2 + margin)
+            dst.set(left, top, right, bottom)
             canvas.drawBitmap(bitmap, src, dst, paint)
         }
     }
@@ -483,31 +520,44 @@ private class BarPainter(val dress: WaveDress) {
     private companion object { const val MAX_ALPHA = 255f }
 }
 
-/** Software-blurred capsule sprites (ALPHA_8, tinted when drawn), cached for the process; at most 64. */
+/**
+ * Software-blurred capsule sprites (ALPHA_8, tinted when drawn), cached for the process. They are rendered at the
+ * largest wave's scale (the scene's 176 dp hero) and only ever drawn at that size or smaller, so scaling never
+ * softens them; keyed in the mark's units, the same few serve the stage, the morph and the scene.
+ */
 private object BarSprites {
-    class Sprite(val bitmap: Bitmap, val margin: Int, val tall: Boolean, val middleRow: Int)
+    class Sprite(val bitmap: Bitmap, val unit: Float, val margin: Int, val tall: Boolean, val middleRow: Int)
 
-    private data class Key(val width: Int, val sigmaTenths: Int, val height: Int)
+    private data class Key(val widthTenths: Int, val sigmaTenths: Int, val heightBucket: Int)
 
     private val cache = LruCache<Key, Sprite>(MAX_SPRITES)
-    private const val MAX_SPRITES = 64
+    /** Short capsules of four distances and the glow, at half-unit heights, fit with room to spare. */
+    private const val MAX_SPRITES = 96
     private const val TALL = -1
-    /** Short bars share a sprite per this many pixels of height (2 dp at the usual densities: see [bucket]). */
-    private val bucketDp = 2.dp
+    private const val BUCKETS_PER_UNIT = 2
+    private const val TENTHS = 10f
+    /** The hero wave's box height, in dp: the scale sprites are rendered at. */
+    private const val REFERENCE_BOX_DP = 176f
+    /** Room between the slices of a tall capsule, in units. */
+    private const val TALL_SLACK = 0.25f
 
-    fun tallMinimum(width: Float, sigma: Float): Float = width + 2 * BLUR_REACH * sigma + 2
+    private val referenceUnit: Float by lazy { REFERENCE_BOX_DP * Resources.getSystem().displayMetrics.density / Mark.BOX_HEIGHT }
 
-    fun get(width: Float, height: Float, sigma: Float, tall: Boolean): Sprite {
-        val bucket = bucket()
-        val bucketHeight = if (tall) TALL else (ceil(height / bucket).toInt() * bucket).coerceAtLeast(bucket)
-        val key = Key(width.roundToInt(), (sigma * 10).roundToInt(), bucketHeight)
-        return cache.get(key) ?: render(width, sigma, if (tall) ceil(tallMinimum(width, sigma)).toInt() else bucketHeight, tall)
+    private fun tallMinimum(widthUnits: Float, sigmaUnits: Float): Float = widthUnits + 2 * BLUR_REACH * sigmaUnits + TALL_SLACK
+
+    fun get(widthUnits: Float, heightUnits: Float, sigmaUnits: Float): Sprite {
+        val tall = heightUnits >= tallMinimum(widthUnits, sigmaUnits)
+        val bucket = if (tall) TALL else ceil(heightUnits * BUCKETS_PER_UNIT).toInt().coerceAtLeast(1)
+        val key = Key((widthUnits * TENTHS).roundToInt(), (sigmaUnits * TENTHS).roundToInt(), bucket)
+        return cache.get(key) ?: render(widthUnits, sigmaUnits, if (tall) tallMinimum(widthUnits, sigmaUnits) else bucket.toFloat() / BUCKETS_PER_UNIT, tall)
             .also { cache.put(key, it) }
     }
 
-    private fun bucket(): Int = (bucketDp.value * Resources.getSystem().displayMetrics.density).roundToInt().coerceAtLeast(1)
-
-    private fun render(width: Float, sigma: Float, capsuleHeight: Int, tall: Boolean): Sprite {
+    private fun render(widthUnits: Float, sigmaUnits: Float, capsuleUnits: Float, tall: Boolean): Sprite {
+        val unit = referenceUnit
+        val width = widthUnits * unit
+        val sigma = sigmaUnits * unit
+        val capsuleHeight = ceil(capsuleUnits * unit).toInt()
         val margin = ceil(BLUR_REACH * sigma).toInt() + 1
         val bitmap = createBitmap(ceil(width).toInt() + 2 * margin, capsuleHeight + 2 * margin, Bitmap.Config.ALPHA_8)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -519,7 +569,7 @@ private object BarSprites {
         Canvas(bitmap).drawRoundRect(
             RectF(left, margin.toFloat(), left + width, (margin + capsuleHeight).toFloat()), width / 2, width / 2, paint,
         )
-        return Sprite(bitmap, margin, tall, middleRow = margin + capsuleHeight / 2)
+        return Sprite(bitmap, unit, margin, tall, middleRow = margin + capsuleHeight / 2)
     }
 }
 
