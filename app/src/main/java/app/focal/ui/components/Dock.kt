@@ -77,6 +77,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -92,7 +93,9 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -191,9 +194,16 @@ object DockMetrics {
     val resume = 148.dp
     /** The landscape rail (spec 5.14): the circle above the primary circle, centred in this box. */
     val railHeight = circle * 2 + gap
-    /** Glyph-only controls in the rail: the record dot and the finish square, sized for a circle without a label. */
-    val railDot = FocalGrid.x16
-    val railSquare = FocalGrid.x16
+    /** Glyph-only controls in the rail: the record dot and the finish square in a circle (spec 2.7). */
+    val railDot = FocalGrid.x12
+    val railSquare = GlyphSize.finishSquare
+    /**
+     * Paused, the rail's circle still widens into a labelled Resume (R1, spec 15: a bare ● read as Record): the dot
+     * above "Resume", at least this wide (the 96 dp rail less 8 dp each side) and 8 dp inside the label.
+     */
+    val railResume = 80.dp
+    val railResumePadding = FocalGrid.x8
+    val railResumeGap = FocalGrid.x4
     val glyphGap = FocalGrid.x8
     /** The material's Finish pill: shadow 0 8 28 (CSS blur, so sigma 14) and a 1 dp ring. */
     val actionShadowY = FocalGrid.x8
@@ -263,16 +273,20 @@ fun Dock(
     }
     val edge = if (state is DockState.Live) material else null
     if (rail) {
+        // The rail's box is as wide as the labelled Resume at every moment, so the circle widening into it (and back)
+        // never moves the box: both controls stay centred on the rail's axis.
+        val resumeWidth = railResumeWidth()
         LookaheadScope {
             Column(
-                modifier.size(DockMetrics.circle, DockMetrics.railHeight),
+                modifier.size(resumeWidth, DockMetrics.railHeight),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 val circleSize = if (circle == CircleFace.None) 0.dp else DockMetrics.circle
+                val railCircleWidth = if (circle == CircleFace.Resume) resumeWidth else DockMetrics.circle
                 CircleSlot(
                     face = circle, leaving = leaving?.circle, q = swap::q, actions = actions, edge = edge, rail = true,
-                    modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds).size(DockMetrics.circle, circleSize),
+                    modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds).size(railCircleWidth, circleSize),
                 )
                 Spacer(Modifier.height(if (circleSize > 0.dp) DockMetrics.gap else 0.dp))
                 PillSlot(
@@ -389,12 +403,29 @@ private fun RailTooltip(label: String?, state: TooltipState, content: @Composabl
     )
 }
 
+/** The rail's labelled Resume: [DockMetrics.railResume], or wider when "Resume" needs it (a large font). */
+@Composable
+private fun railResumeWidth(): Dp {
+    val label = stringResource(R.string.action_resume)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(label, density) {
+        val text = with(density) { measurer.measure(label, FocalType.label, maxLines = 1).size.width.toDp() }
+        maxOf(DockMetrics.railResume, text + DockMetrics.railResumePadding * 2)
+    }
+}
+
 @Composable
 private fun CircleContent(face: CircleFace, dress: Dress, rail: Boolean) {
     val colors = FocalTheme.colors
     val ink = if (dress == Dress.Material) Scene.ink else colors.ink
     if (rail && face == CircleFace.Resume) {
-        RecordDot(ink, size = DockMetrics.railDot)
+        // A rail item's stack: the pill's ● above its word, centred (R1 kept in the rail's width).
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            RecordDot(ink)
+            Spacer(Modifier.height(DockMetrics.railResumeGap))
+            Text(stringResource(R.string.action_resume), style = FocalType.label, color = ink, maxLines = 1, softWrap = false)
+        }
         return
     }
     when (face) {

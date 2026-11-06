@@ -125,6 +125,17 @@ fun railDock(areaLeft: Float, areaRight: Float, statusTop: Float, navigationTop:
     Rect(left, top, left + width, top + height)
 }
 
+/**
+ * The rail dock's x: centred on the rail's axis (the circles' centre), but never closer than 4 dp to the rail's outer
+ * edge, so a wide labelled Resume at a large font grows toward the content instead of off the window.
+ */
+private fun Density.railX(circles: Rect, width: Int, rtl: Boolean): Int {
+    val axis = circles.center.x
+    val outer = if (rtl) axis - WindowLayout.railWidth.toPx() / 2 + FocalGrid.x4.toPx() else axis + WindowLayout.railWidth.toPx() / 2 - FocalGrid.x4.toPx()
+    val centred = axis - width / 2f
+    return (if (rtl) maxOf(centred, outer) else minOf(centred, outer - width)).roundToInt()
+}
+
 @Composable
 fun rememberBottomColumnState(): BottomColumnState {
     val state = remember { BottomColumnState() }
@@ -248,7 +259,7 @@ fun BottomColumn(
             feedbackPlaceables.forEach { it.place(left, feedbackBottom - it.height) }
             stripPlaceables.forEach { it.place(left, stripBottom - it.height) }
             rowPlaceables.forEach { it.place(left, rowsBottom - it.height) }
-            dockPlaceables.forEach { it.place(railBox?.left?.roundToInt() ?: left, dockBottom - it.height) }
+            dockPlaceables.forEach { it.place(railBox?.let { box -> railX(box, it.width, layoutDirection == LayoutDirection.Rtl) } ?: left, dockBottom - it.height) }
         }
     }
 }

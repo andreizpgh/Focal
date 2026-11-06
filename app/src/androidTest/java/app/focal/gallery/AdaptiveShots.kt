@@ -26,6 +26,8 @@ object AdaptiveShots {
         addAll(sized("land-library", Landscape) { Library(idleModel()) })
         add(sized("land-empty", Landscape, dark = false) { Library(LibraryModel(loaded = true)) })
         addAll(sized("land-recording", Landscape) { Library(liveModel(paused = false)) })
+        // Paused, the rail's circle still widens into a labelled Resume (R1).
+        addAll(sized("land-recording-paused", Landscape) { Library(liveModel(paused = true)) })
         addAll(sized("land-scene", Landscape) { SceneFrame(1f, live()) })
         add(sized("land-scene-start", Landscape, dark = false) { SceneFrame(1f, start()) })
         add(sized("land-scene-paused", Landscape, dark = false) { SceneFrame(1f, paused()) })
@@ -39,6 +41,10 @@ object AdaptiveShots {
         add(sized("land-search", Landscape, dark = false) { Library(idleModel(), search = searchResults()) })
         add(sized("land-undo", Landscape, dark = false) { Library(idleModel(), feedback = true) })
         add(sized("land-settings", Landscape, dark = false) { Strip(1f) })
+        // Mirrored: the rail on the left, the live stage's row from the card's right edge.
+        add(sized("land-library-rtl", Landscape, dark = false) { Rtl { Library(idleModel()) } })
+        add(sized("land-recording-paused-rtl", Landscape, dark = false) { Rtl { Library(liveModel(paused = true)) } })
+        add(sized("land-scene-paused-rtl", Landscape, dark = false) { Rtl { SceneFrame(1f, paused()) } })
     }
 
     val tablet: List<Shot> = buildList {
