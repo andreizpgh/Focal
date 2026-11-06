@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.LayoutDirection
@@ -92,7 +93,9 @@ fun rememberShellState(capturing: () -> Boolean = { false }): ShellState {
     val settings = rememberSettingsStripState()
     val live = rememberLiveSurfaceState(capturing)
     val bottom = rememberBottomColumnState()
-    return remember(backStack, settings, live, bottom) { ShellState(backStack, settings, live, bottom, SystemBarsState(), PageTransitions()) }
+    // Page changes run their clock in the composition's scope, on its frame clock.
+    val scope = rememberCoroutineScope()
+    return remember(backStack, settings, live, bottom) { ShellState(backStack, settings, live, bottom, SystemBarsState(), PageTransitions(scope)) }
 }
 
 /** The bottom column's contents for one destination. */
@@ -151,6 +154,12 @@ fun FocalShell(
     scene: @Composable () -> Unit = {},
 ) {
     val colors = FocalTheme.colors
+    val reduced = LocalReducedMotion.current
+    val density = LocalDensity.current
+    SideEffect {
+        shell.pages.reduced = reduced
+        shell.pages.density = density
+    }
     CompositionLocalProvider(LocalShell provides shell) {
         val live = shell.live
         val behindScene by remember(live) { derivedStateOf { live.open } }

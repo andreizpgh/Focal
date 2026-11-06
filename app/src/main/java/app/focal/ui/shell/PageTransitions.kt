@@ -23,11 +23,12 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -68,12 +69,14 @@ import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigationevent.NavigationEvent
 import app.focal.ui.components.sceneMaterial
 import app.focal.ui.design.FocalMotion
+import app.focal.ui.design.FocalSettle
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
+import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.smoothstep
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.max
@@ -142,12 +145,18 @@ internal class PageTitle {
 
 /**
  * The page changes of the back stack (spec 6.1, 2.8.5). Every change in [NavDisplay] is a bare swap whose outgoing
- * page stays composed while the upper page's own progress v runs; each page draws itself from v: fade-throughs, the
- * container transforms between the stage or a row and a note's page (drawn by [PageTransformOverlay], above the
+ * page stays composed while the change runs; each page draws itself from the upper page's progress v: fade-throughs,
+ * the container transforms between the stage or a row and a note's page (drawn by [PageTransformOverlay], above the
  * pages), and the predictive-back preview (scale 0.9, 28 dp corners, a sideways shift) with its commit.
+ *
+ * A tap or Back drives v, the page's body and the origin's content from one clock started at the trigger (spec 6.1:
+ * every "+n" is a time after the trigger), as pure functions of the time since it. NavDisplay composes the incoming
+ * page a frame after the back stack changes and starts its own transition a frame after that, so its progress would
+ * lag the tap by two frames; it only keeps the outgoing page composed until the clock is done. A predictive back is
+ * the exception: the gesture seeks NavDisplay's transition, and v is its progress.
  */
 @Stable
-class PageTransitions internal constructor() {
+class PageTransitions internal constructor(private val scope: CoroutineScope) {
     internal var change by mutableStateOf<PageChange?>(null)
         private set
 
@@ -168,11 +177,17 @@ class PageTransitions internal constructor() {
     internal var document by mutableStateOf<State<Float>?>(null)
     internal var layer by mutableStateOf<GraphicsLayer?>(null)
 
-    /** The page's meta and text (`fade` from +80, or `fadeFast` out) and the origin's own content (`fadeFast` out). */
-    internal var body = Animatable(1f)
-        private set
-    internal var content = Animatable(1f)
-        private set
+    /** Under reduced motion page changes snap (spec 2.8.4); set by the shell. */
+    internal var reduced = false
+    /** For the title's clearance over the page's body (T16); set by the shell. */
+    internal var density: Density = Density(1f)
+
+    /** Milliseconds since the change's trigger, advanced every frame while the change runs (infinite once done). */
+    private var elapsed by mutableFloatStateOf(Float.POSITIVE_INFINITY)
+    private var clock: Job? = null
+
+    /** The page's meta and text after a predictive back was released (`fadeFast` out); other changes use [body]. */
+    private var predictiveBody = Animatable(1f)
 
     /** v when a predictive back was released: the fold runs from the previewed page over what remains of v. */
     internal var commitAt = 1f
@@ -181,24 +196,22 @@ class PageTransitions internal constructor() {
     private var resolvedFor: PageChange? = null
     private var resolved = false
 
-    /** [destination] opens on top with [motion]; its body starts hidden when it will fade in under a flying title. */
+    /** [destination] opens on top with [motion], timed from now. */
     internal fun push(destination: Destination, motion: PageMotion) {
         opened[destination] = motion
-        body = Animatable(if (motion == PageMotion.Stage || motion == PageMotion.Row) 0f else 1f)
-        content = Animatable(1f)
         change = PageChange(motion, destination, push = true, serial = ++serial)
+        startClock()
     }
 
     internal fun pop(top: Destination) {
         val current = change
         if (current != null && current.predictive && !current.committed && current.document == top) {
             commitAt = document?.value ?: 1f
-            body = Animatable(1f)
+            predictiveBody = Animatable(1f)
             change = current.copy(committed = true, serial = ++serial)
         } else {
-            body = Animatable(1f)
-            content = Animatable(1f)
             change = PageChange(reverse(opened[top]), top, push = false, serial = ++serial)
+            startClock()
         }
         opened.remove(top)
     }
@@ -207,9 +220,51 @@ class PageTransitions internal constructor() {
     internal fun beginPredictive(top: Destination, edge: Int) {
         val current = change
         if (current != null && current.predictive && !current.committed && current.document == top) return
-        body = Animatable(1f)
-        content = Animatable(1f)
+        clock?.cancel()
+        predictiveBody = Animatable(1f)
         change = PageChange(reverse(opened[top]), top, push = false, predictive = true, edge = edge, serial = ++serial)
+    }
+
+    /**
+     * Starts the change's clock from this trigger. Its first frame counts one frame of motion already
+     * (FocalMotion.fromTrigger), so the frame after the tap has moved; it stops once the change is complete.
+     */
+    private fun startClock() {
+        clock?.cancel()
+        val c = change ?: return
+        val end = clockEnd(c)
+        if (reduced || end <= 0f) {
+            elapsed = Float.POSITIVE_INFINITY
+            return
+        }
+        elapsed = 0f
+        clock = scope.launch {
+            var trigger = Long.MIN_VALUE
+            do {
+                withFrameNanos { now ->
+                    if (trigger == Long.MIN_VALUE) trigger = now - FocalTiming.TRIGGER_LEAD_MS * NANOS_PER_MS
+                    elapsed = (now - trigger).toFloat() / NANOS_PER_MS
+                }
+            } while (elapsed < end)
+            elapsed = Float.POSITIVE_INFINITY
+        }
+    }
+
+    /** How long a change's clock runs: until its slowest part has settled (spec 2.8). */
+    private fun clockEnd(c: PageChange): Float = when (c.motion) {
+        PageMotion.Cut -> 0f
+        PageMotion.FadeThrough -> FocalSettle.FADE_MS.toFloat()
+        PageMotion.Stage, PageMotion.Row, PageMotion.LiveStage -> FocalSettle.MOVE_MS.toFloat()
+    }
+
+    /** The upper page's progress v on the clock: 0 → 1 as it opens, 1 → 0 as it folds. */
+    private fun clockProgress(c: PageChange): Float {
+        val opened = when (c.motion) {
+            PageMotion.Cut -> 1f
+            PageMotion.FadeThrough -> fade(elapsed)
+            PageMotion.Stage, PageMotion.Row, PageMotion.LiveStage -> move(elapsed)
+        }
+        return if (c.push) opened else 1 - opened
     }
 
     /** A page that landed from the scene or the live stage folds back into the stage, which now holds its note. */
@@ -222,15 +277,15 @@ class PageTransitions internal constructor() {
     /** True for a note page that opened from the stage or the live stage: its text develops as in T7 (T7b). */
     internal fun develops(destination: Destination): Boolean = opened[destination] == PageMotion.LiveStage
 
-    /** The NavDisplay spec of a page's progress v: the upper page's drives the change; the lower page keeps time with it. */
+    /**
+     * The NavDisplay spec of a page's progress: a predictive back seeks it. Otherwise it only keeps the outgoing page
+     * composed until the change's clock is done, which starts up to two frames before NavDisplay's transition does.
+     */
     internal fun spec(): FiniteAnimationSpec<Float> {
         val c = change ?: return snap()
         if (c.predictive) return tween(PREDICTIVE_MS, easing = LinearEasing)
-        return when (c.motion) {
-            PageMotion.Cut -> snap()
-            PageMotion.FadeThrough -> FocalMotion.fade()
-            PageMotion.Stage, PageMotion.Row, PageMotion.LiveStage -> FocalMotion.move()
-        }
+        if (c.motion == PageMotion.Cut) return snap()
+        return tween(clockEnd(c).toInt() + HOLD_MARGIN_MS, easing = LinearEasing)
     }
 
     private fun noteIdOf(destination: Destination): String? = (destination as? Destination.Note)?.id
@@ -294,7 +349,7 @@ class PageTransitions internal constructor() {
         if (!c.predictive) return 1 - v
         if (commitAt <= 0f) return 1f
         val linear = (1 - v / commitAt).coerceIn(0f, 1f)
-        return if (linear >= 1f) 1f else FocalMotion.springFraction(FocalMotion.SPATIAL_DAMPING, FocalMotion.MOVE_STIFFNESS, linear * MOVE_SETTLE_MS)
+        return if (linear >= 1f) 1f else move(linear * FocalSettle.MOVE_MS)
     }
 
     /** The predictive preview's eased progress e: during the gesture, and frozen at its release. */
@@ -312,7 +367,7 @@ class PageTransitions internal constructor() {
         chrome = {
             val c = change
             if (c == null || c.document != destination || !transforms(c) || !active(c)) 1f
-            else if (c.motion == PageMotion.Row) body.value else 1 - material(c)
+            else if (c.motion == PageMotion.Row) body(c) else 1 - material(c)
         },
         title = {
             val id = noteIdOf(destination)
@@ -321,12 +376,55 @@ class PageTransitions internal constructor() {
         body = {
             val c = change
             if (c == null || c.document != destination || !transforms(c) || !active(c) || c.motion == PageMotion.LiveStage) 1f
-            else body.value
+            else body(c)
         },
     )
 
-    /** The upper page's progress: 0 before a pushed page is composed, and once a popped page has left. */
-    private fun documentProgress(): Float = document?.value ?: 0f
+    /**
+     * The page's meta and text in a transform (spec 6.1): opening, they arrive on `fade` from +80 (T16, T16′); folding,
+     * they leave on `fadeFast`. From a row they also wait for the flying title to clear them ([titleClear]).
+     */
+    private fun body(c: PageChange): Float {
+        if (c.predictive) return predictiveBody.value
+        val base = when {
+            !c.push -> 1 - fadeFast(elapsed)
+            c.motion == PageMotion.Stage || c.motion == PageMotion.Row -> fade(elapsed - BODY_DELAY_MS)
+            else -> 1f
+        }
+        return if (c.motion == PageMotion.Row) minOf(base, titleClear(c)) else base
+    }
+
+    /** The origin's own content as the page opens out of it (T16′, T7b): the time, text and footer leave on `fadeFast`. */
+    internal fun content(c: PageChange): Float = 1 - fadeFast(elapsed)
+
+    /**
+     * T16: a row's title flies up across the page's meta and text, so they develop only once it is within
+     * [TITLE_CLEARANCE] of its landing line (and on Back they are gone before it has left it): two typesettings are
+     * never drawn over each other. A title that lands from above never crosses them.
+     */
+    private fun titleClear(c: PageChange): Float {
+        val id = noteIdOf(c.document) ?: return 1f
+        val origin = rows[id]?.title?.takeIf { it.isAttached } ?: return 1f
+        val page = pageTitle.coordinates?.takeIf { it.isAttached && pageTitle.noteId == id } ?: return 1f
+        val below = (origin.boundsInWindow().bottom - page.boundsInWindow().bottom) * progress(c)
+        return 1 - smoothstep(0f, with(density) { TITLE_CLEARANCE.toPx() }, below)
+    }
+
+    /** Reads what every frame of a change follows (the clock, or a predictive back's progress), so a reader redraws. */
+    internal fun observe() {
+        elapsed
+        document?.value
+    }
+
+    /**
+     * The upper page's progress v: from the clock, or a predictive back's NavDisplay progress (0 before a pushed page
+     * is composed, and once a popped page has left).
+     */
+    private fun documentProgress(): Float {
+        val c = change
+        if (c != null && !c.predictive) return clockProgress(c)
+        return document?.value ?: 0f
+    }
 
     /** A popped page left: nothing is in flight any more. */
     internal fun left(destination: Destination) {
@@ -369,26 +467,9 @@ class PageTransitions internal constructor() {
         return PageLook(alpha = if (upper) smoothstep(HALF, 1f, v) else smoothstep(HALF, 1f, 1 - v))
     }
 
-    /** Runs the change's time-based parts: the page's body and the origin's content (spec 6.1 T16, T16′, T7b). */
-    internal suspend fun play(c: PageChange) = coroutineScope {
-        if (c.motion !in CONTAINERS) return@coroutineScope
-        val body = body
-        val content = content
-        if (c.predictive) {
-            if (c.committed) body.animateTo(0f, FocalMotion.fadeFast())
-            return@coroutineScope
-        }
-        // NavDisplay starts the pages' motion a frame or two after the back stack changed: time runs from there.
-        val start = if (c.push) 0f else 1f
-        snapshotFlow { document?.value ?: start }.first { it != start }
-        if (!c.push) {
-            body.animateTo(0f, FocalMotion.fadeFast())
-            return@coroutineScope
-        }
-        launch { content.animateTo(0f, FocalMotion.fadeFast()) }
-        if (c.motion == PageMotion.LiveStage) return@coroutineScope
-        delay(BODY_DELAY_MS)
-        body.animateTo(1f, FocalMotion.fade())
+    /** A predictive back released past its threshold: the page's meta and text leave on `fadeFast` as it folds. */
+    internal suspend fun play(c: PageChange) {
+        if (c.motion in CONTAINERS && c.predictive && c.committed) predictiveBody.animateTo(0f, FocalMotion.fadeFast())
     }
 
     /** The stage holds its recording while the live stage opens into the page (T7b): it is leaving, not changing. */
@@ -401,9 +482,13 @@ class PageTransitions internal constructor() {
         val CONTAINERS = setOf(PageMotion.Stage, PageMotion.Row, PageMotion.LiveStage)
         /** The seekable length of a predictive back: the gesture maps onto it, and its release runs what remains. */
         const val PREDICTIVE_MS = 500
-        /** `move` settles to 0.1 % in this time (spec 2.8). */
-        const val MOVE_SETTLE_MS = 317f
-        const val BODY_DELAY_MS = 80L
+        /** NavDisplay keeps the outgoing page this much longer than the clock runs: it starts up to two frames late. */
+        const val HOLD_MARGIN_MS = 3 * FocalTiming.TRIGGER_LEAD_MS.toInt()
+        /** `bodyFadeDelay` (spec 2.8.3): the page's meta and text start to arrive this long after the trigger. */
+        const val BODY_DELAY_MS = 80f
+        /** T16: the page's body develops once the flying title is this close to its landing line. */
+        val TITLE_CLEARANCE = 16.dp
+        private const val NANOS_PER_MS = 1_000_000L
         const val MATERIAL_FROM = 0.4f
         /** The stage's time, text and footer arrive over the last 40 % of a fold (`smoothstep(0.6, 1, q)`). */
         const val CONTENT_FROM = 0.6f
@@ -415,6 +500,17 @@ class PageTransitions internal constructor() {
         const val SHIFT_DIVISOR = 20f
         val ShiftInset = 8.dp
     }
+}
+
+/** The spec 2.8 springs as functions of the time since their start, settled exactly at their 0.1 % time. */
+private fun move(ms: Float): Float = clockSpring(FocalMotion.SPATIAL_DAMPING, FocalMotion.MOVE_STIFFNESS, FocalSettle.MOVE_MS, ms)
+private fun fade(ms: Float): Float = clockSpring(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_STIFFNESS, FocalSettle.FADE_MS, ms)
+private fun fadeFast(ms: Float): Float = clockSpring(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS, FocalSettle.FADE_FAST_MS, ms)
+
+private fun clockSpring(damping: Float, stiffness: Float, settleMs: Long, ms: Float): Float = when {
+    ms <= 0f -> 0f
+    ms >= settleMs -> 1f
+    else -> FocalMotion.springFraction(damping, stiffness, ms)
 }
 
 /** How a page draws itself: [alpha], the predictive preview at eased progress [preview] toward [edge], or recorded. */
@@ -548,7 +644,7 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, chan
     val measurer = rememberTextMeasurer()
     val frame: () -> TransformFrame? = {
         // Read the progress first: every layout, layer and draw lambda below follows it, whatever returns early.
-        pages.document?.value
+        pages.observe()
         val coordinates = placement.coordinates
         if (coordinates == null || !coordinates.isAttached || !pages.transforms(change) || !pages.active(change)) null
         else pages.frameIn(change, coordinates, density)
@@ -670,7 +766,7 @@ private fun PageTransitions.frameIn(c: PageChange, overlay: LayoutCoordinates, d
     }
     val content = when {
         !stageLike -> 0f
-        c.push -> this.content.value
+        c.push -> content(c)
         else -> smoothstep(PageTransitions.CONTENT_FROM, 1f, p)
     }
     return TransformFrame(
