@@ -544,6 +544,7 @@ class RecordingService : Service() {
                             session.storageShort = short
                             metadata.enqueue(CaptureEvent.AutoPause(CaptureReason.STORAGE))
                             publishPaused()
+                            RecordingState.events.tryEmit(ServiceEvent.ResumeRefused(short))
                         } else {
                             if (device == null || session.deviceFailed) {
                                 // A microphone that stopped delivering audio is reopened for Resume.

@@ -110,17 +110,12 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
                         StartFailure.PERMISSION -> onRecord()
                         StartFailure.OTHER -> feedback.show(event.message)
                     }
+                    // Resume refused for storage: say how much to free, at every refusal (spec 5.3.5).
+                    is ServiceEvent.ResumeRefused -> {
+                        val text = words.storageResume.format(Formatter.formatShortFileSize(context, event.storageShortBytes))
+                        if (feedback.show(text, FeedbackAction(words.storage)) == FeedbackResult.ActionPerformed) context.openStorageSettings()
+                    }
                 }
-            }
-        }
-    }
-    // Resume refused for storage: say how much to free (spec 5.3.5).
-    LaunchedEffect(recording) {
-        recording.state.map { it.storageShortBytes }.distinctUntilChanged().collect { short ->
-            if (short <= 0) return@collect
-            scope.launch {
-                val text = words.storageResume.format(Formatter.formatShortFileSize(context, short))
-                if (feedback.show(text, FeedbackAction(words.storage)) == FeedbackResult.ActionPerformed) context.openStorageSettings()
             }
         }
     }

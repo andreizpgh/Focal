@@ -48,6 +48,12 @@ sealed interface ServiceEvent {
 
     /** Record could not start. [storageShortBytes] is set when free space was the reason. */
     data class StartFailed(val reason: StartFailure, val message: String, val storageShortBytes: Long = 0) : ServiceEvent
+
+    /**
+     * Resume was refused because storage is still short by [storageShortBytes] (the pause stays). Sent for every
+     * refusal, also when the shortfall (and so the published session) did not change.
+     */
+    data class ResumeRefused(val storageShortBytes: Long) : ServiceEvent
 }
 
 enum class StartFailure { STORAGE, MICROPHONE, PERMISSION, OTHER }
