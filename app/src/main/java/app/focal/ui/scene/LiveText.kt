@@ -26,10 +26,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTiming
@@ -198,9 +199,10 @@ private fun rememberTranscriptMotion(view: TranscriptView, focus: Boolean): Tran
 }
 
 /**
- * A paragraph in its three inks: receded text, the stretch that recedes, the stretch that is current. A paragraph
- * in one ink draws with a colour producer, so its colour moves without recomposing; one that mixes inks recomposes
- * its string while the arrival develops (about half a second, spec 10).
+ * A paragraph in its three inks: receded text, the stretch that recedes, the stretch that is current. Colours are
+ * drawn, never composed: a paragraph in one ink draws with a colour producer; one that mixes inks is three copies of
+ * one layout, each showing its own stretch through its own producer with the rest transparent, so the develop and
+ * the recede only redraw and the glyphs of the three line up exactly.
  */
 @Composable
 private fun LiveParagraphText(
@@ -218,14 +220,23 @@ private fun LiveParagraphText(
         bright == 0 -> BasicText(text, modifier, style, color = { motion.bright(inks) })
         recede == 0 && bright >= length -> BasicText(text, modifier, style, color = { motion.receding(inks) })
         else -> {
-            val mixed = buildAnnotatedString {
-                withStyle(SpanStyle(color = inks.muted)) { append(text, 0, recede) }
-                withStyle(SpanStyle(color = motion.receding(inks))) { append(text, recede, bright) }
-                withStyle(SpanStyle(color = motion.bright(inks))) { append(text, bright, length) }
+            val runs = remember(text, recede, bright) { listOf(0 until recede, recede until bright, bright until length).map { visibleOnly(text, it) } }
+            Box(modifier) {
+                BasicText(runs[0], style = style, color = { inks.muted })
+                // The copies are drawing only: the first one carries the paragraph's text for accessibility.
+                BasicText(runs[1], Modifier.clearAndSetSemantics { }, style = style, color = { motion.receding(inks) })
+                BasicText(runs[2], Modifier.clearAndSetSemantics { }, style = style, color = { motion.bright(inks) })
             }
-            BasicText(mixed, modifier, style)
         }
     }
+}
+
+/** [text] with everything outside [run] transparent: the run takes the colour its text is drawn with. */
+private fun visibleOnly(text: String, run: IntRange): AnnotatedString = buildAnnotatedString {
+    append(text)
+    val hidden = SpanStyle(color = Color.Transparent)
+    if (run.first > 0) addStyle(hidden, 0, run.first)
+    if (run.last + 1 < text.length) addStyle(hidden, run.last + 1, text.length)
 }
 
 /**
