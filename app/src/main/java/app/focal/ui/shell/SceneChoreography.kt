@@ -42,30 +42,34 @@ class SceneChoreography internal constructor(val kind: SceneEntry, private val r
         override val restLevel: Float? = if (kind == SceneEntry.RecordEmpty) Mark.REST else null
     }
 
-    /** Plays it; [wake] is the material's alpha, which only T1′e animates. */
+    /**
+     * Plays it; [wake] is the material's alpha, which only T1′e animates. Every part counts from the trigger
+     * (FocalMotion.fromTrigger), as the morph does: the first frame after Record already shows the material arriving
+     * and the note leaving, and each "+n" lands n ms after the tap.
+     */
     internal suspend fun play(wake: Animatable<Float, *>) = coroutineScope {
         if (kind == SceneEntry.RecordEmpty && !reduced) {
             wake.snapTo(0f)
-            launch { wake.animateTo(1f, FocalMotion.fadeFast()) }
+            launch(start = CoroutineStart.UNDISPATCHED) { wake.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.fadeFast())) }
         } else wake.snapTo(1f)
         // The stage's note leaves from the trigger frame itself (spec 2.8.2 `noteExit`), not a dispatch later.
-        launch(start = CoroutineStart.UNDISPATCHED) { note.animateTo(0f, FocalMotion.fadeFast()) }
-        launch { chrome.animateTo(1f, FocalMotion.fade()) }
+        launch(start = CoroutineStart.UNDISPATCHED) { note.animateTo(0f, FocalMotion.fromTrigger(FocalMotion.fadeFast())) }
+        launch(start = CoroutineStart.UNDISPATCHED) { chrome.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.fade())) }
         if (!lights) return@coroutineScope
         pairs.forEachIndexed { distance, pair ->
-            launch {
+            launch(start = CoroutineStart.UNDISPATCHED) {
                 delay(FocalTiming.LIGHT_UP_STAGGER_MS * distance)
-                pair.animateTo(1f, FocalMotion.fade())
+                pair.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.fade()))
             }
         }
-        launch {
+        launch(start = CoroutineStart.UNDISPATCHED) {
             delay(FocalTiming.LIGHT_UP_GLOW_DELAY_MS)
-            glow.animateTo(1f, FocalMotion.fadeSlow())
+            glow.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.fadeSlow()))
         }
         delay(if (kind == SceneEntry.RecordEmpty) FocalTiming.EMPTY_TIMER_DELAY_MS else FocalTiming.LIGHT_UP_TIMER_DELAY_MS)
         // "0:00" fades through the leaving note: it waits until the note's footer has nearly gone (T1′), so the two
         // typesettings are never superimposed.
         if (kind == SceneEntry.Record) snapshotFlow { note.value }.first { it <= NOTE_GONE }
-        timer.animateTo(1f, FocalMotion.fade())
+        timer.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.fade()))
     }
 }

@@ -187,10 +187,13 @@ class LiveSurfaceState internal constructor(open: Boolean) {
         settle(0f, reducedMotion)
     }
 
-    /** A release or a tap: `stage` with the finger's velocity (in p per second), clamped at the bounds: no bounce. */
+    /**
+     * A release or a tap: `stage` with the finger's velocity (in p per second), clamped at the bounds: no bounce. It
+     * counts from the release or the tap (FocalMotion.fromTrigger), so the first frame after it has already moved.
+     */
     suspend fun settle(target: Float, reducedMotion: Boolean, velocity: Float = 0f) {
-        if (reducedMotion || !spatial) withContext(FullMotion) { expansion.animateTo(target, FocalMotion.reducedCrossfade) }
-        else expansion.animateTo(target, FocalMotion.stage(), initialVelocity = velocity)
+        if (reducedMotion || !spatial) withContext(FullMotion) { expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.reducedCrossfade)) }
+        else expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.stage()), initialVelocity = velocity)
     }
 
     /**
@@ -212,15 +215,16 @@ class LiveSurfaceState internal constructor(open: Boolean) {
             landingContent.snapTo(1f)
             landingAlpha.snapTo(1f)
             openNote()
+            // Counted from Finish (FocalMotion.fromTrigger): the first frame after the tap has already moved.
             if (reducedMotion || !spatial) {
-                withContext(FullMotion) { landingAlpha.animateTo(0f, FocalMotion.reducedCrossfade) }
+                withContext(FullMotion) { landingAlpha.animateTo(0f, FocalMotion.fromTrigger(FocalMotion.reducedCrossfade)) }
             } else coroutineScope {
-                launch { landingContent.animateTo(0f, FocalMotion.fadeFast()) }
+                launch(start = CoroutineStart.UNDISPATCHED) { landingContent.animateTo(0f, FocalMotion.fromTrigger(FocalMotion.fadeFast())) }
                 launch {
                     snapshotFlow { landing.value >= HALF }.first { it }
                     landingAlpha.animateTo(0f, FocalMotion.fade())
                 }
-                landing.animateTo(1f, FocalMotion.stage())
+                landing.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.stage()))
             }
         } finally {
             withContext(NonCancellable) {

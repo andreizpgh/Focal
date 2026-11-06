@@ -1,5 +1,7 @@
 package app.focal.ui.design
 
+import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.VectorConverter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,7 +35,22 @@ class FocalMotionTest {
             assertEquals(name, settle, settleMs(damping, stiffness), 3f)
         }
         assertEquals(FocalSettle.FADE_FAST_MS.toFloat(), settleMs(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS), 3f)
+        assertEquals(FocalSettle.FADE_MS.toFloat(), settleMs(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_STIFFNESS), 3f)
+        assertEquals(FocalSettle.MOVE_MS.toFloat(), settleMs(FocalMotion.SPATIAL_DAMPING, FocalMotion.MOVE_STIFFNESS), 3f)
     }
+
+    /** A triggered motion's first frame already shows one frame of it, and it ends that much sooner. */
+    @Test fun fromTriggerRunsOneFrameAhead() {
+        val lead = FocalTiming.TRIGGER_LEAD_MS
+        val plain = TargetBasedAnimation(FocalMotion.fadeFast<Float>(), Float.VectorConverter, 0f, 1f)
+        val led = TargetBasedAnimation(FocalMotion.fromTrigger(FocalMotion.fadeFast<Float>()), Float.VectorConverter, 0f, 1f)
+        assertEquals(plain.getValueFromNanos(lead * NANOS), led.getValueFromNanos(0L), 1e-6f)
+        assertTrue(led.getValueFromNanos(0L) > 0f)
+        assertEquals(plain.getValueFromNanos(100 * NANOS), led.getValueFromNanos((100 - lead) * NANOS), 1e-6f)
+        assertEquals(plain.durationNanos - lead * NANOS, led.durationNanos)
+    }
+
+    private companion object { const val NANOS = 1_000_000L }
 
     /** No visible bounce: the spatial springs (damping 0.9) overshoot by 0.15 % (spec 2.8), never more. */
     @Test fun spatialSpringsDoNotVisiblyOvershoot() {

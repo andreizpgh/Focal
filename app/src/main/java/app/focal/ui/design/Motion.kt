@@ -3,11 +3,15 @@ package app.focal.ui.design
 import android.animation.TimeInterpolator
 import android.animation.ValueAnimator
 import android.os.Build
+import androidx.compose.animation.core.AnimationVector
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.InfiniteRepeatableSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.TweenSpec
+import androidx.compose.animation.core.TwoWayConverter
+import androidx.compose.animation.core.VectorizedFiniteAnimationSpec
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -66,6 +70,17 @@ object FocalMotion {
     val readyShimmer: TweenSpec<Float> = tween(720, easing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f))
 
     /**
+     * [spec] counted from its trigger (spec 6.1: every "+n" is a time after the trigger). A tap or a key lands between
+     * frames, and an animation started by it begins at its own time 0 on the next frame, so that frame shows nothing
+     * moved and every later one lags the trigger by a frame. Run from the trigger, the animation is ahead by
+     * [FocalTiming.TRIGGER_LEAD_MS] (one frame at 60 Hz): the first frame after the trigger already shows that much of
+     * it. Use it for motion a trigger starts, not for motion that follows a value already on screen.
+     */
+    fun <T> fromTrigger(spec: FiniteAnimationSpec<T>): FiniteAnimationSpec<T> = TriggerLead(spec, FocalTiming.TRIGGER_LEAD_MS * NANOS_PER_MS)
+
+    private const val NANOS_PER_MS = 1_000_000L
+
+    /**
      * The spring's step response x(t) from 0 to 1 at rest, for View animations that must speak the same voice (the
      * splash exit). [timeMs] is the time since the start.
      */
@@ -83,15 +98,37 @@ object FocalMotion {
         TimeInterpolator { input -> springFraction(dampingRatio, stiffness, input * durationMs) }
 }
 
+/** An animation spec run [leadNanos] ahead of its own start (FocalMotion.fromTrigger). */
+private data class TriggerLead<T>(private val spec: FiniteAnimationSpec<T>, private val leadNanos: Long) : FiniteAnimationSpec<T> {
+    override fun <V : AnimationVector> vectorize(converter: TwoWayConverter<T, V>): VectorizedFiniteAnimationSpec<V> =
+        VectorizedLead(spec.vectorize(converter), leadNanos)
+}
+
+private class VectorizedLead<V : AnimationVector>(
+    private val inner: VectorizedFiniteAnimationSpec<V>,
+    private val leadNanos: Long,
+) : VectorizedFiniteAnimationSpec<V> {
+    override fun getValueFromNanos(playTimeNanos: Long, initialValue: V, targetValue: V, initialVelocity: V): V =
+        inner.getValueFromNanos(playTimeNanos + leadNanos, initialValue, targetValue, initialVelocity)
+
+    override fun getVelocityFromNanos(playTimeNanos: Long, initialValue: V, targetValue: V, initialVelocity: V): V =
+        inner.getVelocityFromNanos(playTimeNanos + leadNanos, initialValue, targetValue, initialVelocity)
+
+    override fun getDurationNanos(initialValue: V, targetValue: V, initialVelocity: V): Long =
+        (inner.getDurationNanos(initialValue, targetValue, initialVelocity) - leadNanos).coerceAtLeast(0L)
+}
+
 /** smoothstep(e0, e1, x): the cubic Hermite step t^2 (3 - 2t) with t = clamp((x - e0) / (e1 - e0)) (spec, "How to read"). */
 fun smoothstep(edge0: Float, edge1: Float, x: Float): Float {
     val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
     return t * t * (3 - 2 * t)
 }
 
-/** Settle times to 0.1 %, computed from the spring solutions (2.8 table): for View-based animations only. */
+/** Settle times to 0.1 %, computed from the spring solutions (2.8 table), for motion drawn from a clock. */
 object FocalSettle {
     const val FADE_FAST_MS = 150L
+    const val FADE_MS = 231L
+    const val MOVE_MS = 317L
 }
 
 /** Timing constants of the choreography (spec 2.8.2, 2.8.3, 2.8.6, 2.8.7). */
@@ -106,6 +143,11 @@ object FocalTiming {
     const val AUTOSAVE_DEBOUNCE_MS = 600L
     const val ARRIVAL_HIGHLIGHT_MS = 1500L
     const val NOTIFICATION_PERMISSION_DELAY_MS = 600L
+    /**
+     * How far ahead of its first frame a triggered motion runs (FocalMotion.fromTrigger): one frame at 60 Hz, the
+     * longest wait from a tap to the next frame.
+     */
+    const val TRIGGER_LEAD_MS = 16L
     const val FEEDBACK_MS = 8000
     const val HINT_RECORDINGS = 3
     const val LIGHT_UP_STAGGER_MS = 24L
