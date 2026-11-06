@@ -39,6 +39,10 @@ import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.ParagraphStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.LineBreak
 import app.focal.R
 import app.focal.ui.components.PaperTopFade
@@ -110,8 +114,12 @@ object LicenseText {
         if (lines.isEmpty()) return ""
         val out = StringBuilder(lines.first().trim())
         for (i in 1 until lines.size) out.append(if (keepsBreak(lines[i - 1], lines[i])) '\n' else ' ').append(lines[i].trim())
-        return out.toString()
+        // A labelled URL starts a line of its own under its label, so it is never split right after "https://".
+        return out.toString().replace(labelledUrl, "$1\n$2")
     }
+
+    /** Whether a reflowed line is a URL (it then breaks balanced at the URL's own break points). */
+    internal fun isUrl(line: String): Boolean = urlStart.containsMatchIn(line)
 
     private fun keepsBreak(previous: String, next: String): Boolean {
         if (urlLine.containsMatchIn(next) || urlEnd.containsMatchIn(previous)) return true
@@ -126,6 +134,8 @@ object LicenseText {
     private const val URL = """(?:https?://|www\.)\S+"""
     private const val SENTENCE_ENDS = ".:"
     private val urlLine = Regex("""^\s*(?:<?$URL|[^\s:][^:]{0,60}:\s+<?$URL)""")
+    private val urlStart = Regex("""^<?$URL""")
+    private val labelledUrl = Regex("""(?m)^([^\s:][^:\n]{0,60}:) +(<?$URL)""")
     private val urlEnd = Regex("""$URL>?$""")
     private val rule = Regex("""\s*[=\-_*]{3,}\s*""")
 
@@ -194,7 +204,7 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
                             Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()),
                         ) {
                             Text(
-                                paragraph, style = LicenseStyle, color = colors.recede,
+                                remember(paragraph) { licenseLines(paragraph) }, style = FocalType.secondary, color = colors.recede,
                                 modifier = Modifier.padding(horizontal = FocalLayout.gutter).padding(bottom = Grid.x12),
                             )
                         }
@@ -213,10 +223,17 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
 private val EntryPlate = PressPlate(FocalShapes.block, insetX = SettingsMetrics.plateInset)
 
 /**
- * The notices' text: `secondary`, broken for the whole paragraph at once, so a long URL that must wrap at its slashes
- * does not leave a short piece ("/tree") alone on a line when moving one more piece down evens the lines.
+ * A reflowed notice paragraph, each of its lines broken as what it is: prose for the whole line at once
+ * (`LineBreak.Paragraph`), a URL balanced (`LineBreak.Heading`) at the platform's URL break points, so a long one
+ * that must wrap evens its lines instead of leaving a short piece ("/tree") alone between two full ones.
  */
-private val LicenseStyle = FocalType.secondary.copy(lineBreak = LineBreak.Paragraph)
+private fun licenseLines(paragraph: String): AnnotatedString = buildAnnotatedString {
+    paragraph.split('\n').forEachIndexed { index, line ->
+        if (index > 0) append('\n')
+        val breaking = if (LicenseText.isUrl(line)) LineBreak.Heading else LineBreak.Paragraph
+        withStyle(ParagraphStyle(lineBreak = breaking)) { append(line) }
+    }
+}
 
 /** Test tag prefix of the entries ("license-entry:0" is the speech model), for the screenshot gallery. */
 const val LICENSE_ENTRY_TAG = "license-entry"
