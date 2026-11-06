@@ -275,11 +275,11 @@ internal fun TranscribingNote(destination: Destination.Note) {
     )
 }
 
-/** The note menu as ⋮ opens it (a popup on a phone; drawn inline here): x 168-400, from 4 dp under the bar's ⋮. */
+/** The note menu as ⋮ opens it (a popup on a phone; drawn inline here): its right edge at 400, 4 dp under the bar's ⋮. */
 @Composable
 private fun NoteMenuInline() {
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
-        MenuSurface(Modifier.offset(x = MENU_X, y = FocalLayout.topBar - (FocalLayout.topBar - FocalLayout.target) / 2 + Grid.x4)) {
+        MenuSurface(Modifier.menuAt(x = MENU_END, y = FocalLayout.topBar - (FocalLayout.topBar - FocalLayout.target) / 2 + Grid.x4, endAligned = true)) {
             FocalMenuItem("Find and replace", {})
             FocalMenuItem("Rename", {})
             FocalMenuItem("Share", {})
@@ -290,6 +290,7 @@ private fun NoteMenuInline() {
     }
 }
 
-private val MENU_X = 168.dp
+/** The ⋮ button's end edge: the menu's top-end corner (spec 4.15, ref x 400). */
+private val MENU_END = 400.dp
 private const val WORD_INTO_MS = 50L
 private const val FIND_SETTLE_MS = 400L

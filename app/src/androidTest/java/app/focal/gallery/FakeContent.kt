@@ -3,6 +3,10 @@ package app.focal.gallery
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import app.focal.ui.components.MenuMetrics
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.tabular
@@ -43,4 +47,17 @@ val FakeScene = listOf(
 @Composable
 fun FakeCaption(text: String, modifier: Modifier = Modifier) {
     Text(text, style = FocalType.caption.tabular(), color = FocalTheme.colors.muted, modifier = modifier)
+}
+
+/**
+ * Places a menu drawn inline (popups are separate windows the capture cannot see) as MenuPosition does on a phone:
+ * its top-start corner at ([x], [y]), or its top-end corner when [endAligned], clamped 16 dp from the frame's edges.
+ */
+internal fun Modifier.menuAt(x: Dp, y: Dp, endAligned: Boolean = false): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(Constraints())
+    val edge = MenuMetrics.edge.roundToPx()
+    val start = if (endAligned) x.roundToPx() - placeable.width else x.roundToPx()
+    val left = start.coerceIn(edge, (constraints.maxWidth - edge - placeable.width).coerceAtLeast(edge))
+    val top = y.roundToPx().coerceIn(edge, (constraints.maxHeight - edge - placeable.height).coerceAtLeast(edge))
+    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(left, top) }
 }

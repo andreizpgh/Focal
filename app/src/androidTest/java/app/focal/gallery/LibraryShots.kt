@@ -2,7 +2,6 @@ package app.focal.gallery
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
@@ -27,8 +26,8 @@ import app.focal.ui.library.LibraryDates
 import app.focal.ui.library.LibraryHost
 import app.focal.ui.library.LibraryModel
 import app.focal.ui.library.LibraryPage
-import app.focal.ui.library.SettingsLayerState
 import app.focal.ui.library.STAGE_PILL_TAG
+import app.focal.ui.library.SettingsLayerState
 import app.focal.ui.library.StageUi
 import app.focal.ui.library.rememberLibrarySearchState
 import app.focal.ui.settings.LicensesPage
@@ -227,7 +226,7 @@ internal fun LibraryDestination(
 @Composable
 private fun RowMenu() {
     Box(Modifier.fillMaxSize()) {
-        MenuSurface(Modifier.offset(x = 120.dp, y = 420.dp)) {
+        MenuSurface(Modifier.menuAt(x = 120.dp, y = 420.dp)) {
             FocalMenuItem("Copy text", {})
             FocalMenuItem("Share", {})
             FocalMenuItem("Rename", {})

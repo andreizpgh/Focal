@@ -3,6 +3,7 @@ package app.focal.ui.components
 import android.graphics.Paint
 import android.os.Build
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.background
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,9 +37,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -65,6 +66,8 @@ object MenuMetrics {
     val item = Grid.x48
     val itemPadding = Grid.x16
     val dividerMargin = Grid.x8
+    /** A label that wraps keeps this much room above and below it inside its item. */
+    val labelPadding = Grid.x8
     /** From the overflow button the menu's top sits this far below the button's bottom (ref y 100 under 96). */
     val belowAnchor = Grid.x4
     /** Clamped this far from the window edges. */
@@ -118,6 +121,8 @@ fun FocalMenu(expanded: Boolean, onDismiss: () -> Unit, anchor: MenuAnchor = Men
     if (!composed) return
     val density = LocalDensity.current
     val position = remember(anchor, density) { MenuPosition(anchor, density) }
+    // Read in the app's window: inside the popup the window is the popup's own.
+    val maxWidth = menuMaxWidth()
     Popup(popupPositionProvider = position, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
         Box(Modifier.padding(MenuMetrics.shadowRoom)) {
             MenuSurface(
@@ -127,22 +132,35 @@ fun FocalMenu(expanded: Boolean, onDismiss: () -> Unit, anchor: MenuAnchor = Men
                     scaleY = scale.value
                     transformOrigin = position.origin
                 },
-                content,
+                maxWidth = maxWidth,
+                content = content,
             )
         }
     }
 }
 
+/**
+ * How wide a menu may grow (spec 4.15): 280 dp; at larger font sizes up to the window's 16 dp edges, so an item's
+ * label and its value stay on one line where they can, and wrap where even that is too narrow (8.4). Never wider than
+ * the window allows.
+ */
+@Composable
+fun menuMaxWidth(): Dp {
+    val density = LocalDensity.current
+    val available = with(density) { LocalWindowInfo.current.containerSize.width.toDp() } - MenuMetrics.edge * 2
+    return if (density.fontScale > 1f) available else minOf(MenuMetrics.maxWidth, available)
+}
+
 /** The menu's container: `raised`, radius 16, Light shadows or the Dark ring, 8 dp vertical padding. */
 @Composable
-fun MenuSurface(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun MenuSurface(modifier: Modifier = Modifier, maxWidth: Dp = menuMaxWidth(), content: @Composable ColumnScope.() -> Unit) {
     val colors = FocalTheme.colors
     Column(
         modifier
             .menuElevation(colors.dark)
             .background(colors.raised, FocalShapes.menu)
             .then(if (colors.dark) Modifier.border(MenuMetrics.ring, colors.raisedRing, FocalShapes.menu) else Modifier)
-            .widthIn(min = MenuMetrics.width, max = MenuMetrics.maxWidth)
+            .widthIn(min = minOf(MenuMetrics.width, maxWidth), max = maxWidth)
             .width(IntrinsicSize.Max)
             .padding(vertical = MenuMetrics.verticalPadding),
         content = content,
@@ -151,7 +169,7 @@ fun MenuSurface(modifier: Modifier = Modifier, content: @Composable ColumnScope.
 
 /**
  * A menu item: `label` at 400 in ink, an optional trailing value in `meta` `muted` ("9 MB"). Disabled (Edit's "Restore
- * original" while the paragraph is unedited) it is `faint` and not clickable.
+ * original" while the paragraph is unedited) it is `faint` and not clickable. 48 dp tall; a wrapped label grows it.
  */
 @Composable
 fun FocalMenuItem(text: String, onClick: () -> Unit, trailing: String? = null, enabled: Boolean = true) {
@@ -166,9 +184,10 @@ fun FocalMenuItem(text: String, onClick: () -> Unit, trailing: String? = null, e
             .padding(horizontal = MenuMetrics.itemPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // A label wraps rather than lose its action's name (spec 8.4); it only does at large font sizes.
         Text(
             text, style = FocalType.label.copy(fontWeight = FocalWeight.Regular), color = if (enabled) colors.ink else colors.faint,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).padding(vertical = MenuMetrics.labelPadding),
         )
         if (trailing != null) {
             Spacer(Modifier.width(MenuMetrics.itemPadding))
