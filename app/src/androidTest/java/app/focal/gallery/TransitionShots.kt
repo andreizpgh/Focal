@@ -18,7 +18,6 @@ import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteUiState
 import app.focal.ui.state.SearchUiState
 import app.focal.ui.state.SettingsUiState
-import kotlinx.coroutines.delay
 
 /**
  * Page changes at fixed times after their trigger (spec 6.1, 2.8.5): the stage opening into its note's page (T16′)
@@ -28,22 +27,22 @@ import kotlinx.coroutines.delay
  */
 object TransitionShots {
     val all: List<Shot> = buildList {
-        for (t in listOf(40L, 100L, 180L)) add(Shot("t16-open-$t-light", dark = false, settleMs = AT_MS + t) { StageToNote(back = false) })
-        add(Shot("t16-open-100-dark", dark = true, settleMs = AT_MS + 100) { StageToNote(back = false) })
-        for (t in listOf(60L, 140L, 240L)) add(Shot("t16-back-$t-light", dark = false, settleMs = AT_MS + OPEN_MS + t) { StageToNote(back = true) })
-        add(Shot("t16-back-140-dark", dark = true, settleMs = AT_MS + OPEN_MS + 140) { StageToNote(back = true) })
-        for (t in listOf(60L, 140L)) add(Shot("t16-row-open-$t-light", dark = false, settleMs = AT_MS + t) { RowToNote(back = false) })
-        add(Shot("t16-row-back-120-light", dark = false, settleMs = AT_MS + OPEN_MS + 120) { RowToNote(back = true) })
-        for (t in listOf(60L, 140L, 260L)) add(Shot("t7b-$t-light", dark = false, settleMs = AT_MS + t) { LiveToNote() })
-        add(Shot("t7b-140-dark", dark = true, settleMs = AT_MS + 140) { LiveToNote() })
-        add(Shot("licenses-fade-90-light", dark = false, settleMs = AT_MS + 90) { SettingsToLicenses() })
-        add(Shot("licenses-fade-180-light", dark = false, settleMs = AT_MS + 180) { SettingsToLicenses() })
+        for (t in listOf(40L, 100L, 180L)) add(Shot("t16-open-$t-light", dark = false, settleMs = after(AT_MS, t)) { StageToNote(back = false) })
+        add(Shot("t16-open-100-dark", dark = true, settleMs = after(AT_MS, 100)) { StageToNote(back = false) })
+        for (t in listOf(60L, 140L, 240L)) add(Shot("t16-back-$t-light", dark = false, settleMs = after(AT_MS + OPEN_MS, t)) { StageToNote(back = true) })
+        add(Shot("t16-back-140-dark", dark = true, settleMs = after(AT_MS + OPEN_MS, 140)) { StageToNote(back = true) })
+        for (t in listOf(60L, 140L)) add(Shot("t16-row-open-$t-light", dark = false, settleMs = after(AT_MS, t)) { RowToNote(back = false) })
+        add(Shot("t16-row-back-120-light", dark = false, settleMs = after(AT_MS + OPEN_MS, 120)) { RowToNote(back = true) })
+        for (t in listOf(60L, 140L, 260L)) add(Shot("t7b-$t-light", dark = false, settleMs = after(AT_MS, t)) { LiveToNote() })
+        add(Shot("t7b-140-dark", dark = true, settleMs = after(AT_MS, 140)) { LiveToNote() })
+        add(Shot("licenses-fade-90-light", dark = false, settleMs = after(AT_MS, 90)) { SettingsToLicenses() })
+        add(Shot("licenses-fade-180-light", dark = false, settleMs = after(AT_MS, 180)) { SettingsToLicenses() })
     }
 }
 
-/** The library settles before the change starts; a page settles before Back. */
-private const val AT_MS = 500L
-private const val OPEN_MS = 600L
+/** The library settles before the change starts; a page settles before Back (whole frames). */
+private const val AT_MS = 512L
+private const val OPEN_MS = 608L
 
 /** The note the stage holds (the design renders' note) and the page it opens. */
 private val stageNote: NoteUiState get() = design().copy(noteId = "note-0")
@@ -71,10 +70,10 @@ private fun StageToNote(back: Boolean) {
     val shell = rememberShellState()
     val note = remember { stageNote }
     LaunchedEffect(shell) {
-        delay(AT_MS)
+        waitFrames(AT_MS)
         shell.open(Destination.Note(note.noteId), PageMotion.Stage)
         if (!back) return@LaunchedEffect
-        delay(OPEN_MS)
+        waitFrames(OPEN_MS)
         shell.back()
     }
     FocalShell(shell, destination = { d ->
@@ -88,10 +87,10 @@ private fun RowToNote(back: Boolean) {
     val shell = rememberShellState()
     val note = remember { rowNote }
     LaunchedEffect(shell) {
-        delay(AT_MS)
+        waitFrames(AT_MS)
         shell.open(Destination.Note(note.noteId), PageMotion.Row)
         if (!back) return@LaunchedEffect
-        delay(OPEN_MS)
+        waitFrames(OPEN_MS)
         shell.back()
     }
     FocalShell(shell, destination = { d ->
@@ -105,7 +104,7 @@ private fun LiveToNote() {
     val shell = rememberShellState()
     val note = remember { saturdayNote(NotePhase.TRANSCRIBING) }
     LaunchedEffect(shell) {
-        delay(AT_MS)
+        waitFrames(AT_MS)
         shell.open(Destination.Note(note.noteId), PageMotion.LiveStage)
     }
     FocalShell(shell, destination = { d ->
@@ -120,7 +119,7 @@ private fun SettingsToLicenses() {
     val shell = rememberShellState()
     LaunchedEffect(shell) {
         shell.settings.track(1f)
-        delay(AT_MS)
+        waitFrames(AT_MS)
         shell.open(Destination.Licenses)
     }
     val actions = remember { LibraryActions() }

@@ -43,7 +43,6 @@ import app.focal.ui.state.PauseReason
 import app.focal.ui.state.SearchRow
 import app.focal.ui.state.SearchUiState
 import app.focal.ui.state.SettingsUiState
-import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -62,7 +61,7 @@ object LibraryShots {
         addAll(themed("transcribing") { Library(workingModel(NotePhase.TRANSCRIBING)) })
         add(Shot("waiting-light", dark = false) { Library(workingModel(NotePhase.WAITING)) })
         addAll(themed("ready") { Library(readyModel(fresh = true)) })
-        add(Shot("ready-moment-light", dark = false, settleMs = READY_AT_MS + MOMENT_AT_MS) { ReadyMoment() })
+        add(Shot("ready-moment-light", dark = false, settleMs = after(READY_AT_MS, MOMENT_AT_MS)) { ReadyMoment() })
         add(Shot("copied-light", dark = false, settleMs = COPIED_AT_MS, click = STAGE_PILL_TAG) { Library(readyModel(fresh = true)) })
         add(Shot("no-speech-light", dark = false) { Library(noSpeechModel()) })
         addAll(themed("scrolled") { Library(idleModel(), scroll = true) })
@@ -266,7 +265,7 @@ internal fun Strip(s: Float, model: LibraryModel = idleModel()) {
 private fun ReadyMoment() {
     var ready by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(READY_AT_MS)
+        waitFrames(READY_AT_MS)
         ready = true
     }
     val note = if (ready) saturday.copy(id = "moment") else saturday.copy(id = "moment", phase = NotePhase.TRANSCRIBING, progress = 0.97f)

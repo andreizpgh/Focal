@@ -42,9 +42,11 @@ object SceneShots {
         add(Shot("expand-paused-40-light", dark = false) { SceneFrame(0.4f, paused()) })
         add(Shot("expand-storage-50-light", dark = false) { SceneFrame(0.5f, paused(PauseReason.STORAGE)) })
         add(Shot("expand-start-60-light", dark = false) { SceneFrame(0.6f, start()) })
-        for (t in listOf(60L, 160L, 300L)) add(Shot("record-$t-light", dark = false, settleMs = t) { RecordFrame(fromEmpty = false) })
-        for (t in listOf(60L, 120L, 200L, 600L)) add(Shot("record-empty-$t-light", dark = false, settleMs = t) { RecordFrame(fromEmpty = true) })
-        add(Shot("record-empty-120-dark", dark = true, settleMs = 120L) { RecordFrame(fromEmpty = true) })
+        for (t in listOf(60L, 160L, 300L)) add(Shot("record-$t-light", dark = false, settleMs = after(RECORD_AT_MS, t)) { RecordFrame(fromEmpty = false) })
+        for (t in listOf(60L, 120L, 200L, 600L)) {
+            add(Shot("record-empty-$t-light", dark = false, settleMs = after(RECORD_AT_MS, t)) { RecordFrame(fromEmpty = true) })
+        }
+        add(Shot("record-empty-120-dark", dark = true, settleMs = after(RECORD_AT_MS, 120L)) { RecordFrame(fromEmpty = true) })
         for (t in listOf(120L, 260L)) add(Shot("settle-$t-light", dark = false, settleMs = t) { SettleFrame() })
         add(Shot("crossfade-50-light", dark = false) { SceneFrame(0.5f, live(), reduced = true) })
         add(Shot("rec-live-light-200", dark = false, fontScale = 2f) { SceneFrame(1f, live()) })
@@ -54,6 +56,8 @@ object SceneShots {
 }
 
 private const val PERCENT = 100f
+/** Record is tapped once the library has settled, so its dock (Record alone, or Search | Record) morphs from rest. */
+private const val RECORD_AT_MS = 512L
 private const val LATEST_SCROLL = 3
 
 internal fun paragraphs(texts: List<String>) = texts.mapIndexed { i, text -> LiveParagraph(i.toLong(), text, open = i == texts.lastIndex) }
@@ -91,12 +95,19 @@ internal fun SceneFrame(p: Float, scene: SceneUi, reduced: Boolean = false, scro
     }
 }
 
-/** Record over the library: from the idle stage (T1′) or the empty library's resting instrument (T1′e). */
+/**
+ * Record over the settled library: from the idle stage (T1′) or the empty library's resting instrument (T1′e). The
+ * scene registers its dock only once it is composed, as in the app, so the library's dock morphs into Pause | Finish
+ * (T1′e: Pause grows 0 → 56 while Record's left edge moves 24 → 92).
+ */
 @Composable
 private fun RecordFrame(fromEmpty: Boolean) {
     val shell = rememberShellState()
     val model = if (fromEmpty) LibraryModel(loaded = true) else idleModel()
-    LaunchedEffect(shell) { shell.live.record(fromEmpty, reducedMotion = false) }
+    LaunchedEffect(shell) {
+        waitFrames(RECORD_AT_MS)
+        shell.live.record(fromEmpty, reducedMotion = false)
+    }
     FocalShell(shell, destination = { LibraryDestination(model) }, scene = { SceneLayer(shell, SceneUi(hint = true)) })
 }
 

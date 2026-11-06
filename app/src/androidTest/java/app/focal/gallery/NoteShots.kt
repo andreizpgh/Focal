@@ -40,7 +40,6 @@ import app.focal.ui.state.NoteUiState
 import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.PlaybackSession
 import app.focal.ui.state.WordUi
-import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
@@ -238,7 +237,7 @@ internal fun NoteDestination(
     val page: NotePageState = rememberNotePageState(editing = edit, field = field, takesFocus = false)
     if (states.rename) LaunchedEffect(page) { page.renaming = true }
     if (states.followOff) LaunchedEffect(page) {
-        delay(FIND_SETTLE_MS)
+        waitFrames(FIND_SETTLE_MS)
         page.followSuspended = true
         list.scrollToItem(note.paragraphs.size)
     }
@@ -254,7 +253,7 @@ internal fun NoteDestination(
         page.find.query.setTextAndPlaceCursorAtEnd(find.first)
         page.find.replacement.setTextAndPlaceCursorAtEnd(find.second)
         if (nextMatch) {
-            delay(FIND_SETTLE_MS)
+            waitFrames(FIND_SETTLE_MS)
             page.find.next()
         }
     }

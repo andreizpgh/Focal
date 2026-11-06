@@ -82,7 +82,6 @@ import app.focal.ui.design.Grid
 import app.focal.ui.design.Scene
 import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.Stage
-import kotlinx.coroutines.delay
 
 /** The foundation stage's renders: tokens, every control state, the bars, the material, the shell's layers. */
 object FoundationShots {
@@ -96,7 +95,7 @@ object FoundationShots {
         add(Shot("scene-live", dark = false) { SceneMock(paused = false) })
         add(Shot("scene-paused", dark = false) { SceneMock(paused = true) })
         addAll(themed("empty") { EmptyMock() })
-        add(Shot("ready-morph-light", dark = false, settleMs = READY_AT_MS + 80) { ReadyMorph() })
+        add(Shot("ready-morph-light", dark = false, settleMs = after(READY_AT_MS, 80)) { ReadyMorph() })
         add(Shot("copied-light", dark = false, settleMs = 300, click = COPY_TAG) { CopiedDock() })
         add(Shot("controls-library-light-200", dark = false, fontScale = 2f) { LibraryControls() })
         add(Shot("controls-note-light-200", dark = false, fontScale = 2f) { NoteControls() })
@@ -104,7 +103,7 @@ object FoundationShots {
     }
 }
 
-private const val READY_AT_MS = 500L
+private const val READY_AT_MS = 512L
 private const val COPY_TAG = "copy"
 private val noActions = DockActions()
 
@@ -399,7 +398,7 @@ private fun EmptyMock() {
 @Composable
 private fun ReadyMorph() {
     var pill by remember { mutableStateOf<NotePill>(NotePill.Progress(ProgressPhase.Transcribing, 0.9f)) }
-    LaunchedEffect(Unit) { delay(READY_AT_MS); pill = NotePill.Copy() }
+    LaunchedEffect(Unit) { waitFrames(READY_AT_MS); pill = NotePill.Copy() }
     val bottom = rememberBottomColumnState()
     BottomColumn(bottom, dock = { Dock(DockState.Note(PlayCircle.Play, pill), noActions) }, modifier = Modifier.fillMaxSize())
 }

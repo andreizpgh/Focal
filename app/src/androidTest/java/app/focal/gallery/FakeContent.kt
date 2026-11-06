@@ -2,6 +2,7 @@ package app.focal.gallery
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
@@ -51,13 +52,29 @@ fun FakeCaption(text: String, modifier: Modifier = Modifier) {
 
 /**
  * Places a menu drawn inline (popups are separate windows the capture cannot see) as MenuPosition does on a phone:
- * its top-start corner at ([x], [y]), or its top-end corner when [endAligned], clamped 16 dp from the frame's edges.
+ * its top-start corner at a long-press ([x], [y]), clamped 16 dp from the frame's edges, or its top-end corner at an
+ * overflow button's end when [endAligned], bounded by the frame only.
  */
 internal fun Modifier.menuAt(x: Dp, y: Dp, endAligned: Boolean = false): Modifier = layout { measurable, constraints ->
     val placeable = measurable.measure(Constraints())
-    val edge = MenuMetrics.edge.roundToPx()
+    val edge = if (endAligned) 0 else MenuMetrics.edge.roundToPx()
     val start = if (endAligned) x.roundToPx() - placeable.width else x.roundToPx()
     val left = start.coerceIn(edge, (constraints.maxWidth - edge - placeable.width).coerceAtLeast(edge))
     val top = y.roundToPx().coerceIn(edge, (constraints.maxHeight - edge - placeable.height).coerceAtLeast(edge))
     layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(left, top) }
 }
+
+/** The gallery's frame clock steps 16 ms a frame. */
+internal const val FRAME_MS = 16L
+
+/**
+ * Waits [ms] of frame time in whole frames and returns inside a frame. `delay` resumes between frames, a frame early
+ * or late from run to run, so a change it starts would land in a different frame each time; counted in frames, every
+ * shot's change starts in the same frame and its captures are pixel-stable.
+ */
+internal suspend fun waitFrames(ms: Long) {
+    repeat((ms / FRAME_MS).toInt()) { withFrameMillis { } }
+}
+
+/** A capture [t] ms after a change started at [at] ms, on the nearest frame (captures land on whole frames). */
+internal fun after(at: Long, t: Long): Long = at + t - FRAME_MS / 2
