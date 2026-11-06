@@ -9,7 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
@@ -47,6 +45,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -59,18 +58,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.focal.R
 import app.focal.core.Title
 import app.focal.recording.SpeechAvailability
-import app.focal.ui.components.FocalMenu
-import app.focal.ui.components.MenuAnchor
 import app.focal.ui.components.Mark
 import app.focal.ui.components.NineBars
 import app.focal.ui.components.PauseBadge
@@ -94,7 +89,10 @@ import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.Scene
 import app.focal.ui.design.Stage
-import app.focal.ui.state.LiveParagraph
+import app.focal.ui.scene.StageTranscript
+import app.focal.ui.scene.TimerText
+import app.focal.ui.scene.TranscriptInks
+import app.focal.ui.scene.rememberTimerStyles
 import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.PauseReason
@@ -141,15 +139,6 @@ object StageMetrics {
     val liveGap = Grid.x16
     /** The live text region fades in over its top this far (`DstIn`). */
     val liveMask = 34.dp
-    val paragraphGap = Grid.x12
-    /** Enough paragraphs to fill the region; older ones are under the mask anyway. */
-    const val LIVE_PARAGRAPHS = 6
-    /** The timer is the scene's 76 sp timer at 48/76; it shrinks in 2 sp steps to 32 sp until "0:00:00" fits. */
-    const val TIMER_MAX_SP = 48f
-    const val TIMER_MIN_SP = 32f
-    const val TIMER_STEP_SP = 2f
-    const val SCENE_TIMER_SP = 76f
-    const val TIMER_TEMPLATE = "0:00:00"
 
     // The readiness shimmer (2.2.1 `stageShimmer`).
     val shimmerWidth = 180.dp
@@ -362,24 +351,17 @@ private const val HALF_TURN = 180f
  */
 @Composable
 private fun LiveStage(stage: StageUi.Live, meter: WaveMeter) {
+    val colors = FocalTheme.colors
     val density = LocalDensity.current
-    val measurer = rememberTextMeasurer()
-    val timerStyle = remember(density.fontScale, density.density) {
-        // The largest size in 32-48 sp at which "0:00:00" fits beside the wave (spec 4.22.7), fixed per composition.
-        val room = with(density) { (FRAME_COLUMN - Mark.width(StageMetrics.wave) - StageMetrics.liveGap).roundToPx() }
-        var size = StageMetrics.TIMER_MAX_SP
-        while (size > StageMetrics.TIMER_MIN_SP) {
-            val style = timerStyle(size)
-            if (measurer.measure(StageMetrics.TIMER_TEMPLATE, style, density = density).size.width <= room) break
-            size -= StageMetrics.TIMER_STEP_SP
-        }
-        timerStyle(size)
-    }
-    val timerColor = remember { ColorAnimatable(if (stage.paused) Stage.muted else Scene.hi) }
-    LaunchedEffect(stage.paused) { timerColor.animateTo(if (stage.paused) Stage.muted else Scene.hi, FocalMotion.develop()) }
+    // The scene's timer at the stage's size (spec 4.22.7), with the same reserved widths (R5): the morph scales one
+    // into the other.
+    val timers = rememberTimerStyles(LocalWindowInfo.current.containerSize.width.toFloat())
+    val timerColor = remember { ColorAnimatable(if (stage.paused) colors.stageRecede else Scene.hi) }
+    LaunchedEffect(stage.paused, colors.stageRecede) { timerColor.animateTo(if (stage.paused) colors.stageRecede else Scene.hi, FocalMotion.develop()) }
     val badge = remember { Animatable(if (stage.paused) 1f else 0f) }
     LaunchedEffect(stage.paused) { badge.animateTo(if (stage.paused) 1f else 0f, FocalMotion.fadeFast()) }
     val lineHeight = with(density) { FocalType.stageText.lineHeight.toPx() }
+    val inks = TranscriptInks(colors.stageInk, colors.stageRecede, Scene.faint)
     Layout(
         contents = listOf(
             {
@@ -395,19 +377,39 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter) {
                         )
                     }
                     Spacer(Modifier.width(StageMetrics.liveGap))
-                    androidx.compose.foundation.text.BasicText(
-                        Lengths.timer(stage.elapsedSeconds), style = timerStyle, maxLines = 1, color = { timerColor.value },
+                    TimerText(stage.elapsedSeconds, timers.stage, timers::stageWidth, color = { timerColor.value })
+                }
+            },
+            {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .clipToBounds()
+                        .clearAndSetSemantics { }
+                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, endY = StageMetrics.liveMask.toPx()),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        },
+                ) {
+                    StageTranscript(
+                        stage.paragraphs, FocalType.stageText, inks, focus = !stage.storageFull,
+                        modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().wrapContentHeight(Alignment.Bottom, unbounded = true),
+                        hint = if (stage.hint && !stage.storageFull) { { Text(stringResource(R.string.hint_first_text), style = FocalType.stageText, color = colors.stageRecede) } } else null,
+                        footer = liveFooter(stage),
                     )
                 }
             },
-            { LiveText(stage) },
         ),
     ) { (head, region), constraints ->
         val width = constraints.maxWidth
         val inset = StageMetrics.inset.roundToPx()
         val column = width - 2 * inset
         val top = head.first().measure(Constraints(maxWidth = column))
-        val regionTop = inset + top.height + StageMetrics.liveGap.roundToPx()
+        val regionTop = inset + max(top.height, StageMetrics.wave.roundToPx()) + StageMetrics.liveGap.roundToPx()
         val height = max(StageMetrics.minHeight.roundToPx(), regionTop + (StageMetrics.TEXT_LINES_MIN * lineHeight).roundToInt() + inset)
         val text = region.first().measure(Constraints.fixed(column, height - inset - regionTop))
         layout(width, height) {
@@ -417,92 +419,26 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter) {
     }
 }
 
-/** The text column of a 412 dp frame's stage (x 44-368), the room the timer is sized for. */
-private val FRAME_COLUMN = 324.dp
-
-private fun timerStyle(sizeSp: Float) = FocalType.sceneTimer.let { style ->
-    val k = sizeSp / StageMetrics.SCENE_TIMER_SP
-    style.copy(fontSize = sizeSp.sp, lineHeight = (style.lineHeight.value * k).sp)
-}
-
 /**
- * The live text region: the latest resolved stretch in `stageInk`, older text in `stageMuted`, bottom-anchored with
- * a 34 dp mask at its top. Before the first text, the first recordings show the hint. A storage-full pause adds
- * "Storage is full" as the last line and the transcript above recedes; a model condition adds its line muted.
+ * The live region's last line: "Storage is full" in ink (the only caption; the transcript above recedes), or a
+ * model condition, receded.
  */
 @Composable
-private fun LiveText(stage: StageUi.Live) {
+private fun liveFooter(stage: StageUi.Live): (@Composable () -> Unit)? {
     val colors = FocalTheme.colors
-    val shown = stage.paragraphs.takeLast(StageMetrics.LIVE_PARAGRAPHS)
-    // Paragraphs present when the region first composed are settled; later ones develop as they arrive.
-    val settled = remember { shown.mapTo(HashSet()) { it.id } }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .clipToBounds()
-            .clearAndSetSemantics { }
-            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-            .drawWithContent {
-                drawContent()
-                drawRect(
-                    Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, endY = StageMetrics.liveMask.toPx()),
-                    blendMode = BlendMode.DstIn,
-                )
-            },
-    ) {
-        Column(
-            Modifier.align(Alignment.BottomStart).fillMaxWidth().wrapContentHeight(Alignment.Bottom, unbounded = true),
-            verticalArrangement = Arrangement.spacedBy(StageMetrics.paragraphGap),
-        ) {
-            if (shown.isEmpty() && stage.hint && !stage.storageFull) {
-                Text(stringResource(R.string.hint_first_text), style = FocalType.stageText, color = colors.stageRecede)
-            }
-            shown.forEachIndexed { index, paragraph ->
-                androidx.compose.runtime.key(paragraph.id) {
-                    LiveLine(paragraph, latest = index == shown.lastIndex && !stage.storageFull, arriving = paragraph.id !in settled)
-                }
-            }
-            when {
-                stage.storageFull -> Text(
-                    stringResource(R.string.paused_storage), style = FocalType.stageText.copy(fontWeight = FocalWeight.Medium),
-                    color = colors.stageInk,
-                )
-                stage.speech == SpeechAvailability.PREPARING ->
-                    Text(stringResource(R.string.state_preparing), style = FocalType.stageText, color = colors.stageRecede)
-                stage.speech == SpeechAvailability.UNAVAILABLE ->
-                    Text(stringResource(R.string.state_later), style = FocalType.stageText, color = colors.stageRecede)
-            }
+    return when {
+        stage.storageFull -> {
+            { Text(stringResource(R.string.paused_storage), style = FocalType.stageText.copy(fontWeight = FocalWeight.Medium), color = colors.stageInk) }
         }
+        stage.speech == SpeechAvailability.PREPARING -> {
+            { Text(stringResource(R.string.state_preparing), style = FocalType.stageText, color = colors.stageRecede) }
+        }
+        stage.speech == SpeechAvailability.UNAVAILABLE -> {
+            { Text(stringResource(R.string.state_later), style = FocalType.stageText, color = colors.stageRecede) }
+        }
+        else -> null
     }
 }
-
-/** A live paragraph: it develops on arrival (spec 2.8.1) and recedes 140 ms after a newer one starts developing. */
-@Composable
-private fun LiveLine(paragraph: LiveParagraph, latest: Boolean, arriving: Boolean) {
-    val colors = FocalTheme.colors
-    val target = if (latest) colors.stageInk else colors.stageRecede
-    val color = remember { ColorAnimatable(if (arriving) Scene.faint else target) }
-    val alpha = remember { Animatable(if (arriving) 0f else 1f) }
-    val shift = remember { Animatable(if (arriving) ARRIVAL_SHIFT else 0f) }
-    LaunchedEffect(target) {
-        if (color.value == target) return@LaunchedEffect
-        if (!latest) delay(FocalTiming.RECEDE_DELAY_MS)
-        color.animateTo(target, FocalMotion.develop())
-    }
-    LaunchedEffect(Unit) {
-        if (!arriving) return@LaunchedEffect
-        delay(FocalTiming.DEVELOP_DELAY_MS)
-        launch { shift.animateTo(0f, FocalMotion.move()) }
-        alpha.animateTo(1f, FocalMotion.fadeSlow())
-    }
-    androidx.compose.foundation.text.BasicText(
-        paragraph.text, style = FocalType.stageText, color = { color.value },
-        modifier = Modifier.graphicsLayer { this.alpha = alpha.value; translationY = shift.value * density },
-    )
-}
-
-/** Arriving text rises this far (dp) as it develops. */
-private const val ARRIVAL_SHIFT = 8f
 
 /**
  * A note on the stage (spec 4.22.4): the title with the time on its first baseline, the text under it in whole
