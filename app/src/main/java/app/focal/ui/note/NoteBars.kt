@@ -68,7 +68,7 @@ object NoteBarMetrics {
 }
 
 /** What the note menu offers in this state (spec 4.15: items that do not apply are hidden). */
-internal data class NoteMenuItems(val find: Boolean, val share: Boolean, val removeAudio: Boolean)
+internal data class NoteMenuItems(val find: Boolean, val share: Boolean, val removeAudio: Boolean, val delete: Boolean = true)
 
 internal class NoteMenuActions(
     val find: () -> Unit,
@@ -153,7 +153,7 @@ private fun NoteMenu(items: NoteMenuItems, actions: NoteMenuActions, dismiss: ()
         LaunchedEffect(Unit) { size.value = actions.audioSize() }
         FocalMenuItem(stringResource(R.string.menu_remove_audio), run(actions.removeAudio), trailing = size.value)
     }
-    FocalMenuItem(stringResource(R.string.menu_delete), run(actions.delete))
+    if (items.delete) FocalMenuItem(stringResource(R.string.menu_delete), run(actions.delete))
 }
 
 /** What the edit bar shows and does. */

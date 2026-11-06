@@ -80,6 +80,7 @@ import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.library.LibraryDates
+import app.focal.ui.library.LibraryModels
 import app.focal.ui.library.noteDock
 import app.focal.ui.shell.BackEase
 import app.focal.ui.shell.Destination
@@ -645,6 +646,7 @@ fun NotePage(
         find = editable || (note.phase == NotePhase.READY && !note.audioPresent && paragraphs.isNotEmpty()),
         share = note.phase == NotePhase.READY || note.phase == NotePhase.PARTIAL_FAILURE,
         removeAudio = note.canRemoveAudio,
+        delete = note.phase !in LibraryModels.BUSY,
     )
     val menuActions = run {
         NoteMenuActions(

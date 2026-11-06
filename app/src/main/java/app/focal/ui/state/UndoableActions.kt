@@ -49,8 +49,11 @@ object UndoableActions {
 
     /** Moves [noteId] to the trash. False (with [onError]) when it is busy or not deletable now. */
     suspend fun delete(app: FocalApplication, noteId: String, onError: (String) -> Unit): Boolean {
-        val claim = SessionOperations.tryDestructive(noteId)
-            ?: return false.also { onError(app.getString(R.string.error_note_busy)) }
+        val claim = SessionOperations.tryDestructive(noteId) ?: return false.also {
+            // Held by its transcription, it stays refused until that is done; anything else is a moment's work.
+            val live = RecordingState.live.value
+            onError(app.getString(if (live.noteId == noteId && live.processing) R.string.error_delete_active else R.string.error_note_busy))
+        }
         val deleted = try { withContext(Dispatchers.IO) { app.store.deleteWithUndo(noteId) } }
         catch (error: Exception) {
             if (error is CancellationException) throw error

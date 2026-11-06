@@ -140,6 +140,9 @@ class LibraryModelsTest {
         assertTrue(LibraryModels.copyable(row("a", 1, NotePhase.PARTIAL_FAILURE)))
         assertFalse(LibraryModels.copyable(row("a", 1, NotePhase.TRANSCRIBING)))
         assertEquals(listOf(MenuItem.Rename, MenuItem.Delete), menuItems(row("a", 1, NotePhase.WAITING)))
+        // Being transcribed, the service holds the note: Delete would only be refused.
+        assertEquals(listOf(MenuItem.Rename), menuItems(row("a", 1, NotePhase.TRANSCRIBING)))
+        assertEquals(listOf(MenuItem.Rename), menuItems(row("a", 1, NotePhase.PREPARING_MODEL)))
         assertEquals(
             listOf(MenuItem.CopyText, MenuItem.Share, MenuItem.Rename, MenuItem.RemoveAudio, MenuItem.Delete),
             menuItems(row("a", 1).copy(canRemoveAudio = true)),

@@ -149,6 +149,12 @@ object LibraryModels {
 
     /** Whether [row] is done becoming text. */
     fun done(row: NoteRow): Boolean = row.phase in DONE
+
+    /**
+     * Phases in which the note is being transcribed right now: the service holds it, so a delete would be refused
+     * until it is done (the drain cannot be cancelled from here). Delete is not offered then.
+     */
+    val BUSY = setOf(NotePhase.TRANSCRIBING, NotePhase.PREPARING_MODEL)
 }
 
 /** The row menu's items (spec 4.15). */
@@ -156,10 +162,10 @@ enum class MenuItem { CopyText, Share, Rename, RemoveAudio, Delete }
 
 /**
  * Row menu = Copy text, Share, Rename, divider, Remove audio, Delete; a note that is not ready yet offers Rename and
- * Delete only. Items that do not apply are hidden, not disabled.
+ * Delete only, and only Rename while it is being transcribed. Items that do not apply are hidden, not disabled.
  */
 fun menuItems(row: NoteRow): List<MenuItem> {
-    if (!LibraryModels.done(row)) return listOf(MenuItem.Rename, MenuItem.Delete)
+    if (!LibraryModels.done(row)) return listOfNotNull(MenuItem.Rename, MenuItem.Delete.takeUnless { row.phase in LibraryModels.BUSY })
     return buildList {
         if (LibraryModels.copyable(row)) {
             add(MenuItem.CopyText)
