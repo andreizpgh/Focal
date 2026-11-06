@@ -188,22 +188,25 @@ fun BottomColumn(
  * The paper fade above the bottom column (spec 2.6), drawn by the screen under its own content: a gradient from
  * transparent to paper ending 8 dp above the topmost bottom element (64 dp tall), then solid paper to the window
  * bottom. Above search results and find rows ([keyboard]) it is 48 dp and ends at the element itself. It follows the
- * element on `move` (exactly, while the keyboard drives it). Fill the window with [modifier].
+ * element on `move` (exactly, while the keyboard drives it). [alpha] lets a screen hold it off while nothing scrolls
+ * under it. Fill the window with [modifier].
  */
 @Composable
-fun BottomFade(state: BottomColumnState, modifier: Modifier, keyboard: Boolean = false) {
+fun BottomFade(state: BottomColumnState, modifier: Modifier, keyboard: Boolean = false, alpha: () -> Float = { 1f }) {
     val paper = FocalTheme.colors.paper
     Spacer(
         modifier.drawBehind {
             val top = state.top.value
             if (top.isNaN()) return@drawBehind
+            val strength = alpha()
+            if (strength <= 0f) return@drawBehind
             val end = if (keyboard) top else top - FocalLayout.bottomGap.toPx()
             val start = end - (if (keyboard) FocalLayout.keyboardFade else FocalLayout.bottomFade).toPx()
             drawRect(
                 Brush.verticalGradient(0f to Color.Transparent, 1f to paper, startY = start, endY = end),
-                topLeft = Offset(0f, start), size = Size(size.width, end - start),
+                topLeft = Offset(0f, start), size = Size(size.width, end - start), alpha = strength,
             )
-            drawRect(paper, topLeft = Offset(0f, end), size = Size(size.width, size.height - end))
+            drawRect(paper, topLeft = Offset(0f, end), size = Size(size.width, size.height - end), alpha = strength)
         },
     )
 }

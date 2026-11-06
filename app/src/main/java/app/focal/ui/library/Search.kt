@@ -14,15 +14,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.input.TextFieldDecorator
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +55,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.util.lerp
 import app.focal.R
 import app.focal.ui.components.BottomColumnState
@@ -60,6 +63,7 @@ import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.Glyph
 import app.focal.ui.components.KeyboardRowMetrics
 import app.focal.ui.components.focusRing
+import app.focal.ui.components.scrollEdgeFade
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
@@ -148,6 +152,7 @@ fun SearchField(search: LibrarySearchState, query: TextFieldState, onClose: () -
     val keyboard = LocalSoftwareKeyboardController.current
     val circle = with(LocalDensity.current) { KeyboardRowMetrics.searchField.roundToPx() }
     val hint = stringResource(R.string.search_hint)
+    val scroll = rememberScrollState()
     LaunchedEffect(search.focusPending) {
         if (!search.focusPending) return@LaunchedEffect
         search.focusPending = false
@@ -184,8 +189,10 @@ fun SearchField(search: LibrarySearchState, query: TextFieldState, onClose: () -
                 lineLimits = TextFieldLineLimits.SingleLine,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 onKeyboardAction = KeyboardActionHandler { keyboard?.hide() },
+                scrollState = scroll,
                 modifier = Modifier
                     .weight(1f)
+                    .scrollEdgeFade(scroll)
                     .focusRequester(search.focus)
                     .semantics { contentDescription = hint }
                     .graphicsLayer { alpha = smoothstep(HALF, 1f, search.grow.value) },
@@ -236,7 +243,8 @@ fun SyncQuery(query: TextFieldState, onQuery: (String) -> Unit) {
  * The results (spec 5.2): a stack that grows upward from the field (`reverseLayout`, the most recent match nearest
  * the field), its last row 24 dp above the field and the count head 16 dp above the topmost title. An empty query
  * leaves the paper empty; no match leaves one line 16 dp above the field. The stack's bottom follows the field as it
- * rides the keyboard, read in the layout phase.
+ * rides the keyboard, read in the layout phase. The list runs down to the field's top, so a row scrolled toward the
+ * field passes under the whole bottom fade (and [searchFadeAlpha]) instead of being cut 12 dp above it.
  */
 @Composable
 fun SearchResults(
@@ -246,18 +254,16 @@ fun SearchResults(
     today: LocalDate,
     onOpen: (SearchRow) -> Unit,
     modifier: Modifier = Modifier,
+    list: LazyListState = rememberLazyListState(),
 ) {
     val colors = FocalTheme.colors
     val status = WindowInsets.statusBars
     val results = remember(search.results) { search.results.sortedByDescending { it.row.created } }
-    val list = rememberLazyListState()
     // A new query starts at the field.
     LaunchedEffect(search.resultsQuery) { list.scrollToItem(0) }
     Box(
         modifier.fillMaxSize().layout { measurable, constraints ->
-            val fieldTop = bottom.fieldTop(constraints.maxHeight)
-            // The last row's hit area reaches 12 dp below its text, so the stack ends 24 - 12 dp above the field.
-            val height = (fieldTop - (SearchMetrics.resultsGap - RowMetrics.hitPad).roundToPx()).coerceIn(0, constraints.maxHeight)
+            val height = bottom.fieldTop(constraints.maxHeight).coerceIn(0, constraints.maxHeight)
             val placeable = measurable.measure(Constraints.fixed(constraints.maxWidth, height))
             layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
         },
@@ -267,13 +273,17 @@ fun SearchResults(
             results.isEmpty() && !search.searching -> Text(
                 stringResource(R.string.search_none, search.resultsQuery), style = FocalType.secondary, color = colors.recede,
                 modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = FocalLayout.gutter)
-                    .padding(bottom = SearchMetrics.headGap - RowMetrics.hitPad),
+                    .padding(bottom = SearchMetrics.headGap),
             )
             else -> LazyColumn(
                 state = list,
                 reverseLayout = true,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = with(LocalDensity.current) { status.getTop(this).toDp() } + FocalLayout.topFade),
+                contentPadding = PaddingValues(
+                    top = with(LocalDensity.current) { status.getTop(this).toDp() } + FocalLayout.topFade,
+                    // The last row's hit area reaches 12 dp below its text: its text ends 24 dp above the field.
+                    bottom = SearchMetrics.resultsGap - RowMetrics.hitPad,
+                ),
             ) {
                 items(results, key = { it.row.id }, contentType = { "result" }) { result ->
                     SearchResultItem(result, dates, today, onOpen, Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()))
@@ -289,6 +299,16 @@ fun SearchResults(
             }
         }
     }
+}
+
+/**
+ * The bottom fade's alpha above the results (spec 2.6, 5.2): at rest every result clears it, so it stays off and the
+ * nearest result's last line keeps its full contrast; it arrives over the first 16 dp that the stack scrolls toward
+ * the field (as the library's pin band arrives, G1). Read it in the draw phase.
+ */
+fun searchFadeAlpha(list: LazyListState, density: Density): Float {
+    if (list.firstVisibleItemIndex > 0) return 1f
+    return (list.firstVisibleItemScrollOffset / with(density) { FocalLayout.topFade.toPx() }).coerceIn(0f, 1f)
 }
 
 /** The search field's top in the window: the topmost bottom element (the field, or the feedback pill above it). */

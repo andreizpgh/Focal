@@ -3,6 +3,8 @@ package app.focal.ui.library
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,10 +20,10 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.input.TextFieldState
-import androidx.compose.foundation.text.selection.LocalTextSelectionColors
-import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -39,11 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -54,12 +54,12 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import app.focal.R
 import app.focal.ui.components.BottomFade
 import app.focal.ui.components.DayLabel
@@ -153,6 +153,8 @@ fun LibraryPage(
     var renaming by rememberSaveable { mutableStateOf(initialRename) }
     val renameBounds = remember { RenameBounds() }
     val imeVisible = WindowInsets.isImeVisible
+    val searchList = rememberLazyListState()
+    val density = LocalDensity.current
 
     SyncQuery(query, actions.query)
     val closeSearch: () -> Unit = {
@@ -270,11 +272,14 @@ fun LibraryPage(
                 SearchResults(search, bottom, dates, today, onOpen = { result ->
                     focusManager.clearFocus()
                     actions.openResult(result)
-                })
+                }, list = searchList)
                 LibraryTopFade({ Float.POSITIVE_INFINITY }, Modifier.fillMaxSize())
             }
         }
-        BottomFade(bottom, Modifier.fillMaxSize(), keyboard = searchState.open)
+        BottomFade(
+            bottom, Modifier.fillMaxSize(), keyboard = searchState.open,
+            alpha = { if (searchState.open) searchFadeAlpha(searchList, density) else 1f },
+        )
     }
 }
 
