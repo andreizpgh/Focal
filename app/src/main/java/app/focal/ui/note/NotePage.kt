@@ -324,6 +324,18 @@ fun NotePage(
             else if (session.failures >= 2) bottom.feedback.show(saveFailed)
         }
     }
+    // Writes that changed the stored text under the field (Replace all, its Undo): the field takes the stored text
+    // back, keeping its caret, so its draft never writes the old words over them. A paragraph that went away drops it.
+    fun reseedField() {
+        val current = page.field ?: return
+        val stored = session.paragraph(current.id)
+        if (stored == null) {
+            page.field = null
+            focus.editingId = null
+            return
+        }
+        focusField(CaretAt(stored.id, current.text.selection.start.coerceAtMost(stored.text.length)))
+    }
     fun withDraft(block: suspend (FieldFocus?) -> CaretAt?) {
         scope.launch { block(page.field)?.takeIf { it.id >= 0 }?.let { focusField(it) } }
     }
@@ -369,7 +381,7 @@ fun NotePage(
     fun closeFind() {
         val back = find.fromEdit
         find.close()
-        if (!back) {
+        if (back) reseedField() else {
             keyboard?.hide()
             focusManager.clearFocus()
         }
@@ -415,12 +427,18 @@ fun NotePage(
         scope.launch {
             val outcome = actions.replaceAll(query, replacement)
             if (outcome !is EditOutcome.Saved) return@launch
-            if (page.editing) session.recordReplace(outcome.paragraphs, before) else session.applySaved(outcome.paragraphs)
+            if (page.editing) {
+                session.recordReplace(outcome.paragraphs, before)
+                reseedField()
+            } else session.applySaved(outcome.paragraphs)
             find.refresh()
             if (bottom.feedback.show(label, FeedbackAction(undoLabel, FocalIcon.Undo)) == FeedbackResult.ActionPerformed) {
-                if (!(page.editing && session.undoReplace())) {
+                if (page.editing && session.undoReplace()) reseedField() else {
                     val undone = actions.undoReplace()
-                    if (undone is EditOutcome.Saved) session.applySaved(undone.paragraphs)
+                    if (undone is EditOutcome.Saved) {
+                        session.applySaved(undone.paragraphs)
+                        reseedField()
+                    }
                 }
                 find.refresh()
             }
