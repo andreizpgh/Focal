@@ -1,12 +1,5 @@
 package app.focal.ui.shell
 
-import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
@@ -33,21 +26,17 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.ui.NavDisplay
-import androidx.navigationevent.NavigationEvent
 import app.focal.ui.components.BottomColumn
 import app.focal.ui.components.BottomColumnState
 import app.focal.ui.components.Dock
 import app.focal.ui.components.DockActions
 import app.focal.ui.components.DockState
 import app.focal.ui.components.rememberBottomColumnState
-import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.smoothstep
@@ -69,15 +58,22 @@ class ShellState internal constructor(
     val live: LiveSurfaceState,
     val bottom: BottomColumnState,
     val bars: SystemBarsState,
+    val pages: PageTransitions,
 ) {
     val current: Destination get() = backStack.last()
 
-    fun open(destination: Destination) {
-        if (backStack.lastOrNull() != destination) backStack.add(destination)
+    /** Opens [destination] on top; [motion] says how (spec 6.1): a fade-through unless it grows out of the library. */
+    fun open(destination: Destination, motion: PageMotion = PageMotion.FadeThrough) {
+        if (backStack.lastOrNull() == destination) return
+        pages.push(destination, motion)
+        backStack.add(destination)
     }
 
+    /** Back from the top page: it folds into where it came from if that is on screen, else it fades through. */
     fun back() {
-        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+        if (backStack.size <= 1) return
+        pages.pop(backStack.last())
+        backStack.removeAt(backStack.lastIndex)
     }
 
     /** What each destination asked the bottom column to show; only the current destination's is drawn. */
@@ -96,7 +92,7 @@ fun rememberShellState(capturing: () -> Boolean = { false }): ShellState {
     val settings = rememberSettingsStripState()
     val live = rememberLiveSurfaceState(capturing)
     val bottom = rememberBottomColumnState()
-    return remember(backStack, settings, live, bottom) { ShellState(backStack, settings, live, bottom, SystemBarsState()) }
+    return remember(backStack, settings, live, bottom) { ShellState(backStack, settings, live, bottom, SystemBarsState(), PageTransitions()) }
 }
 
 /** The bottom column's contents for one destination. */
@@ -155,7 +151,6 @@ fun FocalShell(
     scene: @Composable () -> Unit = {},
 ) {
     val colors = FocalTheme.colors
-    val backInset = with(LocalDensity.current) { PREDICTIVE_SHIFT_INSET.roundToPx() }
     CompositionLocalProvider(LocalShell provides shell) {
         val live = shell.live
         val behindScene by remember(live) { derivedStateOf { live.open } }
@@ -177,14 +172,20 @@ fun FocalShell(
                         scaleY = scale
                     },
             ) {
+                // Every change is a bare swap; each page draws its own part from the upper page's progress, and the
+                // container transforms draw above both (PageTransitions).
                 NavDisplay(
                     backStack = shell.backStack,
                     onBack = { shell.back() },
                     transitionSpec = { pageSwap() },
                     popTransitionSpec = { pageSwap() },
-                    predictivePopTransitionSpec = { edge -> predictivePagePop(edge, backInset) },
-                    entryProvider = { key -> NavEntry(key) { destination(key) } },
+                    predictivePopTransitionSpec = { edge ->
+                        shell.pages.beginPredictive(shell.current, edge)
+                        pageSwap()
+                    },
+                    entryProvider = { key -> NavEntry(key) { PageFrame(key, shell.pages) { destination(key) } } },
                 )
+                PageTransformOverlay(shell.pages, shell.live)
             }
             LiveSurfaceHost(shell.live, scene)
             ShellBottom(shell)
@@ -229,32 +230,9 @@ private fun ShellBottom(shell: ShellState) {
     )
 }
 
-/** Pages swap by fading through (`fade` in, `fadeFast` out) until each transition gets its container transform. */
-private fun pageSwap(): ContentTransform = fadeIn(FocalMotion.fade()) togetherWith fadeOut(FocalMotion.fadeFast())
-
-/**
- * Predictive back on a page (spec 2.8.5): it scales to 0.9 and shifts W / 20 - 8 dp toward the gesture, eased by
- * [BackEase]. The container transforms back into the stage or a row come with those screens.
- */
-private fun predictivePagePop(edge: Int, insetPx: Int): ContentTransform {
-    val spec = tween<Float>(durationMillis = PREDICTIVE_DURATION_MS, easing = BackEase)
-    val direction = if (edge == NavigationEvent.EDGE_RIGHT) -1 else 1
-    return fadeIn(spec) togetherWith (
-        scaleOut(spec, targetScale = PREDICTIVE_SCALE) +
-            slideOutHorizontally(tween(PREDICTIVE_DURATION_MS, easing = BackEase)) { width ->
-                direction * (width / PREDICTIVE_SHIFT_DIVISOR - insetPx)
-            }
-        )
-}
-
 private const val HALF = 0.5f
 /** The pages behind the morph darken (spec 2.8.2 `libraryDim`). */
 private const val PAGES_DIM = 0.30f
-private const val PREDICTIVE_SCALE = 0.9f
-/** The seekable transition's length; the gesture's progress drives it, so this only shapes the commit. */
-private const val PREDICTIVE_DURATION_MS = 300
-private const val PREDICTIVE_SHIFT_DIVISOR = 20
-private val PREDICTIVE_SHIFT_INSET = 8.dp
 
 /** Runs the activity's keyboard shortcuts: Ctrl+, opens settings from the library while the scene is folded. */
 @Composable

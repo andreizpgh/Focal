@@ -97,6 +97,9 @@ import app.focal.ui.scene.TimerText
 import app.focal.ui.scene.TranscriptInks
 import app.focal.ui.scene.rememberTimerStyles
 import app.focal.ui.shell.LocalShell
+import app.focal.ui.shell.Origin
+import app.focal.ui.shell.pageOrigin
+import app.focal.ui.shell.rememberStageOrigin
 import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.PauseReason
@@ -201,9 +204,13 @@ fun StageCard(
     val description = stageDescription(stage, dates, today)
     val note = (stage as? StageUi.Note)?.row
     val clickLabel = stringResource(if (note != null) R.string.a11y_open_note else R.string.a11y_expand_recording)
+    val large = LocalDensity.current.fontScale >= StageMetrics.LARGE_FONT
+    val origin = rememberStageOrigin(note?.id, if (large) StageMetrics.TITLE_LINES_LARGE else StageMetrics.TITLE_LINES)
     Box(
         modifier
             .fillMaxWidth()
+            // The page transforms grow out of the card at rest (outside its press scale).
+            .pageOrigin(origin)
             .semantics(mergeDescendants = true) {
                 contentDescription = description
                 customActions = note?.let(actions.menuActions).orEmpty() + CustomAccessibilityAction(settingsLabel) { actions.openSettings(); true }
@@ -231,9 +238,9 @@ fun StageCard(
     ) {
         if (shimmering) Spacer(Modifier.matchParentSize().shimmer { shimmer.value })
         when (stage) {
-            is StageUi.Live -> LiveStage(stage, meter)
-            is StageUi.Note -> RecordedForRecord { NoteStage(
-                stage, dates, today, actions, title,
+            is StageUi.Live -> RecordedStage { LiveStage(stage, meter) }
+            is StageUi.Note -> RecordedStage { NoteStage(
+                stage, dates, today, actions, title, origin,
                 onReadyMoment = {
                     if (!reduced) scope.launch {
                         delay(FocalTiming.READY_SHIMMER_DELAY_MS)
@@ -253,12 +260,15 @@ fun StageCard(
 }
 
 /**
- * The note on the stage, drawn through a graphics layer the recording surface can draw too: Record grows the scene
- * out of this card, and the note leaves with the clip's top-left (T1′).
+ * The stage's content, drawn through a graphics layer the recording surface and the page transforms draw too: Record
+ * grows the scene out of this card and the note leaves with the clip's top-left (T1′); the stage opens into its
+ * note's page with its content riding the clip (T16′, T7b). While the live stage opens into the page, the layer keeps
+ * the recording it had when Finish was tapped: the content is leaving, it must not turn into the note on its way out.
  */
 @Composable
-private fun RecordedForRecord(content: @Composable () -> Unit) {
-    val live = LocalShell.current.live
+private fun RecordedStage(content: @Composable () -> Unit) {
+    val shell = LocalShell.current
+    val live = shell.live
     val layer = rememberGraphicsLayer()
     DisposableEffect(live, layer) {
         live.stageNote = layer
@@ -266,7 +276,7 @@ private fun RecordedForRecord(content: @Composable () -> Unit) {
     }
     Box(
         Modifier.drawWithContent {
-            layer.record { this@drawWithContent.drawContent() }
+            if (!shell.pages.freezesStage()) layer.record { this@drawWithContent.drawContent() }
             drawLayer(layer)
         },
     ) { content() }
@@ -480,9 +490,11 @@ private fun NoteStage(
     today: LocalDate,
     actions: StageActions,
     renameField: (@Composable () -> Unit)?,
+    origin: Origin,
     onReadyMoment: () -> Unit,
 ) {
     val colors = FocalTheme.colors
+    val pages = LocalShell.current.pages
     val row = stage.row
     val density = LocalDensity.current
     val large = density.fontScale >= StageMetrics.LARGE_FONT
@@ -505,7 +517,11 @@ private fun NoteStage(
                     noteTitle(row, dates), style = FocalType.headline.copy(lineBreak = LineBreak.Heading),
                     color = if (fallback) colors.stageRecede else colors.stageInk,
                     maxLines = if (large) StageMetrics.TITLE_LINES_LARGE else StageMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.clearAndSetSemantics { },
+                    // While the stage opens into its page (or folds back), a copy of the title flies between them.
+                    modifier = Modifier
+                        .clearAndSetSemantics { }
+                        .pageOrigin(origin, title = true)
+                        .graphicsLayer { alpha = if (pages.flying(row.id)) 0f else 1f },
                 )
             },
             {

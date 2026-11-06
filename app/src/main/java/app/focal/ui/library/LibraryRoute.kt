@@ -32,6 +32,7 @@ import app.focal.ui.settings.SettingsRoute
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.NoteHit
+import app.focal.ui.shell.PageMotion
 import app.focal.ui.state.LibraryViewModel
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.RecordingUiState
@@ -87,7 +88,8 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
     }
     val actions = remember(library, recording) {
         LibraryActions(
-            open = { row -> shell.open(Destination.Note(row.id)) },
+            open = { row -> shell.open(Destination.Note(row.id), PageMotion.Row) },
+            openStage = { row -> shell.open(Destination.Note(row.id), PageMotion.Stage) },
             openResult = { result ->
                 val hit = result.paragraphId?.let { NoteHit(it, result.hitStart, result.hitEnd) }
                 shell.open(Destination.Note(result.row.id, hit))
@@ -115,7 +117,7 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
                 val id = noteId
                 recording.finish()
                 haptics.finish()
-                if (id != null) shell.open(Destination.Note(id))
+                if (id != null) shell.open(Destination.Note(id), PageMotion.LiveStage)
             },
             openSettings = openSettings,
         )

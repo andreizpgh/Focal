@@ -89,7 +89,10 @@ import java.time.LocalDate
 /** What the library page does; the route provides it from the view models (the gallery from fakes). */
 @Stable
 class LibraryActions(
+    /** A row opens its note (T16). */
     val open: (NoteRow) -> Unit = {},
+    /** The stage opens its note (T16′). */
+    val openStage: (NoteRow) -> Unit = open,
     val openResult: (SearchRow) -> Unit = {},
     /** Tap or Enter on the live stage: the scene expands (T6′). */
     val expand: () -> Unit = {},
@@ -193,7 +196,7 @@ fun LibraryPage(
     }
     val stageActions = remember(actions, rowActions) {
         StageActions(
-            open = actions.open, expand = actions.expand, copy = actions.copy, openSettings = actions.openSettings,
+            open = actions.openStage, expand = actions.expand, copy = actions.copy, openSettings = actions.openSettings,
             menu = { row, at -> menu = MenuTarget(row.id, at) },
             menuActions = rowActions.menuActions,
         )

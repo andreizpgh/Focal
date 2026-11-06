@@ -60,6 +60,9 @@ import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.library.RenameField
+import app.focal.ui.shell.LocalPageReveal
+import app.focal.ui.shell.pageTitle
+import app.focal.ui.shell.rememberPageTitle
 import app.focal.ui.state.GapUi
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -112,6 +115,7 @@ internal data class HeadUi(
  */
 @Composable
 internal fun NoteHead(
+    noteId: String,
     head: HeadUi,
     titleInks: Boolean,
     renaming: Boolean,
@@ -143,11 +147,17 @@ internal fun NoteHead(
             metaShown.animateTo(1f, FocalMotion.fade())
         }
     }
+    val reveal = LocalPageReveal.current
+    val flight = rememberPageTitle(
+        noteId, head.title, head.titleFallback, if (large) NoteBlockMetrics.TITLE_LINES_LARGE else NoteBlockMetrics.TITLE_LINES,
+    )
     Column(modifier.fillMaxWidth().padding(horizontal = FocalLayout.gutter).padding(bottom = NoteBlockMetrics.bodyGap - ParagraphMetrics.gap)) {
+        // While the page opens out of the stage or a row (or folds back), a copy of the title flies in its place.
         val titleModifier = Modifier
             .fillMaxWidth()
             .onGloballyPositioned { onTitleBottom(it.positionInWindow().y + it.size.height) }
-            .graphicsLayer { alpha = titleShown.value }
+            .pageTitle(flight)
+            .graphicsLayer { alpha = titleShown.value * reveal.title() }
         if (renaming) {
             RenameField(
                 initial = if (head.titleFallback) "" else head.title,

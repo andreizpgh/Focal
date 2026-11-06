@@ -59,7 +59,11 @@ fun FocalApp(preferences: Preferences, commands: Flow<ShellCommand>) {
             destination = { destination ->
                 when (destination) {
                     Destination.Library -> LibraryRoute(recordFlow::record, sheetOpen = recordFlow.sheet != null, meter = meter)
-                    is Destination.Note -> NoteRoute(destination, scope, landing = remember(destination) { shell.live.landingNote == destination.id })
+                    is Destination.Note -> NoteRoute(
+                        destination, scope,
+                        // The page develops under the settling scene (T7) or out of the live stage (T7b).
+                        landing = remember(destination) { shell.live.landingNote == destination.id || shell.pages.develops(destination) },
+                    )
                     Destination.Licenses -> LicensesPage(onBack = shell::back)
                 }
             },

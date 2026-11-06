@@ -84,6 +84,7 @@ import app.focal.ui.library.LibraryDates
 import app.focal.ui.shell.BackEase
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.DestinationBottom
+import app.focal.ui.shell.LocalPageReveal
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.state.EditOutcome
 import app.focal.ui.state.GapUi
@@ -172,6 +173,8 @@ fun NotePage(
     val selection = rememberSelectionState()
     val arrivedAt = remember { SystemClock.uptimeMillis() }
     val status = WindowInsets.statusBars
+    // Inside a container transform the chrome has the paper's alpha and the body arrives on its own (spec 6.1).
+    val reveal = LocalPageReveal.current
 
     // What is drawn: the note's paragraphs with the session's saved ones laid over them.
     val paragraphs by remember(note.paragraphs, page.editing) {
@@ -638,7 +641,7 @@ fun NotePage(
             ),
     ) {
         // The bars come first, so keyboard focus and TalkBack meet them before the text (spec 8.5); they draw on top.
-        val chrome = { 1 - findT.value }
+        val chrome = { (1 - findT.value) * reveal.chrome() }
         if (topBarShown) {
             NoteTopBar(
                 title = head.title, titleMuted = head.titleFallback, collapsed = collapsed && mode != NoteMode.Editing,
@@ -661,7 +664,7 @@ fun NotePage(
         val bringSpec = remember(density, status) { CaretSpec({ bandTop() + with(density) { CaretMargin.toPx() } }, { with(density) { CaretMargin.toPx() } }) }
         CompositionLocalProvider(LocalBringIntoViewSpec provides bringSpec) {
             SelectionContainer(selection, Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxSize().graphicsLayer { alpha = listFade.value }, contentAlignment = Alignment.TopCenter) {
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = listFade.value * reveal.body() }, contentAlignment = Alignment.TopCenter) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
@@ -675,6 +678,7 @@ fun NotePage(
                         items(items, key = { it.key }, contentType = { contentTypeOf(it) }) { item ->
                             when (item) {
                                 NoteItem.Head -> NoteHead(
+                                    noteId = note.noteId,
                                     head = head,
                                     titleInks = focus.titleInks,
                                     renaming = page.renaming,
@@ -730,9 +734,9 @@ fun NotePage(
             }
         }
         // The top fade under the bar; Find's is shorter (spec 2.6).
-        PaperTopFade(FocalLayout.topBar, Modifier.fillMaxSize().zIndex(FADES_Z), alpha = { 1 - findT.value })
-        PaperTopFade(0.dp, Modifier.fillMaxSize().zIndex(FADES_Z), fade = FindFade, alpha = { findT.value })
-        BottomFade(bottom, Modifier.fillMaxSize().zIndex(FADES_Z).graphicsLayer { alpha = 1 - editT.value }, keyboard = find.open)
+        PaperTopFade(FocalLayout.topBar, Modifier.fillMaxSize().zIndex(FADES_Z), alpha = { (1 - findT.value) * reveal.chrome() })
+        PaperTopFade(0.dp, Modifier.fillMaxSize().zIndex(FADES_Z), fade = FindFade, alpha = { findT.value * reveal.chrome() })
+        BottomFade(bottom, Modifier.fillMaxSize().zIndex(FADES_Z).graphicsLayer { alpha = (1 - editT.value) * reveal.chrome() }, keyboard = find.open)
         JumpPill(
             visible = page.playingOutside != null && stripWanted,
             up = page.playingOutside == true,

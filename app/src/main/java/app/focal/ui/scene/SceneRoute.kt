@@ -33,6 +33,7 @@ import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.rememberFocalHaptics
 import app.focal.ui.shell.Destination
+import app.focal.ui.shell.PageMotion
 import app.focal.ui.shell.SceneBottom
 import app.focal.ui.shell.ShellState
 import app.focal.ui.state.LibraryViewModel
@@ -76,7 +77,7 @@ fun SceneRoute(shell: ShellState, recording: RecordingViewModel, library: Librar
                     live.prepareLanding(id)
                     recording.finish()
                     haptics.finish()
-                    scope.launch { live.land(reduced) { shell.open(Destination.Note(id)) } }
+                    scope.launch { live.land(reduced) { shell.open(Destination.Note(id), PageMotion.Cut) } }
                 }
             },
         )

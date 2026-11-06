@@ -24,7 +24,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
@@ -43,6 +42,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -69,6 +69,9 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.Grid
+import app.focal.ui.shell.LocalShell
+import app.focal.ui.shell.pageOrigin
+import app.focal.ui.shell.rememberRowOrigin
 import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.SearchRow
@@ -137,6 +140,8 @@ fun NoteRowItem(
     } else durationText(row.durationMs)
     val titleText = noteTitle(row, dates)
     val menuActions = actions.menuActions(row)
+    val pages = LocalShell.current.pages
+    val origin = rememberRowOrigin(row.id, RowMetrics.TITLE_LINES)
     Box(
         modifier
             .fillMaxWidth()
@@ -155,15 +160,20 @@ fun NoteRowItem(
                 onLongClick = { actions.menu(row, IntOffset(touch.at.x.roundToInt(), touch.at.y.roundToInt())) },
                 onClick = { actions.open(row) },
             )
-            .padding(horizontal = FocalLayout.gutter, vertical = RowMetrics.hitPad),
+            .padding(horizontal = FocalLayout.gutter, vertical = RowMetrics.hitPad)
+            // The row's content box is what a page grows out of (T16).
+            .pageOrigin(origin),
     ) {
         Column {
             TitleLine(
                 title = title ?: {
-                    // Balanced, so a title never ends on a lone word.
+                    // Balanced, so a title never ends on a lone word; hidden while a copy of it flies to the page.
                     Text(
                         titleText, style = RowTitleStyle, color = if (row.title.isBlank()) colors.recede else colors.ink,
                         maxLines = RowMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .pageOrigin(origin, title = true)
+                            .graphicsLayer { alpha = if (pages.flying(row.id)) 0f else 1f },
                     )
                 },
                 trailing = trailing,
