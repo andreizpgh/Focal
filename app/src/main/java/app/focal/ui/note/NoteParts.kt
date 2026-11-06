@@ -40,6 +40,7 @@ import app.focal.ui.state.GapUi
 import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteUiState
 import app.focal.ui.state.ParagraphUi
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import java.time.LocalDate
 import kotlin.math.abs
@@ -85,6 +86,51 @@ internal fun lineBox(layout: TextLayoutResult?, offset: Int?): Pair<Float, Float
     return layout.getLineTop(line) to layout.getLineBottom(line)
 }
 
+/**
+ * The text lines laid out on screen, as window spans: every visible paragraph's lines from its layout, and the title's
+ * lines from its window bounds ([titleTop]..[titleBottom], [titleLine] each). What [TopEdge] keeps out of the fade.
+ */
+internal fun windowLines(
+    list: LazyListState,
+    items: List<NoteItem>,
+    layouts: ParagraphLayouts,
+    titleTop: Float,
+    titleBottom: Float,
+    titleLine: Float,
+): List<Span> {
+    val info = list.layoutInfo
+    val out = ArrayList<Span>()
+    for (item in info.visibleItemsInfo) {
+        val top = (item.offset - info.viewportStartOffset).toFloat()
+        when (val row = items.getOrNull(item.index)) {
+            is NoteItem.Text -> layouts[row.paragraph.id]?.let { layout ->
+                for (line in 0 until layout.lineCount) out += Span(top + layout.getLineTop(line), top + layout.getLineBottom(line))
+            }
+            NoteItem.Head -> if (titleLine > 0f && titleBottom > titleTop && titleBottom.isFinite()) {
+                val count = ((titleBottom - titleTop) / titleLine).roundToInt().coerceAtLeast(1)
+                val line = (titleBottom - titleTop) / count
+                for (k in 0 until count) out += Span(titleTop + k * line, titleTop + (k + 1) * line)
+            }
+            else -> Unit
+        }
+    }
+    return out
+}
+
+/**
+ * Where a bring may leave the line it brought, and how it lands the lines at the top on the band's edge ([TopEdge]):
+ * [lines] on screen now, the band's top and fade, and the span the brought line must stay in.
+ */
+internal class EdgeSnap(
+    val lines: () -> List<Span>,
+    val bandTop: () -> Float,
+    val fade: Float,
+    val keepTop: () -> Float,
+    val keepBottom: () -> Float,
+) {
+    fun adjust(scroll: Float, keep: Span): Float = TopEdge.snap(scroll, lines(), bandTop(), fade, keep, keepTop(), keepBottom())
+}
+
 /** The window y of [lineTop] inside item [index], while it is laid out (the list fills the window from its top). */
 internal fun windowY(list: LazyListState, index: Int, lineTop: Float): Float? {
     val info = list.layoutInfo
@@ -108,10 +154,14 @@ internal class PhaseMemory {
  * `fade` in) when it is more than three screens away (spec 4.11, 5.8).
  */
 internal class NoteScroller(private val list: LazyListState, private val fade: Animatable<Float, AnimationVector1D>) {
-    /** Brings the line at [lineTop] (from item [index]'s top) to window y [target]. */
-    suspend fun bring(index: Int, lineTop: () -> Float, target: Float) {
+    /**
+     * Brings the line at [lineTop] (from item [index]'s top, [lineHeight] tall) to window y [target]; with [edge], to
+     * where the lines at the top land on the band's edge, the nearest place that keeps the line where [edge] allows.
+     */
+    suspend fun bring(index: Int, lineTop: () -> Float, target: Float, lineHeight: () -> Float = { 0f }, edge: EdgeSnap? = null) {
         windowY(list, index, lineTop())?.let { y ->
-            list.animateScrollBy(y - target, FocalMotion.move())
+            val scroll = y - target
+            list.animateScrollBy(edge?.adjust(scroll, Span(y, y + lineHeight())) ?: scroll, FocalMotion.move())
             return
         }
         val info = list.layoutInfo
@@ -123,6 +173,7 @@ internal class NoteScroller(private val list: LazyListState, private val fade: A
             fade.animateTo(0f, FocalMotion.fadeFast())
             list.scrollToItem(index)
             windowY(list, index, lineTop())?.let { list.scrollBy(it - target) }
+            settle(index, lineTop, lineHeight, edge, animate = false)
             fade.animateTo(1f, FocalMotion.fade())
             return
         }
@@ -140,6 +191,16 @@ internal class NoteScroller(private val list: LazyListState, private val fade: A
                 scrolled += scrollBy(remaining * share)
             }
         }
+        settle(index, lineTop, lineHeight, edge, animate = true)
+    }
+
+    /** After a bring that could not see the lines it would land: the small move that lands them on the band's edge. */
+    private suspend fun settle(index: Int, lineTop: () -> Float, lineHeight: () -> Float, edge: EdgeSnap?, animate: Boolean) {
+        edge ?: return
+        val y = windowY(list, index, lineTop()) ?: return
+        val scroll = edge.adjust(0f, Span(y, y + lineHeight()))
+        if (scroll == 0f) return
+        if (animate) list.animateScrollBy(scroll, FocalMotion.move()) else list.scrollBy(scroll)
     }
 
     private companion object {
@@ -150,20 +211,30 @@ internal class NoteScroller(private val list: LazyListState, private val fade: A
 
 /**
  * Edit keeps the caret's line inside the band between the edit bar and the keyboard, [margin] from each (spec 5.7):
- * the list is padded by the keyboard, and the bar lies over its top.
+ * the list is padded by the keyboard, and the bar lies over its top ([bandTop] is the bar's bottom, where the top fade
+ * starts). The lines at the top land on the band's edge ([TopEdge]): out of the band, the caret only has to stay
+ * clear of the fade; in it, within its margins, so the list never steps back and forth on its way.
  */
-internal class CaretSpec(private val top: () -> Float, private val margin: () -> Float) : BringIntoViewSpec {
+internal class CaretSpec(
+    private val bandTop: () -> Float,
+    private val margin: () -> Float,
+    private val fade: Float,
+    private val lines: () -> List<Span>,
+) : BringIntoViewSpec {
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-        val start = top()
+        val top = bandTop()
+        val start = top + margin()
         val end = containerSize - margin()
         val last = offset + size
-        return when {
+        // Taller than the band and covering it (a focused paragraph, the list itself): nothing to bring.
+        if (offset < start && last > end) return 0f
+        val scroll = when {
             offset >= start && last <= end -> 0f
-            // Taller than the band and covering it (a focused paragraph, the list itself): nothing to bring.
-            offset < start && last > end -> 0f
             abs(offset - start) < abs(last - end) -> offset - start
             else -> last - end
         }
+        val keepTop = if (scroll == 0f) start else top + fade
+        return TopEdge.snap(scroll, lines(), top, fade, Span(offset, last), keepTop, end)
     }
 }
 

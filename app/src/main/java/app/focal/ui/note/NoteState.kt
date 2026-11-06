@@ -102,6 +102,9 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
     /** The content title's bottom in the window, for the collapsed title in the bar. */
     var titleBottom by mutableFloatStateOf(Float.POSITIVE_INFINITY)
 
+    /** The content title's top in the window, for its lines at the band's edge (read in effects, not observed). */
+    internal var titleTop = Float.NaN
+
     /** The search hit was scrolled to and marked: a recreated page keeps its reading position instead. */
     var hitShown by mutableStateOf(false)
 

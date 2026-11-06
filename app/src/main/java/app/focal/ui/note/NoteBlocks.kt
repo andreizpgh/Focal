@@ -121,7 +121,7 @@ internal fun NoteHead(
     canRename: Boolean,
     onRename: () -> Unit,
     onCommitRename: (String) -> Unit,
-    onTitleBottom: (Float) -> Unit,
+    onTitleBounds: (top: Float, bottom: Float) -> Unit,
     entrance: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -144,7 +144,10 @@ internal fun NoteHead(
         // While the page opens out of the stage or a row (or folds back), a copy of the title flies in its place.
         val titleModifier = Modifier
             .fillMaxWidth()
-            .onGloballyPositioned { onTitleBottom(it.positionInWindow().y + it.size.height) }
+            .onGloballyPositioned {
+                val top = it.positionInWindow().y
+                onTitleBounds(top, top + it.size.height)
+            }
             .pageTitle(flight)
             .graphicsLayer { alpha = titleShown() * reveal.title() }
         if (renaming) {

@@ -355,6 +355,25 @@ class NoteFormatTest {
         assertEquals(-50f, Follow.distance(150f, 178f, 100f, 400f))
     }
 
+    @Test fun aLineAcrossTheTopFadeLandsAnEdgeOnTheBand() {
+        // The band's solid paper ends at 100, its fade at 116; lines are 28 tall.
+        val paragraph = listOf(Span(80f, 108f), Span(108f, 136f), Span(136f, 164f))
+        // Nothing crosses: the scroll stands.
+        assertEquals(0f, TopEdge.snap(0f, paragraph.map { it.shifted(-20f) }, 100f, 16f, null, 0f, 1000f))
+        // The first line crosses the band: the nearest edge lands on it (8 up hides it).
+        assertEquals(8f, TopEdge.snap(0f, paragraph, 100f, 16f, null, 0f, 1000f))
+        // Where the brought line may not rise past 130, the other way: the line shows whole from the band down.
+        assertEquals(-20f, TopEdge.snap(0f, paragraph, 100f, 16f, Span(136f, 164f), 130f, 1000f))
+        // A paragraph that starts inside the fade, the gap above it on the band: the last line above lands instead.
+        val gap = listOf(Span(60f, 88f), Span(104f, 132f))
+        assertEquals(4f, TopEdge.snap(0f, gap, 100f, 16f, null, 0f, 1000f))
+        assertEquals(-12f, TopEdge.snap(0f, gap, 100f, 16f, Span(200f, 228f), 200f, 1000f))
+        // A planned scroll is adjusted from where it would leave the lines: 20 would cut the second line, so 8.
+        assertEquals(8f, TopEdge.snap(20f, paragraph, 100f, 16f, null, 0f, 1000f))
+        // No way to keep the brought line where it must stay: the scroll stands.
+        assertEquals(0f, TopEdge.snap(0f, paragraph, 100f, 16f, Span(136f, 164f), 136f, 164f))
+    }
+
     @Test fun theMetaOpensWithAShortDateAndTime() {
         val zone = ZoneOffset.UTC
         val today = LocalDate.of(2026, 11, 6)

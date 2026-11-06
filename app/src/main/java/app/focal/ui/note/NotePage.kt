@@ -77,6 +77,7 @@ import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTheme
+import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.library.LibraryDates
@@ -217,6 +218,12 @@ fun NotePage(
     SideEffect { position.durationMs = audio.durationMs.takeIf { it > 0 } ?: note.durationMs }
     val bandTop: () -> Float = { status.getTop(density).toFloat() + with(density) { FocalLayout.topBar.toPx() } }
     val bandBottom: () -> Float = { bottom.top.value.takeUnless { it.isNaN() } ?: listState.layoutInfo.viewportSize.height.toFloat() }
+    // The lines on screen, for landing them on the top band's edge after a bring (TopEdge).
+    val fadePx = with(density) { FocalLayout.topFade.toPx() }
+    val titleLinePx = with(density) { FocalType.title.lineHeight.toPx() }
+    val itemsNow = rememberUpdatedState(items)
+    val topLines: () -> List<Span> = { windowLines(listState, itemsNow.value, page.layouts, page.titleTop, page.titleBottom, titleLinePx) }
+    fun lineHeight(id: Long, offset: Int?): () -> Float = { lineBox(page.layouts[id], offset).let { it.second - it.first } }
     val follow = remember { FollowJob() }
     val scrubbing by remember { derivedStateOf { position.scrubMs != null } }
     LaunchedEffect(playingHere, audio.playing, scrubbing, paragraphs, items) {
@@ -256,7 +263,9 @@ fun NotePage(
                         val distance = if (y == null) Float.NaN else Follow.distance(y, y + height, bandTop(), bandBottom())
                         if (distance.isNaN() || distance != 0f) follow.job = scope.launch {
                             val third = (bandBottom() - bandTop()) / THIRDS
-                            scroller.bring(index, { lineBox(page.layouts[id], word?.start).first }, bandTop() + third)
+                            // The lines at the top land on the band's edge; the playing line stays in the middle third.
+                            val edge = EdgeSnap(topLines, bandTop, fadePx, { bandTop() + third }, { bandTop() + 2 * third })
+                            scroller.bring(index, { lineBox(page.layouts[id], word?.start).first }, bandTop() + third, lineHeight(id, word?.start), edge)
                         }
                     }
                 }
@@ -647,7 +656,8 @@ fun NotePage(
         withFrameMillis { }
         val line = lineBox(page.layouts[hit.paragraphId], hit.start)
         val target = bandTop() + (bandBottom() - bandTop()) * HALF - (line.second - line.first) * HALF
-        scroller.bring(index, { lineBox(page.layouts[hit.paragraphId], hit.start).first }, target)
+        val edge = EdgeSnap(topLines, bandTop, fadePx, { bandTop() + fadePx }, bandBottom)
+        scroller.bring(index, { lineBox(page.layouts[hit.paragraphId], hit.start).first }, target, lineHeight(hit.paragraphId, hit.start), edge)
         page.hitShown = true
         focus.hit = hit
         focus.hitAlpha.snapTo(1f)
@@ -759,7 +769,7 @@ fun NotePage(
         }
         val topPadding = with(density) { status.getTop(this).toDp() } + FocalLayout.topBar + FocalGrid.x8
         val padding = remember(topPadding, bottom, density) { bottom.contentPadding(topPadding, density) }
-        val bringSpec = remember(density, status) { CaretSpec({ bandTop() + with(density) { CaretMargin.toPx() } }, { with(density) { CaretMargin.toPx() } }) }
+        val bringSpec = remember(density, status) { CaretSpec(bandTop, { with(density) { CaretMargin.toPx() } }, fadePx, topLines) }
         CompositionLocalProvider(LocalBringIntoViewSpec provides bringSpec) {
             SelectionContainer(selection, Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().graphicsLayer { alpha = listFade.value * reveal.body() }, contentAlignment = Alignment.TopCenter) {
@@ -786,7 +796,10 @@ fun NotePage(
                                         page.renaming = false
                                         if (text != note.title || note.titleIsCustom) actions.rename(text)
                                     },
-                                    onTitleBottom = { page.titleBottom = it },
+                                    onTitleBounds = { top, bottom ->
+                                        page.titleTop = top
+                                        page.titleBottom = bottom
+                                    },
                                     entrance = landing,
                                     modifier = Modifier.animateItem(fadeInSpec = null, placementSpec = placement, fadeOutSpec = null),
                                 )
