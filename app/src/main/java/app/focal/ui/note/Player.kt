@@ -60,13 +60,13 @@ import app.focal.ui.components.Glyph
 import app.focal.ui.components.GlyphSize
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.pressScale
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
-import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.library.spokenDuration
 import kotlinx.coroutines.coroutineScope
@@ -75,22 +75,22 @@ import kotlin.math.roundToInt
 
 /** Player strip geometry (spec 4.10) and the jump pill's (4.11). */
 object PlayerMetrics {
-    val height = Grid.x48
-    val timeMin = Grid.x40
-    val trackGap = Grid.x12
-    val track = Grid.x4
+    val height = FocalGrid.x48
+    val timeMin = FocalGrid.x40
+    val trackGap = FocalGrid.x12
+    val track = FocalGrid.x4
     /** The track breaks this far on each side of the playhead. */
-    val trackBreak = Grid.x4
-    val playheadWidth = Grid.x4
-    val playhead = Grid.x24
-    val playheadDragging = Grid.x32
-    val jumpHeight = Grid.x40
-    val jumpTarget = Grid.x48
-    val jumpStart = Grid.x12
-    val jumpEnd = Grid.x16
-    val jumpGlyphGap = Grid.x8
+    val trackBreak = FocalGrid.x4
+    val playheadWidth = FocalGrid.x4
+    val playhead = FocalGrid.x24
+    val playheadDragging = FocalGrid.x32
+    val jumpHeight = FocalGrid.x40
+    val jumpTarget = FocalGrid.x48
+    val jumpStart = FocalGrid.x12
+    val jumpEnd = FocalGrid.x16
+    val jumpGlyphGap = FocalGrid.x8
     /** The jump pill's bottom sits this far above the strip or the dock. */
-    val jumpAbove = Grid.x12
+    val jumpAbove = FocalGrid.x12
     const val JUMP_START_SCALE = 0.9f
 }
 
@@ -250,7 +250,7 @@ internal fun StripMotion(visible: Boolean, onGone: () -> Unit, content: @Composa
     Box(
         Modifier.graphicsLayer {
             alpha = shown.value
-            translationY = (1 - rise.value) * Grid.x16.toPx()
+            translationY = (1 - rise.value) * FocalGrid.x16.toPx()
         },
     ) { content() }
 }

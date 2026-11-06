@@ -58,12 +58,12 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.focal.core.SpeechTuning
 import app.focal.ui.design.FocalClock
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.shell.LocalPageReveal
 import app.focal.ui.state.ParagraphUi
@@ -76,21 +76,21 @@ import kotlin.math.min
 
 /** Paragraph geometry (spec 4.13, 4.14). */
 object ParagraphMetrics {
-    val gap = Grid.x16
+    val gap = FocalGrid.x16
     /** The lens, find matches and the search-arrival mark span the 28 dp line box inset this much (22 dp tall). */
     val markInset = 3.dp
     /** The lens is the word box plus this much on each side; a match, [matchOutset]. */
-    val lensOutset = Grid.x4
-    val matchOutset = Grid.x2
+    val lensOutset = FocalGrid.x4
+    val matchOutset = FocalGrid.x2
     /** Doubtful words: round dots this big, this far apart, this far under the baseline. */
     val dotRadius = 0.75.dp
-    val dotPitch = Grid.x4
+    val dotPitch = FocalGrid.x4
     val dotDrop = 3.dp
     /** The edit sheet is drawn this far outside the text box (x 12-400 for a 24-388 paragraph). */
-    val sheetOutsetX = Grid.x12
-    val sheetOutsetY = Grid.x8
+    val sheetOutsetX = FocalGrid.x12
+    val sheetOutsetY = FocalGrid.x8
     /** An arriving paragraph rises this far as it develops. */
-    val developRise = Grid.x8
+    val developRise = FocalGrid.x8
     const val LENS_START_SCALE = 0.92f
 }
 

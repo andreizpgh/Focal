@@ -62,13 +62,13 @@ import androidx.compose.ui.unit.dp
 import app.focal.R
 import app.focal.ui.components.PressPlate
 import app.focal.ui.components.focusRing
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
-import app.focal.ui.design.Grid
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.pageOrigin
 import app.focal.ui.shell.rememberRowOrigin
@@ -81,12 +81,12 @@ import kotlin.math.roundToInt
 /** Row geometry (spec 4.12). */
 object RowMetrics {
     /** The hit area reaches this far above the title and below the preview; rows are twice this apart. */
-    val hitPad = Grid.x12
+    val hitPad = FocalGrid.x12
     /** The press plate spans x 8-404: this far inside the full-width hit area. */
-    val plateInset = Grid.x8
-    val durationGap = Grid.x16
-    val previewGap = Grid.x4
-    val trackGap = Grid.x8
+    val plateInset = FocalGrid.x8
+    val durationGap = FocalGrid.x16
+    val previewGap = FocalGrid.x4
+    val trackGap = FocalGrid.x8
     val track = 2.dp
     const val TITLE_LINES = 2
     const val PREVIEW_LINES = 2

@@ -22,8 +22,8 @@ import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.FocalMenuDivider
 import app.focal.ui.components.FocalMenuItem
 import app.focal.ui.components.MenuSurface
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
-import app.focal.ui.design.Grid
 import app.focal.ui.note.EditBackend
 import app.focal.ui.note.FieldFocus
 import app.focal.ui.note.NoteActions
@@ -296,7 +296,8 @@ internal fun TranscribingNote(destination: Destination.Note) {
 @Composable
 private fun NoteMenuInline() {
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
-        MenuSurface(Modifier.menuAt(x = MENU_END, y = FocalLayout.topBar - (FocalLayout.topBar - FocalLayout.target) / 2 + Grid.x4, endAligned = true)) {
+        val top = FocalLayout.topBar - (FocalLayout.topBar - FocalLayout.target) / 2 + FocalGrid.x4
+        MenuSurface(Modifier.menuAt(x = MENU_END, y = top, endAligned = true)) {
             FocalMenuItem("Find and replace", {})
             FocalMenuItem("Rename", {})
             FocalMenuItem("Share", {})

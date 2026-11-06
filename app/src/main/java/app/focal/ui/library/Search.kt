@@ -64,12 +64,12 @@ import app.focal.ui.components.Glyph
 import app.focal.ui.components.KeyboardRowMetrics
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.scrollEdgeFade
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.design.smoothstep
 import app.focal.ui.state.SearchRow
 import app.focal.ui.state.SearchUiState
@@ -81,10 +81,10 @@ import kotlin.math.roundToInt
 /** Search geometry (spec 4.9.1, 5.2). */
 object SearchMetrics {
     /** The field's leading ← and trailing × are 56 dp targets; the text runs between them. */
-    val target = Grid.x56
+    val target = FocalGrid.x56
     /** The last result ends this far above the field; the count head and the "no results" line sit 16 above. */
-    val resultsGap = Grid.x24
-    val headGap = Grid.x16
+    val resultsGap = FocalGrid.x24
+    val headGap = FocalGrid.x16
 }
 
 /**

@@ -76,11 +76,11 @@ import app.focal.ui.components.inert
 import app.focal.ui.components.rememberRowPlacement
 import app.focal.ui.components.rememberStickyLabels
 import app.focal.ui.components.stickyLabelSource
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.Stage
 import app.focal.ui.scene.ExpandDrag
@@ -504,11 +504,11 @@ private const val ROW_TYPE = "row"
 private fun dayKey(epochDay: Long) = "day:$epochDay"
 
 /** The first label sits 32 dp under the stage (spec 4.12.1). */
-private fun firstLabelGap(afterStage: Boolean) = if (afterStage) Grid.x32 else 0.dp
+private fun firstLabelGap(afterStage: Boolean) = if (afterStage) FocalGrid.x32 else 0.dp
 /** 36 dp from a preview to the next label, less the row's 12 dp hit area below it. */
-private val SECTION_GAP = Grid.x36 - RowMetrics.hitPad
+private val SECTION_GAP = FocalGrid.x36 - RowMetrics.hitPad
 /** 16 dp from a label to the next title, less the row's 12 dp hit area above it. */
-private val LABEL_TO_TITLE = Grid.x16 - RowMetrics.hitPad
+private val LABEL_TO_TITLE = FocalGrid.x16 - RowMetrics.hitPad
 
 /** A layer that takes every touch, so nothing under a faded layer can be pressed. */
 private fun Modifier.blockTouches(): Modifier = pointerInput(Unit) {

@@ -43,9 +43,9 @@ import app.focal.ui.components.SheetMetrics
 import app.focal.ui.components.WaveDress
 import app.focal.ui.components.WaveMode
 import app.focal.ui.components.markBox
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 
 /** What the rationale sheet offers (spec 5.11). */
 enum class RationaleMode { Allow, OpenSettings }
@@ -133,11 +133,11 @@ fun RecordFlowSheet(flow: RecordFlow) {
         NineBars(WaveMode.Static, WaveDress.paper(colors), Modifier.markBox(SheetMark))
         Text(
             stringResource(R.string.perm_title), style = FocalType.headline, color = colors.ink, textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = Grid.x16),
+            modifier = Modifier.padding(top = FocalGrid.x16),
         )
         Text(
             stringResource(R.string.perm_body), style = FocalType.secondary, color = colors.recede, textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = Grid.x8),
+            modifier = Modifier.padding(top = FocalGrid.x8),
         )
         FocalPrimaryPill(
             stringResource(if (shown == RationaleMode.Allow) R.string.perm_allow else R.string.perm_settings),
@@ -145,16 +145,16 @@ fun RecordFlowSheet(flow: RecordFlow) {
                 flow.dismiss()
                 if (shown == RationaleMode.Allow) flow.allow() else flow.openDetails()
             },
-            modifier = Modifier.fillMaxWidth().padding(top = Grid.x32),
+            modifier = Modifier.fillMaxWidth().padding(top = FocalGrid.x32),
             leading = if (shown == RationaleMode.Allow) { tint -> RecordDot(tint) } else null,
         )
-        FocalTextButton(stringResource(R.string.perm_not_now), onClick = flow::dismiss, modifier = Modifier.padding(top = Grid.x8))
+        FocalTextButton(stringResource(R.string.perm_not_now), onClick = flow::dismiss, modifier = Modifier.padding(top = FocalGrid.x8))
     }
 }
 
 /** The sheet's static mark (40 dp) sits 36 dp from its top (spec 4.19), under the grab handle (12 dp down, 4 dp tall). */
-private val SheetMark = Grid.x40
-private val SheetTop = Grid.x36 - SheetMetrics.handleTop - SheetMetrics.handleHeight
+private val SheetMark = FocalGrid.x40
+private val SheetTop = FocalGrid.x36 - SheetMetrics.handleTop - SheetMetrics.handleHeight
 
 private fun Context.hasMicrophone(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED

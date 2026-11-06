@@ -61,13 +61,13 @@ import app.focal.ui.components.WaveDress
 import app.focal.ui.components.WaveMode
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.markBox
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
-import app.focal.ui.design.Grid
 import app.focal.ui.design.tabular
 import app.focal.ui.state.SettingsUiState
 import app.focal.ui.state.ThemeMode
@@ -85,22 +85,22 @@ class SettingsActions(
 /** Settings page geometry (spec 5.10, 4.1.4, 4.18). */
 object SettingsMetrics {
     /** The page title sits this far under the top bar (ref 112 under 104). */
-    val titleTop = Grid.x8
+    val titleTop = FocalGrid.x8
     /** Group heads: 32 dp above (24 under the page title), 8 dp below. */
-    val groupAbove = Grid.x32
-    val groupAboveFirst = Grid.x24
-    val groupBelow = Grid.x8
-    val rowMinHeight = Grid.x56
-    val rowPadding = Grid.x12
-    val descriptionGap = Grid.x2
-    val trailingGap = Grid.x16
+    val groupAbove = FocalGrid.x32
+    val groupAboveFirst = FocalGrid.x24
+    val groupBelow = FocalGrid.x8
+    val rowMinHeight = FocalGrid.x56
+    val rowPadding = FocalGrid.x12
+    val descriptionGap = FocalGrid.x2
+    val trailingGap = FocalGrid.x16
     /** A row's trailing value never takes more than this, so its title keeps room at large font scales. */
     val valueMaxWidth = 160.dp
     /** The footer: the static mark 48 dp under the last row, the version 8 dp under it. */
-    val footerGap = Grid.x48
-    val footerMark = Grid.x32
-    val versionGap = Grid.x8
-    val plateInset = Grid.x8
+    val footerGap = FocalGrid.x48
+    val footerMark = FocalGrid.x32
+    val versionGap = FocalGrid.x8
+    val plateInset = FocalGrid.x8
     /** The collapsed title starts after the ← (x 72). */
     val collapsedTitleStart = 72.dp
 }

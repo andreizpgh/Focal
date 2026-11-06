@@ -49,12 +49,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
-import app.focal.ui.design.Grid
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
@@ -62,23 +62,23 @@ import kotlinx.coroutines.launch
 object MenuMetrics {
     val width = 232.dp
     val maxWidth = 280.dp
-    val verticalPadding = Grid.x8
-    val item = Grid.x48
-    val itemPadding = Grid.x16
-    val dividerMargin = Grid.x8
+    val verticalPadding = FocalGrid.x8
+    val item = FocalGrid.x48
+    val itemPadding = FocalGrid.x16
+    val dividerMargin = FocalGrid.x8
     /** A label that wraps keeps this much room above and below it inside its item. */
-    val labelPadding = Grid.x8
+    val labelPadding = FocalGrid.x8
     /** From the overflow button the menu's top sits this far below the button's bottom (ref y 100 under 96). */
-    val belowAnchor = Grid.x4
+    val belowAnchor = FocalGrid.x4
     /** Clamped this far from the window edges. */
-    val edge = Grid.x16
+    val edge = FocalGrid.x16
     /** Room for the Light shadows inside the popup window, which clips its content. */
-    val shadowRoom = Grid.x24
+    val shadowRoom = FocalGrid.x24
     /** Light: 0 1 2 at 8 % and 0 8 24 at 14 % (CSS blurs, so sigma = blur / 2). */
     val nearShadowY = 1.dp
     val nearShadowSigma = 1.dp
-    val farShadowY = Grid.x8
-    val farShadowSigma = Grid.x12
+    val farShadowY = FocalGrid.x8
+    val farShadowSigma = FocalGrid.x12
     const val NEAR_SHADOW_ALPHA = 0.08f
     const val FAR_SHADOW_ALPHA = 0.14f
     const val ENTER_SCALE = 0.95f

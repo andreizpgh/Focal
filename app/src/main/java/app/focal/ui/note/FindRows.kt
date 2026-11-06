@@ -63,27 +63,27 @@ import app.focal.ui.components.PressPlate
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.pressScale
 import app.focal.ui.components.scrollEdgeFade
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.design.tabular
 import kotlin.math.max
 
 /** Find row geometry (spec 4.9.2): fields 24-244, controls 252-388, 48 dp rows. */
 object FindMetrics {
     /** ← and ↳ sit in a 48 dp box at the field's start, so the text starts at x 72 in both rows. */
-    val lead = Grid.x48
+    val lead = FocalGrid.x48
     /** The count ends 16 dp inside the field, at least 8 dp after the query. */
-    val countEnd = Grid.x16
-    val countGap = Grid.x8
-    val replacePadding = Grid.x8
+    val countEnd = FocalGrid.x16
+    val countGap = FocalGrid.x8
+    val replacePadding = FocalGrid.x8
     /** Stacked under the query, the count and the query keep this much room above and below them. */
-    val stackPadding = Grid.x8
+    val stackPadding = FocalGrid.x8
     /** The caret the query's end must still show (BasicTextField's 2 dp cursor, spec 4.9.1). */
-    val caret = Grid.x2
+    val caret = FocalGrid.x2
     /** The count stacks under the query only when, beside the widest count, less than this is left for the query. */
-    val minQuery = Grid.x64
+    val minQuery = FocalGrid.x64
 }
 
 /** What the find rows do. */
@@ -333,4 +333,4 @@ private fun RowScope.ReplaceAll(count: Int, enabled: Boolean, onClick: () -> Uni
 }
 
 /** The 40 dp press circle of a control inside a 48 dp row target. */
-private val LeadPlate = PressPlate(FocalShapes.pill, insetX = Grid.x4, insetY = Grid.x4)
+private val LeadPlate = PressPlate(FocalShapes.pill, insetX = FocalGrid.x4, insetY = FocalGrid.x4)

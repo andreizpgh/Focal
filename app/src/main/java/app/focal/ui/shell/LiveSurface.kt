@@ -22,8 +22,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.zIndex
+import app.focal.ui.design.FocalFullMotion
 import app.focal.ui.design.FocalMotion
-import app.focal.ui.design.FullMotion
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.scene.Morph
 import kotlinx.coroutines.CancellationException
@@ -195,8 +195,11 @@ class LiveSurfaceState internal constructor(open: Boolean) {
      */
     suspend fun settle(target: Float, reducedMotion: Boolean, velocity: Float = 0f) {
         if (target <= 0f) cover()
-        if (reducedMotion || !spatial) withContext(FullMotion) { expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.reducedCrossfade)) }
-        else expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.stage()), initialVelocity = velocity)
+        if (reducedMotion || !spatial) {
+            withContext(FocalFullMotion) { expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.reducedCrossfade)) }
+        } else {
+            expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.stage()), initialVelocity = velocity)
+        }
     }
 
     /**
@@ -220,7 +223,7 @@ class LiveSurfaceState internal constructor(open: Boolean) {
             openNote()
             // Counted from Finish (FocalMotion.fromTrigger): the first frame after the tap has already moved.
             if (reducedMotion || !spatial) {
-                withContext(FullMotion) { landingAlpha.animateTo(0f, FocalMotion.fromTrigger(FocalMotion.reducedCrossfade)) }
+                withContext(FocalFullMotion) { landingAlpha.animateTo(0f, FocalMotion.fromTrigger(FocalMotion.reducedCrossfade)) }
             } else coroutineScope {
                 launch(start = CoroutineStart.UNDISPATCHED) { landingContent.animateTo(0f, FocalMotion.fromTrigger(FocalMotion.fadeFast())) }
                 launch {

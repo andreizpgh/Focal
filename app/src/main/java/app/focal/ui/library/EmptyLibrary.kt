@@ -32,10 +32,10 @@ import app.focal.ui.components.NineBars
 import app.focal.ui.components.WaveDress
 import app.focal.ui.components.WaveMode
 import app.focal.ui.components.markBox
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.SceneEntry
 import kotlin.math.roundToInt
@@ -50,8 +50,8 @@ object EmptyMetrics {
     val instrumentLarge = 80.dp
     const val LARGE_FONT = 1.5f
     /** The headline sits this far under the instrument's box, the second line this far under the headline. */
-    val headlineGap = Grid.x36
-    val bodyGap = Grid.x12
+    val headlineGap = FocalGrid.x36
+    val bodyGap = FocalGrid.x12
     /** The headline's measure: two balanced lines at 1.0×. */
     val headlineWidth = 300.dp
     /**

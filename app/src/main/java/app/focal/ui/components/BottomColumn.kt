@@ -44,10 +44,10 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTheme
-import app.focal.ui.design.Grid
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.min
@@ -71,7 +71,7 @@ class BottomColumnState {
     /** Scrolling content reserves the column's height plus 64 dp, so the last line scrolls clear of the fade. */
     fun contentReserve(density: Density): Dp = with(density) {
         val target = topTarget
-        if (target.isNaN() || windowHeight <= 0f) return FocalLayout.contentReserve + Grid.x56 + FocalLayout.dockInset
+        if (target.isNaN() || windowHeight <= 0f) return FocalLayout.contentReserve + FocalGrid.x56 + FocalLayout.dockInset
         (windowHeight - target).toDp() + FocalLayout.contentReserve
     }
 
@@ -122,7 +122,7 @@ fun BottomColumn(
     dockHidden: Boolean = rows != null,
 ) {
     val density = LocalDensity.current
-    val hideDistance = with(density) { Grid.x24.toPx() }
+    val hideDistance = with(density) { FocalGrid.x24.toPx() }
     val ime = WindowInsets.ime
     val imeTarget = WindowInsets.imeAnimationTarget
     val navigation = WindowInsets.navigationBars
@@ -241,10 +241,10 @@ fun BottomFade(state: BottomColumnState, modifier: Modifier, keyboard: Boolean =
 
 /** Find and replace rows (spec 4.9.2): fields fill the start column, the controls keep 136 dp, 8 dp apart. */
 object KeyboardRowMetrics {
-    val searchField = Grid.x56
-    val row = Grid.x48
+    val searchField = FocalGrid.x56
+    val row = FocalGrid.x48
     val controls = 136.dp
-    val columnGap = Grid.x8
+    val columnGap = FocalGrid.x8
 }
 
 /**

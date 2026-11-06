@@ -34,20 +34,20 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.hideFromAccessibility
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
-import app.focal.ui.design.Grid
 import kotlinx.coroutines.CancellationException
 
 /** Bottom sheet geometry (spec 4.19). */
 object SheetMetrics {
-    val handleWidth = Grid.x32
-    val handleHeight = Grid.x4
-    val handleTop = Grid.x12
-    val padding = Grid.x24
-    val bottom = Grid.x16
+    val handleWidth = FocalGrid.x32
+    val handleHeight = FocalGrid.x4
+    val handleTop = FocalGrid.x12
+    val padding = FocalGrid.x24
+    val bottom = FocalGrid.x16
 }
 
 /**

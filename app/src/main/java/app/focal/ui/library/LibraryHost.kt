@@ -38,13 +38,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.focal.data.Preferences
+import app.focal.ui.design.FocalFullMotion
 import app.focal.ui.design.FocalGestures
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
-import app.focal.ui.design.FullMotion
-import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.SettingsStrip
@@ -62,9 +62,9 @@ import kotlin.math.max
 /** The settings swipe's decisions (spec 2.8.7, 4.23.3), as pure functions. */
 object SettingsGesture {
     /** A touch-down at least this far from either side may start the swipe (or the system's inset, if wider). */
-    val edgeZone = Grid.x32
+    val edgeZone = FocalGrid.x32
     /** The peek's reach: the seam and the settings page's blank 24 dp margin (spec 4.23.5). */
-    val peekReach = Grid.x32
+    val peekReach = FocalGrid.x32
 
     /**
      * Where a released swipe settles. [s0] is s when the direction locked, [s] now, [velocity] the finger's speed in
@@ -268,7 +268,7 @@ private fun androidx.compose.ui.input.pointer.PointerInputScope.edgeZone(left: I
 /** Where a touch may start the swipe: above the topmost bottom-column element, less 8 dp (spec 4.23.3). */
 private fun app.focal.ui.components.BottomColumnState.touchLimit(density: androidx.compose.ui.unit.Density): Float {
     val top = topTarget
-    return if (top.isNaN()) Float.POSITIVE_INFINITY else top - with(density) { Grid.x8.toPx() }
+    return if (top.isNaN()) Float.POSITIVE_INFINITY else top - with(density) { FocalGrid.x8.toPx() }
 }
 
 private fun resume(scope: kotlinx.coroutines.CoroutineScope, strip: SettingsStripState, target: Float, reduced: Boolean) {
@@ -316,7 +316,7 @@ private fun SettingsPeek(
         layer.peek = coroutineContext[Job]
         try {
             if (reduced) {
-                withContext(FullMotion) {
+                withContext(FocalFullMotion) {
                     layer.edgePeek.animateTo(1f, FocalMotion.reducedCrossfade)
                     delay(FocalTiming.PEEK_HOLD_MS)
                     layer.edgePeek.animateTo(0f, FocalMotion.reducedCrossfade)

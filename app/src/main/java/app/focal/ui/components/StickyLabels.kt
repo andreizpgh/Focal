@@ -25,10 +25,10 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import kotlin.math.min
 
 /** A day label in the list (spec 4.12.1): `section` in `muted`, a heading for TalkBack. */
@@ -44,11 +44,11 @@ fun DayLabel(text: String, modifier: Modifier = Modifier) {
  */
 object StickyLabelMetrics {
     /** The pin line: status + 12 dp. */
-    val pinLine = Grid.x12
+    val pinLine = FocalGrid.x12
     /** The pin band stays solid this far under the pinned label. */
-    val bandClearance = Grid.x8
+    val bandClearance = FocalGrid.x8
     /** The next label pushes the pinned one up, keeping this much room between them. */
-    val pushGap = Grid.x16
+    val pushGap = FocalGrid.x16
 
     /** The pin band's solid end under the status bar: the pinned label's bottom + 8 dp (ref 40 at 1.0x). */
     fun bandSolid(density: Density): Float = with(density) {

@@ -30,12 +30,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.design.smoothstep
 
 /**
@@ -88,7 +88,7 @@ fun FocalIconButton(icon: FocalIcon, contentDescription: String, onClick: () -> 
     }
 }
 
-private val IconPressPlate = PressPlate(FocalShapes.pill, insetX = Grid.x4, insetY = Grid.x4)
+private val IconPressPlate = PressPlate(FocalShapes.pill, insetX = FocalGrid.x4, insetY = FocalGrid.x4)
 
 /**
  * The text button (spec 4.20): `label` in ink, at least 48 dp tall, 12 dp padding, a `press` pill when pressed. The
@@ -101,7 +101,7 @@ fun FocalTextButton(
     modifier: Modifier = Modifier,
     leading: FocalIcon? = null,
     style: TextStyle = FocalType.label,
-    horizontalPadding: Dp = Grid.x12,
+    horizontalPadding: Dp = FocalGrid.x12,
 ) {
     val colors = FocalTheme.colors
     val source = remember { MutableInteractionSource() }
@@ -144,18 +144,18 @@ fun FocalPrimaryPill(
     val content = if (enabled) colors.onInv else colors.faint
     Row(
         modifier
-            .defaultMinSize(minHeight = Grid.x56)
+            .defaultMinSize(minHeight = FocalGrid.x56)
             .pressScale(source)
             .focusRing(FocalShapes.pill)
             .background(if (enabled) colors.inv else colors.s1, FocalShapes.pill)
             .clickable(source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = Grid.x16, vertical = Grid.x8),
+            .padding(horizontal = FocalGrid.x16, vertical = FocalGrid.x8),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (leading != null) {
             leading(content)
-            Spacer(Modifier.width(Grid.x8))
+            Spacer(Modifier.width(FocalGrid.x8))
         }
         Text(text, style = FocalType.label, color = content, textAlign = TextAlign.Center)
     }

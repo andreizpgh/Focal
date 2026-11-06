@@ -32,10 +32,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.focal.ui.components.inert
+import app.focal.ui.design.FocalFullMotion
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
-import app.focal.ui.design.FullMotion
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.smoothstep
 import kotlinx.coroutines.CancellationException
@@ -75,7 +75,7 @@ class SettingsStripState internal constructor(open: Boolean) {
     /** For the swipe's release: `move` with the finger's velocity, in s per second, clamped at the bounds. */
     suspend fun settle(target: Float, reducedMotion: Boolean, velocity: Float = 0f) {
         composedSettings = composedSettings || target > 0f
-        if (reducedMotion) withContext(FullMotion) { progress.animateTo(target, FocalMotion.reducedCrossfade) }
+        if (reducedMotion) withContext(FocalFullMotion) { progress.animateTo(target, FocalMotion.reducedCrossfade) }
         else progress.animateTo(target, FocalMotion.move(), initialVelocity = velocity)
     }
 

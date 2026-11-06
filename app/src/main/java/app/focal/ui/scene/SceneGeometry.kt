@@ -9,10 +9,10 @@ import app.focal.ui.components.DockMetrics
 import app.focal.ui.components.Mark
 import app.focal.ui.components.PauseBadgeMetrics
 import app.focal.ui.design.FocalGestures
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.design.lineScale
 import app.focal.ui.design.smoothstep
 import kotlin.math.max
@@ -39,46 +39,46 @@ object SceneMetrics {
     val startHeroLift = 105.5.dp
 
     /** The vertical rhythm with text: wave, 16, timer (84 dp line at 76 sp), 2, state slot (20), 24, text region. */
-    val liveWaveToTimer = Grid.x16
-    val liveTimerToState = Grid.x2
+    val liveWaveToTimer = FocalGrid.x16
+    val liveTimerToState = FocalGrid.x2
 
     /** Before text: wave, 40, timer, 4, state slot; the hint 108 dp under the slot (ref 668). */
-    val startWaveToTimer = Grid.x40
-    val startTimerToState = Grid.x4
+    val startWaveToTimer = FocalGrid.x40
+    val startTimerToState = FocalGrid.x4
     val stateHint = 108.dp
-    val stateSlot = Grid.x20
-    val stateToText = Grid.x24
+    val stateSlot = FocalGrid.x20
+    val stateToText = FocalGrid.x24
 
     /** The text region ends this far above the dock's top (ref 795). */
-    val textToDock = Grid.x24
-    val paragraphGap = Grid.x16
+    val textToDock = FocalGrid.x24
+    val paragraphGap = FocalGrid.x16
     /** The region's top alpha mask in the scene (2.6). */
     val textMask = 128.dp
 
     /** The chevron's 48 dp target sits this far under the status bar (ref 48-96, glyph 22 dp). */
-    val chevronFromStatus = Grid.x8
+    val chevronFromStatus = FocalGrid.x8
     val chevronGlyph = 22.dp
 
     /** The "Latest" jump pill: 40 dp visual in a 48 dp target, 12 dp above the dock (ref 767-807, spec 4.11). */
-    val jumpHeight = Grid.x40
-    val jumpAboveDock = Grid.x12
+    val jumpHeight = FocalGrid.x40
+    val jumpAboveDock = FocalGrid.x12
     /** While the jump pill shows, the text region ends this far above it, fading out over [jumpFade]. */
-    val jumpClearance = Grid.x8
-    val jumpFade = Grid.x16
-    val jumpStart = Grid.x12
-    val jumpEnd = Grid.x16
+    val jumpClearance = FocalGrid.x8
+    val jumpFade = FocalGrid.x16
+    val jumpStart = FocalGrid.x12
+    val jumpEnd = FocalGrid.x16
     val jumpGlyph = 18.dp
-    val jumpGap = Grid.x8
+    val jumpGap = FocalGrid.x8
 }
 
 /** The stage's live slots, card-local (spec 4.22.3): where the morph starts from. */
 object StageLiveMetrics {
-    val inset = Grid.x20
-    val wave = Grid.x56
+    val inset = FocalGrid.x20
+    val wave = FocalGrid.x56
     /** The timer and the text region start this far after the wave's box and under the head row. */
-    val gap = Grid.x16
+    val gap = FocalGrid.x16
     val mask = 34.dp
-    val paragraphGap = Grid.x12
+    val paragraphGap = FocalGrid.x12
 }
 
 /** One of the scene's two instrument layouts: before text or with text, in window pixels. */

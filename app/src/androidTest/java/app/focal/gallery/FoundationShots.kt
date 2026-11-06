@@ -69,10 +69,10 @@ import app.focal.ui.components.WaveRenderer
 import app.focal.ui.components.markBox
 import app.focal.ui.components.rememberBottomColumnState
 import app.focal.ui.components.sceneMaterial
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.design.Scene
 import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.Stage
@@ -102,14 +102,14 @@ private val noActions = DockActions()
 @Composable
 private fun Page(content: @Composable () -> Unit) {
     Column(
-        Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = Grid.x24, vertical = Grid.x16),
-        verticalArrangement = Arrangement.spacedBy(Grid.x12),
+        Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = FocalGrid.x24, vertical = FocalGrid.x16),
+        verticalArrangement = Arrangement.spacedBy(FocalGrid.x12),
     ) { content() }
 }
 
 @Composable
 private fun Head(text: String) {
-    Text(text, style = FocalType.section, color = FocalTheme.colors.muted, modifier = Modifier.padding(top = Grid.x4))
+    Text(text, style = FocalType.section, color = FocalTheme.colors.muted, modifier = Modifier.padding(top = FocalGrid.x4))
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -118,7 +118,7 @@ private fun ColourSheet() {
     val c = FocalTheme.colors
     Page {
         Head("Paper")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(Grid.x12), verticalArrangement = Arrangement.spacedBy(Grid.x12)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x12), verticalArrangement = Arrangement.spacedBy(FocalGrid.x12)) {
             listOf(
                 "paper" to c.paper, "ink" to c.ink, "muted" to c.muted, "faint" to c.faint, "line" to c.line,
                 "s1" to c.s1, "s2" to c.s2, "lens" to c.lens, "select" to c.select, "inv" to c.inv, "onInv" to c.onInv,
@@ -126,7 +126,7 @@ private fun ColourSheet() {
             ).forEach { (name, color) -> Swatch(name, color) }
         }
         Head("Scene and stage")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(Grid.x12), verticalArrangement = Arrangement.spacedBy(Grid.x12)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x12), verticalArrangement = Arrangement.spacedBy(FocalGrid.x12)) {
             listOf(
                 "top" to Scene.top, "mid" to Scene.mid, "bottom" to Scene.bottom, "ink" to Scene.ink, "hi" to Scene.hi,
                 "muted" to Scene.muted, "stage" to Stage.muted, "glass" to Scene.glass,
@@ -165,7 +165,7 @@ private fun TypeSheet() {
                 Text("Speak, and it’s written down. 0123456789 Ёж", style = style, color = c.ink, maxLines = 1)
             }
         }
-        Box(Modifier.fillMaxWidth().height(220.dp).sceneMaterial(FocalShapes.sheetRadius, ring = c.stageRing).padding(Grid.x20)) {
+        Box(Modifier.fillMaxWidth().height(220.dp).sceneMaterial(FocalShapes.sheetRadius, ring = c.stageRing).padding(FocalGrid.x20)) {
             Column {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text("12", style = FocalType.stageLength, color = Scene.ink)
@@ -182,7 +182,7 @@ private fun TypeSheet() {
 
 @Composable
 private fun DockDemo(caption: String, state: DockState, actions: DockActions = noActions, edge: (() -> Float)? = null) {
-    Column(verticalArrangement = Arrangement.spacedBy(Grid.x4)) {
+    Column(verticalArrangement = Arrangement.spacedBy(FocalGrid.x4)) {
         FakeCaption(caption, Modifier.then(if (edge != null) Modifier.graphicsLayer { alpha = 0.9f } else Modifier))
         Dock(state, actions, materialEdge = edge)
     }
@@ -205,7 +205,7 @@ private fun LibraryControls() {
             FocalIconButton(FocalIcon.Edit, "Edit", {})
             FocalIconButton(FocalIcon.More, "More options", {})
             FocalIconButton(FocalIcon.Redo, "Redo", {}, enabled = false)
-            Spacer(Modifier.width(Grid.x8))
+            Spacer(Modifier.width(FocalGrid.x8))
             FocalTextButton("Not now", {})
         }
         FocalPrimaryPill("Allow microphone", {}, Modifier.fillMaxWidth(), leading = { RecordDot(it) })
@@ -233,8 +233,8 @@ private fun MaterialControls() {
     val half = with(LocalDensity.current) { 28.dp.toPx() }
     Box(Modifier.fillMaxSize().sceneMaterial()) {
         Column(
-            Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = Grid.x24, vertical = Grid.x16),
-            verticalArrangement = Arrangement.spacedBy(Grid.x24),
+            Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = FocalGrid.x24, vertical = FocalGrid.x16),
+            verticalArrangement = Arrangement.spacedBy(FocalGrid.x24),
         ) {
             Text("Material dress", style = FocalType.section, color = Scene.muted)
             Dock(DockState.Live(paused = false), noActions, materialEdge = { Float.MAX_VALUE })
@@ -243,7 +243,7 @@ private fun MaterialControls() {
             Box(Modifier.onGloballyPositioned { dockTop = it.positionInWindow().y }) {
                 Dock(DockState.Live(paused = false), noActions, materialEdge = { dockTop + half })
             }
-            Box(Modifier.fillMaxWidth().background(FocalTheme.colors.paper, FocalShapes.sheet).padding(Grid.x16)) {
+            Box(Modifier.fillMaxWidth().background(FocalTheme.colors.paper, FocalShapes.sheet).padding(FocalGrid.x16)) {
                 Dock(DockState.Live(paused = true), noActions)
             }
         }
@@ -258,8 +258,8 @@ private fun WaveSheet() {
     val meter = remember { FixedMeter(previewLevels) }
     Page {
         Box(Modifier.fillMaxWidth().height(300.dp).sceneMaterial(FocalShapes.sheetRadius, ring = c.stageRing)) {
-            Column(Modifier.padding(Grid.x16), verticalArrangement = Arrangement.spacedBy(Grid.x8)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(Grid.x4)) {
+            Column(Modifier.padding(FocalGrid.x16), verticalArrangement = Arrangement.spacedBy(FocalGrid.x8)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x4)) {
                     listOf(WaveRenderer.Layers, WaveRenderer.Sprites, WaveRenderer.AlphaOnly).forEach { renderer ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             NineBars(WaveMode.Live(meter), WaveDress.Material, Modifier.markBox(84.dp), renderer)
@@ -267,7 +267,7 @@ private fun WaveSheet() {
                         }
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(Grid.x24), verticalAlignment = Alignment.CenterVertically) {
+                Row(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x24), verticalAlignment = Alignment.CenterVertically) {
                     WithBadge(56.dp, PauseBadgeMetrics.stage) { NineBars(WaveMode.Live(meter, paused = true), WaveDress.Material, Modifier.markBox(56.dp)) }
                     NineBars(WaveMode.Live(meter), WaveDress.Material, Modifier.markBox(56.dp))
                     WithBadge(88.dp, PauseBadgeMetrics.scene) { NineBars(WaveMode.Live(meter, paused = true), WaveDress.Material, Modifier.markBox(88.dp)) }
@@ -275,7 +275,7 @@ private fun WaveSheet() {
             }
         }
         Head("Paper")
-        Row(horizontalArrangement = Arrangement.spacedBy(Grid.x24), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x24), verticalAlignment = Alignment.CenterVertically) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 NineBars(WaveMode.Rest, WaveDress.paper(c), Modifier.markBox(112.dp))
                 FakeCaption("rest 112")
@@ -293,7 +293,7 @@ private fun WaveSheet() {
                 FakeCaption("gap 16")
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(Grid.x24), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x24), verticalAlignment = Alignment.CenterVertically) {
             NineBars(WaveMode.Live(meter), WaveDress.paper(c), Modifier.markBox(40.dp), WaveRenderer.Sprites)
             NineBars(WaveMode.Working(paused = true, frozenAtMs = 300L), WaveDress.paper(c), Modifier.markBox(40.dp))
             Box(Modifier.size(4.dp, 24.dp).background(c.ink, FocalShapes.pill))
@@ -322,7 +322,7 @@ private fun SceneMock(paused: Boolean) {
     Box(Modifier.fillMaxSize().sceneMaterial()) {
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
             Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.TopCenter) {
-                Glyph(FocalIcon.Up, Scene.chevron, Modifier.padding(Grid.x12), size = 22.dp)
+                Glyph(FocalIcon.Up, Scene.chevron, Modifier.padding(FocalGrid.x12), size = 22.dp)
             }
             Box(Modifier.fillMaxWidth().padding(top = 76.dp), contentAlignment = Alignment.TopCenter) {
                 if (paused) WithBadge(136.dp, PauseBadgeMetrics.scene) { NineBars(WaveMode.Live(meter, paused = true), WaveDress.Material, Modifier.markBox(136.dp)) }
@@ -333,13 +333,13 @@ private fun SceneMock(paused: Boolean) {
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 228.dp),
             )
             Column(
-                Modifier.fillMaxWidth().padding(top = 358.dp, start = Grid.x24, end = Grid.x24).height(397.dp)
+                Modifier.fillMaxWidth().padding(top = 358.dp, start = FocalGrid.x24, end = FocalGrid.x24).height(397.dp)
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                     .drawWithContent {
                         drawContent()
                         drawRect(Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, endY = 128.dp.toPx()), blendMode = BlendMode.DstIn)
                     },
-                verticalArrangement = Arrangement.spacedBy(Grid.x16, Alignment.Bottom),
+                verticalArrangement = Arrangement.spacedBy(FocalGrid.x16, Alignment.Bottom),
             ) {
                 FakeScene.forEachIndexed { index, text ->
                     Text(text, style = FocalType.sceneText, color = if (index == FakeScene.lastIndex) Scene.ink else Scene.muted)

@@ -250,9 +250,9 @@ object FocalGestures {
 
 /**
  * Animations play at their own speed even with the system's animator scale at 0: the reduced-motion crossfades run
- * inside `withContext(FullMotion)`, because an instant cut from paper to the near-black material is a flash.
+ * inside `withContext(FocalFullMotion)`, because an instant cut from paper to the near-black material is a flash.
  */
-object FullMotion : MotionDurationScale {
+object FocalFullMotion : MotionDurationScale {
     override val scaleFactor: Float get() = 1f
 }
 

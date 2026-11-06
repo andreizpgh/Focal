@@ -79,12 +79,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.focal.R
 import app.focal.ui.design.FocalClock
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.design.Scene
 import app.focal.ui.design.TriggerClock
 import app.focal.ui.design.rememberFocalHaptics
@@ -141,14 +141,14 @@ enum class Dress { Paper, Material }
 
 /** Dock geometry (spec 4.3, 4.7). */
 object DockMetrics {
-    val height = Grid.x56
-    val circle = Grid.x56
-    val gap = Grid.x12
+    val height = FocalGrid.x56
+    val circle = FocalGrid.x56
+    val gap = FocalGrid.x12
     /** The labelled Resume pill that the circle widens into while paused (x 24-172). */
     val resume = 148.dp
-    val glyphGap = Grid.x8
+    val glyphGap = FocalGrid.x8
     /** The material's Finish pill: shadow 0 8 28 (CSS blur, so sigma 14) and a 1 dp ring. */
-    val actionShadowY = Grid.x8
+    val actionShadowY = FocalGrid.x8
     val actionShadowSigma = 14.dp
     val ring = 1.dp
 }
@@ -397,7 +397,7 @@ private fun PillContent(dress: Dress, alpha: () -> Float, content: @Composable (
 /** A centred glyph + 8 dp + `label`: the 56 dp pills' content (spec 4.5.1). Wraps at large font scales. */
 @Composable
 private fun LabelRow(text: String, color: Color, glyph: @Composable () -> Unit) {
-    Row(Modifier.padding(horizontal = Grid.x16), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.padding(horizontal = FocalGrid.x16), verticalAlignment = Alignment.CenterVertically) {
         glyph()
         Spacer(Modifier.width(DockMetrics.glyphGap))
         Text(text, style = FocalType.label, color = color, textAlign = TextAlign.Center)
@@ -465,7 +465,10 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
             .graphicsLayer { alpha = contentAlpha() * (1 - smoothstep(0f, 0.5f, copyShown.value)) },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = FocalType.label, color = colors.ink, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = Grid.x16))
+        Text(
+            label, style = FocalType.label, color = colors.ink, textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = FocalGrid.x16),
+        )
         Box(
             Modifier.matchParentSize().drawWithContent {
                 val width = size.width * fill.value
@@ -473,7 +476,10 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
             },
             contentAlignment = Alignment.Center,
         ) {
-            Text(label, style = FocalType.label, color = colors.onInv, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = Grid.x16))
+            Text(
+            label, style = FocalType.label, color = colors.onInv, textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = FocalGrid.x16),
+        )
         }
     }
     val ink = if (enabled) colors.onInv else colors.faint
@@ -486,7 +492,7 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
 /** Copy and Copied in the dock's pill (spec 4.5.1): `label`, a 20 dp glyph and an 8 dp gap, centred on "Copy". */
 @Composable
 private fun CopyContent(copied: Boolean, ink: Color) {
-    CopyLabel(copied, ink, FocalType.label, GlyphSize.inPill, DockMetrics.glyphGap, Modifier.padding(horizontal = Grid.x16))
+    CopyLabel(copied, ink, FocalType.label, GlyphSize.inPill, DockMetrics.glyphGap, Modifier.padding(horizontal = FocalGrid.x16))
 }
 
 /** What the dock's two slots show. */

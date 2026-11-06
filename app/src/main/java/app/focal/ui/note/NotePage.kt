@@ -73,11 +73,11 @@ import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.NotePill
 import app.focal.ui.components.PaperTopFade
 import app.focal.ui.components.rememberRowPlacement
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
-import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.library.LibraryDates
 import app.focal.ui.library.LibraryModels
@@ -123,17 +123,17 @@ private const val HALF = 0.5f
 private const val END_SLACK_MS = 250L
 
 /** Find's band: from the status bar + 24 to the first row − 24 (spec 5.8). */
-private val FindBandInset = Grid.x24
+private val FindBandInset = FocalGrid.x24
 
 /** Find's top fade: solid to the status bar, then 48 dp (spec 2.6). */
-private val FindFade = Grid.x48
+private val FindFade = FocalGrid.x48
 
 /** Above the text: the fades and the jump pill, then the bars. */
 private const val FADES_Z = 1f
 private const val BARS_Z = 2f
 
 /** Edit keeps the caret's line this far inside the visible band, above the keyboard (spec 5.7). */
-private val CaretMargin = Grid.x24
+private val CaretMargin = FocalGrid.x24
 
 /**
  * The note page (spec 5.4 to 5.9): a document. Its title, meta and notices, then the paragraphs in a lazy list, with
@@ -583,7 +583,7 @@ fun NotePage(
         dockActions,
         strip = if (page.stripShown) {
             {
-                Box(Modifier.graphicsLayer { translationY = page.stripBack.value * Grid.x16.toPx(); alpha = 1 - page.stripBack.value }) {
+                Box(Modifier.graphicsLayer { translationY = page.stripBack.value * FocalGrid.x16.toPx(); alpha = 1 - page.stripBack.value }) {
                     StripMotion(stripWanted, onGone = {
                         page.stripShown = false
                         scope.launch { page.stripBack.snapTo(0f) }
@@ -731,7 +731,7 @@ fun NotePage(
                 modifier = Modifier.zIndex(BARS_Z).graphicsLayer { alpha = editT.value * chrome() }.inertBar(!page.editing || find.open),
             )
         }
-        val topPadding = with(density) { status.getTop(this).toDp() } + FocalLayout.topBar + Grid.x8
+        val topPadding = with(density) { status.getTop(this).toDp() } + FocalLayout.topBar + FocalGrid.x8
         val padding = remember(topPadding, bottom, density) { bottom.contentPadding(topPadding, density) }
         val bringSpec = remember(density, status) { CaretSpec({ bandTop() + with(density) { CaretMargin.toPx() } }, { with(density) { CaretMargin.toPx() } }) }
         CompositionLocalProvider(LocalBringIntoViewSpec provides bringSpec) {

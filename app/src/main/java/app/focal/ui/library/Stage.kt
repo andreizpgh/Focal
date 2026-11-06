@@ -85,13 +85,13 @@ import app.focal.ui.components.markBox
 import app.focal.ui.components.pressScale
 import app.focal.ui.components.sceneMaterial
 import app.focal.ui.design.FocalDisplay
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
-import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.Scene
 import app.focal.ui.design.Stage
@@ -121,15 +121,15 @@ import kotlin.math.tan
 object StageMetrics {
     val minHeight = 240.dp
     /** Every text sits this far inside the card. */
-    val inset = Grid.x20
+    val inset = FocalGrid.x20
     /** The footer row: 48 dp, 16 dp from the card's bottom and right edges. */
-    val footer = Grid.x48
-    val footerInset = Grid.x16
+    val footer = FocalGrid.x48
+    val footerInset = FocalGrid.x16
     /** The text starts this far under the title and ends at least this far above the footer. */
-    val textGap = Grid.x8
-    val textClearance = Grid.x20
+    val textGap = FocalGrid.x8
+    val textClearance = FocalGrid.x20
     /** Between the title and the time on its first line. */
-    val timeGap = Grid.x16
+    val timeGap = FocalGrid.x16
     /** When the time + 16 dp takes more than this share of the text column, it drops under the title. */
     const val TIME_SHARE = 0.4f
     /** From this font scale the title may take 3 lines and the length takes its own row (spec 4.22.7). */
@@ -142,12 +142,12 @@ object StageMetrics {
     val unitGap = 5.dp
     val groupGap = 10.dp
     /** The length yields to the pill when they would come closer than this. */
-    val footerYield = Grid.x12
+    val footerYield = FocalGrid.x12
 
     // The live state (spec 4.22.3).
-    val wave = Grid.x56
+    val wave = FocalGrid.x56
     /** The timer starts this far after the wave's box (x 132 = 44 + 72 + 16), as the text region below it. */
-    val liveGap = Grid.x16
+    val liveGap = FocalGrid.x16
     /** The live text region fades in over its top this far (`DstIn`): about 1.4 lines, growing with the font scale. */
     val liveMask = 34.dp
 
@@ -155,7 +155,7 @@ object StageMetrics {
     val shimmerWidth = 180.dp
     const val SHIMMER_ANGLE = 18f
     /** The band is masked out of the card's highlight band (F1): nothing above 48 dp, full from 80 dp. */
-    val shimmerMaskStart = Grid.x48
+    val shimmerMaskStart = FocalGrid.x48
     val shimmerMaskEnd = 80.dp
     const val SHIMMER_SHOULDER_AT = 0.25f
 }

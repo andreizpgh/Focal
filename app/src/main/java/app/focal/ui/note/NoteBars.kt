@@ -44,23 +44,23 @@ import app.focal.ui.components.FocalMenuDivider
 import app.focal.ui.components.FocalMenuItem
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.pressScale
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 
 /** Top bar geometry (spec 4.1.2, 4.1.3). */
 object NoteBarMetrics {
     /** The collapsed title starts after ← (x 72) and ends 8 dp before ✎. */
-    val titleStart = Grid.x12
-    val titleEnd = Grid.x8
-    val doneHeight = Grid.x40
-    val donePadding = Grid.x20
+    val titleStart = FocalGrid.x12
+    val titleEnd = FocalGrid.x8
+    val doneHeight = FocalGrid.x40
+    val donePadding = FocalGrid.x20
     /** ⋮ ends 4 dp before Done (x 256-304, Done 308-388). */
-    val doneGap = Grid.x4
+    val doneGap = FocalGrid.x4
     /** Done's end sits on the gutter, 12 dp further in than an icon button's target. */
     val doneEnd = FocalLayout.gutter - FocalLayout.iconEdge
     /** From this font scale Redo moves into Edit's ⋮ (spec 8.4). */

@@ -26,9 +26,9 @@ import app.focal.ui.components.DockState
 import app.focal.ui.components.NotePill
 import app.focal.ui.components.PlayCircle
 import app.focal.ui.components.ProgressPhase
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
-import app.focal.ui.design.Grid
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -48,7 +48,7 @@ class CopyFeedbackTest {
         rule.mainClock.autoAdvance = false
         rule.setContent {
             FocalTheme(dark = false) {
-                Box(Modifier.fillMaxWidth().padding(Grid.x24)) {
+                Box(Modifier.fillMaxWidth().padding(FocalGrid.x24)) {
                     Dock(DockState.Note(PlayCircle.Play, pill), DockActions(copy = copy))
                 }
             }

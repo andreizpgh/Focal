@@ -48,12 +48,12 @@ import app.focal.R
 import app.focal.ui.components.PaperTopFade
 import app.focal.ui.components.PressPlate
 import app.focal.ui.components.focusRing
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -188,7 +188,7 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
             item(key = "title") {
                 Text(
                     title, style = FocalType.title, color = colors.ink,
-                    modifier = Modifier.padding(horizontal = FocalLayout.gutter).padding(top = SettingsMetrics.titleTop, bottom = Grid.x16)
+                    modifier = Modifier.padding(horizontal = FocalLayout.gutter).padding(top = SettingsMetrics.titleTop, bottom = FocalGrid.x16)
                         .semantics { heading() },
                 )
             }
@@ -220,7 +220,7 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
                         ) {
                             Text(
                                 remember(paragraph) { licenseLines(paragraph) }, style = FocalType.secondary, color = colors.recede,
-                                modifier = Modifier.padding(horizontal = FocalLayout.gutter).padding(bottom = Grid.x12),
+                                modifier = Modifier.padding(horizontal = FocalLayout.gutter).padding(bottom = FocalGrid.x12),
                             )
                         }
                     }

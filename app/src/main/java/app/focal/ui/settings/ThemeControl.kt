@@ -38,19 +38,19 @@ import app.focal.R
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.Glyph
 import app.focal.ui.components.focusRing
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
-import app.focal.ui.design.Grid
 import app.focal.ui.state.ThemeMode
 
 /** The segmented control (spec 4.17). */
 object SegmentMetrics {
-    val track = Grid.x48
+    val track = FocalGrid.x48
     /** The thumb is inset this far inside the track (40 dp tall). */
-    val inset = Grid.x4
+    val inset = FocalGrid.x4
     /**
      * The room a label needs either side inside its segment: clear of the thumb's rounded ends, half the thumb's
      * height (20 dp). A label that would come closer turns the control into stacked radio rows.
@@ -156,7 +156,7 @@ private fun RadioRows(labels: List<String>, selected: ThemeMode, onSelect: (Them
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(labels[i], style = FocalType.field.copy(fontWeight = FocalWeight.Medium), color = colors.ink, modifier = Modifier.weight(1f))
-                Spacer(Modifier.width(Grid.x16))
+                Spacer(Modifier.width(FocalGrid.x16))
                 if (mode == selected) Glyph(FocalIcon.Check, colors.ink)
             }
         }

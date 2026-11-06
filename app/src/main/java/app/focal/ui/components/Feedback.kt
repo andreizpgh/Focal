@@ -38,12 +38,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.focal.ui.design.FocalGestures
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -112,16 +112,16 @@ class FeedbackHostState {
 
 /** Feedback pill geometry (spec 4.8). */
 object FeedbackMetrics {
-    val minHeight = Grid.x48
+    val minHeight = FocalGrid.x48
     /** The message starts 20 dp inside the pill; the action ends 8 dp inside it. */
-    val textStart = Grid.x20
-    val actionEnd = Grid.x8
-    val actionPadding = Grid.x16
+    val textStart = FocalGrid.x20
+    val actionEnd = FocalGrid.x8
+    val actionPadding = FocalGrid.x16
     /** From font scale 1.3 the message wraps to two lines and the pill grows with this vertical padding. */
     val wrapPadding = 14.dp
     const val WRAP_FONT_SCALE = 1.3f
     /** It rises this far from behind the dock, and sinks back the same way. */
-    val travel = Grid.x16
+    val travel = FocalGrid.x16
 }
 
 /**

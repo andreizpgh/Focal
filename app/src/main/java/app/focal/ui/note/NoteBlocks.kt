@@ -52,6 +52,7 @@ import app.focal.ui.components.focusRing
 import app.focal.ui.components.markBox
 import app.focal.ui.components.pressScale
 import app.focal.ui.design.FocalClock
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
@@ -59,7 +60,6 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
-import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.library.RenameField
 import app.focal.ui.shell.LocalPageReveal
@@ -71,24 +71,24 @@ import kotlin.math.roundToInt
 /** The note's head and inline blocks (spec 4.13, 4.14, 4.16, 5.4, 5.5). */
 object NoteBlockMetrics {
     /** Title to meta, meta to notices, notices to their pill. */
-    val headGap = Grid.x8
+    val headGap = FocalGrid.x8
     /** The body starts 24 dp under the head; the list puts [ParagraphMetrics.gap] between items, the head the rest. */
-    val bodyGap = Grid.x24
-    val noticePill = Grid.x40
-    val noticePillPadding = Grid.x16
+    val bodyGap = FocalGrid.x24
+    val noticePill = FocalGrid.x40
+    val noticePillPadding = FocalGrid.x16
     const val NOTICE_LINES = 3
     const val TITLE_LINES = 3
     /** From this font scale the title may take a fourth line (spec 8.4). */
     const val TITLE_LINES_LARGE = 4
     const val LARGE_FONT = 1.5f
-    val gapRow = Grid.x48
-    val gapMark = Grid.x16
+    val gapRow = FocalGrid.x48
+    val gapMark = FocalGrid.x16
     const val GAP_MARK_ALPHA = 0.4f
-    val gapMarkGap = Grid.x12
-    val writingHead = Grid.x40
+    val gapMarkGap = FocalGrid.x12
+    val writingHead = FocalGrid.x40
     /** The provenance line: 16 dp under the text, 20 dp tall; its "Restore original" keeps a 48 dp target. */
-    val provenanceGap = Grid.x16
-    val provenanceLine = Grid.x20
+    val provenanceGap = FocalGrid.x16
+    val provenanceLine = FocalGrid.x20
 }
 
 /** A notice under the meta (spec 4.16): its first sentence in ink (or none, [quiet]), the rest `muted`. */
@@ -270,7 +270,7 @@ internal fun GapRow(gap: GapUi, playable: Boolean, onPlay: () -> Unit, modifier:
 }
 
 /** The text button's 12 dp padding: its label's end lands on the gutter. */
-private val GapPlayInset = Grid.x12
+private val GapPlayInset = FocalGrid.x12
 private val GapPlate = PressPlate(FocalShapes.pill)
 
 /** The writing head (spec 5.4): the 40 dp wave in paper dress, sweeping while the tail transcribes, still while it waits. */

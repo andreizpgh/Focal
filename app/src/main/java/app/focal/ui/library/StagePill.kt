@@ -62,11 +62,11 @@ import app.focal.ui.components.copyPillWidth
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.glassHighlight
 import app.focal.ui.components.pressScale
+import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.Scene
 import app.focal.ui.design.Stage
@@ -100,7 +100,7 @@ object StagePillMetrics {
     val track = 2.dp
     val trackBottom = 11.dp
     /** Copy's label keeps at least this much above and below it when a large font grows the pill past 48 dp. */
-    val copyInsetY = Grid.x12
+    val copyInsetY = FocalGrid.x12
     /** The white Copy's shadow: 0 6 20 (a CSS blur, so sigma 10). */
     val shadowY = 6.dp
     val shadowSigma = 10.dp
