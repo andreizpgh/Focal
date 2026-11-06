@@ -380,10 +380,17 @@ fun NotePage(
             }
         }
     }
-    // A page recreated in Edit (rotation, process death) starts its session once the note is there; the undo log is
-    // not kept across recreation.
+    // A page recreated in Edit (rotation, process death) goes on with its session once the note is there, its undo
+    // and redo log included; the saved state reads the log from here.
     LaunchedEffect(note.loaded) {
-        if (note.loaded && page.editing && !session.started) session.begin(paragraphs)
+        if (note.loaded && page.editing && !session.started) {
+            session.begin(paragraphs, page.restoredLog)
+            page.restoredLog = null
+        }
+    }
+    DisposableEffect(page, session) {
+        page.editLog = { session.log() ?: page.restoredLog }
+        onDispose { page.editLog = { page.restoredLog } }
     }
     // The draft's last save outlives the page: when the activity stops (recreation included) and when the page goes,
     // it is written in the note's own scope, so nothing typed in the last 600 ms is lost.

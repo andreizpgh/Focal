@@ -105,11 +105,18 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
     /** The search hit was scrolled to and marked: a recreated page keeps its reading position instead. */
     var hitShown by mutableStateOf(false)
 
+    /** The running Edit session's log, read when the page's state is saved (set by the page). */
+    internal var editLog: () -> EditLog? = { restoredLog }
+
+    /** The log a recreated page's Edit session goes on with, once the note has loaded (then null). */
+    internal var restoredLog: EditLog? = null
+
     internal companion object {
         /**
          * Keeps what the user was doing across recreation (rotation, a font or locale change, process death): Edit
-         * with the focused paragraph's draft and selection, Find with its two fields, a rename, the hit having been
-         * shown. The undo log and the menus are not kept.
+         * with the focused paragraph's draft and selection and the session's undo and redo log ([EditLog.encode]
+         * keeps its newest steps within a text budget), Find with its two fields, a rename, the hit having been
+         * shown. The menus are not kept.
          */
         fun saver(takesFocus: Boolean): Saver<NotePageState, Any> = listSaver(
             save = { page ->
@@ -117,7 +124,7 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
                 listOf(
                     page.editing, field?.id, field?.text?.text?.toString(), field?.text?.selection?.start, field?.text?.selection?.end,
                     page.find.open, page.find.fromEdit, page.find.query.text.toString(), page.find.replacement.text.toString(),
-                    page.renaming, page.hitShown,
+                    page.renaming, page.hitShown, page.editLog()?.encode(),
                 )
             },
             restore = { saved ->
@@ -129,6 +136,7 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
                     find.restore(saved[FIND_OPEN] as Boolean, saved[FIND_FROM_EDIT] as Boolean, saved[QUERY] as String, saved[REPLACEMENT] as String)
                     renaming = saved[RENAMING] as Boolean
                     hitShown = saved[HIT_SHOWN] as Boolean
+                    restoredLog = EditLog.decode(saved.getOrNull(EDIT_LOG) as List<*>?)
                 }
             },
         )
@@ -144,6 +152,7 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
         private const val REPLACEMENT = 8
         private const val RENAMING = 9
         private const val HIT_SHOWN = 10
+        private const val EDIT_LOG = 11
     }
 }
 

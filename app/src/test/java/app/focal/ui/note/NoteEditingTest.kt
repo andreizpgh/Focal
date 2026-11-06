@@ -254,6 +254,47 @@ class EditSessionTest {
         assertEquals(store.visible(), edit.paragraphs(store.visible()))
     }
 
+    @Test fun aRecreatedPageGoesOnWithItsSessionsLog() = runBlocking {
+        val store = FakeStore("Alpha.", "Beta.")
+        val edit = session(store)
+        edit.save(1, "Alpha, typed.")
+        edit.mergeIntoPrevious(2, "Beta.")
+        edit.undo() // the join: Beta returns under a new id, and the join waits in redo
+        val saved = edit.log()!!.encode()
+        // The page is recreated: a new session over the reloaded note, with the log the saved state kept.
+        val again = EditSession(store).also { it.begin(store.visible(), EditLog.decode(ArrayList<Any?>(saved))) }
+        assertTrue(again.canUndo)
+        assertTrue(again.canRedo)
+        again.redo()
+        assertEquals(listOf("Alpha, typed. Beta."), again.shown(store))
+        again.undo()
+        again.undo()
+        assertEquals(listOf("Alpha.", "Beta."), again.shown(store))
+        assertFalse(again.canUndo)
+    }
+
+    @Test fun theSavedLogKeepsEveryKindOfStepAndOnlyTheNewestThatFit() {
+        val log = EditLog(
+            undo = listOf(
+                EditStep.Text(1, "a".repeat(10), "b".repeat(10)),
+                EditStep.Split(1, 4, 9),
+                EditStep.Merge(1, 9, 4),
+                EditStep.Replace(listOf(EditStep.Text(1, "one", "two"), EditStep.Text(2, "три", "четыре"))),
+            ),
+            redo = listOf(EditStep.Text(2, "x", "y")),
+            alias = mapOf(5L to 7L),
+        )
+        assertEquals(log, EditLog.decode(log.encode()))
+        // Within 20 characters only the newest steps fit: the 20-character typing step is dropped, the older one.
+        val small = EditLog.decode(log.encode(budget = 20))!!
+        assertEquals(log.undo.drop(1), small.undo)
+        assertEquals(log.redo, small.redo)
+        assertEquals(log.alias, small.alias)
+        assertNull(EditLog.decode(listOf("not a log")))
+        assertNull(EditLog.decode(null))
+        assertNull(EditSession(FakeStore("Idle.")).log())
+    }
+
     @Test fun theCaretAfterUndoSitsAtTheEndOfTheChange() {
         assertEquals("Hello brave ".length, EditSession.changeEnd("Hello world", "Hello brave world"))
         assertEquals("Hello ".length, EditSession.changeEnd("Hello brave world", "Hello world"))

@@ -32,6 +32,86 @@ sealed interface EditStep {
     data class Replace(val changes: List<Text>) : EditStep
 }
 
+/**
+ * A session's undo and redo log and the ids that undoing merges replaced, kept across recreation (rotation, process
+ * death) so Undo goes on where it was ([EditSession.log], [EditSession.begin]).
+ */
+data class EditLog(val undo: List<EditStep>, val redo: List<EditStep>, val alias: Map<Long, Long>) {
+    /**
+     * As a flat list of strings and numbers, which a saved-state Bundle holds. The newest steps that fit in [budget]
+     * characters of paragraph text are kept, so a log of many large Replace alls cannot overrun the Bundle's
+     * transaction limit; Undo then reaches back as far as what was kept.
+     */
+    fun encode(budget: Int = SAVED_TEXT_BUDGET): ArrayList<Any> {
+        var left = budget
+        fun keep(steps: List<EditStep>): List<EditStep> {
+            val kept = ArrayList<EditStep>()
+            for (step in steps.asReversed()) {
+                val cost = step.textLength()
+                if (cost > left) break
+                left -= cost
+                kept += step
+            }
+            return kept.asReversed()
+        }
+        val undoKept = keep(undo)
+        val redoKept = keep(redo)
+        val out = ArrayList<Any>()
+        out += undoKept.size
+        out += redoKept.size
+        out += alias.size
+        (undoKept + redoKept).forEach { it.encodeInto(out) }
+        alias.forEach { (from, to) -> out += from; out += to }
+        return out
+    }
+
+    companion object {
+        /** About 64 KB of UTF-16: well under the Bundle's limit with the page's other saved state. */
+        const val SAVED_TEXT_BUDGET = 32_000
+
+        /** The log [encode] wrote, or null for anything else. */
+        fun decode(saved: List<*>?): EditLog? = runCatching {
+            saved ?: return null
+            val read = saved.iterator()
+            val undoCount = read.next() as Int
+            val redoCount = read.next() as Int
+            val aliasCount = read.next() as Int
+            val undo = List(undoCount) { decodeStep(read) }
+            val redo = List(redoCount) { decodeStep(read) }
+            val alias = HashMap<Long, Long>()
+            repeat(aliasCount) { alias[read.next() as Long] = read.next() as Long }
+            if (read.hasNext()) null else EditLog(undo, redo, alias)
+        }.getOrNull()
+    }
+}
+
+private fun EditStep.textLength(): Int = when (this) {
+    is EditStep.Text -> before.length + after.length
+    is EditStep.Split, is EditStep.Merge -> 0
+    is EditStep.Replace -> changes.sumOf { it.before.length + it.after.length }
+}
+
+private fun EditStep.encodeInto(out: ArrayList<Any>) {
+    when (this) {
+        is EditStep.Text -> { out += "T"; out += id; out += before; out += after }
+        is EditStep.Split -> { out += "S"; out += id; out += offset; out += newId }
+        is EditStep.Merge -> { out += "M"; out += firstId; out += secondId; out += offset }
+        is EditStep.Replace -> {
+            out += "R"
+            out += changes.size
+            changes.forEach { out += it.id; out += it.before; out += it.after }
+        }
+    }
+}
+
+private fun decodeStep(read: Iterator<Any?>): EditStep = when (read.next()) {
+    "T" -> EditStep.Text(read.next() as Long, read.next() as String, read.next() as String)
+    "S" -> EditStep.Split(read.next() as Long, read.next() as Int, read.next() as Long)
+    "M" -> EditStep.Merge(read.next() as Long, read.next() as Long, read.next() as Int)
+    "R" -> EditStep.Replace(List(read.next() as Int) { EditStep.Text(read.next() as Long, read.next() as String, read.next() as String) })
+    else -> error("Not an edit step.")
+}
+
 /** Where the caret goes after a step: paragraph [id] at [caret]. */
 data class CaretAt(val id: Long, val caret: Int)
 
@@ -83,16 +163,27 @@ class EditSession(private val backend: EditBackend) {
     var started by mutableStateOf(false)
         private set
 
-    /** Starts a session on the note's current paragraphs: their order becomes the session's. */
-    fun begin(paragraphs: List<ParagraphUi>) {
+    /**
+     * Starts a session on the note's current paragraphs: their order becomes the session's. A session that the page
+     * had before it was recreated goes on with its [log].
+     */
+    fun begin(paragraphs: List<ParagraphUi>, log: EditLog? = null) {
         started = true
         state = paragraphs
         order = paragraphs.map { it.id }
         undoSteps.clear()
         redoSteps.clear()
+        if (log != null) {
+            alias.putAll(log.alias)
+            undoSteps.addAll(log.undo)
+            redoSteps.addAll(log.redo)
+        }
         failed = false
         failures = 0
     }
+
+    /** The running session's log, for the page's saved state. */
+    fun log(): EditLog? = if (started) EditLog(undoSteps.toList(), redoSteps.toList(), HashMap(alias)) else null
 
     /** Edit ended: the log goes; saved paragraphs stay laid over the state until it catches up ([sync]). */
     fun end() {

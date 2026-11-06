@@ -14,11 +14,16 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.text.TextRange
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -50,8 +55,8 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * Edit's input paths (spec 5.7): Backspace at a paragraph's start joins it to the one before, whether a soft keyboard
  * sends it through the input connection (`deleteSurroundingText`, which at offset 0 changes no text) or a hardware
- * key sends Backspace; a join the store refuses keeps both paragraphs and says so. The note page in the real shell,
- * over an in-memory note.
+ * key sends Backspace; a join the store refuses keeps both paragraphs and says so; and the session's undo log
+ * survives the page being recreated. The note page in the real shell, over an in-memory note.
  */
 @RunWith(AndroidJUnit4::class)
 class NoteEditInputTest {
@@ -62,12 +67,14 @@ class NoteEditInputTest {
         var paragraphs by mutableStateOf(timedParagraphs(texts, 60_000))
         @Volatile var refuseJoin = false
         val joins = AtomicInteger()
+        val writes = AtomicInteger()
 
         fun text(id: Long): String? = paragraphs.firstOrNull { it.id == id }?.text
 
         override suspend fun edit(id: Long, revision: Long, text: String): EditOutcome {
             val current = paragraphs.firstOrNull { it.id == id } ?: return EditOutcome.Stale
             if (current.revision != revision) return EditOutcome.Stale
+            writes.incrementAndGet()
             val saved = current.copy(text = text.trim(), revision = revision + 1, edited = true, words = emptyList())
             paragraphs = paragraphs.map { if (it.id == id) saved else it }
             return EditOutcome.Saved(listOf(saved))
@@ -186,10 +193,30 @@ class NoteEditInputTest {
         }
     }
 
+    @Test fun theUndoLogSurvivesThePageBeingRecreated() {
+        val store = MemoryNote(listOf(FIRST, SECOND))
+        val restoration = StateRestorationTester(rule)
+        restoration.setContent { FocalTheme(dark = false) { EditingNote(store, fieldId = 1, caret = FIRST.length) } }
+        rule.onNode(hasSetTextAction() and hasText(FIRST)).performTextReplacement(REVISED)
+        // The autosave writes the typing as one step.
+        rule.waitUntil(TIMEOUT_MS) { store.writes.get() == 1 }
+        rule.waitUntil(TIMEOUT_MS) { rule.onNode(hasContentDescription("Undo")).fetchSemanticsNode().config.contains(SemanticsProperties.Disabled).not() }
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        // The recreated page is still in Edit with the draft, and its Undo takes the typing back.
+        rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasSetTextAction() and hasText(REVISED)).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNode(hasContentDescription("Undo")).assertIsEnabled().performClick()
+        rule.waitUntil(TIMEOUT_MS) { store.text(1) == FIRST }
+        rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasSetTextAction() and hasText(FIRST)).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNode(hasContentDescription("Redo")).assertIsEnabled()
+    }
+
     private companion object {
         const val NOTE_ID = "edit-input"
         const val FIRST = "The first synthetic paragraph ends here."
         const val SECOND = "Second synthetic paragraph."
+        const val REVISED = "Revised synthetic words."
         const val CANNOT_JOIN = "Can’t join these paragraphs."
         const val TIMEOUT_MS = 5_000L
     }
