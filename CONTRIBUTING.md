@@ -66,6 +66,8 @@ models/                 lock files for the speech model and runtime (no weights)
 scripts/                fetch-model.py, subset-inter.py (Inter font subset), score-wer.py
 design/brand/           the logo and launcher icon sources and their generator
 docs/                   architecture, design, speech quality, testing, install guide
+releases/               manifests of published alphas (historical, read-only)
+.github/workflows/      CI build and tests, secret scan, disabled release workflow
 ```
 
 ## Product boundaries
