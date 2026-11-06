@@ -101,6 +101,22 @@ class LibraryDates(locale: Locale, private val zone: ZoneId, patterns: DatePatte
         }
     }
 
+    /**
+     * When a note was made, as its page's meta line opens (spec 5.5): "Today, 14:32", "Yesterday, 21:47",
+     * "Mon, 16:40" for the past week, "28 Oct, 09:12", "28 Oct 2025, 09:12".
+     */
+    fun noteWhen(epochMs: Long, today: LocalDate, dateline: SpokenDateline): String {
+        val day = date(epochMs)
+        val clock = time(epochMs)
+        return when {
+            day == today -> dateline.today(clock)
+            day == today.minusDays(1) -> dateline.yesterday(clock)
+            withinWeek(day, today) -> dateline.dated(weekdayShort.format(day), clock)
+            day.year == today.year -> dateline.dated(dayMonthShort.format(day), clock)
+            else -> dateline.dated(dayMonthShortYear.format(day), clock)
+        }
+    }
+
     private fun relative(day: LocalDate, today: LocalDate): String? = when (day) {
         today -> words.today
         today.minusDays(1) -> words.yesterday

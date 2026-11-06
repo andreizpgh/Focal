@@ -177,6 +177,14 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         return edit { store.mergeParagraphs(previous.id, previous.revision, paragraphId, revision) }
     }
 
+    /**
+     * Joins [secondId] into [firstId], the paragraph the editor shows before it. Unlike [mergeWithPrevious] the
+     * editor names both, so a new paragraph that is still empty (and therefore not in [NoteUiState.paragraphs]) can
+     * be joined, and a split can be undone by id.
+     */
+    suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditOutcome =
+        edit { store.mergeParagraphs(firstId, firstRevision, secondId, secondRevision) }
+
     /** Puts back the recognizer's text of an edited paragraph. */
     suspend fun restoreOriginal(paragraphId: Long, revision: Long): EditOutcome =
         edit { store.restoreOriginal(paragraphId, revision) }

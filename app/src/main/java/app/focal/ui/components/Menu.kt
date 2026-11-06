@@ -149,9 +149,12 @@ fun MenuSurface(modifier: Modifier = Modifier, content: @Composable ColumnScope.
     )
 }
 
-/** A menu item: `label` at 400 in ink, an optional trailing value in `meta` `muted` ("9 MB"). */
+/**
+ * A menu item: `label` at 400 in ink, an optional trailing value in `meta` `muted` ("9 MB"). Disabled (Edit's "Restore
+ * original" while the paragraph is unedited) it is `faint` and not clickable.
+ */
 @Composable
-fun FocalMenuItem(text: String, onClick: () -> Unit, trailing: String? = null) {
+fun FocalMenuItem(text: String, onClick: () -> Unit, trailing: String? = null, enabled: Boolean = true) {
     val colors = FocalTheme.colors
     val source = remember { MutableInteractionSource() }
     Row(
@@ -159,12 +162,12 @@ fun FocalMenuItem(text: String, onClick: () -> Unit, trailing: String? = null) {
             .fillMaxWidth()
             .heightIn(min = MenuMetrics.item)
             .focusRing(RectangleShape)
-            .clickable(source, indication = PressPlate, role = Role.Button, onClick = onClick)
+            .clickable(source, indication = PressPlate, enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = MenuMetrics.itemPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text, style = FocalType.label.copy(fontWeight = FocalWeight.Regular), color = colors.ink,
+            text, style = FocalType.label.copy(fontWeight = FocalWeight.Regular), color = if (enabled) colors.ink else colors.faint,
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
         )
         if (trailing != null) {

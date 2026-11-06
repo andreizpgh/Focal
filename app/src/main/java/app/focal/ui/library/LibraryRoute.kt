@@ -143,15 +143,18 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
  * Copies a note (spec 5.5): its visible paragraphs joined by a blank line, labelled with its title, marked
  * sensitive on API 33+ so the system preview hides it. Clears the stage's fresh mark. True when the clipboard took it.
  */
-fun copyNote(context: Context, row: NoteRow, text: String): Boolean {
+fun copyNote(context: Context, row: NoteRow, text: String): Boolean = copyNoteText(context, row.id, row.title, text)
+
+/** [copyNote] by id: the note page and the stage share it. */
+fun copyNoteText(context: Context, noteId: String, title: String, text: String): Boolean {
     if (text.isBlank()) return false
     return try {
-        val clip = ClipData.newPlainText(row.title, text)
+        val clip = ClipData.newPlainText(title, text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             clip.description.extras = PersistableBundle().apply { putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true) }
         }
         context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(clip) ?: return false
-        FreshNotes.copied(row.id)
+        FreshNotes.copied(noteId)
         true
     } catch (_: SecurityException) {
         false
@@ -160,10 +163,13 @@ fun copyNote(context: Context, row: NoteRow, text: String): Boolean {
     }
 }
 
-/** Shares a note's text through the system's share sheet (spec 4.15). */
-private fun shareNote(context: Context, row: NoteRow, text: String) {
+/** Shares a note through the system's share sheet (spec 4.15). */
+private fun shareNote(context: Context, row: NoteRow, text: String) = shareNoteText(context, row.title, text)
+
+/** [shareNote] by title: the note page's menu shares the same way. */
+fun shareNoteText(context: Context, title: String, text: String) {
     if (text.isBlank()) return
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
-        .apply { if (row.title.isNotBlank()) putExtra(Intent.EXTRA_TITLE, row.title) }
+        .apply { if (title.isNotBlank()) putExtra(Intent.EXTRA_TITLE, title) }
     try { context.startActivity(Intent.createChooser(send, null)) } catch (_: ActivityNotFoundException) { }
 }

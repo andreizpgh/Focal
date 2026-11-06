@@ -313,14 +313,17 @@ fun spokenDuration(seconds: Long): String {
 
 /** "Today, 16:05" and the other full forms TalkBack reads. */
 @Composable
-fun spokenWhen(epochMs: Long, dates: LibraryDates, today: LocalDate): String {
+fun spokenWhen(epochMs: Long, dates: LibraryDates, today: LocalDate): String = dates.spoken(epochMs, today, datelines())
+
+/** The `dateline*` templates (spec 7.1): "Today, %s", "Yesterday, %s", "%1$s, %2$s". */
+@Composable
+fun datelines(): SpokenDateline {
     val todayFormat = stringResource(R.string.dateline_today)
     val yesterdayFormat = stringResource(R.string.dateline_yesterday)
     val datedFormat = stringResource(R.string.dateline)
-    return dates.spoken(
-        epochMs, today,
-        SpokenDateline({ todayFormat.format(it) }, { yesterdayFormat.format(it) }, { date, time -> datedFormat.format(date, time) }),
-    )
+    return remember(todayFormat, yesterdayFormat, datedFormat) {
+        SpokenDateline({ todayFormat.format(it) }, { yesterdayFormat.format(it) }, { date, time -> datedFormat.format(date, time) })
+    }
 }
 
 /** The note's title, or the fallback "Note at 14:32". */

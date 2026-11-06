@@ -290,7 +290,7 @@ fun SearchResultItem(result: SearchRow, dates: LibraryDates, today: LocalDate, o
 /**
  * A title renamed in place (spec 5.1.6): a [BasicTextField] in the title's own style with all text selected, the
  * caret in [caret]. IME Done, Enter or leaving the field commits; [onCancel] (Back) is the caller's. An empty value
- * restores the derived title (the store's rule for a blank title).
+ * restores the derived title (the store's rule for a blank title), which [placeholder] can show while it is empty.
  */
 @Composable
 fun RenameField(
@@ -300,6 +300,7 @@ fun RenameField(
     caret: Color,
     onCommit: (String) -> Unit,
     modifier: Modifier = Modifier,
+    placeholder: (@Composable () -> Unit)? = null,
 ) {
     var value by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(initial, selection = TextRange(0, initial.length)))
@@ -328,5 +329,12 @@ fun RenameField(
                 focused = state.isFocused
             }
             .onPreviewKeyEvent { event -> if (event.key == Key.Enter) { commit(); true } else false },
+        decorationBox = { field ->
+            Box {
+                // While it is empty the title it falls back to shows faintly (spec 5.5).
+                if (value.text.isEmpty()) placeholder?.invoke()
+                field()
+            }
+        },
     )
 }
