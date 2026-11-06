@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import app.focal.R
 import app.focal.ui.components.FocalIcon
@@ -112,7 +113,7 @@ private fun Segments(labels: List<String>, style: androidx.compose.ui.text.TextS
                             else Modifier,
                         ),
                     contentAlignment = Alignment.Center,
-                ) { Text(labels[i], style = style, color = color, maxLines = 1, textAlign = TextAlign.Center) }
+                ) { Text(labels[i], style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center) }
             }
         }
     }

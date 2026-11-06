@@ -94,6 +94,8 @@ object SettingsMetrics {
     val rowPadding = Grid.x12
     val descriptionGap = Grid.x2
     val trailingGap = Grid.x16
+    /** A row's trailing value never takes more than this, so its title keeps room at large font scales. */
+    val valueMaxWidth = 160.dp
     /** The footer: the static mark 48 dp under the last row, the version 8 dp under it. */
     val footerGap = Grid.x48
     val footerMark = Grid.x32
@@ -246,7 +248,10 @@ private fun SettingsRow(
         }
         if (value != null) {
             Spacer(Modifier.width(SettingsMetrics.trailingGap))
-            Text(value, style = FocalType.field.copy(fontWeight = FocalWeight.Medium).tabular(), color = colors.ink, maxLines = 1)
+            Text(
+                value, style = FocalType.field.copy(fontWeight = FocalWeight.Medium).tabular(), color = colors.ink,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = SettingsMetrics.valueMaxWidth),
+            )
         }
         if (glyph != null) {
             Spacer(Modifier.width(SettingsMetrics.trailingGap))
