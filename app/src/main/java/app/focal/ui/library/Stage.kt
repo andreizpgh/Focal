@@ -601,7 +601,7 @@ private fun StageText(row: NoteRow, noSpeech: Boolean) {
         }
         if (lastLine != null) {
             Text(
-                stringResource(lastLine), style = StageTextStyle, color = colors.stageRecede,
+                stringResource(lastLine), style = StageReasonStyle, color = colors.stageRecede,
                 maxLines = StageMetrics.TEXT_LINES_MIN, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -609,6 +609,8 @@ private fun StageText(row: NoteRow, noSpeech: Boolean) {
 }
 
 private val StageTextStyle = FocalType.stageText.copy(lineBreak = LineBreak.Paragraph)
+/** A reason that needs two lines splits them evenly ("Not enough free memory / to transcribe right now."), never a widow. */
+private val StageReasonStyle = FocalType.stageText.copy(lineBreak = LineBreak.Heading)
 
 /**
  * The note's length (spec 4.22.4): thin numerals in `stageLength`, each unit small after them ("12 min",
