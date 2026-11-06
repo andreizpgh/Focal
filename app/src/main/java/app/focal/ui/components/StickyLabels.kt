@@ -7,7 +7,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -104,9 +106,12 @@ class StickyLabels(val listState: LazyListState, private val sectionOf: (key: An
     }
 }
 
+/** The labels of [listState]; [sectionOf] may change with the list's content and is always read as it is now. */
 @Composable
-fun rememberStickyLabels(listState: LazyListState, sectionOf: (key: Any) -> Any?): StickyLabels =
-    remember(listState) { StickyLabels(listState, sectionOf) }
+fun rememberStickyLabels(listState: LazyListState, sectionOf: (key: Any) -> Any?): StickyLabels {
+    val current by rememberUpdatedState(sectionOf)
+    return remember(listState) { StickyLabels(listState) { key -> current(key) } }
+}
 
 /** Hides a label's list copy while the overlay draws it. */
 fun Modifier.stickyLabelSource(labels: StickyLabels, key: Any): Modifier =
