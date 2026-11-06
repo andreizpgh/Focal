@@ -37,6 +37,22 @@ class FocalMotionTest {
         assertEquals(FocalSettle.FADE_FAST_MS.toFloat(), settleMs(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS), 3f)
         assertEquals(FocalSettle.FADE_MS.toFloat(), settleMs(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_STIFFNESS), 3f)
         assertEquals(FocalSettle.MOVE_MS.toFloat(), settleMs(FocalMotion.SPATIAL_DAMPING, FocalMotion.MOVE_STIFFNESS), 3f)
+        assertEquals(FocalSettle.FADE_SLOW_MS.toFloat(), settleMs(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_SLOW_STIFFNESS), 3f)
+    }
+
+    /** The clock-drawn springs start at 0, follow the spring's solution and end exactly at 1 at their settle time. */
+    @Test fun clockSpringsSettleOnTheirTime() {
+        val springs = listOf(
+            FocalClock::move to FocalSettle.MOVE_MS, FocalClock::fadeFast to FocalSettle.FADE_FAST_MS,
+            FocalClock::fade to FocalSettle.FADE_MS, FocalClock::fadeSlow to FocalSettle.FADE_SLOW_MS,
+        )
+        for ((spring, settle) in springs) {
+            assertEquals(0f, spring(0f), 0f)
+            assertEquals(1f, spring(settle.toFloat()), 0f)
+            assertEquals(1f, spring(Float.POSITIVE_INFINITY), 0f)
+            assertTrue(spring(settle / 2f) in 0.5f..1f)
+        }
+        assertEquals(FocalMotion.springFraction(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_STIFFNESS, 80f), FocalClock.fade(80f), 0f)
     }
 
     /** A triggered motion's first frame already shows one frame of it, and it ends that much sooner. */

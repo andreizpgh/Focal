@@ -69,6 +69,7 @@ import androidx.compose.ui.util.lerp
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigationevent.NavigationEvent
 import app.focal.ui.components.sceneMaterial
+import app.focal.ui.design.FocalClock
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalSettle
 import app.focal.ui.design.FocalShapes
@@ -583,16 +584,9 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     }
 }
 
-/** The spec 2.8 springs as functions of the time since their start, settled exactly at their 0.1 % time. */
-private fun move(ms: Float): Float = clockSpring(FocalMotion.SPATIAL_DAMPING, FocalMotion.MOVE_STIFFNESS, FocalSettle.MOVE_MS, ms)
-private fun fade(ms: Float): Float = clockSpring(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_STIFFNESS, FocalSettle.FADE_MS, ms)
-private fun fadeFast(ms: Float): Float = clockSpring(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS, FocalSettle.FADE_FAST_MS, ms)
-
-private fun clockSpring(damping: Float, stiffness: Float, settleMs: Long, ms: Float): Float = when {
-    ms <= 0f -> 0f
-    ms >= settleMs -> 1f
-    else -> FocalMotion.springFraction(damping, stiffness, ms)
-}
+private fun move(ms: Float): Float = FocalClock.move(ms)
+private fun fade(ms: Float): Float = FocalClock.fade(ms)
+private fun fadeFast(ms: Float): Float = FocalClock.fadeFast(ms)
 
 /** How a page draws itself: [alpha], the predictive preview at eased progress [preview] toward [edge], or recorded. */
 @Immutable

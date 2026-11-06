@@ -17,15 +17,22 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.MotionDurationScale
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.sin
@@ -128,7 +135,66 @@ fun smoothstep(edge0: Float, edge1: Float, x: Float): Float {
 object FocalSettle {
     const val FADE_FAST_MS = 150L
     const val FADE_MS = 231L
+    const val FADE_SLOW_MS = 326L
     const val MOVE_MS = 317L
+}
+
+/**
+ * The spec 2.8 springs as functions of the time since their start (ms), settled exactly at their 0.1 % time: for
+ * motion drawn from a clock ([TriggerClock], the page changes) rather than run by an Animatable.
+ */
+object FocalClock {
+    fun move(ms: Float): Float = at(FocalMotion.SPATIAL_DAMPING, FocalMotion.MOVE_STIFFNESS, FocalSettle.MOVE_MS, ms)
+    fun fadeFast(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS, FocalSettle.FADE_FAST_MS, ms)
+    fun fade(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_STIFFNESS, FocalSettle.FADE_MS, ms)
+    fun fadeSlow(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_SLOW_STIFFNESS, FocalSettle.FADE_SLOW_MS, ms)
+
+    private fun at(damping: Float, stiffness: Float, settleMs: Long, ms: Float): Float = when {
+        ms <= 0f -> 0f
+        ms >= settleMs -> 1f
+        else -> FocalMotion.springFraction(damping, stiffness, ms)
+    }
+}
+
+/**
+ * The time since a trigger (a tap, a key) for motion that counts from it even when what it moves is composed a frame
+ * or two later (spec 6.1: every "+n" is a time after the trigger). Like FocalMotion.fromTrigger, its first frame
+ * counts one frame already; it follows the animator duration scale. [elapsed] reads infinity once [lengthMs] has
+ * passed, before the first trigger and when animations are off; [serial] tells one trigger from the next.
+ */
+@Stable
+class TriggerClock(private val scope: CoroutineScope, private val lengthMs: Long) {
+    var elapsed by mutableFloatStateOf(Float.POSITIVE_INFINITY)
+        private set
+    var serial = 0
+        private set
+    private var job: Job? = null
+
+    /** Call in the tap's handler: the next frame is the first one counted. */
+    fun start() {
+        job?.cancel()
+        serial++
+        elapsed = 0f
+        // Undispatched, so it waits for the very next frame: the one the trigger is drawn in.
+        job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            val scale = coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
+            if (scale > 0f) {
+                val lead = (FocalTiming.TRIGGER_LEAD_MS * NANOS_PER_MS * scale).toLong()
+                var start = Long.MIN_VALUE
+                while (elapsed < lengthMs) {
+                    withFrameNanos { now ->
+                        if (start == Long.MIN_VALUE) start = now - lead
+                        elapsed = (now - start).toFloat() / NANOS_PER_MS / scale
+                    }
+                }
+            }
+            elapsed = Float.POSITIVE_INFINITY
+        }
+    }
+
+    private companion object {
+        const val NANOS_PER_MS = 1_000_000L
+    }
 }
 
 /** Timing constants of the choreography (spec 2.8.2, 2.8.3, 2.8.6, 2.8.7). */
