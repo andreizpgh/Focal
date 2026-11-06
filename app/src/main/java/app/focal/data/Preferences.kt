@@ -41,10 +41,5 @@ class Preferences(context: Context) {
 
     companion object {
         val THEMES = listOf("system", "light", "dark")
-        // Languages chosen for notes recorded before Ultra; Ultra notes detect the language.
-        private val legacyLanguages = mapOf("en" to "English", "ru" to "Русский", "de" to "Deutsch", "fr" to "Français",
-            "es" to "Español", "it" to "Italiano", "pt" to "Português")
-        fun languageLabel(language: String, speechEngine: String): String =
-            if (speechEngine == ULTRA_ENGINE) "Automatic" else legacyLanguages[language] ?: language
     }
 }

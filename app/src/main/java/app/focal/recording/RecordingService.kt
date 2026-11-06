@@ -178,7 +178,6 @@ class RecordingService : Service() {
                 if (error is SecurityException) StartFailure.PERMISSION else StartFailure.OTHER,
                 if (error is SecurityException) "Allow microphone access and start recording while Focal is open."
                 else "Recording could not start. Open Focal and try again."))
-            if (capture == null) RecordingState.live.update { if (it.noteId == null) it.copy(message = "Recording could not start.") else it }
             // Processing promotion opens no microphone and disarms the foreground-start deadline.
             runCatching { promote(processingType(), notifications.transcribing(processingNote, "", null, false)) }
             SessionOperations.releasePending(token)
@@ -187,9 +186,6 @@ class RecordingService : Service() {
         val claim = try { SessionOperations.acceptSession(token, capture = true, noteId = null) } catch (_: Exception) { null }
         if (claim == null) {
             // A second Record while recording is idempotent; anything else reports that capture is busy.
-            if (capture == null) RecordingState.live.update {
-                if (it.noteId == null) it.copy(message = "This session is busy. Try again when its current operation finishes.") else it
-            }
             restoreForeground()
             stopIfIdle(startId); return
         }
@@ -211,9 +207,6 @@ class RecordingService : Service() {
         if (noteId != null) {
             val claim = try { SessionOperations.acceptSession(token, capture = false, noteId = noteId) } catch (_: Exception) { null }
             if (claim == null) {
-                if (!SessionOperations.matchesSession(capture = false, noteId = noteId)) RecordingState.live.update {
-                    if (it.noteId == null) it.copy(message = "This note is being changed. Try again when it finishes.") else it
-                }
                 stopIfIdle(startId); return
             }
             synchronized(workLock) {
@@ -468,7 +461,7 @@ class RecordingService : Service() {
             val id = store.create()
             session.noteId = id
             session.claim.bindNote(id)
-            RecordingState.live.value = LiveSession(id, message = "Starting recording…", speech = speechAvailability())
+            RecordingState.live.value = LiveSession(id, speech = speechAvailability())
             val opened = device
             device = null
             captureAudio(session, id, opened)
@@ -485,7 +478,6 @@ class RecordingService : Service() {
 
     private fun fail(session: Capture, event: ServiceEvent.StartFailed) {
         RecordingState.events.tryEmit(event)
-        if (session.noteId == null) RecordingState.live.update { if (it.noteId == null) it.copy(message = event.message) else it }
     }
 
     @Suppress("MissingPermission")
@@ -525,7 +517,7 @@ class RecordingService : Service() {
             fun publishPaused() {
                 RecordingState.live.update {
                     if (it.noteId == id) it.copy(paused = true, pauseReason = session.pauseReason, storageShortBytes = session.storageShort,
-                        duration = samplesWritten / 16, level = 0f, message = "Paused") else it
+                        duration = samplesWritten / 16) else it
                 }
                 refreshNotification()
             }
@@ -586,7 +578,7 @@ class RecordingService : Service() {
                     session.started = true
                     metadata.enqueue(CaptureEvent.State(NoteState.RECORDING))
                     RecordingState.live.update {
-                        if (it.noteId == id) it.copy(paused = false, pauseReason = null, storageShortBytes = 0, message = "Listening") else it
+                        if (it.noteId == id) it.copy(paused = false, pauseReason = null, storageShortBytes = 0) else it
                     }
                     refreshNotification()
                 }
@@ -614,7 +606,7 @@ class RecordingService : Service() {
                 if (current.silenced) session.pauseAutomatically(silencedReason())
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastUi >= 100) {
-                    RecordingState.live.update { if (it.noteId == id) it.copy(duration = samplesWritten / 16, level = meter.level) else it }
+                    RecordingState.live.update { if (it.noteId == id) it.copy(duration = samplesWritten / 16) else it }
                     lastUi = now
                 }
                 if (now - lastSync >= 1000) {
@@ -641,8 +633,7 @@ class RecordingService : Service() {
             notifications.cancelAutoPause()
             session.claim.finishCapture()
             RecordingState.live.update {
-                if (it.noteId == id) it.copy(processing = true, paused = false, pauseReason = null, storageShortBytes = 0,
-                    level = 0f, message = session.failure ?: "Finishing transcript…") else it
+                if (it.noteId == id) it.copy(processing = true, paused = false, pauseReason = null, storageShortBytes = 0) else it
             }
             // The microphone and original file are closed before waiting on any database work.
             withContext(NonCancellable + Dispatchers.IO) {
@@ -667,7 +658,7 @@ class RecordingService : Service() {
                 if (store.discardIfEmpty(id)) {
                     // No bytes, or exactly constant samples: nothing was recorded.
                     RecordingState.events.tryEmit(ServiceEvent.NothingRecorded)
-                    RecordingState.live.update { if (it.noteId == id) LiveSession(message = "Nothing was recorded.") else it }
+                    RecordingState.live.update { if (it.noteId == id) LiveSession() else it }
                 } else {
                     store.state(id, NoteState.PROCESSING, session.failure.orEmpty())
                     RecordingState.live.update { if (it.noteId == id) it.copy(duration = duration) else it }
@@ -903,7 +894,6 @@ class RecordingService : Service() {
                 val decoder = engine.decoder
                 if (pending != null && decoder != null) {
                     if (Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
-                        RecordingState.live.update { if (it.noteId == id) it.copy(message = "Cooling down · audio is saved") else it }
                         delay(3000); continue
                     }
                     // A window that already failed or killed the process twice is marked failed instead.
@@ -958,7 +948,7 @@ class RecordingService : Service() {
         val note = store.note(id)
         processingTitle = note?.title.orEmpty()
         val session = LiveSession(id, processing = true, duration = note?.duration ?: 0,
-            message = "Transcribing", progress = progress, speech = engine.availabilityOrPreparing(),
+            progress = progress, speech = engine.availabilityOrPreparing(),
             pending = runCatching { store.pendingCount(id) }.getOrDefault(0))
         // A recording that started since this note was picked owns the live state: never overwrite it.
         RecordingState.live.update { if (it.capturing) it else session }

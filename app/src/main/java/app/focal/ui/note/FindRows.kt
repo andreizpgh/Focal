@@ -63,8 +63,6 @@ object FindMetrics {
     /** The count ends 16 dp inside the field, at least 8 dp after the query. */
     val countEnd = Grid.x16
     val countGap = Grid.x8
-    /** ∧ and ∨ are 68 dp targets, splitting the 136 dp nav pill. */
-    val navTarget = KeyboardRowMetrics.controls / 2
     val replacePadding = Grid.x8
     /** From this font scale the count stacks under the query, inside a field that grows. */
     const val STACK_FONT = 1.5f

@@ -31,10 +31,9 @@
         <!--
             Settings from App info (design 4.23.6): Android shows a gear for an activity that handles
             APPLICATION_PREFERENCES. Its own empty task affinity keeps it off the library's task, so Back returns to
-            App info. It shows only the theme, the storage size and About, so it needs no permission. Enabled with
-            the rebuilt interface.
+            App info. It shows only the theme, the storage size and About, so it needs no permission.
         -->
-        <activity android:name=".SettingsActivity" android:exported="true" android:enabled="${focalNewUi}"
+        <activity android:name=".SettingsActivity" android:exported="true"
             android:taskAffinity="" android:excludeFromRecents="true" android:configChanges="uiMode"
             android:label="@string/settings_title">
             <intent-filter>

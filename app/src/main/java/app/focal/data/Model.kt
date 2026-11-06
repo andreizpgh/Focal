@@ -67,9 +67,6 @@ data class Note(
     val failedWindows: Int = 0,
 )
 
-internal val Note.mayNeedRecovery: Boolean get() = state == NoteState.INTERRUPTED || state == NoteState.ERROR
-val Note.displayTitle: String get() = title.ifBlank { "Untitled note" }
-
 /**
  * One paragraph of a note. [text] is what the user sees; [sourceText] is the formatted recognizer text it
  * was materialised from (null = unknown, for text saved before schema 5; "" = none, for a paragraph the user

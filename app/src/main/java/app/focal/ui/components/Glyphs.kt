@@ -59,9 +59,8 @@ object GlyphSize {
     val inPill = 20.dp
     /** The feedback action's undo glyph, 6 dp before its label; the stage's copy glyph. */
     val small = 18.dp
-    /** The record dot in a pill; 12 dp in a circle. */
+    /** The record dot in a pill. */
     val recordDot = 10.dp
-    val recordDotInCircle = 12.dp
     /** The finish square and its corner radius. */
     val finishSquare = 12.dp
     val finishRadius = 3.dp

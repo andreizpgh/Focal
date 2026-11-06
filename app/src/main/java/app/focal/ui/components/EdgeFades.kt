@@ -24,8 +24,6 @@ object FadeMetrics {
     /** The library's pin band: solid to status + 40 dp, gradient to status + 56 dp. */
     val pinBandSolid = Grid.x40
     val pinBandEnd = Grid.x56
-    /** Find: solid to the status bar's bottom, gradient over 48 dp. */
-    val findFade = Grid.x48
 }
 
 /** Solid paper from the window top to [solidBelowStatus] under the status bar, then [fade] to transparent. */

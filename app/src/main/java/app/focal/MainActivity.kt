@@ -16,14 +16,13 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
 import app.focal.recording.ServiceEvent
 import app.focal.recording.StartFailure
-import app.focal.ui.FocalApp
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalSettle
+import app.focal.ui.shell.FocalApp
 import app.focal.ui.shell.FocalWindow
 import app.focal.ui.shell.NightMode
 import app.focal.ui.shell.ShellCommand
@@ -31,15 +30,12 @@ import app.focal.ui.state.EntryRequest
 import app.focal.ui.state.EntryRequests
 import app.focal.ui.state.ThemeMode
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import app.focal.ui.shell.FocalApp as RebuiltApp
 
 class MainActivity : ComponentActivity() {
-    private val openedNote = MutableStateFlow<Pair<String?, Long>>(null to 0)
     private val shellCommands = MutableSharedFlow<ShellCommand>(extraBufferCapacity = 1)
 
     /** API 26-30: the theme setting reaches values-night before any resource is read (no flash on a cold start). */
@@ -71,17 +67,14 @@ class MainActivity : ComponentActivity() {
         // The saved Compose destination already reflects any previously handled
         // notification. Replaying the launch intent would override it on rotation.
         if (savedInstanceState == null) handle(intent)
-        setContent {
-            if (BuildConfig.NEW_UI) RebuiltApp(preferences, shellCommands)
-            else { val model: FocalViewModel = viewModel(); FocalApp(model, openedNote) }
-        }
+        setContent { FocalApp(preferences, shellCommands) }
     }
 
     private fun applyTheme(mode: ThemeMode) = FocalWindow.apply(this, mode)
 
     /** Ctrl+, opens Settings with no focused node needed (spec 4.23.6). */
     override fun onKeyShortcut(keyCode: Int, event: KeyEvent): Boolean {
-        if (BuildConfig.NEW_UI && keyCode == KeyEvent.KEYCODE_COMMA && event.isCtrlPressed) {
+        if (keyCode == KeyEvent.KEYCODE_COMMA && event.isCtrlPressed) {
             shellCommands.tryEmit(ShellCommand.OpenSettings)
             return true
         }
@@ -90,7 +83,7 @@ class MainActivity : ComponentActivity() {
 
     /** Esc is Back wherever the screen has nothing of its own to close (spec 8.5). */
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        if (BuildConfig.NEW_UI && keyCode == KeyEvent.KEYCODE_ESCAPE && !event.isCanceled) {
+        if (keyCode == KeyEvent.KEYCODE_ESCAPE && !event.isCanceled) {
             onBackPressedDispatcher.onBackPressed()
             return true
         }
@@ -100,7 +93,6 @@ class MainActivity : ComponentActivity() {
     /** Lists Ctrl+, in the system's keyboard-shortcuts helper (Meta+/). */
     override fun onProvideKeyboardShortcuts(data: MutableList<KeyboardShortcutGroup>, menu: Menu?, deviceId: Int) {
         super.onProvideKeyboardShortcuts(data, menu, deviceId)
-        if (!BuildConfig.NEW_UI) return
         data += KeyboardShortcutGroup(
             getString(R.string.kbd_group),
             listOf(KeyboardShortcutInfo(getString(R.string.kbd_open_settings), KeyEvent.KEYCODE_COMMA, KeyEvent.META_CTRL_ON)),
@@ -126,15 +118,8 @@ class MainActivity : ComponentActivity() {
         when (intent.action) {
             // The shortcut's request itself travels in memory (ShortcutRecord), handled in onResume.
             ACTION_FROM_SHORTCUT -> Unit
-            ACTION_SHOW_RECORDING -> {
-                val id = intent.getStringExtra(RecordingService.NOTE)
-                EntryRequests.post(EntryRequest.ShowRecording(id))
-                openFromIntent(intent)
-            }
-            else -> {
-                intent.getStringExtra(RecordingService.NOTE)?.let { EntryRequests.post(EntryRequest.OpenNote(it)) }
-                openFromIntent(intent)
-            }
+            ACTION_SHOW_RECORDING -> EntryRequests.post(EntryRequest.ShowRecording(intent.getStringExtra(RecordingService.NOTE)))
+            else -> intent.getStringExtra(RecordingService.NOTE)?.let { EntryRequests.post(EntryRequest.OpenNote(it)) }
         }
     }
 
@@ -146,7 +131,6 @@ class MainActivity : ComponentActivity() {
         val live = RecordingState.live.value
         if (live.capturing) {
             EntryRequests.post(EntryRequest.ShowRecording(live.noteId))
-            openedNote.value = live.noteId to (openedNote.value.second + 1)
             return
         }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -159,10 +143,6 @@ class MainActivity : ComponentActivity() {
         } catch (error: Exception) {
             RecordingState.events.tryEmit(ServiceEvent.StartFailed(StartFailure.OTHER, error.message ?: "Could not start recording."))
         }
-    }
-
-    private fun openFromIntent(intent: Intent) {
-        openedNote.value = intent.getStringExtra(RecordingService.NOTE) to (openedNote.value.second + 1)
     }
 
     companion object {

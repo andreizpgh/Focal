@@ -19,10 +19,9 @@ enum class SpeechAvailability {
 /**
  * What the recording service is doing, published for the UI. [noteId] is the note it works on: the recording
  * while the microphone session lasts (Recording or Paused), else the note being transcribed ([processing]).
- * Null when the service is idle; [message] then may carry the reason the last command failed.
+ * Null when the service is idle; failed commands are reported as [ServiceEvent]s.
  *
- * [duration] is the recorded length in ms (the capture clock while recording). [level] is the meter level
- * for screens that read it from this state (it changes ten times a second; new screens read [AudioLevel]).
+ * [duration] is the recorded length in ms (the capture clock while recording; the meter reads [AudioLevel]).
  * [pauseReason] is a [app.focal.data.CaptureReason] when capture paused automatically, null for a manual
  * pause. [storageShortBytes] is how much space is still missing after Resume was refused for storage.
  * [progress] is the transcribed share of the processed note's audio (0..1) while [processing].
@@ -32,8 +31,6 @@ data class LiveSession(
     val paused: Boolean = false,
     val processing: Boolean = false,
     val duration: Long = 0,
-    val level: Float = 0f,
-    val message: String = "",
     val pending: Int = 0,
     val pauseReason: String? = null,
     val storageShortBytes: Long = 0,

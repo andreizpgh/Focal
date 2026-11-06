@@ -101,11 +101,9 @@ object FocalTiming {
     const val READY_HAPTIC_GUARD_MS = 1500L
     const val DEVELOP_DELAY_MS = 60L
     const val RECEDE_DELAY_MS = 140L
-    const val BODY_FADE_DELAY_MS = 80L
     const val SEARCH_DEBOUNCE_MS = 120L
     const val FIND_DEBOUNCE_MS = 120L
     const val AUTOSAVE_DEBOUNCE_MS = 600L
-    const val PLAY_PREROLL_MS = 500L
     const val ARRIVAL_HIGHLIGHT_MS = 1500L
     const val NOTIFICATION_PERMISSION_DELAY_MS = 600L
     const val FEEDBACK_MS = 8000
