@@ -45,6 +45,7 @@ import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.Grid
 import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -86,6 +87,21 @@ class FeedbackHostState {
             // A replacing message is already current; only the message that ended clears itself.
             if (current === message) current = null
         }
+    }
+
+    /**
+     * A deferred action's message (Delete, Remove audio: "Note deleted · Undo"): [undo] on its action, [commit] when it
+     * ends any other way, including the host going away with the activity (its coroutine is cancelled then, and the
+     * pill is gone, so the action commits as if it had been dismissed).
+     */
+    suspend fun showDeferred(text: String, action: FeedbackAction, undo: () -> Unit, commit: () -> Unit) {
+        val result = try {
+            show(text, action)
+        } catch (cancelled: CancellationException) {
+            commit()
+            throw cancelled
+        }
+        if (result == FeedbackResult.ActionPerformed) undo() else commit()
     }
 
     /** Ends the message as Dismissed: it timed out, was swiped away, the app stopped or settings covered it. */

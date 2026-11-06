@@ -55,8 +55,8 @@ import kotlinx.coroutines.launch
  * What the whole app reacts to, whichever page is shown: the library's and the service's outcomes in the feedback
  * pill (spec 4.8, 5.1.7, 5.1.8), notes turning Ready (the fresh mark, 4.22.2), the Recording-started tick (2.9),
  * the notification permission after the first capture (5.11), and entry requests from the shortcut and
- * notifications (5.13). Messages run in the activity's scope, so a deferred Delete still commits or undoes after
- * the page changes.
+ * notifications (5.13). Messages run in the activity composition's scope, so a deferred Delete still commits or
+ * undoes after the page changes, and commits when that scope ends with the activity (a rotation included).
  */
 @Composable
 fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: RecordingViewModel, record: () -> Unit) {
@@ -81,14 +81,14 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
         library.events.collect { event ->
             scope.launch {
                 when (event) {
-                    is LibraryEvent.Deleted -> when (feedback.show(words.deleted, FeedbackAction(words.undo, FocalIcon.Undo))) {
-                        FeedbackResult.ActionPerformed -> library.undoDelete(event.noteId)
-                        FeedbackResult.Dismissed -> library.commitDelete(event.noteId)
-                    }
-                    is LibraryEvent.AudioRemoved -> when (feedback.show(words.audioRemoved, FeedbackAction(words.undo, FocalIcon.Undo))) {
-                        FeedbackResult.ActionPerformed -> library.undoRemoveAudio(event.noteId)
-                        FeedbackResult.Dismissed -> library.commitRemoveAudio(event.noteId)
-                    }
+                    is LibraryEvent.Deleted -> feedback.showDeferred(
+                        words.deleted, FeedbackAction(words.undo, FocalIcon.Undo),
+                        undo = { library.undoDelete(event.noteId) }, commit = { library.commitDelete(event.noteId) },
+                    )
+                    is LibraryEvent.AudioRemoved -> feedback.showDeferred(
+                        words.audioRemoved, FeedbackAction(words.undo, FocalIcon.Undo),
+                        undo = { library.undoRemoveAudio(event.noteId) }, commit = { library.commitRemoveAudio(event.noteId) },
+                    )
                     is LibraryEvent.TooLateToUndo -> feedback.show(words.tooLate)
                     is LibraryEvent.Error -> feedback.show(event.message)
                 }
