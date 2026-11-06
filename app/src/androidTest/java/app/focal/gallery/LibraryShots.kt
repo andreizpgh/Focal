@@ -88,14 +88,14 @@ private const val READY_AT_MS = 400L
 private const val MOMENT_AT_MS = 520L
 private const val COPIED_AT_MS = 300L
 
-private val today: LocalDate = LocalDate.of(2026, 11, 6)
+internal val today: LocalDate = LocalDate.of(2026, 11, 6)
 private val zone: ZoneId = ZoneId.systemDefault()
-private val dates = LibraryDates(
+internal val dates = LibraryDates(
     Locale.UK, zone,
     DatePatterns("HH:mm", "EEE", "EEEE", "d MMM", "d MMM y", "d MMMM", "d MMMM y"),
     DayWords("Today", "Yesterday"),
 )
-private val meter = FixedMeter(floatArrayOf(0.94f, 0.62f, 0.88f, 0.55f, 0.38f))
+internal val meter = FixedMeter(floatArrayOf(0.94f, 0.62f, 0.88f, 0.55f, 0.38f))
 
 private fun dayOf(label: String): LocalDate = when (label) {
     "Today" -> today
@@ -117,7 +117,7 @@ private fun durationMs(text: String): Long {
     return total
 }
 
-private fun rows(): List<NoteRow> = FakeNotes.mapIndexed { index, note ->
+internal fun rows(): List<NoteRow> = FakeNotes.mapIndexed { index, note ->
     NoteRow(
         id = "note-$index", title = note.title, titleIsCustom = true, created = epoch(dayOf(note.day), note.time),
         durationMs = durationMs(note.duration), preview = note.preview, phase = NotePhase.READY, progress = null,
@@ -125,10 +125,10 @@ private fun rows(): List<NoteRow> = FakeNotes.mapIndexed { index, note ->
     )
 }
 
-private fun days(rows: List<NoteRow>): List<LibraryDay> =
+internal fun days(rows: List<NoteRow>): List<LibraryDay> =
     rows.groupBy { dates.date(it.created).toEpochDay() }.map { (day, list) -> LibraryDay(day, list) }
 
-private fun idleModel(): LibraryModel {
+internal fun idleModel(): LibraryModel {
     val all = rows()
     return LibraryModel(loaded = true, stage = StageUi.Note(all.first(), fresh = false), days = days(all.drop(1)))
 }
@@ -143,7 +143,7 @@ private fun liveModel(paused: Boolean, reason: PauseReason? = null, text: Boolea
     )
 }
 
-private val saturday = NoteRow(
+internal val saturday = NoteRow(
     id = "saturday", title = "So the plan for Saturday is simple", titleIsCustom = false, created = epoch(today, "17:08"),
     durationMs = 4 * 60_000L,
     preview = "So the plan for Saturday is simple. We meet at the trailhead at eight, not half past, because the car park is full by nine. Anna brings the stove and the big pot.",
@@ -181,7 +181,7 @@ private fun searchResults(): SearchUiState {
 
 /** The library page inside the real shell (the dock, the feedback pill, the strip), from fake state. */
 @Composable
-private fun Library(
+internal fun Library(
     model: LibraryModel,
     scroll: Boolean = false,
     search: SearchUiState? = null,
@@ -190,24 +190,34 @@ private fun Library(
 ) {
     val shell = rememberShellState()
     val list = rememberLazyListState()
-    val actions = remember { LibraryActions(copy = { true }) }
     if (scroll) LaunchedEffect(list) { list.scrollToItem(2, 140) }
     if (feedback) LaunchedEffect(shell) { shell.bottom.feedback.show("Note deleted", FeedbackAction("Undo", FocalIcon.Undo)) }
-    FocalShell(shell, destination = {
-        LibraryHost(
-            strip = shell.settings, preferences = null, armed = { true }, hasNotes = !model.empty, capturing = model.live != null,
-            blocked = false, layer = remember { SettingsLayerState() },
-            library = {
-                LibraryPage(
-                    model, search ?: SearchUiState(), meter, dates, today, actions, listState = list,
-                    searchState = rememberLibrarySearchState(open = search != null),
-                    query = rememberTextFieldState(search?.query.orEmpty()),
-                )
-                if (menu) RowMenu()
-            },
-            settings = { Settings() },
-        )
-    })
+    FocalShell(shell, destination = { LibraryDestination(model, list, search, menu) })
+}
+
+/** The Library destination (the page and the settings strip) inside whatever shell is current. */
+@Composable
+internal fun LibraryDestination(
+    model: LibraryModel,
+    list: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    search: SearchUiState? = null,
+    menu: Boolean = false,
+) {
+    val shell = app.focal.ui.shell.LocalShell.current
+    val actions = remember { LibraryActions(copy = { true }) }
+    LibraryHost(
+        strip = shell.settings, preferences = null, armed = { true }, hasNotes = !model.empty, capturing = model.live != null,
+        blocked = false, layer = remember { SettingsLayerState() },
+        library = {
+            LibraryPage(
+                model, search ?: SearchUiState(), meter, dates, today, actions, listState = list,
+                searchState = rememberLibrarySearchState(open = search != null),
+                query = rememberTextFieldState(search?.query.orEmpty()),
+            )
+            if (menu) RowMenu()
+        },
+        settings = { Settings() },
+    )
 }
 
 /** The row menu at a long-press on the second row (a popup on a phone; drawn inline here). */
