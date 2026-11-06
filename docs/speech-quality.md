@@ -23,10 +23,10 @@ measurement first and then what the app does with it.
 
 ## Test material
 
-All quality figures use 84 clips of [FLEURS](https://huggingface.co/datasets/google/fleurs)
-read speech: six clips per language from the official dev split (the **DEV set**,
-864 reference words) and six per language from the test split (the **held-out
-set**, 961 words). Clip IDs, reference texts and hashes are in
+The engine, segmentation, confidence and formatting figures use 84 clips of
+[FLEURS](https://huggingface.co/datasets/google/fleurs) read speech: six clips per
+language from the official dev split (the **DEV set**, 864 reference words) and
+six per language from the test split (the **held-out set**, 961 words). Clip IDs, reference texts and hashes are in
 [`fleurs-references.json`](benchmarks/fleurs-references.json) and
 [`fleurs-corpus.json`](benchmarks/fleurs-corpus.json).
 
@@ -134,16 +134,21 @@ DEV variant had 91 word errors against 50 for the normal one. Silero can classif
 quiet room noise as speech, in which case no pause qualifies and windows run to
 the 20-second cap.
 
-**What the app does:** the shipped segmenter is the last row, with three changes
-made after the experiment's audit and not measured end to end: 250 ms of pause
-audio is decoded before each pause-cut window (onset protection), the duplicate
-guard at hard cuts is 480 ms instead of 300 ms, and windows shorter than 200 ms or
-with a peak below −60 dBFS are recorded as silent without decoding. A result of
-one or two words from a window in which the VAD heard no speech is kept but not
-shown. A 15-second
-cap scored as well as 20 seconds; 20 was kept for fewer seams. If Silero cannot be
-loaded, a relative-energy detector takes over (more errors in the table above, but
-no model needed). ([Summary data](benchmarks/2026-11-05-pipeline/summary.json).)
+**What the app does:** the shipped segmenter is the last row, with changes made
+after a review of the experiment and not measured end to end:
+
+- 250 ms of pause audio is decoded before each pause-cut window, to protect word
+  onsets.
+- The duplicate guard at hard cuts is 480 ms instead of 300 ms.
+- Windows shorter than 200 ms or with a peak below −60 dBFS are recorded as silent
+  without decoding.
+- A result of one or two words from a window in which the VAD heard no speech is
+  stored but not shown.
+
+A 15-second cap scored as well as 20 seconds or better; 20 was kept for fewer
+seams. If Silero cannot be loaded, a relative-energy detector takes over (more
+errors in the table above, but no model needed).
+([Summary data](benchmarks/2026-11-05-pipeline/summary.json).)
 
 ## Doubtful words
 
@@ -219,9 +224,10 @@ improved the transcript enough to justify the cost and the risk of changing what
 was said.
 
 - **Text-only correction** (Qwen3.5 2B, Q4_K_M): seven DEV passages went from 44
-  to 43 word errors out of 159. It accepted one wrong spelling repair. Median
-  response on the host was 9.3 s.
-- **Audio-grounded correction** (Gemma 4 E2B, audio plus Ultra's draft): normal
+  to 43 word errors out of 159. On seven synthetic typos it made four exact
+  repairs and one wrong one. Median response on the host was 9.3 s.
+- **Audio-grounded correction** (Gemma 4 E2B, audio plus Ultra's draft), on seven
+  clips from an earlier FLEURS DEV subset at normal and reduced volume: normal
   speech 15 to 14 word errors out of 210, quiet speech unchanged at 14, while
   character errors rose from 33 to 40 and from 31 to 38. On empty drafts of noise
   it invented 30 words. Median call time on the host was 9.9 s; phone cost was not
