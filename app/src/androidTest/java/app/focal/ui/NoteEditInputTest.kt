@@ -187,10 +187,8 @@ class NoteEditInputTest {
         rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasText(CANNOT_JOIN)).fetchSemanticsNodes().isNotEmpty() }
         // Both stay; the caret stays at the start of the paragraph it was in.
         rule.onNode(hasSetTextAction()).assertTextEquals(SECOND)
-        rule.runOnIdle {
-            assertEquals(TextRange.Zero, fieldSelection())
-            assertEquals(listOf(FIRST, SECOND), store.paragraphs.map { it.text })
-        }
+        assertEquals(TextRange.Zero, fieldSelection())
+        rule.runOnIdle { assertEquals(listOf(FIRST, SECOND), store.paragraphs.map { it.text }) }
     }
 
     @Test fun theUndoLogSurvivesThePageBeingRecreated() {
