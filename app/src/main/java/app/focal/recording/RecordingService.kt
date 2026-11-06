@@ -289,14 +289,14 @@ class RecordingService : Service() {
         }
     }
 
+    /** Changes the published session as this instance ([RecordingState.publish]); [transform] must not block. */
+    private fun updateLive(transform: (LiveSession) -> LiveSession) = RecordingState.publish(liveGeneration, transform)
+
     /**
      * Re-posts the foreground notification for whatever runs now. Every update goes through here, so a
      * transcription update that lands after a new recording started cannot replace its chronometer and
      * Pause/Finish actions.
      */
-    /** Changes the published session as this instance ([RecordingState.publish]); [transform] must not block. */
-    private fun updateLive(transform: (LiveSession) -> LiveSession) = RecordingState.publish(liveGeneration, transform)
-
     private fun refreshNotification() = synchronized(notificationLock) {
         if (!destroyed) notifications.update(foregroundNotification())
     }
