@@ -53,6 +53,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
 import app.focal.R
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.Glyph
@@ -81,6 +82,8 @@ object FindMetrics {
     val stackPadding = Grid.x8
     /** The caret the query's end must still show (BasicTextField's 2 dp cursor, spec 4.9.1). */
     val caret = Grid.x2
+    /** The count stacks under the query only when, beside the widest count, less than this is left for the query. */
+    val minQuery = Grid.x64
 }
 
 /** What the find rows do. */
@@ -121,12 +124,12 @@ private fun RowScope.FindField(find: FindState, actions: FindActions) {
         find.matches.isEmpty() -> stringResource(R.string.find_none)
         else -> stringResource(R.string.find_count, find.current + 1, find.matches.size)
     }
-    // The query's own width decides whether the count fits beside it (spec 4.9.2: at least 8 dp after the text).
+    // Whether the count stacks is decided by its widest form at this font size, never by what is typed: the row keeps
+    // its height while the query and its count change (spec 4.9.2). A query longer than its room scrolls under its fade.
     val measurer = rememberTextMeasurer()
-    val queryText = find.query.text.toString()
-    val queryWidth = remember(queryText, measurer) {
-        measurer.measure(queryText, FocalType.field, maxLines = 1, softWrap = false).size.width
-    }
+    val none = stringResource(R.string.find_none)
+    val countStyle = FocalType.meta.tabular()
+    val reserve = remember(none, countStyle, measurer) { measurer.measure(none, countStyle, maxLines = 1, softWrap = false).size }
     val scroll = rememberScrollState()
     Row(
         Modifier.weight(1f).fillMaxHeight().heightIn(min = KeyboardRowMetrics.row).background(colors.s1, FocalShapes.pill),
@@ -143,7 +146,7 @@ private fun RowScope.FindField(find: FindState, actions: FindActions) {
             contentAlignment = Alignment.Center,
         ) { Glyph(FocalIcon.Back, colors.ink) }
         QueryAndCount(
-            queryWidth = queryWidth,
+            reserve = reserve,
             query = {
                 BasicTextField(
                     state = find.query,
@@ -167,7 +170,7 @@ private fun RowScope.FindField(find: FindState, actions: FindActions) {
             },
             count = {
                 if (count != null) Text(
-                    count, style = FocalType.meta, color = colors.recede, maxLines = 1,
+                    count, style = countStyle, color = colors.recede, maxLines = 1,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
             },
@@ -178,19 +181,20 @@ private fun RowScope.FindField(find: FindState, actions: FindActions) {
 }
 
 /**
- * The query and its count (spec 4.9.2, 8.4): side by side while the query's text, its caret, 8 dp and the count fit
- * the field; otherwise, at any font scale, the count goes under the query and the field grows, so the query is never
- * cut by its own count. [queryWidth] is the query's text as laid out on one line, in pixels.
+ * The query and its count (spec 4.9.2, 8.4): side by side, the count pinned at the end, while the field leaves the
+ * query at least [FindMetrics.minQuery] beside the count's widest form ([reserve], "No matches"); otherwise (large
+ * font scales) the count's line goes under the query, kept even while there is no count, so the field never changes
+ * height as the query is typed or its count changes.
  */
 @Composable
-private fun QueryAndCount(queryWidth: Int, query: @Composable () -> Unit, count: @Composable () -> Unit, modifier: Modifier) {
-    val policy = remember(queryWidth) { QueryCountPolicy(queryWidth) }
+private fun QueryAndCount(reserve: IntSize, query: @Composable () -> Unit, count: @Composable () -> Unit, modifier: Modifier) {
+    val policy = remember(reserve) { QueryCountPolicy(reserve) }
     Layout(contents = listOf(query, count), modifier = modifier, measurePolicy = policy)
 }
 
-private class QueryCountPolicy(private val queryWidth: Int) : MultiContentMeasurePolicy {
-    private fun Density.stacked(width: Int, countWidth: Int?): Boolean =
-        countWidth != null && queryWidth + FindMetrics.caret.roundToPx() + FindMetrics.countGap.roundToPx() + countWidth > width
+private class QueryCountPolicy(private val reserve: IntSize) : MultiContentMeasurePolicy {
+    private fun Density.stacked(width: Int): Boolean =
+        width - FindMetrics.caret.roundToPx() - FindMetrics.countGap.roundToPx() - reserve.width < FindMetrics.minQuery.roundToPx()
 
     private fun Density.inlineQueryWidth(width: Int, countWidth: Int?): Int =
         if (countWidth == null) width else (width - FindMetrics.countGap.roundToPx() - countWidth).coerceAtLeast(0)
@@ -199,12 +203,12 @@ private class QueryCountPolicy(private val queryWidth: Int) : MultiContentMeasur
         val width = constraints.maxWidth
         val countPlaceable = measurables[1].firstOrNull()?.measure(Constraints(maxWidth = width))
         val pad = FindMetrics.stackPadding.roundToPx()
-        if (stacked(width, countPlaceable?.width)) {
+        if (stacked(width)) {
             val queryPlaceable = measurables[0].first().measure(Constraints.fixedWidth(width))
-            val height = max(constraints.minHeight, pad + queryPlaceable.height + countPlaceable!!.height + pad)
+            val height = max(constraints.minHeight, pad + queryPlaceable.height + max(reserve.height, countPlaceable?.height ?: 0) + pad)
             return layout(width, height) {
                 queryPlaceable.place(0, pad)
-                countPlaceable.place(0, pad + queryPlaceable.height)
+                countPlaceable?.place(0, pad + queryPlaceable.height)
             }
         }
         val queryPlaceable = measurables[0].first().measure(Constraints.fixedWidth(inlineQueryWidth(width, countPlaceable?.width)))
@@ -220,8 +224,9 @@ private class QueryCountPolicy(private val queryWidth: Int) : MultiContentMeasur
         val query = measurables[0].first()
         val count = measurables[1].firstOrNull()
         val countWidth = count?.maxIntrinsicWidth(Constraints.Infinity)
-        if (stacked(width, countWidth)) {
-            return 2 * FindMetrics.stackPadding.roundToPx() + query.minIntrinsicHeight(width) + count!!.minIntrinsicHeight(countWidth!!)
+        if (stacked(width)) {
+            val countHeight = max(reserve.height, count?.minIntrinsicHeight(countWidth!!) ?: 0)
+            return 2 * FindMetrics.stackPadding.roundToPx() + query.minIntrinsicHeight(width) + countHeight
         }
         return max(query.minIntrinsicHeight(inlineQueryWidth(width, countWidth)), count?.minIntrinsicHeight(countWidth!!) ?: 0)
     }
