@@ -254,8 +254,11 @@ private class MenuPosition(private val anchor: MenuAnchor, private val density: 
                     origin = TransformOrigin(if (flipX) 1f else 0f, if (flipY) 1f else 0f)
                 }
             }
-            x = x.coerceIn(edge, (windowSize.width - edge - width).coerceAtLeast(edge))
-            y = y.coerceIn(edge, (windowSize.height - edge - height).coerceAtLeast(edge))
+            // A long-press menu keeps 16 dp from the window's edges (spec 4.15); one under ⋮ hangs from the button's
+            // end (x 168-400), and only the window itself bounds it.
+            val inset = if (anchor is MenuAnchor.At) edge else 0
+            x = x.coerceIn(inset, (windowSize.width - inset - width).coerceAtLeast(inset))
+            y = y.coerceIn(inset, (windowSize.height - inset - height).coerceAtLeast(inset))
             return IntOffset(x - room, y - room)
         }
     }
