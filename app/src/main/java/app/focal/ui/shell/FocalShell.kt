@@ -97,11 +97,14 @@ internal class BottomContent(
     val actions: DockActions,
     val strip: (@Composable () -> Unit)?,
     val rows: (@Composable ColumnScope.() -> Unit)?,
+    val dockHidden: Boolean,
 )
 
 /**
  * A destination tells the root's bottom column what to show while it is the current page: the dock's state and
- * actions, the player [strip], keyboard-riding [rows] (the dock hides while they are open).
+ * actions, the player [strip], keyboard-riding [rows]. The dock hides while rows are open, and whenever
+ * [dockHidden] says so (an inline rename's keyboard); a closing row can ask for the dock back before it leaves, so
+ * the dock fades in under it without a dip.
  */
 @Composable
 fun DestinationBottom(
@@ -110,9 +113,10 @@ fun DestinationBottom(
     actions: DockActions,
     strip: (@Composable () -> Unit)? = null,
     rows: (@Composable ColumnScope.() -> Unit)? = null,
+    dockHidden: Boolean = rows != null,
 ) {
     val shell = LocalShell.current
-    val content = BottomContent(dock, actions, strip, rows)
+    val content = BottomContent(dock, actions, strip, rows, dockHidden)
     SideEffect { shell.bottomContent[destination] = content }
 }
 
@@ -177,6 +181,7 @@ private fun ShellBottom(shell: ShellState) {
         dock = { Dock(content.dock, content.actions, materialEdge = shell.live.materialEdge) },
         strip = content.strip,
         rows = content.rows,
+        dockHidden = content.dockHidden,
     )
 }
 
@@ -213,7 +218,7 @@ fun ShellCommands(shell: ShellState, commands: Flow<ShellCommand>) {
     LaunchedEffect(commands) {
         commands.collect { command ->
             when (command) {
-                ShellCommand.OpenSettings -> if (shell.current == Destination.Library && !shell.live.visible) {
+                ShellCommand.OpenSettings -> if (shell.current == Destination.Library && !shell.live.visible && shell.settings.armed) {
                     scope.launch { shell.settings.open(reduced) }
                 }
             }

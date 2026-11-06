@@ -2,6 +2,7 @@ package app.focal.ui.shell
 
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -58,6 +59,12 @@ class SettingsStripState internal constructor(open: Boolean) {
         internal set
 
     val isOpen: Boolean get() = progress.targetValue >= 1f
+
+    /**
+     * Whether the library lets settings open now (spec 4.23.3: not while search, a menu, a rename, the sheet or the
+     * keyboard is open). The library writes it; Ctrl+, reads it.
+     */
+    var armed by mutableStateOf(true)
 
     /** Opens with `move` from wherever s is (the reduced-motion crossfade under [reducedMotion]). */
     suspend fun open(reducedMotion: Boolean = false) = settle(1f, reducedMotion)
@@ -146,7 +153,9 @@ fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, se
                         clip = s > 0f && s < 1f
                         shape = if (clip) SeamSideShape(corner, seamAtEnd = true) else RectangleShape
                     }
-                },
+                }
+                // Each page is opaque paper, so the seam shows only between them and under their rounded corners.
+                .background(colors.paper),
         ) { library() }
         if (state.composedSettings) {
             Box(
@@ -160,7 +169,8 @@ fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, se
                             clip = s > 0f && s < 1f
                             shape = if (clip) SeamSideShape(corner, seamAtEnd = false) else RectangleShape
                         }
-                    },
+                    }
+                    .background(colors.paper),
             ) { settings() }
         }
     }

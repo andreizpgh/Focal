@@ -89,8 +89,8 @@ fun rememberBottomColumnState(): BottomColumnState {
  * above it; keyboard-riding [rows], whose lowest edge is min(IME top, navigation top - 8) - 8; the feedback pill, 8
  * above the topmost of them and drawn behind the dock. Positions read the IME inset in the layout phase, so on API
  * 30+ the rows follow the keyboard's own curve frame by frame; on API 26-29 they appear where the keyboard settles,
- * fading in on `fadeFast`. The dock hides (24 dp down and out) while rows are open, following the keyboard when it
- * drives the change. It never moves for any other reason.
+ * fading in on `fadeFast`. The dock hides (24 dp down and out) while rows are open (or [dockHidden]), following the
+ * keyboard when it drives the change. It never moves for any other reason.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -100,13 +100,13 @@ fun BottomColumn(
     modifier: Modifier = Modifier,
     strip: (@Composable () -> Unit)? = null,
     rows: (@Composable ColumnScope.() -> Unit)? = null,
+    dockHidden: Boolean = rows != null,
 ) {
     val density = LocalDensity.current
     val hideDistance = with(density) { Grid.x24.toPx() }
     val ime = WindowInsets.ime
     val imeTarget = WindowInsets.imeAnimationTarget
     val navigation = WindowInsets.navigationBars
-    val dockHidden = rows != null
     // The dock slides 24 dp down on `move` and fades on `fade` (spec 4.3), or follows the keyboard while it moves.
     val slide = remember { Animatable(if (dockHidden) 1f else 0f) }
     val fade = remember { Animatable(if (dockHidden) 1f else 0f) }
