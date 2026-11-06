@@ -137,6 +137,8 @@
     <string name="error_remove_audio">Couldn’t remove the audio.</string>
     <string name="error_remove_audio_later">Couldn’t delete the audio file yet. Focal will try again when it next opens.</string>
     <string name="error_replace">Couldn’t replace the matches.</string>
+    <string name="error_replace_too_large">A paragraph would get too long. Nothing was replaced.</string>
+    <string name="error_restore">Couldn’t restore the original.</string>
     <string name="error_retry">Couldn’t continue transcription.</string>
     <string name="error_save">Couldn’t save your edit.</string>
     <string name="error_playback">Couldn’t play the audio.</string>

@@ -112,6 +112,9 @@ internal sealed interface NoteItem {
     data object NoSpeech : NoteItem { override val key: Any = "no-speech" }
 }
 
+/** What the page says when an edit outside the session's own writes does not save. */
+private class OutcomeWords(val replace: String, val tooLarge: String, val restore: String, val tooLate: String)
+
 /** Where in the reading band a found match or a search hit lands: its centre (spec 5.8). */
 private const val HALF = 0.5f
 
@@ -441,6 +444,20 @@ fun NotePage(
     }
     val undoLabel = stringResource(R.string.action_undo)
     val replacedTemplate = pluralStringResource(R.plurals.feedback_replaced, find.matches.size, find.matches.size)
+    // An outcome that did not save is said in the pill: the store's own sentence for a storage failure, otherwise
+    // what did not happen ("Too late to undo" when the text changed again since).
+    val words = OutcomeWords(
+        replace = stringResource(R.string.error_replace), tooLarge = stringResource(R.string.error_replace_too_large),
+        restore = stringResource(R.string.error_restore), tooLate = stringResource(R.string.feedback_too_late),
+    )
+    fun report(outcome: EditOutcome, otherwise: String) {
+        val message = when (outcome) {
+            is EditOutcome.Saved -> return
+            is EditOutcome.Failed -> outcome.message
+            else -> otherwise
+        }
+        scope.launch { bottom.feedback.show(message) }
+    }
     val replaceAll: () -> Unit = {
         val query = find.matchedQuery
         val replacement = find.replacement.text.toString()
@@ -448,7 +465,10 @@ fun NotePage(
         val before = paragraphs.associate { it.id to it.text }
         scope.launch {
             val outcome = actions.replaceAll(query, replacement)
-            if (outcome !is EditOutcome.Saved) return@launch
+            if (outcome !is EditOutcome.Saved) {
+                report(outcome, if (outcome == EditOutcome.TooLarge) words.tooLarge else words.replace)
+                return@launch
+            }
             if (page.editing) {
                 session.recordReplace(outcome.paragraphs, before)
                 reseedField()
@@ -460,7 +480,7 @@ fun NotePage(
                     if (undone is EditOutcome.Saved) {
                         session.applySaved(undone.paragraphs)
                         reseedField()
-                    }
+                    } else report(undone, words.tooLate)
                 }
                 find.refresh()
             }
@@ -472,12 +492,15 @@ fun NotePage(
     val restoreOutside: (ParagraphUi) -> Unit = { paragraph ->
         scope.launch {
             val outcome = edits.restore(paragraph.id, paragraph.revision)
-            if (outcome !is EditOutcome.Saved) return@launch
+            if (outcome !is EditOutcome.Saved) {
+                report(outcome, words.restore)
+                return@launch
+            }
             session.applySaved(outcome.paragraphs)
             val restored = outcome.paragraphs.firstOrNull { it.id == paragraph.id } ?: return@launch
             if (bottom.feedback.show(restoredLabel, FeedbackAction(undoLabel, FocalIcon.Undo)) == FeedbackResult.ActionPerformed) {
                 val undone = edits.edit(restored.id, restored.revision, paragraph.text)
-                if (undone is EditOutcome.Saved) session.applySaved(undone.paragraphs)
+                if (undone is EditOutcome.Saved) session.applySaved(undone.paragraphs) else report(undone, words.tooLate)
             }
         }
     }
