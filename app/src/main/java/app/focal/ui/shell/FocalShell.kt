@@ -211,7 +211,7 @@ fun FocalShell(
                     },
                     entryProvider = { key -> NavEntry(key) { PageFrame(key, shell.pages) { destination(key) } } },
                 )
-                PageTransformOverlay(shell.pages, shell.live)
+                PageTransformOverlay(shell.pages, shell.live, shell.bottom)
             }
             LiveSurfaceHost(shell.live, scene)
             ShellBottom(shell)
