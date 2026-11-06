@@ -196,7 +196,7 @@ fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, se
 private const val HALF = 0.5f
 
 /** A page in motion: the `sheet` radius on its seam side only (spec 4.23.2). Mirrored in RTL. */
-private class SeamSideShape(private val radius: Dp, private val seamAtEnd: Boolean) : Shape {
+internal class SeamSideShape(private val radius: Dp, private val seamAtEnd: Boolean) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
         val r = with(density) { radius.toPx() }
         val end = seamAtEnd == (layoutDirection == LayoutDirection.Ltr)

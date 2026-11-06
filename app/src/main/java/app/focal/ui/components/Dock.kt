@@ -6,19 +6,32 @@ import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateBounds
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.TooltipState
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,14 +54,17 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -56,6 +72,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.layout.onPlaced
@@ -92,9 +109,9 @@ import app.focal.ui.design.Scene
 import app.focal.ui.design.TriggerClock
 import app.focal.ui.design.rememberFocalHaptics
 import app.focal.ui.design.smoothstep
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 /** What the dock holds (spec 4.3). The geometry is the bottom column's; only contents, widths and dress change. */
 @Immutable
@@ -156,6 +173,15 @@ class DockRequests {
 /** The dock's two dresses: on paper, or on the recording material (spec 4.7). */
 enum class Dress { Paper, Material }
 
+/** Where the recording material is, for the dock's dress (window pixels): inside it the material dress, outside paper. */
+object MaterialBounds {
+    val Everywhere = Rect(Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+    val Nowhere = Rect.Zero
+
+    /** Everything above the window y [edge]: the material's bottom edge passing over a bottom dock. */
+    fun above(edge: Float) = Rect(Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY, edge)
+}
+
 /** Dock geometry (spec 4.3, 4.7). */
 object DockMetrics {
     val height = FocalGrid.x56
@@ -163,6 +189,11 @@ object DockMetrics {
     val gap = FocalGrid.x12
     /** The labelled Resume pill that the circle widens into while paused (x 24-172). */
     val resume = 148.dp
+    /** The landscape rail (spec 5.14): the circle above the primary circle, centred in this box. */
+    val railHeight = circle * 2 + gap
+    /** Glyph-only controls in the rail: the record dot and the finish square, sized for a circle without a label. */
+    val railDot = FocalGrid.x16
+    val railSquare = FocalGrid.x16
     val glyphGap = FocalGrid.x8
     /** The material's Finish pill: shadow 0 8 28 (CSS blur, so sigma 14) and a 1 dp ring. */
     val actionShadowY = FocalGrid.x8
@@ -201,9 +232,13 @@ private val MoveBounds = BoundsTransform { _, _ -> FocalMotion.fromTrigger(Focal
  * (`animateBounds` in a `LookaheadScope`); glyphs and labels fade through; containers that change crossfade without
  * a coverage dip. Both slots swap on one q, so the circle and the pill are always at the same phase; a change that a
  * tap announced counts from the tap ([clock], started in its handler), even when the new contents arrive a frame or
- * two later. While a capture runs, [materialEdge] (the window y of the recording material's bottom edge, read in
- * the draw phase) wipes each control from its paper dress to its material dress (spec 2.8.6), so a drag never
- * recomposes the dock. Touch and semantics belong to the control, never to a dress.
+ * two later. While a capture runs, [material] (the recording material's bounds in the window, read in the draw
+ * phase) wipes each control from its paper dress to its material dress (spec 2.8.6), so a drag never recomposes the
+ * dock. Touch and semantics belong to the control, never to a dress.
+ *
+ * In a short window it is a [rail] (spec 5.14): the circle above the primary control, which is a 56 dp circle with
+ * its glyph only (the label is its content description, and a long press shows it), centred in a fixed box so that a
+ * circle growing in moves the primary one on `move`.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -211,10 +246,11 @@ fun Dock(
     state: DockState,
     actions: DockActions,
     modifier: Modifier = Modifier,
-    materialEdge: (() -> Float)? = null,
+    material: (() -> Rect)? = null,
     clock: TriggerClock? = null,
     hidden: Boolean = false,
     requests: DockRequests? = null,
+    rail: Boolean = false,
 ) {
     val circle = circleFace(state)
     val pill = pillFace(state)
@@ -225,7 +261,29 @@ fun Dock(
         CircleFace.Resume -> DockMetrics.resume
         else -> DockMetrics.circle
     }
-    val edge = if (state is DockState.Live) materialEdge else null
+    val edge = if (state is DockState.Live) material else null
+    if (rail) {
+        LookaheadScope {
+            Column(
+                modifier.size(DockMetrics.circle, DockMetrics.railHeight),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                val circleSize = if (circle == CircleFace.None) 0.dp else DockMetrics.circle
+                CircleSlot(
+                    face = circle, leaving = leaving?.circle, q = swap::q, actions = actions, edge = edge, rail = true,
+                    modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds).size(DockMetrics.circle, circleSize),
+                )
+                Spacer(Modifier.height(if (circleSize > 0.dp) DockMetrics.gap else 0.dp))
+                PillSlot(
+                    face = pill, leaving = leaving?.pill, q = swap::q, notePill = (state as? DockState.Note)?.pill, actions = actions,
+                    edge = edge, hidden = hidden, requests = requests, rail = true,
+                    modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds).size(DockMetrics.circle),
+                )
+            }
+        }
+        return
+    }
     LookaheadScope {
         Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             CircleSlot(
@@ -254,9 +312,12 @@ fun Dock(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CircleSlot(face: CircleFace, leaving: CircleFace?, q: () -> Float, actions: DockActions, edge: (() -> Float)?, modifier: Modifier) {
+private fun CircleSlot(face: CircleFace, leaving: CircleFace?, q: () -> Float, actions: DockActions, edge: (() -> Rect)?, modifier: Modifier, rail: Boolean = false) {
     val source = remember { MutableInteractionSource() }
+    val tooltip = rememberTooltipState()
+    val scope = rememberCoroutineScope()
     val description = when (face) {
         CircleFace.None -> null
         CircleFace.Search -> stringResource(R.string.cd_search_open)
@@ -283,25 +344,59 @@ private fun CircleSlot(face: CircleFace, leaving: CircleFace?, q: () -> Float, a
         }
         .pressScale(source)
         .focusRing(FocalShapes.pill)
-        .clickable(source, indication = null, enabled = onClick != null, onClick = { onClick?.invoke() })
-    DressWipe(edge, control) { dress ->
-        SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
-            if (shown != CircleFace.None) {
-                TonalContainer(dress, containerAlpha)
-                // Unbounded: "● Resume" keeps its width (never wraps) while the circle widens under it.
-                Box(
-                    Modifier.wrapContentWidth(unbounded = true).heightIn(min = DockMetrics.height).graphicsLayer { alpha = contentAlpha() },
-                    contentAlignment = Alignment.Center,
-                ) { CircleContent(shown, dress) }
+        .tapOrLabel(source, onClick, rail) { scope.launch { tooltip.show() } }
+    RailTooltip(description.takeIf { rail }, tooltip) {
+        DressWipe(edge, control) { dress ->
+            SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
+                if (shown != CircleFace.None) {
+                    TonalContainer(dress, containerAlpha)
+                    // Unbounded: "● Resume" keeps its width (never wraps) while the circle widens under it.
+                    Box(
+                        Modifier.wrapContentWidth(unbounded = true).heightIn(min = if (rail) 0.dp else DockMetrics.height).graphicsLayer { alpha = contentAlpha() },
+                        contentAlignment = Alignment.Center,
+                    ) { CircleContent(shown, dress, rail) }
+                }
             }
         }
     }
 }
 
+/**
+ * A control's tap; in the rail also a long press that shows its label (spec 5.14), disabled controls included (the
+ * progress circle says "Transcribing" only that way).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private fun Modifier.tapOrLabel(source: MutableInteractionSource, onClick: (() -> Unit)?, rail: Boolean, showLabel: () -> Unit): Modifier = when {
+    !rail -> clickable(source, indication = null, enabled = onClick != null, onClick = { onClick?.invoke() })
+    onClick != null -> combinedClickable(source, indication = null, onLongClick = showLabel, onClick = onClick)
+    else -> pointerInput(showLabel) { detectTapGestures(onLongPress = { showLabel() }) }
+}
+
+/** In the rail, a plain tooltip with the control's label on its start side, shown by a long press or a hover. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CircleContent(face: CircleFace, dress: Dress) {
+private fun RailTooltip(label: String?, state: TooltipState, content: @Composable () -> Unit) {
+    if (label == null) {
+        content()
+        return
+    }
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Start),
+        tooltip = { PlainTooltip { Text(label, style = FocalType.meta) } },
+        state = state,
+        enableUserInput = false,
+        content = content,
+    )
+}
+
+@Composable
+private fun CircleContent(face: CircleFace, dress: Dress, rail: Boolean) {
     val colors = FocalTheme.colors
     val ink = if (dress == Dress.Material) Scene.ink else colors.ink
+    if (rail && face == CircleFace.Resume) {
+        RecordDot(ink, size = DockMetrics.railDot)
+        return
+    }
     when (face) {
         CircleFace.Search -> Glyph(FocalIcon.Search, ink)
         CircleFace.Pause -> Glyph(FocalIcon.Pause, ink)
@@ -313,6 +408,7 @@ private fun CircleContent(face: CircleFace, dress: Dress) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PillSlot(
     face: PillFace,
@@ -320,12 +416,14 @@ private fun PillSlot(
     q: () -> Float,
     notePill: NotePill?,
     actions: DockActions,
-    edge: (() -> Float)?,
+    edge: (() -> Rect)?,
     modifier: Modifier,
     hidden: Boolean,
     requests: DockRequests?,
+    rail: Boolean = false,
 ) {
     val source = remember { MutableInteractionSource() }
+    val tooltip = rememberTooltipState()
     val scope = rememberCoroutineScope()
     val haptics = rememberFocalHaptics()
     var copied by remember { mutableStateOf(false) }
@@ -386,19 +484,27 @@ private fun PillSlot(
         }
         .pressScale(source)
         .focusRing(FocalShapes.pill)
-        .clickable(source, indication = null, enabled = onClick != null, onClick = { onClick?.invoke() })
-    DressWipe(edge, control) { dress ->
-        SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
-            when (shown) {
-                PillFace.Record -> {
-                    PrimaryContainer(dress, containerAlpha)
-                    PillContent(dress, contentAlpha) { ink -> LabelRow(stringResource(R.string.action_record), ink) { RecordDot(ink) } }
+        .tapOrLabel(source, onClick, rail) { scope.launch { tooltip.show() } }
+    RailTooltip(description.takeIf { rail }, tooltip) {
+        DressWipe(edge, control) { dress ->
+            SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
+                when (shown) {
+                    PillFace.Record -> {
+                        PrimaryContainer(dress, containerAlpha)
+                        PillContent(dress, contentAlpha) { ink ->
+                            if (rail) RecordDot(ink, size = DockMetrics.railDot)
+                            else LabelRow(stringResource(R.string.action_record), ink) { RecordDot(ink) }
+                        }
+                    }
+                    PillFace.Finish -> {
+                        PrimaryContainer(dress, containerAlpha)
+                        PillContent(dress, contentAlpha) { ink ->
+                            if (rail) FinishSquare(ink, size = DockMetrics.railSquare)
+                            else LabelRow(stringResource(R.string.action_finish), ink) { FinishSquare(ink) }
+                        }
+                    }
+                    PillFace.NotePrimary -> NotePrimaryPill(notePill ?: NotePill.Copy(), copied, containerAlpha, contentAlpha, hidden, rail)
                 }
-                PillFace.Finish -> {
-                    PrimaryContainer(dress, containerAlpha)
-                    PillContent(dress, contentAlpha) { ink -> LabelRow(stringResource(R.string.action_finish), ink) { FinishSquare(ink) } }
-                }
-                PillFace.NotePrimary -> NotePrimaryPill(notePill ?: NotePill.Copy(), copied, containerAlpha, contentAlpha, hidden)
             }
         }
     }
@@ -442,7 +548,7 @@ private fun LabelRow(text: String, color: Color, glyph: @Composable () -> Unit) 
  * Copy confirms with the check and "Copied" for 1600 ms.
  */
 @Composable
-private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerAlpha: () -> Float, contentAlpha: () -> Float, hidden: Boolean) {
+private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerAlpha: () -> Float, contentAlpha: () -> Float, hidden: Boolean, rail: Boolean) {
     val colors = FocalTheme.colors
     val haptics = rememberFocalHaptics()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -466,6 +572,7 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
     val enabled = pill !is NotePill.Copy || pill.enabled
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     // Container: the `s1` track, the `inv` fill from the start edge (its leading end straight), clipped to the pill.
+    // In the rail's circle the fill rises from the bottom, like a level.
     Box(
         Modifier.matchParentSize().drawWithCache {
             val outline = FocalShapes.pill.createOutline(size, layoutDirection, this)
@@ -475,13 +582,27 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
                 val base = if (enabled) lerp(colors.s1, colors.inv, inverted.value) else colors.s1
                 drawOutline(outline, base, alpha = a)
                 if (enabled) clipPath(clip) {
-                    val width = size.width * fill.value
-                    val left = if (rtl) size.width - width else 0f
-                    drawRect(colors.inv, topLeft = Offset(left, 0f), size = Size(width, size.height), alpha = a)
+                    if (rail) {
+                        val height = size.height * fill.value
+                        drawRect(colors.inv, topLeft = Offset(0f, size.height - height), size = Size(size.width, height), alpha = a)
+                    } else {
+                        val width = size.width * fill.value
+                        val left = if (rtl) size.width - width else 0f
+                        drawRect(colors.inv, topLeft = Offset(left, 0f), size = Size(width, size.height), alpha = a)
+                    }
                 }
             }
         },
     )
+    if (rail) {
+        // The rail's circle has room for the glyph only: the progress is its level, Copy its glyph.
+        val ink = if (enabled) colors.onInv else colors.faint
+        Box(
+            Modifier.matchParentSize().graphicsLayer { alpha = contentAlpha() * smoothstep(0.5f, 1f, copyShown.value) },
+            contentAlignment = Alignment.Center,
+        ) { CopyGlyph(copied, ink) }
+        return
+    }
     val label = when (pill) {
         is NotePill.Progress -> when (pill.phase) {
             ProgressPhase.Transcribing -> stringResource(R.string.action_transcribing)
@@ -519,6 +640,23 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
         contentAlignment = Alignment.Center,
     ) { CopyContent(copied, ink) }
 }
+
+/** Copy and Copied in the rail's circle: the copy glyph turning into the check (T9 without its labels). */
+@Composable
+private fun CopyGlyph(copied: Boolean, ink: Color) {
+    val check = remember { Animatable(if (copied) 1f else 0f) }
+    val checkScale = remember { Animatable(1f) }
+    LaunchedEffect(copied) {
+        if (copied) launch { checkScale.snapTo(CHECK_START_SCALE); checkScale.animateTo(1f, FocalMotion.press()) }
+        check.animateTo(if (copied) 1f else 0f, FocalMotion.fadeFast())
+    }
+    Box(contentAlignment = Alignment.Center) {
+        Glyph(FocalIcon.Copy, ink, modifier = Modifier.graphicsLayer { alpha = 1 - check.value })
+        Glyph(FocalIcon.Check, ink, modifier = Modifier.graphicsLayer { alpha = check.value; scaleX = checkScale.value; scaleY = checkScale.value })
+    }
+}
+
+private const val CHECK_START_SCALE = 0.7f
 
 /** Copy and Copied in the dock's pill (spec 4.5.1): `label`, a 20 dp glyph and an 8 dp gap, centred on "Copy". */
 @Composable
@@ -664,36 +802,42 @@ internal fun glassHighlight(outline: Outline, width: Float): Path {
 private class SlotPlacement { var coordinates: LayoutCoordinates? = null }
 
 /**
- * Draws [content] in both dresses split at the material's edge (window y from [edge]): paper below it, the material
- * above it, glyphs and labels included (`dockDress`, spec 2.8.6). Without an edge only the paper dress exists. The
- * slot and its paper dress keep their place in the composition whether or not an edge exists, so the slot's bounds
- * animation and the paper content's fade-through carry on when the material arrives behind the dock (T1′e: Pause
- * grows from 0 while Record's left edge moves 24 → 92, as the scene registers its edge).
+ * Draws [content] in both dresses split at the material's bounds (window pixels from [material]): paper outside them,
+ * the material inside them, glyphs and labels included (`dockDress`, spec 2.8.6). On a bottom dock that is its bottom
+ * edge passing over the row; on the landscape rail the clip's end edge and bottom edge both cross it. Without bounds
+ * only the paper dress exists. The slot and its paper dress keep their place in the composition whether or not
+ * bounds exist, so the slot's bounds animation and the paper content's fade-through carry on when the material
+ * arrives behind the dock (T1′e: Pause grows from 0 while Record's left edge moves 24 → 92, as the scene registers
+ * its bounds).
  */
 @Composable
-private fun DressWipe(edge: (() -> Float)?, modifier: Modifier, content: @Composable BoxScope.(Dress) -> Unit) {
+private fun DressWipe(material: (() -> Rect)?, modifier: Modifier, content: @Composable BoxScope.(Dress) -> Unit) {
     val placement = remember { SlotPlacement() }
-    fun local(windowY: Float): Float = windowY - (placement.coordinates?.takeIf { it.isAttached }?.positionInWindow()?.y ?: 0f)
+    // The bounds in the slot's own pixels, kept within reach of it (the pill's shadow and ring draw outside it).
+    fun DrawScope.local(bounds: Rect): Rect {
+        val origin = placement.coordinates?.takeIf { it.isAttached }?.positionInWindow() ?: Offset.Zero
+        val reach = 2 * size.maxDimension
+        fun x(v: Float) = (v - origin.x).coerceIn(-reach, reach)
+        fun y(v: Float) = (v - origin.y).coerceIn(-reach, reach)
+        return Rect(x(bounds.left), y(bounds.top), x(bounds.right), y(bounds.bottom))
+    }
     Box(modifier.onPlaced { placement.coordinates = it }, contentAlignment = Alignment.Center) {
         Box(
             Modifier.drawWithContent {
-                if (edge == null) {
+                if (material == null) {
                     drawContent()
                     return@drawWithContent
                 }
-                val e = local(edge())
-                if (e < size.height) clipRect(top = e.coerceAtLeast(0f), left = -size.width, right = 2 * size.width, bottom = 2 * size.height) {
-                    this@drawWithContent.drawContent()
-                }
+                val r = local(material())
+                if (r.isEmpty) drawContent()
+                else clipRect(r.left, r.top, r.right, r.bottom, ClipOp.Difference) { this@drawWithContent.drawContent() }
             },
             contentAlignment = Alignment.Center,
         ) { content(Dress.Paper) }
-        if (edge != null) Box(
+        if (material != null) Box(
             Modifier.matchParentSize().drawWithContent {
-                val e = local(edge())
-                if (e > 0f) clipRect(top = -size.height, left = -size.width, right = 2 * size.width, bottom = e.coerceAtMost(2 * size.height)) {
-                    this@drawWithContent.drawContent()
-                }
+                val r = local(material())
+                if (!r.isEmpty) clipRect(r.left, r.top, r.right, r.bottom) { this@drawWithContent.drawContent() }
             },
             contentAlignment = Alignment.Center,
         ) { content(Dress.Material) }

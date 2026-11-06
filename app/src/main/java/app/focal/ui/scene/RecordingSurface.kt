@@ -16,9 +16,9 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -103,6 +103,7 @@ import app.focal.ui.components.DockState
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.Glyph
 import app.focal.ui.components.LiveMeter
+import app.focal.ui.components.MaterialBounds
 import app.focal.ui.components.NineBars
 import app.focal.ui.components.PauseBadge
 import app.focal.ui.components.WaveDress
@@ -121,17 +122,20 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.design.LocalWindowLayout
 import app.focal.ui.design.Scene
+import app.focal.ui.library.StageMetrics
 import app.focal.ui.library.spokenDuration
 import app.focal.ui.shell.LiveSurfaceState
+import app.focal.ui.shell.LocalDockAreas
 import app.focal.ui.shell.SceneChoreography
 import app.focal.ui.shell.SceneEntry
 import app.focal.ui.shell.SystemBarsState
 import app.focal.ui.state.LiveParagraph
 import app.focal.ui.state.PauseReason
-import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /** What the scene shows: immutable, from the recording view model in the app and from fakes in the gallery. */
 @Immutable
@@ -192,8 +196,17 @@ fun RecordingSurface(
     val navigationBottom = WindowInsets.navigationBars.getBottom(density).toFloat()
     val timers = rememberTimerStyles(window.width.toFloat())
     val compact = density.fontScale >= SceneMetrics.COMPACT_FONT
-    val slots = remember(window, statusTop, navigationBottom, timers, compact, density) {
-        SceneSlots.of(window.width.toFloat(), window.height.toFloat(), statusTop, navigationBottom, timers.sceneLine, compact, density)
+    // The page area the scene's column keeps (spec 5.14: beside the rail; the whole window over two panes) and the one
+    // Finish settles into.
+    val areas = LocalDockAreas.current
+    val rail = LocalWindowLayout.current.rail
+    val area = areas.scene.span(window.width, density)
+    val landingArea = areas.landing.span(window.width, density)
+    val slots = remember(window, statusTop, navigationBottom, timers, compact, density, area, landingArea, rail, rtl) {
+        SceneSlots.of(
+            window.width.toFloat(), window.height.toFloat(), statusTop, navigationBottom, timers.sceneLine, compact, density,
+            area = area, landing = landingArea, rail = rail, rtl = rtl,
+        )
     }
     val entry = live.entry
     val landing = live.landingNote != null
@@ -229,11 +242,11 @@ fun RecordingSurface(
         drag.density = density.density
         drag.reduced = reduced || !spatial
     }
-    touch.foldLimit = { slots.dockTop - with(density) { FocalLayout.dockInset.toPx() } }
-    // The dock's dress follows the material's edge; under the crossfade it flips at half (spec 6.2, 2.8.6).
+    touch.mayFold = { at -> slots.mayFold(at.x, at.y, slots.dockTop - with(density) { FocalLayout.dockInset.toPx() }) }
+    // The dock's dress follows the material's clip; under the crossfade it flips at half (spec 6.2, 2.8.6).
     DisposableEffect(live, spatial, frame) {
-        live.materialEdge = if (spatial) { { frame.value.edge } } else { { if (live.expansion.value >= HALF) Float.POSITIVE_INFINITY else Float.NEGATIVE_INFINITY } }
-        onDispose { live.materialEdge = null }
+        live.material = if (spatial) { { frame.value.clip } } else { { if (live.expansion.value >= HALF) MaterialBounds.Everywhere else MaterialBounds.Nowhere } }
+        onDispose { live.material = null }
     }
     // The status and navigation icons turn light where the material is behind them (spec 6.2).
     if (bars != null) {
@@ -343,7 +356,7 @@ private fun origin(
     rtl: Boolean,
     density: Density,
 ): MorphOrigin {
-    val startTimer = Offset(slots.centreX, slots.start.timerTop + slots.timerLine / 2)
+    val startTimer = Offset(slots.instrumentX, slots.start.timerTop + slots.timerLine / 2)
     // From the empty library the morph grows out of the resting instrument while it is there; once the library has
     // its live stage (it switched while covered), the scene folds into the stage like any other.
     if (entry == SceneEntry.RecordEmpty) live.restBounds?.let { return MorphOrigin.rest(it, startTimer) }
@@ -352,13 +365,15 @@ private fun origin(
     return MorphOrigin.stage(bounds, head, timerWidth, timers.stageScale, rtl, density)
 }
 
-/** Where the stage sits with the list at its top (16 dp under the status bar, 240 tall): the origin while it is not laid out. */
+/**
+ * Where the stage sits with the list at its top (16 dp under the status bar, 240 tall; 200 in a short window): the
+ * origin while it is not laid out.
+ */
 private fun restStage(slots: SceneSlots, density: Density): Rect = with(density) {
     val top = slots.statusTop + FocalLayout.topFade.toPx()
-    Rect(slots.columnLeft, top, slots.columnRight, top + StageMinHeight.toPx())
+    Rect(slots.columnLeft, top, slots.columnRight, top + StageMetrics.minHeight(short = slots.twoColumn).toPx())
 }
 
-private val StageMinHeight = 240.dp
 
 /** A rounded rect inside the layer's bounds: the morph's clip. */
 private class MorphShape(private val rect: Rect, private val radius: Float) : Shape {
@@ -373,11 +388,15 @@ private fun Modifier.placeAt(rect: () -> Rect): Modifier = layout { measurable, 
     layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(r.left.roundToInt(), r.top.roundToInt()) }
 }
 
-/** Places a child at its own size, centred on [centreX] with its top at [top] (both window pixels, layout phase). */
-private fun Modifier.placeCentred(maxWidth: Float, centreX: () -> Float, top: () -> Float): Modifier = layout { measurable, constraints ->
+/**
+ * Places a child at its own size, centred on [centreX] with its top at [top] (both window pixels, layout phase); with
+ * [middle], [top] is where its vertical middle goes.
+ */
+private fun Modifier.placeCentred(maxWidth: Float, centreX: () -> Float, middle: Boolean = false, top: () -> Float): Modifier = layout { measurable, constraints ->
     val placeable = measurable.measure(Constraints(maxWidth = maxWidth.roundToInt()))
     layout(constraints.maxWidth, constraints.maxHeight) {
-        placeable.place((centreX() - placeable.width / 2f).roundToInt(), top().roundToInt())
+        val y = if (middle) top() - placeable.height / 2f else top()
+        placeable.place((centreX() - placeable.width / 2f).roundToInt(), y.roundToInt())
     }
 }
 
@@ -496,7 +515,7 @@ private fun TextRegion(
                 // While "↓ Latest" shows, the text ends 8 dp above it: no glyph sits under or against its glass.
                 val a = latest.value
                 if (a > 0f) {
-                    val end = slots.dockTop - (SceneMetrics.jumpAboveDock + SceneMetrics.jumpHeight + SceneMetrics.jumpClearance).toPx()
+                    val end = slots.latestBottom - (SceneMetrics.jumpHeight + SceneMetrics.jumpClearance).toPx()
                     drawRect(
                         Brush.verticalGradient(
                             0f to Color.Black, 1f to Color.Black.copy(alpha = 1 - a),
@@ -533,7 +552,11 @@ private fun TextRegion(
         }
         SceneTranscript(
             scene.paragraphs, listState, FocalType.sceneWords, sceneInks, focus,
-            contentPadding = with(density) { PaddingValues(start = slots.columnLeft.toDp(), end = (slots.width - slots.columnRight).toDp()) },
+            contentPadding = with(density) {
+                val left = slots.textLeft.toDp()
+                val right = (slots.width - slots.textRight).toDp()
+                if (LocalLayoutDirection.current == LayoutDirection.Rtl) PaddingValues(start = right, end = left) else PaddingValues(start = left, end = right)
+            },
             modifier = Modifier
                 .placeAt { val f = frame.value; Rect(0f, f.textTop, slots.width, f.textBottom) }
                 .graphicsLayer { alpha = frame.value.sceneTextAlpha }
@@ -581,7 +604,7 @@ private fun Hint(scene: SceneUi, frame: State<MorphFrame>, slots: SceneSlots, re
     Text(
         text, style = FocalType.secondary.copy(lineBreak = LineBreak.Heading), color = colors.sceneRecede, textAlign = TextAlign.Center,
         modifier = Modifier
-            .placeCentred(slots.columnRight - slots.columnLeft, { slots.centreX }, { slots.hintTop })
+            .placeCentred(slots.textRight - slots.textLeft, { slots.hintX }, middle = slots.twoColumn) { slots.hintTop }
             .graphicsLayer { alpha = frame.value.lateAlpha * shown.value },
     )
 }
@@ -609,7 +632,7 @@ private fun StateLine(scene: SceneUi, frame: State<MorphFrame>, slots: SceneSlot
     Text(
         text, style = FocalType.meta.copy(fontWeight = FocalWeight.Medium), color = colors.sceneRecede, textAlign = TextAlign.Center, maxLines = 2,
         modifier = Modifier
-            .placeCentred(slots.columnRight - slots.columnLeft, { frame.value.timerCentre.x }) {
+            .placeCentred(slots.instrumentWidth, { frame.value.timerCentre.x }) {
                 val f = frame.value
                 val gap = with(density) { lerp(SceneMetrics.startTimerToState.toPx(), SceneMetrics.liveTimerToState.toPx(), lift.value) }
                 f.timerCentre.y + slots.timerLine * f.timerScale / 2 + gap
@@ -710,7 +733,9 @@ private fun Chevron(frame: State<MorphFrame>, slots: SceneSlots, collapse: () ->
                 val f = frame.value
                 val half = with(density) { FocalLayout.target.toPx() } / 2
                 val top = f.clip.top + slots.chevronTop
-                Rect(f.clip.center.x - half, top, f.clip.center.x + half, top + 2 * half)
+                // Over the instrument: the window's middle, or the start half's in two columns, carried with the clip.
+                val x = f.clip.left + slots.instrumentX / slots.width * f.clip.width
+                Rect(x - half, top, x + half, top + 2 * half)
             }
             .graphicsLayer { alpha = frame.value.lateAlpha }
             .clearAndSetSemantics {
@@ -749,10 +774,12 @@ private fun LatestPill(open: Boolean, listState: LazyListState, slots: SceneSlot
         Modifier
             .layout { measurable, constraints ->
                 val placeable = measurable.measure(Constraints())
-                val bottom = slots.dockTop - with(density) { SceneMetrics.jumpAboveDock.toPx() } +
-                    (placeable.height - with(density) { SceneMetrics.jumpHeight.toPx() }) / 2
+                val bottom = slots.latestBottom + (placeable.height - with(density) { SceneMetrics.jumpHeight.toPx() }) / 2
+                val rtl = layoutDirection == LayoutDirection.Rtl
+                // Its end edge on the text column's (spec 4.11).
+                val x = if (rtl) slots.textLeft else slots.textRight - placeable.width
                 layout(constraints.maxWidth, constraints.maxHeight) {
-                    placeable.place((slots.columnRight - placeable.width).roundToInt(), (bottom - placeable.height).roundToInt())
+                    placeable.place(x.roundToInt(), (bottom - placeable.height).roundToInt())
                 }
             }
             .graphicsLayer {
@@ -801,9 +828,12 @@ private const val JUMP_START_SCALE = 0.9f
  */
 @Composable
 private fun LandingDock(paused: Boolean, live: LiveSurfaceState) {
+    val rail = LocalWindowLayout.current.rail
     BottomColumn(
         state = rememberBottomColumnState(),
-        dock = { Dock(DockState.Live(paused), remember { DockActions() }, materialEdge = { Float.POSITIVE_INFINITY }) },
+        dock = { Dock(DockState.Live(paused), remember { DockActions() }, material = { MaterialBounds.Everywhere }, rail = rail) },
+        area = LocalDockAreas.current.dock,
+        rail = rail,
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer { alpha = live.landingContent.value }

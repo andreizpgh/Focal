@@ -222,6 +222,8 @@ internal data class PageStates(
     val editField: Boolean = true,
     val followOff: Boolean = false,
     val unsaved: Boolean = false,
+    /** The focused paragraph takes focus, so the keyboard opens (the gallery waits for it). */
+    val focus: Boolean = false,
 )
 
 @Composable
@@ -245,7 +247,7 @@ internal fun NoteDestination(
     val field = if (edit && states.editField && third != null) {
         remember { FieldFocus(third.id, third.text, "The welcome screen can lose the subtitle entirely.".length) }
     } else null
-    val page: NotePageState = rememberNotePageState(editing = edit, field = field, takesFocus = false)
+    val page: NotePageState = rememberNotePageState(editing = edit, field = field, takesFocus = states.focus)
     if (states.rename) LaunchedEffect(page) { page.renaming = true }
     if (states.followOff) LaunchedEffect(page) {
         waitFrames(FIND_SETTLE_MS)

@@ -9,13 +9,13 @@ import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -37,10 +37,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -60,6 +58,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -71,15 +71,19 @@ import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FeedbackResult
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.NotePill
+import app.focal.ui.components.PageArea
 import app.focal.ui.components.PaperTopFade
+import app.focal.ui.components.pageInsets
 import app.focal.ui.components.rememberRowPlacement
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTheme
-import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalTiming
+import app.focal.ui.design.FocalType
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.design.LocalWindowLayout
+import app.focal.ui.design.columnInset
 import app.focal.ui.library.LibraryDates
 import app.focal.ui.library.LibraryModels
 import app.focal.ui.library.noteDock
@@ -96,13 +100,12 @@ import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteUiState
 import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.PlayingWord
+import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import androidx.compose.ui.unit.dp
 
 /** One row of the note's list. */
 @Immutable
@@ -216,7 +219,8 @@ fun NotePage(
     // Playback: the position read per frame, the playing paragraph and word, follow, and the strip.
     val position = remember(playback) { PlayerPosition(playback::positionMs) }
     SideEffect { position.durationMs = audio.durationMs.takeIf { it > 0 } ?: note.durationMs }
-    val bandTop: () -> Float = { status.getTop(density).toFloat() + with(density) { FocalLayout.topBar.toPx() } }
+    val topBar = LocalWindowLayout.current.topBar
+    val bandTop: () -> Float = { status.getTop(density).toFloat() + with(density) { topBar.toPx() } }
     val bandBottom: () -> Float = { bottom.top.value.takeUnless { it.isNaN() } ?: listState.layoutInfo.viewportSize.height.toFloat() }
     // The lines on screen, for landing them on the top band's edge after a bring (TopEdge).
     val fadePx = with(density) { FocalLayout.topFade.toPx() }
@@ -721,6 +725,8 @@ fun NotePage(
     Box(
         Modifier
             .fillMaxSize()
+            // Beside the landscape rail and inside the side insets (spec 5.14).
+            .windowInsetsPadding(pageInsets(PageArea.Note))
             // A focused field or control inside the page (Edit's field, Find's query) hears them first, here.
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -768,18 +774,19 @@ fun NotePage(
                 modifier = Modifier.zIndex(BARS_Z).graphicsLayer { alpha = editT.value * chrome() }.inertBar(!page.editing || find.open),
             )
         }
-        val topPadding = with(density) { status.getTop(this).toDp() } + FocalLayout.topBar + FocalGrid.x8
-        val padding = remember(topPadding, bottom, density) { bottom.contentPadding(topPadding, density) }
+        val topPadding = with(density) { status.getTop(this).toDp() } + topBar + FocalGrid.x8
         val bringSpec = remember(density, status) { CaretSpec(bandTop, { with(density) { CaretMargin.toPx() } }, fadePx, topLines) }
         CompositionLocalProvider(LocalBringIntoViewSpec provides bringSpec) {
             SelectionContainer(selection, Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxSize().graphicsLayer { alpha = listFade.value * reveal.body() }, contentAlignment = Alignment.TopCenter) {
+                BoxWithConstraints(Modifier.fillMaxSize().graphicsLayer { alpha = listFade.value * reveal.body() }) {
+                    // The text column is at most 600 dp and centred (spec 2.5); the list itself spans the page, so it
+                    // scrolls from its margins too.
+                    val side = FocalLayout.columnInset(maxWidth) - FocalLayout.gutter
+                    val padding = remember(topPadding, side, bottom, density) { bottom.contentPadding(topPadding, density, side) }
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
-                            .fillMaxHeight()
-                            .widthIn(max = FocalLayout.contentMaxWidth + FocalLayout.gutter * 2)
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .imePadding(),
                         contentPadding = padding,
                         verticalArrangement = Arrangement.spacedBy(ParagraphMetrics.gap),
@@ -842,7 +849,7 @@ fun NotePage(
             }
         }
         // The top fade under the bar; Find's is shorter (spec 2.6).
-        PaperTopFade(FocalLayout.topBar, Modifier.fillMaxSize().zIndex(FADES_Z), alpha = { (1 - findT.value) * reveal.chrome() })
+        PaperTopFade(topBar, Modifier.fillMaxSize().zIndex(FADES_Z), alpha = { (1 - findT.value) * reveal.chrome() })
         PaperTopFade(0.dp, Modifier.fillMaxSize().zIndex(FADES_Z), fade = FindFade, alpha = { findT.value * reveal.chrome() })
         BottomFade(bottom, Modifier.fillMaxSize().zIndex(FADES_Z).graphicsLayer { alpha = (1 - editT.value) * reveal.chrome() }, keyboard = find.open)
         JumpPill(

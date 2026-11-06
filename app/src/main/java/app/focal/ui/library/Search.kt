@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -70,13 +71,14 @@ import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
+import app.focal.ui.design.columnInset
 import app.focal.ui.design.smoothstep
 import app.focal.ui.state.SearchRow
 import app.focal.ui.state.SearchUiState
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.math.roundToInt
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /** Search geometry (spec 4.9.1, 5.2). */
 object SearchMetrics {
@@ -261,18 +263,20 @@ fun SearchResults(
     val results = remember(search.results) { search.results.sortedByDescending { it.row.created } }
     // A new query starts at the field.
     LaunchedEffect(search.resultsQuery) { list.scrollToItem(0) }
-    Box(
+    BoxWithConstraints(
         modifier.fillMaxSize().layout { measurable, constraints ->
             val height = bottom.fieldTop(constraints.maxHeight).coerceIn(0, constraints.maxHeight)
             val placeable = measurable.measure(Constraints.fixed(constraints.maxWidth, height))
             layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
         },
     ) {
+        // The results keep the content column (at most 600 dp, centred) over the field below them.
+        val side = FocalLayout.columnInset(maxWidth) - FocalLayout.gutter
         when {
             search.resultsQuery.isBlank() -> Unit
             results.isEmpty() && !search.searching -> Text(
                 stringResource(R.string.search_none, search.resultsQuery), style = FocalType.secondary, color = colors.recede,
-                modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = FocalLayout.gutter)
+                modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = side + FocalLayout.gutter)
                     .padding(bottom = SearchMetrics.headGap),
             )
             else -> LazyColumn(
@@ -280,6 +284,7 @@ fun SearchResults(
                 reverseLayout = true,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
+                    start = side, end = side,
                     top = with(LocalDensity.current) { status.getTop(this).toDp() } + FocalLayout.topFade,
                     // The last row's hit area reaches 12 dp below its text: its text ends 24 dp above the field.
                     bottom = SearchMetrics.resultsGap - RowMetrics.hitPad,

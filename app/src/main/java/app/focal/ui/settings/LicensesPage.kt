@@ -6,10 +6,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -46,9 +49,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.unit.LayoutDirection
 import app.focal.R
+import app.focal.ui.components.PageArea
 import app.focal.ui.components.PaperTopFade
 import app.focal.ui.components.PressPlate
 import app.focal.ui.components.focusRing
+import app.focal.ui.components.pageInsets
 import app.focal.ui.components.scrollEdgeFade
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
@@ -56,6 +61,8 @@ import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
+import app.focal.ui.design.LocalWindowLayout
+import app.focal.ui.design.columnInset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -215,12 +222,20 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val status = WindowInsets.statusBars.asPaddingValues()
     val navigation = WindowInsets.navigationBars.asPaddingValues()
     val title = stringResource(R.string.licenses)
-    Box(modifier.fillMaxSize().semantics { paneTitle = title }) {
+    val topBar = LocalWindowLayout.current.topBar
+    BoxWithConstraints(modifier.fillMaxSize().semantics { paneTitle = title }) {
+        // The content column, centred and capped at 600 dp (spec 2.5, 5.14), inside the window's side insets.
+        val sides = pageInsets(PageArea.Window).asPaddingValues()
+        val direction = LocalLayoutDirection.current
+        val startInset = sides.calculateStartPadding(direction)
+        val endInset = sides.calculateEndPadding(direction)
+        val centring = FocalLayout.columnInset(maxWidth - startInset - endInset) - FocalLayout.gutter
         LazyColumn(
             state = list,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                top = status.calculateTopPadding() + FocalLayout.topBar,
+                start = startInset + centring, end = endInset + centring,
+                top = status.calculateTopPadding() + topBar,
                 bottom = navigation.calculateBottomPadding() + FocalLayout.gutter,
             ),
         ) {
@@ -263,7 +278,7 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 }
             }
         }
-        PaperTopFade(FocalLayout.topBar, Modifier.fillMaxSize())
+        PaperTopFade(topBar, Modifier.fillMaxSize())
         TopBar(title, onBack, collapsed = {
             val first = list.firstVisibleItemIndex
             first > 0 || list.firstVisibleItemScrollOffset > with(density) { SettingsMetrics.titleTop.toPx() + FocalType.title.lineHeight.toPx() }

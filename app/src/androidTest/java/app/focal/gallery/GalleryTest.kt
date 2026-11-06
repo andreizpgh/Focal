@@ -31,15 +31,17 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.ui.design.FocalTheme
+import java.io.File
+import org.junit.Assume
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.io.File
 
 /**
  * Renders every screen and state of the rebuilt interface from fake, immutable state (no service, no model) in
@@ -49,6 +51,10 @@ import java.io.File
  * Run it on a display of at least 824 x 1830 px at 320 dpi (`adb shell wm size 824x1830; adb shell wm density 320`),
  * so the frame is on screen in full; then `adb pull /sdcard/Android/data/app.focal/files/gallery`. To re-render a few
  * shots, pass their name prefixes: `-e shots t16-open,now-playing` (the others in the stage's folder are kept).
+ *
+ * The window sizes of spec 5.14 ([AdaptiveShots]) need a display of their own size, and are skipped on any smaller
+ * one: `landscape` with that display turned (`adb shell settings put system user_rotation 1`), `tablet` on 1600 x
+ * 2560 px and `wide` on it turned. Run each alone (`-e class app.focal.gallery.GalleryTest#landscape`).
  */
 @RunWith(AndroidJUnit4::class)
 class GalleryTest {
@@ -83,10 +89,27 @@ class GalleryTest {
     @Test
     fun transitions() = render("transitions", TransitionShots.all)
 
+    /** A phone in landscape (spec 5.14): run alone, with the display turned to 1830 x 824 px at 320 dpi. */
+    @Test
+    fun landscape() = render("landscape", AdaptiveShots.landscape)
+
+    /** A tablet held upright, one pane (800 x 1280 dp): run alone on a 1600 x 2560 px display at 320 dpi. */
+    @Test
+    fun tablet() = render("tablet", AdaptiveShots.tablet)
+
+    /** Two panes (1280 x 800 dp): run alone on a 2560 x 1600 px display at 320 dpi. */
+    @Test
+    fun wide() = render("wide", AdaptiveShots.wide)
+
     private fun render(stage: String, all: List<Shot>) {
         // `-e shots t16-,now-playing` renders only the shots whose names start with one of these, over the others.
         val only = InstrumentationRegistry.getArguments().getString(SHOTS_ARGUMENT)?.split(',')?.filter { it.isNotBlank() }
         val shots = if (only == null) all else all.filter { shot -> only.any { shot.name.startsWith(it) } }
+        // A stage whose frames do not fit the display (the landscape, tablet and two-pane frames on a phone held
+        // upright) is skipped, not rendered cut off: run it on a display of its size.
+        val window = rule.activity.window.decorView
+        val fits = shots.all { it.width.value * DENSITY <= window.width && it.height.value * DENSITY <= window.height }
+        Assume.assumeTrue("The display is smaller than this stage's frames", fits)
         val directory = File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "gallery/$stage")
             .apply { if (only == null) deleteRecursively(); mkdirs() }
         rule.mainClock.autoAdvance = false
@@ -96,7 +119,7 @@ class GalleryTest {
             key(current.name) {
                 CompositionLocalProvider(LocalDensity provides Density(DENSITY, current.fontScale)) {
                     FocalTheme(dark = current.dark) {
-                        Box(Modifier.testTag(FRAME).requiredSize(FRAME_WIDTH, FRAME_HEIGHT).background(FocalTheme.colors.paper)) {
+                        Box(Modifier.testTag(FRAME).requiredSize(current.width, current.height).background(FocalTheme.colors.paper)) {
                             current.content()
                         }
                     }
@@ -153,8 +176,6 @@ class GalleryTest {
     private companion object {
         const val FRAME = "gallery-frame"
         const val DENSITY = 2f
-        val FRAME_WIDTH = 412.dp
-        val FRAME_HEIGHT = 915.dp
         const val SETTLE_MS = 1_000L
         const val PNG_QUALITY = 100
         const val SHOTS_ARGUMENT = "shots"
@@ -195,6 +216,9 @@ class Shot(
     val click: String? = null,
     /** Text the shot waits for (real time) after [click]: content that is prepared off the main thread. */
     val await: String? = null,
+    /** The frame: the design's 412 x 915 dp reference, or a landscape, tablet or two-pane window (spec 5.14). */
+    val width: Dp = 412.dp,
+    val height: Dp = 915.dp,
     val content: @Composable () -> Unit,
 )
 

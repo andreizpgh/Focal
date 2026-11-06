@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -70,9 +72,11 @@ import app.focal.ui.components.FocalMenuDivider
 import app.focal.ui.components.FocalMenuItem
 import app.focal.ui.components.LibraryTopFade
 import app.focal.ui.components.MenuAnchor
+import app.focal.ui.components.PageArea
 import app.focal.ui.components.StickyLabelOverlay
 import app.focal.ui.components.WaveMeter
 import app.focal.ui.components.inert
+import app.focal.ui.components.pageInsets
 import app.focal.ui.components.rememberRowPlacement
 import app.focal.ui.components.rememberStickyLabels
 import app.focal.ui.components.stickyLabelSource
@@ -83,6 +87,7 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.Stage
+import app.focal.ui.design.columnInset
 import app.focal.ui.scene.ExpandDrag
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.DestinationBottom
@@ -90,8 +95,8 @@ import app.focal.ui.shell.LocalShell
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.SearchRow
 import app.focal.ui.state.SearchUiState
-import kotlinx.coroutines.launch
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 
 /** What the library page does; the route provides it from the view models (the gallery from fakes). */
 @Stable
@@ -257,7 +262,9 @@ fun LibraryPage(
                         }
                     }
                 },
-            ),
+            )
+            // Beside the landscape rail, in the list pane of two panes, inside the side insets (spec 5.14).
+            .windowInsetsPadding(pageInsets(PageArea.Library)),
     ) {
         // The library layer fades out under search (T17) and is then neither touchable nor read.
         val behindSearch = searchState.open
@@ -398,7 +405,6 @@ private fun LibraryList(
     }
     val status = WindowInsets.statusBars
     val top = with(density) { status.getTop(this).toDp() } + FocalLayout.topFade
-    val padding = remember(top, shell.bottom, density) { shell.bottom.contentPadding(top, density) }
     val isLive = model.stage is StageUi.Live
     val placement = rememberRowPlacement(
         remember(model.stage?.key, model.days) {
@@ -411,7 +417,10 @@ private fun LibraryList(
             }
         },
     )
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // The stage, the labels and the rows keep the content column: at most 600 dp, centred (spec 2.5, 4.22.1).
+        val side = FocalLayout.columnInset(maxWidth) - FocalLayout.gutter
+        val padding = remember(top, side, shell.bottom, density) { shell.bottom.contentPadding(top, density, side) }
         LazyColumn(
             state = listState,
             modifier = Modifier

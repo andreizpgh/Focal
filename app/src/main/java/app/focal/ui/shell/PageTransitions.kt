@@ -89,14 +89,14 @@ import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.TriggerClock
 import app.focal.ui.design.smoothstep
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.roundToInt
 
 /** What a page change plays (spec 6.1, 2.8.5). */
 enum class PageMotion {
@@ -288,6 +288,12 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
             developClock.start()
         }
         startClock()
+    }
+
+    /** Two panes: a note opens in place of [old] in the detail pane, which fades through to it. */
+    internal fun replace(old: Destination, destination: Destination, motion: PageMotion) {
+        opened.remove(old)
+        push(destination, motion)
     }
 
     internal fun pop(top: Destination) {

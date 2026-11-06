@@ -51,6 +51,7 @@ import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.design.LocalWindowLayout
 
 /** Top bar geometry (spec 4.1.2, 4.1.3). */
 object NoteBarMetrics {
@@ -248,14 +249,14 @@ private fun DonePill(label: String, onClick: () -> Unit) {
     }
 }
 
-/** A 64 dp bar under the status bar; icon buttons sit 12 dp from the edges (spec 2.5). */
+/** A 64 dp bar under the status bar (48 in a short window); icon buttons sit 12 dp from the edges (spec 2.5, 5.14). */
 @Composable
 private fun BarRow(modifier: Modifier, content: @Composable RowScope.() -> Unit) {
     Row(
         modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.statusBars)
-            .height(FocalLayout.topBar)
+            .height(LocalWindowLayout.current.topBar)
             .padding(horizontal = FocalLayout.iconEdge),
         verticalAlignment = Alignment.CenterVertically,
         content = content,

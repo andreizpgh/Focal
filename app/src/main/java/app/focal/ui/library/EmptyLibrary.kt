@@ -36,6 +36,7 @@ import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
+import app.focal.ui.design.LocalWindowLayout
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.SceneEntry
 import kotlin.math.roundToInt
@@ -77,6 +78,8 @@ fun EmptyLibrary(openSettings: () -> Unit, modifier: Modifier = Modifier) {
     val status = WindowInsets.statusBars
     val navigation = WindowInsets.navigationBars
     val live = LocalShell.current.live
+    // In a short window the dock stands in the rail beside the page (spec 5.14): the free paper runs to the bottom line.
+    val dockBelow = if (LocalWindowLayout.current.rail) 0.dp else DockMetrics.height
     // Record wakes the instrument in place (T1′e): the scene draws the bars while it grows out of their box, and the
     // invitation leaves at (1 - a)^2 of the material's alpha a, gone before the material is opaque (H3).
     val waking = { live.spatial && live.entry == SceneEntry.RecordEmpty && live.expansion.value > 0f }
@@ -129,7 +132,7 @@ fun EmptyLibrary(openSettings: () -> Unit, modifier: Modifier = Modifier) {
         val inkTop = (mark.height * (1 - Mark.REST * Mark.height(Mark.CENTRE) / Mark.BOX_HEIGHT) / 2).roundToInt()
         val freeTop = status.getTop(this)
         // The free paper ends at the dock's top: navigation inset + 16, then the 56 dp dock.
-        val freeBottom = constraints.maxHeight - navigation.getBottom(this) - (FocalLayout.dockInset + DockMetrics.height).roundToPx()
+        val freeBottom = constraints.maxHeight - navigation.getBottom(this) - (FocalLayout.dockInset + dockBelow).roundToPx()
         val centre = (freeTop + freeBottom) / 2f - EmptyMetrics.opticalLift.toPx()
         val top = (centre - (inkTop + groupBottom) / 2f).roundToInt().coerceAtLeast(freeTop)
         layout(width, constraints.maxHeight) {

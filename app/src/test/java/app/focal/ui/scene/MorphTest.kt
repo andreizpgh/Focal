@@ -49,6 +49,71 @@ class MorphTest {
         assertEquals(Rect(92f, 819f, 388f, 875f), slots.pill)
     }
 
+    /**
+     * A phone turned to landscape (915 x 412, spec 5.14): the dock is a 96 dp rail at the end edge, the instrument is
+     * centred on the start half of the page beside it and keeps its with-text layout, the text runs down the end half.
+     */
+    @Test fun aShortWindowSplitsTheSceneIntoTwoColumns() {
+        val land = SceneSlots.of(
+            width = 915f, height = 412f, statusTop = 24f, navigationBottom = 24f, timerLine = 84f, compact = false, density = density,
+            area = 0f..819f, rail = true,
+        )
+        assertTrue(land.twoColumn)
+        near(204.75f, land.instrumentX)
+        assertEquals(land.live, land.instrument(0f))
+        // Wave 136 → 16 → timer (84) → 2 → state (20), centred between the chevron's target (80) and the bottom line (372).
+        near(97f, land.live.waveTop)
+        near(136f, land.live.waveHeight)
+        near(249f, land.live.timerTop)
+        near(335f, land.live.stateTop)
+        near(409.5f, land.textLeft)
+        near(795f, land.textRight)
+        near(40f, land.textTop)
+        near(372f, land.textBottom)
+        near(602.25f, land.hintX)
+        // The rail: Pause above Finish, centred in 819-915 and between the bars; Finish settles into the lower circle.
+        assertEquals(Rect(839f, 212f, 895f, 268f), land.pill)
+        near(144f, land.dockTop)
+        assertTrue(land.mayFold(818f, 380f, foldLimit = 0f))
+        assertFalse("a drag on the rail never folds", land.mayFold(820f, 100f, foldLimit = 0f))
+        // At rest the wave and the timer stand on the start half's axis.
+        val rest = Morph.rest(1f, land)
+        near(204.75f, rest.wave.center.x)
+        near(204.75f, rest.timerCentre.x)
+    }
+
+    /** Right to left the rail is at the start of the window (the left), the instrument on the right half (spec 8.5). */
+    @Test fun theLandscapeSceneMirrorsRightToLeft() {
+        val land = SceneSlots.of(
+            width = 915f, height = 412f, statusTop = 24f, navigationBottom = 24f, timerLine = 84f, compact = false, density = density,
+            area = 96f..915f, rail = true, rtl = true,
+        )
+        near(710.25f, land.instrumentX)
+        near(120f, land.textLeft)
+        near(505.5f, land.textRight)
+        assertEquals(Rect(20f, 212f, 76f, 268f), land.pill)
+        assertTrue(land.mayFold(97f, 100f, foldLimit = 0f))
+        assertFalse(land.mayFold(95f, 100f, foldLimit = 0f))
+    }
+
+    /**
+     * Two panes (1280 x 800): the scene covers the window with its column capped at 600 and centred; Finish settles
+     * into the note pane's dock (412-1280), whose column is centred there.
+     */
+    @Test fun overTwoPanesTheSceneIsCentredAndLandsInTheNotePane() {
+        val wide = SceneSlots.of(
+            width = 1280f, height = 800f, statusTop = 24f, navigationBottom = 24f, timerLine = 84f, compact = false, density = density,
+            area = 0f..1280f, landing = 412f..1280f,
+        )
+        assertFalse(wide.twoColumn)
+        near(340f, wide.columnLeft)
+        near(940f, wide.columnRight)
+        near(640f, wide.instrumentX)
+        assertEquals(Rect(614f, 704f, 1146f, 760f), wide.pill)
+        assertTrue(wide.mayFold(10f, 600f, foldLimit = 688f))
+        assertFalse(wide.mayFold(10f, 700f, foldLimit = 688f))
+    }
+
     @Test fun theStageIsTheOrigin() {
         val f = Morph.frame(0f, 1f, stage, slots)
         assertEquals(Rect(24f, 56f, 388f, 296f), f.clip)

@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.dp
 import app.focal.ui.components.DockMetrics
 import app.focal.ui.components.Mark
 import app.focal.ui.components.PauseBadgeMetrics
+import app.focal.ui.components.railDock
 import app.focal.ui.design.FocalGestures
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
@@ -98,12 +99,17 @@ data class Instrument(val waveTop: Float, val waveHeight: Float, val timerTop: F
  * The scene at rest (spec 4.21.7), in window pixels: the instrument before text ([start]) and with text ([live]),
  * the hint, the text region, the chevron and the dock row. Built from the window, the insets and the timer's line
  * height; on the 412 x 915 reference frame it reproduces every ref value of the spec.
+ *
+ * In a short window ([twoColumn], spec 5.14) the instrument (wave, timer, state) is centred on the start half of the
+ * page beside the rail and the text region runs down the end half; the instrument has no room to lift, so it keeps
+ * its with-text layout from the start, and the hint waits level with it on the text's half.
  */
 @Immutable
 data class SceneSlots(
     val width: Float,
     val height: Float,
     val statusTop: Float,
+    /** The page's content column (where the stage is). */
     val columnLeft: Float,
     val columnRight: Float,
     val start: Instrument,
@@ -116,55 +122,171 @@ data class SceneSlots(
     val chevronTop: Float,
     val dockTop: Float,
     val dockBottom: Float,
-    /** The dock's pill slot (x 92-388): where the scene settles on Finish (T7). */
+    /** The dock's pill slot (x 92-388; the rail's lower circle): where the scene settles on Finish (T7). */
     val pill: Rect,
     val corner: Float,
     val stageMask: Float,
     val sceneMask: Float,
     val stageBadge: Float,
     val sceneBadge: Float,
+    /** The instrument's vertical axis: the window's middle, or the start half's in two columns. */
+    val instrumentX: Float = width / 2,
+    /** The text region's column, and the hint's centre line over it. */
+    val textLeft: Float = columnLeft,
+    val textRight: Float = columnRight,
+    val hintX: Float = instrumentX,
+    /** The jump pill's bottom edge ("↓ Latest", 12 dp above the dock; the text region's bottom in two columns). */
+    val latestBottom: Float = Float.NaN,
+    /** The rail's edge: a touch beyond it (toward the rail) never folds the scene. NaN without a rail. */
+    val railEdge: Float = Float.NaN,
+    val railAtLeft: Boolean = false,
+    val twoColumn: Boolean = false,
+    /** How wide a line under the instrument (the state slot) may run. */
+    val instrumentWidth: Float = columnRight - columnLeft,
 ) {
     val window: Rect get() = Rect(0f, 0f, width, height)
     val centreX: Float get() = width / 2
 
-    fun instrument(lift: Float): Instrument = Instrument.lerp(start, live, lift)
+    fun instrument(lift: Float): Instrument = if (twoColumn) live else Instrument.lerp(start, live, lift)
+
+    /** Whether a drag that starts at ([x], [y]) may fold the scene: above the dock row, or off the rail. */
+    fun mayFold(x: Float, y: Float, foldLimit: Float): Boolean = when {
+        railEdge.isNaN() -> y < foldLimit
+        railAtLeft -> x > railEdge
+        else -> x < railEdge
+    }
 
     companion object {
-        fun of(width: Float, height: Float, statusTop: Float, navigationBottom: Float, timerLine: Float, compact: Boolean, density: Density): SceneSlots =
-            with(density) {
-                val column = min(width - 2 * FocalLayout.gutter.toPx(), FocalLayout.contentMaxWidth.toPx())
-                val columnLeft = (width - column) / 2
-                val dockBottom = height - navigationBottom - FocalLayout.dockInset.toPx()
-                val dockTop = dockBottom - DockMetrics.height.toPx()
-                val state = SceneMetrics.stateSlot.toPx()
-                val liveWave = (if (compact) SceneMetrics.liveWaveCompact else SceneMetrics.liveWave).toPx()
-                val startWave = (if (compact) SceneMetrics.startWaveCompact else SceneMetrics.startWave).toPx()
-                val liveTop = statusTop + SceneMetrics.liveWaveFromStatus.toPx()
-                val liveTimer = liveTop + liveWave + SceneMetrics.liveWaveToTimer.toPx()
-                val liveState = liveTimer + timerLine + SceneMetrics.liveTimerToState.toPx()
-                // Before text the hero keeps the full 176 dp box's top, so the compact wave starts where it would.
-                val heroCentre = (statusTop + dockTop) / 2 - SceneMetrics.startHeroLift.toPx()
-                val startTop = heroCentre - SceneMetrics.startWave.toPx() / 2
-                val startTimer = startTop + startWave + SceneMetrics.startWaveToTimer.toPx()
-                val startState = startTimer + timerLine + SceneMetrics.startTimerToState.toPx()
-                val pillLeft = columnLeft + DockMetrics.circle.toPx() + DockMetrics.gap.toPx()
-                SceneSlots(
-                    width = width, height = height, statusTop = statusTop,
-                    columnLeft = columnLeft, columnRight = columnLeft + column,
-                    start = Instrument(startTop, startWave, startTimer, startState),
-                    live = Instrument(liveTop, liveWave, liveTimer, liveState),
-                    timerLine = timerLine, stateHeight = state,
-                    hintTop = startState + state + SceneMetrics.stateHint.toPx(),
-                    textTop = liveState + state + SceneMetrics.stateToText.toPx(),
-                    textBottom = dockTop - SceneMetrics.textToDock.toPx(),
-                    chevronTop = statusTop + SceneMetrics.chevronFromStatus.toPx(),
-                    dockTop = dockTop, dockBottom = dockBottom,
-                    pill = Rect(pillLeft, dockTop, columnLeft + column, dockBottom),
-                    corner = FocalShapes.sheetRadius.toPx(),
-                    stageMask = StageLiveMetrics.mask.toPx() * lineScale(FocalType.stageText), sceneMask = SceneMetrics.textMask.toPx(),
-                    stageBadge = PauseBadgeMetrics.stage.toPx(), sceneBadge = PauseBadgeMetrics.scene.toPx(),
+        /**
+         * The slots for a window [width] x [height]. [area] is the page area the scene's column is centred in (inside
+         * the side insets, beside the rail); [landing] the area whose dock Finish settles into (T7: the note's pane).
+         */
+        fun of(
+            width: Float,
+            height: Float,
+            statusTop: Float,
+            navigationBottom: Float,
+            timerLine: Float,
+            compact: Boolean,
+            density: Density,
+            area: ClosedFloatingPointRange<Float> = 0f..width,
+            landing: ClosedFloatingPointRange<Float> = area,
+            rail: Boolean = false,
+            rtl: Boolean = false,
+        ): SceneSlots = with(density) {
+            fun columnOf(span: ClosedFloatingPointRange<Float>): Pair<Float, Float> {
+                val w = span.endInclusive - span.start
+                val column = min(w - 2 * FocalLayout.gutter.toPx(), FocalLayout.contentMaxWidth.toPx()).coerceAtLeast(0f)
+                val left = span.start + (w - column) / 2
+                return left to left + column
+            }
+            val (columnLeft, columnRight) = columnOf(area)
+            val baseline = height - navigationBottom - FocalLayout.dockInset.toPx()
+            val state = SceneMetrics.stateSlot.toPx()
+            val liveWave = (if (compact) SceneMetrics.liveWaveCompact else SceneMetrics.liveWave).toPx()
+            val startWave = (if (compact) SceneMetrics.startWaveCompact else SceneMetrics.startWave).toPx()
+            val chevronTop = statusTop + SceneMetrics.chevronFromStatus.toPx()
+            if (rail) {
+                return@with twoColumns(
+                    width, height, statusTop, timerLine, area, rtl, columnLeft, columnRight, baseline, chevronTop,
+                    navigationTop = height - navigationBottom, liveWave = liveWave, compactWave = SceneMetrics.liveWaveCompact.toPx(), density,
                 )
             }
+            val dockBottom = baseline
+            val dockTop = dockBottom - DockMetrics.height.toPx()
+            val liveTop = statusTop + SceneMetrics.liveWaveFromStatus.toPx()
+            val liveTimer = liveTop + liveWave + SceneMetrics.liveWaveToTimer.toPx()
+            val liveState = liveTimer + timerLine + SceneMetrics.liveTimerToState.toPx()
+            // Before text the hero keeps the full 176 dp box's top, so the compact wave starts where it would.
+            val heroCentre = (statusTop + dockTop) / 2 - SceneMetrics.startHeroLift.toPx()
+            val startTop = heroCentre - SceneMetrics.startWave.toPx() / 2
+            val startTimer = startTop + startWave + SceneMetrics.startWaveToTimer.toPx()
+            val startState = startTimer + timerLine + SceneMetrics.startTimerToState.toPx()
+            // The pill beside the circle: after it, or before it right to left (spec 8.5).
+            val (landingLeft, landingRight) = columnOf(landing)
+            val circle = DockMetrics.circle.toPx() + DockMetrics.gap.toPx()
+            val pill = if (rtl) Rect(landingLeft, dockTop, landingRight - circle, dockBottom) else Rect(landingLeft + circle, dockTop, landingRight, dockBottom)
+            SceneSlots(
+                width = width, height = height, statusTop = statusTop,
+                columnLeft = columnLeft, columnRight = columnRight,
+                start = Instrument(startTop, startWave, startTimer, startState),
+                live = Instrument(liveTop, liveWave, liveTimer, liveState),
+                timerLine = timerLine, stateHeight = state,
+                hintTop = startState + state + SceneMetrics.stateHint.toPx(),
+                textTop = liveState + state + SceneMetrics.stateToText.toPx(),
+                textBottom = dockTop - SceneMetrics.textToDock.toPx(),
+                chevronTop = chevronTop,
+                dockTop = dockTop, dockBottom = dockBottom,
+                pill = pill,
+                corner = FocalShapes.sheetRadius.toPx(),
+                stageMask = StageLiveMetrics.mask.toPx() * lineScale(FocalType.stageText), sceneMask = SceneMetrics.textMask.toPx(),
+                stageBadge = PauseBadgeMetrics.stage.toPx(), sceneBadge = PauseBadgeMetrics.scene.toPx(),
+                instrumentX = (columnLeft + columnRight) / 2,
+                latestBottom = dockTop - SceneMetrics.jumpAboveDock.toPx(),
+            )
+        }
+
+        /** The two-column scene of a short window (spec 5.14): the instrument on the start half, the text on the end. */
+        private fun twoColumns(
+            width: Float,
+            height: Float,
+            statusTop: Float,
+            timerLine: Float,
+            area: ClosedFloatingPointRange<Float>,
+            rtl: Boolean,
+            columnLeft: Float,
+            columnRight: Float,
+            baseline: Float,
+            chevronTop: Float,
+            navigationTop: Float,
+            liveWave: Float,
+            compactWave: Float,
+            density: Density,
+        ): SceneSlots = with(density) {
+            val middle = (area.start + area.endInclusive) / 2
+            val gutter = FocalLayout.gutter.toPx()
+            // The start half holds the instrument; the text runs from the middle to the gutter before the rail.
+            val instrumentX = if (rtl) (middle + area.endInclusive) / 2 else (area.start + middle) / 2
+            val textLeft = if (rtl) area.start + gutter else middle
+            val textRight = if (rtl) middle else area.endInclusive - gutter
+            val state = SceneMetrics.stateSlot.toPx()
+            // The instrument is centred between the chevron and the bottom line; the compact wave if the full one
+            // would not fit.
+            val top = chevronTop + FocalLayout.target.toPx()
+            fun block(wave: Float) = wave + SceneMetrics.liveWaveToTimer.toPx() + timerLine + SceneMetrics.liveTimerToState.toPx() + state
+            val wave = if (block(liveWave) <= baseline - top) liveWave else min(liveWave, compactWave)
+            val waveTop = max(top, (top + baseline - block(wave)) / 2)
+            val timerTop = waveTop + wave + SceneMetrics.liveWaveToTimer.toPx()
+            val stateTop = timerTop + timerLine + SceneMetrics.liveTimerToState.toPx()
+            val instrument = Instrument(waveTop, wave, timerTop, stateTop)
+            val dock = railDock(area.start, area.endInclusive, statusTop, navigationTop, rtl, this)
+            val circle = DockMetrics.circle.toPx()
+            val textTop = statusTop + FocalLayout.topFade.toPx()
+            SceneSlots(
+                width = width, height = height, statusTop = statusTop,
+                columnLeft = columnLeft, columnRight = columnRight,
+                start = instrument, live = instrument,
+                timerLine = timerLine, stateHeight = state,
+                // The hint's centre line: level with the instrument's middle, over the text's half.
+                hintTop = waveTop + block(wave) / 2,
+                textTop = textTop,
+                textBottom = baseline,
+                chevronTop = chevronTop,
+                dockTop = dock.top, dockBottom = dock.bottom,
+                pill = Rect(dock.left, dock.bottom - circle, dock.right, dock.bottom),
+                corner = FocalShapes.sheetRadius.toPx(),
+                stageMask = StageLiveMetrics.mask.toPx() * lineScale(FocalType.stageText), sceneMask = SceneMetrics.textMask.toPx(),
+                stageBadge = PauseBadgeMetrics.stage.toPx(), sceneBadge = PauseBadgeMetrics.scene.toPx(),
+                instrumentX = instrumentX,
+                textLeft = textLeft, textRight = textRight,
+                hintX = (textLeft + textRight) / 2,
+                latestBottom = baseline,
+                railEdge = if (rtl) area.start else area.endInclusive,
+                railAtLeft = rtl,
+                twoColumn = true,
+                instrumentWidth = ((area.endInclusive - area.start) / 2 - 2 * gutter).coerceAtLeast(0f),
+            )
+        }
     }
 }
 
@@ -279,7 +401,7 @@ object Morph {
         val e = easeOut(p)
         val instrument = slots.instrument(lift)
         val waveHeight = lerp(origin.waveHeight, instrument.waveHeight, p)
-        val waveCx = lerp(origin.waveCentre.x, slots.centreX, smoothstep(WAVE_X_FROM, 1f, p))
+        val waveCx = lerp(origin.waveCentre.x, slots.instrumentX, smoothstep(WAVE_X_FROM, 1f, p))
         val waveCy = lerp(origin.waveCentre.y, instrument.waveCentreY(), p)
         val waveWidth = waveHeight * Mark.BOX_WIDTH / Mark.BOX_HEIGHT
         val wave = Rect(waveCx - waveWidth / 2, waveCy - waveHeight / 2, waveCx + waveWidth / 2, waveCy + waveHeight / 2)
@@ -294,7 +416,7 @@ object Morph {
             wave = wave,
             badgeCentre = Offset(wave.left + Mark.BADGE_X * badgeK, wave.top + Mark.BADGE_Y * badgeK),
             badgeDiameter = lerp(slots.stageBadge, slots.sceneBadge, p),
-            timerCentre = Offset(lerp(origin.timerCentre.x, slots.centreX, p), timerCy),
+            timerCentre = Offset(lerp(origin.timerCentre.x, slots.instrumentX, p), timerCy),
             timerScale = lerp(origin.timerScale, 1f, p),
             textTop = textTop,
             textBottom = max(textTop, textBottom),
@@ -312,13 +434,13 @@ object Morph {
     fun rest(lift: Float, slots: SceneSlots): MorphFrame {
         val instrument = slots.instrument(lift)
         val waveWidth = instrument.waveHeight * Mark.BOX_WIDTH / Mark.BOX_HEIGHT
-        val wave = Rect(slots.centreX - waveWidth / 2, instrument.waveTop, slots.centreX + waveWidth / 2, instrument.waveTop + instrument.waveHeight)
+        val wave = Rect(slots.instrumentX - waveWidth / 2, instrument.waveTop, slots.instrumentX + waveWidth / 2, instrument.waveTop + instrument.waveHeight)
         val badgeK = instrument.waveHeight / Mark.BADGE_REFERENCE_HEIGHT
         return MorphFrame(
             p = 1f, clip = slots.window, radius = 0f, wave = wave,
             badgeCentre = Offset(wave.left + Mark.BADGE_X * badgeK, wave.top + Mark.BADGE_Y * badgeK),
             badgeDiameter = slots.sceneBadge,
-            timerCentre = Offset(slots.centreX, instrument.timerTop + slots.timerLine / 2), timerScale = 1f,
+            timerCentre = Offset(slots.instrumentX, instrument.timerTop + slots.timerLine / 2), timerScale = 1f,
             textTop = slots.textTop, textBottom = slots.textBottom, textMask = slots.sceneMask,
             stageTextLeft = 0f, stageTextAlpha = 0f, sceneTextAlpha = 1f, lateAlpha = 1f, ringAlpha = 0f,
             grainAnchor = Offset.Zero,

@@ -10,10 +10,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -30,12 +30,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
@@ -49,14 +49,15 @@ import app.focal.ui.components.Dock
 import app.focal.ui.components.DockActions
 import app.focal.ui.components.DockState
 import app.focal.ui.components.FeedbackAction
+import app.focal.ui.components.FeedbackHostState
 import app.focal.ui.components.FeedbackPill
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.FocalIconButton
 import app.focal.ui.components.FocalPrimaryPill
 import app.focal.ui.components.FocalTextButton
-import app.focal.ui.components.FeedbackHostState
 import app.focal.ui.components.Glyph
 import app.focal.ui.components.Mark
+import app.focal.ui.components.MaterialBounds
 import app.focal.ui.components.NineBars
 import app.focal.ui.components.NotePill
 import app.focal.ui.components.PauseBadge
@@ -74,8 +75,8 @@ import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.Scene
 import app.focal.ui.design.FocalWeight
+import app.focal.ui.design.Scene
 import app.focal.ui.design.Stage
 
 /** The foundation stage's renders: tokens, every control state, the bars, the material, the shell's layers. */
@@ -185,7 +186,7 @@ private fun TypeSheet() {
 private fun DockDemo(caption: String, state: DockState, actions: DockActions = noActions, edge: (() -> Float)? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(FocalGrid.x4)) {
         FakeCaption(caption, Modifier.then(if (edge != null) Modifier.graphicsLayer { alpha = 0.9f } else Modifier))
-        Dock(state, actions, materialEdge = edge)
+        Dock(state, actions, material = edge?.let { e -> { MaterialBounds.above(e()) } })
     }
 }
 
@@ -238,11 +239,11 @@ private fun MaterialControls() {
             verticalArrangement = Arrangement.spacedBy(FocalGrid.x24),
         ) {
             Text("Material dress", style = FocalType.section, color = Scene.muted)
-            Dock(DockState.Live(paused = false), noActions, materialEdge = { Float.MAX_VALUE })
-            Dock(DockState.Live(paused = true), noActions, materialEdge = { Float.MAX_VALUE })
+            Dock(DockState.Live(paused = false), noActions, material = { MaterialBounds.Everywhere })
+            Dock(DockState.Live(paused = true), noActions, material = { MaterialBounds.Everywhere })
             Text("The wipe at the material's edge (half way)", style = FocalType.section, color = Scene.muted)
             Box(Modifier.onGloballyPositioned { dockTop = it.positionInWindow().y }) {
-                Dock(DockState.Live(paused = false), noActions, materialEdge = { dockTop + half })
+                Dock(DockState.Live(paused = false), noActions, material = { MaterialBounds.above(dockTop + half) })
             }
             Box(Modifier.fillMaxWidth().background(FocalTheme.colors.paper, FocalShapes.sheet).padding(FocalGrid.x16)) {
                 Dock(DockState.Live(paused = true), noActions)
@@ -349,7 +350,7 @@ private fun SceneMock(paused: Boolean) {
                 }
             }
         }
-        BottomColumn(bottom, dock = { Dock(DockState.Live(paused), noActions, materialEdge = { Float.MAX_VALUE }) }, modifier = Modifier.fillMaxSize())
+        BottomColumn(bottom, dock = { Dock(DockState.Live(paused), noActions, material = { MaterialBounds.Everywhere }) }, modifier = Modifier.fillMaxSize())
     }
 }
 

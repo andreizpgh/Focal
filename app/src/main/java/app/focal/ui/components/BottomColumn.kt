@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -48,9 +50,11 @@ import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTheme
+import app.focal.ui.design.WindowLayout
+import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import kotlin.math.min
 
 /**
  * The bottom column's shared state (spec 2.5): the feedback pill, and where the topmost bottom element's top edge is,
@@ -79,18 +83,46 @@ class BottomColumnState {
     }
 
     /**
-     * A list's content padding: [top], and [contentReserve] at the bottom. The reserve follows the keyboard frame by
-     * frame while rows ride it, so it is read where the list measures, never in composition: the page does not
-     * recompose for the keyboard. Remember it per [top] and [density].
+     * A list's content padding: [top], [side] on either side (what centres the content column on a wide page), and
+     * [contentReserve] at the bottom. The reserve follows the keyboard frame by frame while rows ride it, so it is read
+     * where the list measures, never in composition: the page does not recompose for the keyboard. Remember it per
+     * [top], [side] and [density].
      */
-    fun contentPadding(top: Dp, density: Density): PaddingValues = ReservePadding(top, this, density)
+    fun contentPadding(top: Dp, density: Density, side: Dp = 0.dp): PaddingValues = ReservePadding(top, side, this, density)
 }
 
-private class ReservePadding(private val top: Dp, private val column: BottomColumnState, private val density: Density) : PaddingValues {
+private class ReservePadding(private val top: Dp, private val side: Dp, private val column: BottomColumnState, private val density: Density) : PaddingValues {
     override fun calculateTopPadding(): Dp = top
     override fun calculateBottomPadding(): Dp = column.contentReserve(density)
-    override fun calculateLeftPadding(layoutDirection: LayoutDirection): Dp = 0.dp
-    override fun calculateRightPadding(layoutDirection: LayoutDirection): Dp = 0.dp
+    override fun calculateLeftPadding(layoutDirection: LayoutDirection): Dp = side
+    override fun calculateRightPadding(layoutDirection: LayoutDirection): Dp = side
+}
+
+/**
+ * The part of the window the bottom column is centred in (spec 2.5, 5.14), as its left and right edges in pixels, read
+ * in the layout phase: inside the side insets, beside the landscape rail, in a pane of a two-pane window, and carried
+ * to the window's middle while the scene grows over two panes.
+ */
+fun interface BottomArea {
+    fun span(width: Int, density: Density): ClosedFloatingPointRange<Float>
+
+    companion object {
+        val Window = BottomArea { width, _ -> 0f..width.toFloat() }
+    }
+}
+
+/**
+ * The rail's dock box in the window (spec 5.14): the circle above the primary circle, centred in the 96 dp rail on the
+ * end side of the area [areaLeft]..[areaRight] and between the status bar and the navigation bar.
+ */
+fun railDock(areaLeft: Float, areaRight: Float, statusTop: Float, navigationTop: Float, rtl: Boolean, density: Density): Rect = with(density) {
+    val rail = WindowLayout.railWidth.toPx()
+    val railLeft = if (rtl) areaLeft - rail else areaRight
+    val width = DockMetrics.circle.toPx()
+    val height = DockMetrics.railHeight.toPx()
+    val left = railLeft + (rail - width) / 2
+    val top = (statusTop + navigationTop - height) / 2
+    Rect(left, top, left + width, top + height)
 }
 
 @Composable
@@ -107,12 +139,14 @@ fun rememberBottomColumnState(): BottomColumnState {
 
 /**
  * The bottom column (spec 2.5, 4.8, 4.9): one layout for everything touched often, on the gutter-to-gutter column
- * (capped at 600 dp and centred on wide windows). Bottom up: the dock, navigation inset + 16; the player [strip], 8
- * above it; keyboard-riding [rows], whose lowest edge is min(IME top, navigation top - 8) - 8; the feedback pill, 8
- * above the topmost of them (above the keyboard while the dock is hidden) and drawn behind the dock. Positions read
- * the IME inset in the layout phase, so on API 30+ the rows follow the keyboard's own curve frame by frame; on API
- * 26-29 they appear where the keyboard settles, fading in on `fadeFast`. The dock hides (24 dp down and out) while rows are open (or [dockHidden]), following the
- * keyboard when it drives the change. It never moves for any other reason.
+ * of its [area] (capped at 600 dp and centred on wide windows). Bottom up: the dock, navigation inset + 16; the player
+ * [strip], 8 above it; keyboard-riding [rows], whose lowest edge is min(IME top, navigation top - 8) - 8; the feedback
+ * pill, 8 above the topmost of them (above the keyboard while the dock is hidden) and drawn behind the dock. Positions
+ * read the IME inset in the layout phase, so on API 30+ the rows follow the keyboard's own curve frame by frame; on API
+ * 26-29 they appear where the keyboard settles, fading in on `fadeFast`. The dock hides (24 dp down and out) while
+ * rows are open (or [dockHidden]), following the keyboard when it drives the change. It never moves for any other
+ * reason. In a short window ([rail], spec 5.14) the dock stands in the 96 dp rail beside the area, vertically centred,
+ * and the strip, the rows and the pill keep the column, the strip on the line where the dock would stand.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -123,12 +157,15 @@ fun BottomColumn(
     strip: (@Composable () -> Unit)? = null,
     rows: (@Composable ColumnScope.() -> Unit)? = null,
     dockHidden: Boolean = rows != null,
+    area: BottomArea = BottomArea.Window,
+    rail: Boolean = false,
 ) {
     val density = LocalDensity.current
     val hideDistance = with(density) { FocalGrid.x24.toPx() }
     val ime = WindowInsets.ime
     val imeTarget = WindowInsets.imeAnimationTarget
     val navigation = WindowInsets.navigationBars
+    val status = WindowInsets.statusBars
     // The dock slides 24 dp down on `move` and fades on `fade` (spec 4.3), or follows the keyboard while it moves.
     val slide = remember { Animatable(if (dockHidden) 1f else 0f) }
     val fade = remember { Animatable(if (dockHidden) 1f else 0f) }
@@ -171,16 +208,24 @@ fun BottomColumn(
     ) { (feedbackMeasurables, stripMeasurables, rowMeasurables, dockMeasurables), constraints ->
         val width = constraints.maxWidth
         val height = constraints.maxHeight
-        val column = min(width - 2 * FocalLayout.gutter.roundToPx(), FocalLayout.contentMaxWidth.roundToPx()).coerceAtLeast(0)
-        val left = (width - column) / 2
+        val span = area.span(width, this)
+        val areaWidth = span.endInclusive - span.start
+        val column = min(areaWidth.roundToInt() - 2 * FocalLayout.gutter.roundToPx(), FocalLayout.contentMaxWidth.roundToPx()).coerceAtLeast(0)
+        val left = (span.start + (areaWidth - column) / 2).roundToInt()
         val childConstraints = Constraints(minWidth = column, maxWidth = column, maxHeight = height)
         val navigationTop = height - navigation.getBottom(this)
         val imeTop = height - ime.getBottom(this)
         val gap = FocalLayout.bottomGap.roundToPx()
-        val dockPlaceables = dockMeasurables.map { it.measure(childConstraints) }
+        val dockPlaceables = dockMeasurables.map { it.measure(if (rail) Constraints() else childConstraints) }
         val dockHeight = dockPlaceables.maxOfOrNull { it.height } ?: 0
-        val dockBottom = navigationTop - FocalLayout.dockInset.roundToPx()
-        val dockTop = dockBottom - dockHeight
+        // The bottom line: the dock's own bottom edge, where the lowest element stands when nothing rides the keyboard.
+        val baseline = navigationTop - FocalLayout.dockInset.roundToPx()
+        val railBox = if (rail) {
+            railDock(span.start, span.endInclusive, status.getTop(this).toFloat(), navigationTop.toFloat(), layoutDirection == LayoutDirection.Rtl, this)
+        } else null
+        val dockBottom = railBox?.bottom?.roundToInt() ?: baseline
+        // In the rail nothing stands on the bottom line, so the strip takes it.
+        val dockTop = if (rail) baseline + gap else dockBottom - dockHeight
         val rowPlaceables = rowMeasurables.map { it.measure(childConstraints) }
         val rowsHeight = rowPlaceables.maxOfOrNull { it.height } ?: 0
         val rowsBottom = min(imeTop, navigationTop - gap) - gap
@@ -203,7 +248,7 @@ fun BottomColumn(
             feedbackPlaceables.forEach { it.place(left, feedbackBottom - it.height) }
             stripPlaceables.forEach { it.place(left, stripBottom - it.height) }
             rowPlaceables.forEach { it.place(left, rowsBottom - it.height) }
-            dockPlaceables.forEach { it.place(left, dockBottom - it.height) }
+            dockPlaceables.forEach { it.place(railBox?.left?.roundToInt() ?: left, dockBottom - it.height) }
         }
     }
 }

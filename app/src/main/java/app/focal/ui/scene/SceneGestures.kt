@@ -13,11 +13,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.unit.Velocity
 import app.focal.ui.shell.LiveSurfaceState
+import kotlin.math.abs
+import kotlin.math.hypot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-import kotlin.math.hypot
 
 /**
  * The drags that move p (spec 6.5, T28). Every drag tracks p = clamp(p0 + dy / D, 0, 1), D being the travel from the
@@ -171,7 +171,8 @@ class FoldScroll(live: LiveSurfaceState, scope: CoroutineScope) : SurfaceDrag(li
  */
 @Stable
 class SurfaceTouch(live: LiveSurfaceState, scope: CoroutineScope, internal val region: FoldScroll) : SurfaceDrag(live, scope) {
-    var foldLimit: () -> Float = { Float.POSITIVE_INFINITY }
+    /** Whether a drag starting at this window point may fold the scene: not on the dock's row, nor on the rail. */
+    var mayFold: (Offset) -> Boolean = { true }
 
     internal suspend fun PointerInputScope.handle() {
         awaitEachGesture {
@@ -181,7 +182,7 @@ class SurfaceTouch(live: LiveSurfaceState, scope: CoroutineScope, internal val r
             val heading = live.expansion.targetValue
             if (caught) scope.launch(start = CoroutineStart.UNDISPATCHED) { live.expansion.stop() }
             val velocity = VelocityTracker().apply { addPosition(down.uptimeMillis, down.position) }
-            val mayFold = down.position.y < foldLimit()
+            val mayFold = mayFold(down.position)
             var claimed = false
             var lockY = 0f
             while (true) {

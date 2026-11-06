@@ -63,7 +63,7 @@ private const val LATEST_SCROLL = 3
 
 internal fun paragraphs(texts: List<String>) = texts.mapIndexed { i, text -> LiveParagraph(i.toLong(), text, open = i == texts.lastIndex) }
 
-private fun start() = SceneUi(elapsedSeconds = 4, hint = true)
+internal fun start() = SceneUi(elapsedSeconds = 4, hint = true)
 internal fun live() = SceneUi(elapsedSeconds = 256, paragraphs = paragraphs(FakeScene))
 internal fun paused(reason: PauseReason? = null) =
     SceneUi(elapsedSeconds = 768, paused = true, pauseReason = reason, paragraphs = paragraphs(FakeLive))

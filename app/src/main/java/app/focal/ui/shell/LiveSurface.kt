@@ -92,10 +92,11 @@ class LiveSurfaceState internal constructor(open: Boolean) {
     var revealStage: (suspend (animated: Boolean) -> Unit)? = null
 
     /**
-     * The window y of the material's bottom edge while the scene is on screen (the morph's clip), which wipes the
-     * dock's dress (spec 2.8.6). Set by the scene; null while there is no material behind the dock's row.
+     * The material's bounds in the window while the scene is on screen (the morph's clip), which wipe the dock's dress
+     * (spec 2.8.6): its bottom edge over a bottom dock, its end and bottom edges over the landscape rail. Set by the
+     * scene; null while there is no material behind the dock.
      */
-    var materialEdge by mutableStateOf<(() -> Float)?>(null)
+    var material by mutableStateOf<(() -> Rect)?>(null)
 
     /** Whether the surface morphs in space (true) or crossfades in place (reduced motion, or no origin on screen). */
     var spatial by mutableStateOf(true)

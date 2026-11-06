@@ -13,9 +13,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
@@ -47,8 +47,8 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -68,6 +68,7 @@ import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.focal.R
@@ -94,6 +95,7 @@ import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.design.LocalWindowLayout
 import app.focal.ui.design.Scene
 import app.focal.ui.design.Stage
 import app.focal.ui.design.lineScale
@@ -108,8 +110,6 @@ import app.focal.ui.shell.rememberStageOrigin
 import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.PauseReason
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.math.PI
 import kotlin.math.cos
@@ -117,10 +117,17 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.tan
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** The stage's geometry (spec 4.22). Card-local: the card is x 24-388 of the window, y 56-296 at rest. */
 object StageMetrics {
     val minHeight = 240.dp
+    /** In a short window (a phone in landscape, spec 4.22.1) the card is 200 tall and its text shows one line. */
+    val shortMinHeight = 200.dp
+
+    fun minHeight(short: Boolean): Dp = if (short) shortMinHeight else minHeight
+    fun textLinesMin(short: Boolean): Int = if (short) TEXT_LINES_SHORT else TEXT_LINES_MIN
     /** Every text sits this far inside the card. */
     val inset = FocalGrid.x20
     /** The footer row: 48 dp, 16 dp from the card's bottom and right edges. */
@@ -138,6 +145,7 @@ object StageMetrics {
     const val TITLE_LINES = 2
     const val TITLE_LINES_LARGE = 3
     const val TEXT_LINES_MIN = 2
+    const val TEXT_LINES_SHORT = 1
     const val TEXT_LINES_MAX = 4
     /** The length's unit sits this far after its numerals; a second group this far after the unit (spec 4.22.4). */
     val unitGap = 5.dp
@@ -438,6 +446,7 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter, seconds: () -> Long
     LaunchedEffect(stage.paused) { badge.animateTo(if (stage.paused) 1f else 0f, FocalMotion.fadeFast()) }
     val lineHeight = with(density) { FocalType.stageText.lineHeight.toPx() }
     val inks = TranscriptInks(colors.stageInk, colors.stageRecede, Scene.faint)
+    val short = LocalWindowLayout.current.rail
     Layout(
         contents = listOf(
             {
@@ -497,7 +506,7 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter, seconds: () -> Long
         val column = width - 2 * inset
         val top = head.first().measure(Constraints(maxWidth = column))
         val regionTop = inset + max(top.height, StageMetrics.wave.roundToPx()) + StageMetrics.liveGap.roundToPx()
-        val height = max(StageMetrics.minHeight.roundToPx(), regionTop + (StageMetrics.TEXT_LINES_MIN * lineHeight).roundToInt() + inset)
+        val height = max(StageMetrics.minHeight(short).roundToPx(), regionTop + (StageMetrics.TEXT_LINES_MIN * lineHeight).roundToInt() + inset)
         val text = region.first().measure(Constraints.fixed(column, height - inset - regionTop))
         layout(width, height) {
             top.place(inset, inset)
@@ -559,6 +568,7 @@ private fun NoteStage(
     var overlapping by remember { mutableStateOf(false) }
     LaunchedEffect(overlapping) { lengthYields.animateTo(if (overlapping) 0f else 1f, FocalMotion.fadeFast()) }
     val lineHeight = with(density) { FocalType.stageText.lineHeight.toPx() }
+    val short = LocalWindowLayout.current.rail
     Layout(
         contents = listOf(
             {
@@ -601,13 +611,14 @@ private fun NoteStage(
         val footerInset = StageMetrics.footerInset.roundToPx()
         // From 1.5x the length takes its own 48 dp row above the pill's.
         val lengthRow = if (large) StageMetrics.footer.roundToPx() else 0
-        // At the card's rest height, the lines that fit above the footer; never fewer than two (the card grows).
-        val restFooterTop = StageMetrics.minHeight.roundToPx() - footerInset - footer - lengthRow
+        // At the card's rest height, the lines that fit above the footer; never fewer than two (the card grows), one
+        // in a short window.
+        val restFooterTop = StageMetrics.minHeight(short).roundToPx() - footerInset - footer - lengthRow
         val fit = ((restFooterTop - StageMetrics.textClearance.roundToPx() - textTop) / lineHeight).toInt()
-        val lines = fit.coerceIn(StageMetrics.TEXT_LINES_MIN, StageMetrics.TEXT_LINES_MAX)
+        val lines = fit.coerceIn(StageMetrics.textLinesMin(short), StageMetrics.TEXT_LINES_MAX)
         val text = texts.first().measure(Constraints(maxWidth = column, maxHeight = (lines * lineHeight).roundToInt()))
         val height = max(
-            StageMetrics.minHeight.roundToPx(),
+            StageMetrics.minHeight(short).roundToPx(),
             textTop + text.height + StageMetrics.textClearance.roundToPx() + lengthRow + footer + footerInset,
         )
         val length = lengths.first().measure(Constraints(maxWidth = column))

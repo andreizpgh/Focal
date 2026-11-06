@@ -2,10 +2,10 @@ package app.focal.ui.components
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -76,6 +76,6 @@ private val finishShape = RoundedCornerShape(GlyphSize.finishRadius)
 
 /** ■ Finish. */
 @Composable
-fun FinishSquare(color: Color, modifier: Modifier = Modifier) {
-    Box(modifier.size(GlyphSize.finishSquare).background(color, finishShape))
+fun FinishSquare(color: Color, modifier: Modifier = Modifier, size: Dp = GlyphSize.finishSquare) {
+    Box(modifier.size(size).background(color, if (size == GlyphSize.finishSquare) finishShape else RoundedCornerShape(GlyphSize.finishRadius * (size / GlyphSize.finishSquare))))
 }

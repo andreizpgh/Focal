@@ -55,12 +55,14 @@ import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.FocalIconButton
 import app.focal.ui.components.Glyph
 import app.focal.ui.components.NineBars
+import app.focal.ui.components.PageArea
 import app.focal.ui.components.PaperTopFade
 import app.focal.ui.components.PressPlate
 import app.focal.ui.components.WaveDress
 import app.focal.ui.components.WaveMode
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.markBox
+import app.focal.ui.components.pageInsets
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
@@ -68,6 +70,7 @@ import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
+import app.focal.ui.design.LocalWindowLayout
 import app.focal.ui.design.tabular
 import app.focal.ui.state.SettingsUiState
 import app.focal.ui.state.ThemeMode
@@ -132,12 +135,14 @@ fun SettingsPage(
                 .fillMaxSize()
                 .verticalScroll(scroll)
                 .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(top = FocalLayout.topBar)
+                .padding(top = LocalWindowLayout.current.topBar)
                 .windowInsetsPadding(WindowInsets.navigationBars)
+                .windowInsetsPadding(pageInsets(PageArea.Window))
                 .padding(bottom = FocalLayout.gutter),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(Modifier.widthIn(max = FocalLayout.contentMaxWidth).fillMaxWidth()) {
+            // The content column: at most 600 dp between the gutters, centred (spec 2.5, 5.14).
+            Column(Modifier.widthIn(max = FocalLayout.contentMaxWidth + FocalLayout.gutter * 2).fillMaxWidth()) {
                 Text(
                     stringResource(R.string.settings_title), style = FocalType.title, color = colors.ink,
                     modifier = Modifier
@@ -166,7 +171,7 @@ fun SettingsPage(
                 Footer(state.versionName, Modifier.align(Alignment.CenterHorizontally))
             }
         }
-        PaperTopFade(FocalLayout.topBar, Modifier.fillMaxSize())
+        PaperTopFade(LocalWindowLayout.current.topBar, Modifier.fillMaxSize())
         TopBar(stringResource(R.string.settings_title), actions.back, collapsed = {
             val height = titleHeight[0]
             !height.isNaN() && scroll.value > height + with(density) { SettingsMetrics.titleTop.toPx() }
@@ -188,7 +193,7 @@ fun TopBar(title: String, onBack: () -> Unit, collapsed: () -> Boolean) {
         Modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.statusBars)
-            .height(FocalLayout.topBar),
+            .height(LocalWindowLayout.current.topBar),
         contentAlignment = Alignment.CenterStart,
     ) {
         FocalIconButton(FocalIcon.Back, stringResource(R.string.cd_back), onBack, Modifier.padding(start = FocalLayout.iconEdge))
