@@ -3,6 +3,7 @@ package app.focal.ui.note
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.animate
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
@@ -104,8 +105,8 @@ internal class PhaseMemory {
 }
 
 /**
- * Scrolls a line into a place on screen: on `move` when it is near, by crossfading the list (`fadeFast` out, `fade`
- * in) when it is more than three screens away (spec 4.11, 5.8).
+ * Scrolls a line into a place on screen: on one `move` when it is near, by crossfading the list (`fadeFast` out,
+ * `fade` in) when it is more than three screens away (spec 4.11, 5.8).
  */
 internal class NoteScroller(private val list: LazyListState, private val fade: Animatable<Float, AnimationVector1D>) {
     /** Brings the line at [lineTop] (from item [index]'s top) to window y [target]. */
@@ -116,18 +117,35 @@ internal class NoteScroller(private val list: LazyListState, private val fade: A
         }
         val info = list.layoutInfo
         val visible = info.visibleItemsInfo
-        val first = visible.firstOrNull()?.index ?: 0
-        val average = if (visible.isEmpty()) 0f else visible.sumOf { it.size }.toFloat() / visible.size
-        val far = abs(index - first) * average > FAR_SCREENS * info.viewportSize.height
+        val first = visible.firstOrNull() ?: return
+        val pitch = visible.sumOf { it.size }.toFloat() / visible.size + info.mainAxisItemSpacing
+        val far = abs(index - first.index) * pitch > FAR_SCREENS * info.viewportSize.height
         if (far) {
             fade.animateTo(0f, FocalMotion.fadeFast())
             list.scrollToItem(index)
             windowY(list, index, lineTop())?.let { list.scrollBy(it - target) }
             fade.animateTo(1f, FocalMotion.fade())
-        } else {
-            list.animateScrollToItem(index)
-            windowY(list, index, lineTop())?.let { list.animateScrollBy(it - target, FocalMotion.move()) }
+            return
         }
+        // Not laid out yet: one `move` toward where the line should be (rows of the visible rows' average height),
+        // corrected to its exact place once it is laid out. Each frame covers the share of the distance still to go
+        // that the spring covers of its own, so the correction changes the speed, never the position or direction.
+        val estimate = first.offset - info.viewportStartOffset + (index - first.index) * pitch + lineTop()
+        list.scroll {
+            var scrolled = 0f
+            var last = 0f
+            animate(0f, 1f, animationSpec = FocalMotion.move()) { fraction, _ ->
+                val remaining = windowY(list, index, lineTop())?.let { it - target } ?: (estimate - target - scrolled)
+                val share = if (last >= 1f - LANDED) 1f else ((fraction - last) / (1f - last)).coerceIn(0f, 1f)
+                last = fraction
+                scrolled += scrollBy(remaining * share)
+            }
+        }
+    }
+
+    private companion object {
+        /** A spring this close to its end has landed: the rest of the distance goes in one step. */
+        const val LANDED = 1e-3f
     }
 }
 
