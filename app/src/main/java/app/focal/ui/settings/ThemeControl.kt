@@ -50,9 +50,12 @@ object SegmentMetrics {
     val track = Grid.x48
     /** The thumb is inset this far inside the track (40 dp tall). */
     val inset = Grid.x4
-    /** A label needs this much room either side inside its segment before the control stacks. */
-    val labelRoom = Grid.x12
-    /** From this font scale a label that would truncate turns the control into stacked radio rows. */
+    /**
+     * The room a label needs either side inside its segment: clear of the thumb's rounded ends, half the thumb's
+     * height (20 dp). A label that would come closer turns the control into stacked radio rows.
+     */
+    val labelRoom = (track - inset * 2) / 2
+    /** From this font scale a label without that room turns the control into stacked radio rows (spec 4.17). */
     const val STACK_FONT = 1.8f
 }
 
@@ -61,8 +64,9 @@ private val themes = listOf(ThemeMode.SYSTEM, ThemeMode.LIGHT, ThemeMode.DARK)
 /**
  * Theme: System | Light | Dark (spec 4.17, T22). A 48 dp `s1` track, three equal segments and an `inv` thumb that
  * slides on `move`; labels are `ink`, and `onInv` wherever the thumb is under them (drawn twice, clipped to the
- * thumb, so the colours are exact at every frame). Applies at once. From font scale 1.8, if a label would truncate,
- * it becomes three stacked 48 dp radio rows. A radio group for TalkBack.
+ * thumb, so the colours are exact at every frame). Applies at once. From font scale 1.8, if a label would come
+ * closer to its thumb's rounded ends than half the thumb's height, it becomes three stacked 48 dp radio rows (so it
+ * never sits cramped in the pill, let alone truncates). A radio group for TalkBack.
  */
 @Composable
 fun ThemeControl(selected: ThemeMode, onSelect: (ThemeMode) -> Unit, modifier: Modifier = Modifier) {
@@ -72,8 +76,10 @@ fun ThemeControl(selected: ThemeMode, onSelect: (ThemeMode) -> Unit, modifier: M
     val style = FocalType.meta.copy(fontWeight = FocalWeight.Medium)
     val widest = remember(labels, density) { labels.maxOf { measurer.measure(it, style).size.width } }
     BoxWithConstraints(modifier.fillMaxWidth()) {
+        // A segment is a third of the track inside its inset: the thumb's width.
+        val segment = (constraints.maxWidth - 2 * with(density) { SegmentMetrics.inset.toPx() }) / themes.size
         val stacked = density.fontScale >= SegmentMetrics.STACK_FONT &&
-            widest + 2 * with(density) { SegmentMetrics.labelRoom.toPx() } > constraints.maxWidth / themes.size
+            widest + 2 * with(density) { SegmentMetrics.labelRoom.toPx() } > segment
         if (stacked) RadioRows(labels, selected, onSelect, Modifier) else Segments(labels, style, selected, onSelect, Modifier)
     }
 }
