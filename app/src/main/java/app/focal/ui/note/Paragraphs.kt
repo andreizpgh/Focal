@@ -251,7 +251,7 @@ internal fun ParagraphText(
     }
     BasicText(
         text = text,
-        style = FocalType.body,
+        style = FocalType.bodyWords,
         color = color,
         onTextLayout = { result ->
             layout = result
@@ -378,7 +378,7 @@ internal fun ParagraphField(
                 } else false
             },
         inputTransformation = input,
-        textStyle = FocalType.body.copy(color = colors.ink),
+        textStyle = FocalType.bodyWords.copy(color = colors.ink),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Default),
         lineLimits = TextFieldLineLimits.MultiLine(),
         onTextLayout = { result -> result()?.let { layouts.put(paragraphId, it) } },

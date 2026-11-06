@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -88,6 +89,12 @@ object FocalType {
     val section = style(FocalText, 14, 20, FocalWeight.Semibold, -0.0062f)
     val caption = style(FocalText, 13, 18, FocalWeight.Regular, -0.0032f, TNUM)
 
+    /** The user's words set in [body], [stageText], [sceneText] and [secondary] (see [words]). */
+    val bodyWords = body.words()
+    val stageWords = stageText.words()
+    val sceneWords = sceneText.words()
+    val secondaryWords = secondary.words()
+
     /** Material components that are still used read these (no baseline Roboto anywhere). */
     val material = Typography(
         displayLarge = title, displayMedium = title, displaySmall = title,
@@ -97,6 +104,14 @@ object FocalType {
         labelLarge = label, labelMedium = action, labelSmall = caption,
     )
 }
+
+/**
+ * The user's words (the transcript, its live text, row previews, search snippets) take their direction from their
+ * first strong letter, as a TextView's do: an Arabic or Hebrew note reads right to left, aligned to its own start, in
+ * an English interface, and an English note left to right in a mirrored one. Chrome (labels, states, hints) keeps the
+ * layout's direction, the default for a style (spec 8.5).
+ */
+fun TextStyle.words(): TextStyle = copy(textDirection = TextDirection.Content)
 
 /** Tabular figures on a style whose numbers change in place ("tnum on numbers" in the scale). */
 fun TextStyle.tabular(): TextStyle = copy(fontFeatureSettings = TNUM)

@@ -478,7 +478,7 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter, seconds: () -> Long
                         },
                 ) {
                     StageTranscript(
-                        stage.paragraphs, FocalType.stageText, inks, focus = !stage.storageFull,
+                        stage.paragraphs, FocalType.stageWords, inks, focus = !stage.storageFull,
                         modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().wrapContentHeight(Alignment.Bottom, unbounded = true),
                         hint = if (stage.hint && !stage.storageFull) { { Text(stringResource(R.string.hint_first_text), style = FocalType.stageText, color = colors.stageRecede) } } else null,
                         footer = liveFooter(stage),
@@ -653,7 +653,7 @@ private fun StageText(row: NoteRow, noSpeech: Boolean) {
     }
 }
 
-private val StageTextStyle = FocalType.stageText.copy(lineBreak = LineBreak.Paragraph)
+private val StageTextStyle = FocalType.stageWords.copy(lineBreak = LineBreak.Paragraph)
 /** A reason that needs two lines splits them evenly ("Not enough free memory / to transcribe right now."), never a widow. */
 private val StageReasonStyle = FocalType.stageText.copy(lineBreak = LineBreak.Heading)
 

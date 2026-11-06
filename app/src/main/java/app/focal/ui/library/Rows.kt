@@ -235,7 +235,7 @@ private fun Preview(runIn: String, text: String, hits: List<IntRange> = emptyLis
         }
     }
     CutText(
-        annotated, FocalType.secondary, colors.recede, RowMetrics.PREVIEW_LINES,
+        annotated, FocalType.secondaryWords, colors.recede, RowMetrics.PREVIEW_LINES,
         Modifier.fillMaxWidth(), protectedEnd = runIn.length + RowMetrics.RUN_IN_GAP.length,
     )
 }

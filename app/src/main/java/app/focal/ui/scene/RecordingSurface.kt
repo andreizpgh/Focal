@@ -524,7 +524,7 @@ private fun TextRegion(
                     .clearAndSetSemantics { },
             ) {
                 StageTranscript(
-                    scene.paragraphs, FocalType.stageText, stageInks, focus,
+                    scene.paragraphs, FocalType.stageWords, stageInks, focus,
                     Modifier.fillMaxWidth().wrapContentHeight(Alignment.Bottom, unbounded = true),
                     hint = if (scene.hint && !scene.storageFull) { { Text(stringResource(R.string.hint_first_text), style = FocalType.stageText, color = colors.stageRecede) } } else null,
                     footer = stageFooter(scene),
@@ -532,7 +532,7 @@ private fun TextRegion(
             }
         }
         SceneTranscript(
-            scene.paragraphs, listState, FocalType.sceneText, sceneInks, focus,
+            scene.paragraphs, listState, FocalType.sceneWords, sceneInks, focus,
             contentPadding = with(density) { PaddingValues(start = slots.columnLeft.toDp(), end = (slots.width - slots.columnRight).toDp()) },
             modifier = Modifier
                 .placeAt { val f = frame.value; Rect(0f, f.textTop, slots.width, f.textBottom) }
