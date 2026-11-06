@@ -1,27 +1,40 @@
 # Focal
 
-Kotlin Android app for local voice notes. The product path is record → review →
-copy. Keep the UI quiet, English by default, with explicit speech-language choice.
+Kotlin Android app for offline voice notes. The product path is record → read →
+copy. Keep the UI quiet and in English. The speech language is detected
+automatically: Parakeet Ultra takes no language input, so there is no language
+choice, and very short utterances can come out in the wrong language
+(see docs/speech-quality.md).
 
-- Use the existing checkout. Each cloud task is isolated; do not create a worktree
-  unless the user explicitly requests it.
-- No network permission, analytics, or accounts. Automatic correction stays
+- Use the existing checkout. Do not create a worktree unless the user explicitly
+  requests it.
+- No network permission, analytics, or accounts. Automatic LLM correction stays
   disabled until paired speech evaluation demonstrates a clear accuracy benefit
-  within phone resource budgets. Research may compare local correction candidates;
+  within phone resource budgets; the evidence and gates are in
+  docs/speech-quality.md. Research may compare local correction candidates;
   preserve original audio/ASR and manual edits, and require visible provenance and
-  undo before enabling corrections. See docs/stt-quality-experiments.md.
+  undo before enabling corrections.
+- Parakeet Ultra INT8 through the pinned sherpa-onnx 2.0.1 C API is the only
+  speech engine. Do not add a second engine, a language picker or a model choice
+  without an explicit product decision. Change the model or runtime only through
+  the lock files in models/; keep the vendored C API header unchanged.
 - Preserve original audio and transactional recovery. Never let inference block
-  the capture thread. Do not add unbounded in-memory audio queues.
-- Keep third_party/whisper.cpp at the recorded submodule commit unless intentionally
-  updating the engine. Do not edit its source as part of unrelated app work.
+  the capture thread. Do not add unbounded in-memory audio queues. A dead process
+  must never reopen the microphone.
+- Formatting must not change recognized words, and raw recognizer output stays
+  immutable. Tuning constants live in core's SpeechTuning; the paragraph and
+  doubtful-word thresholds are provisional.
 - No model weights, user recordings, signing keys, or SDK paths in Git.
-- Build: `./gradlew :core:test :app:lintDebug :app:assembleDebug`.
-- Device tests: `./gradlew :app:connectedDebugAndroidTest` with an Android device.
-- Download verified build-time model: `python3 scripts/fetch-model.py`.
+- Build: `./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`.
+- Device tests: `./gradlew :app:connectedDebugAndroidTest` with an emulator or test
+  device; add `-Pfocal.requireModel=true` so the speech tests cannot skip.
+- Download the verified model and runtime: `python3 scripts/fetch-model.py`
+  (`--runtime-only` is enough for tests and lint).
 - Report actual checks. Desktop/emulator timing does not establish phone battery,
   thermal behavior, background reliability, or Russian recognition quality.
 
-See CONTRIBUTING.md for prerequisites and docs/architecture.md for invariants.
+See CONTRIBUTING.md for prerequisites, docs/architecture.md for invariants and
+docs/testing.md for the pending phone checks.
 
 ## Public repository standards
 
