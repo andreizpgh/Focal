@@ -40,7 +40,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -58,7 +57,6 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
@@ -73,6 +71,7 @@ import app.focal.ui.components.LibraryTopFade
 import app.focal.ui.components.MenuAnchor
 import app.focal.ui.components.StickyLabelOverlay
 import app.focal.ui.components.WaveMeter
+import app.focal.ui.components.inert
 import app.focal.ui.components.rememberRowPlacement
 import app.focal.ui.components.rememberStickyLabels
 import app.focal.ui.components.stickyLabelSource
@@ -264,7 +263,8 @@ fun LibraryPage(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer { alpha = 1 - searchState.content.value }
-                .then(if (behindSearch) Modifier.clearAndSetSemantics { }.focusProperties { canFocus = false }.blockTouches() else Modifier),
+                .inert(behindSearch)
+                .then(if (behindSearch) Modifier.blockTouches() else Modifier),
         ) {
             if (model.loaded) LibraryContent(
                 model, dates, today, meter, listState, stageActions, rowActions, noteMenu,

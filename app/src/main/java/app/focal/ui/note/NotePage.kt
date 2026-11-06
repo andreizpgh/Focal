@@ -720,7 +720,7 @@ fun NotePage(
                 editable = editable, menuItems = menuItems, menuOpen = page.menu, onMenu = { page.menu = it }, menu = menuActions,
                 onBack = actions.back, onEdit = { enterEdit(null) },
                 chrome = { chrome() * (1 - editT.value) },
-                modifier = Modifier.zIndex(BARS_Z).inert(page.editing || find.open),
+                modifier = Modifier.zIndex(BARS_Z).inertBar(page.editing || find.open),
             )
         }
         if (editBarShown) {
@@ -728,7 +728,7 @@ fun NotePage(
                 canUndo = session.canUndo, canRedo = session.canRedo,
                 canRestore = focusedParagraph?.let { it.edited && it.canRestore } == true,
                 failed = session.failed, menuOpen = page.editMenu, onMenu = { page.editMenu = it }, actions = editBarActions,
-                modifier = Modifier.zIndex(BARS_Z).graphicsLayer { alpha = editT.value * chrome() }.inert(!page.editing || find.open),
+                modifier = Modifier.zIndex(BARS_Z).graphicsLayer { alpha = editT.value * chrome() }.inertBar(!page.editing || find.open),
             )
         }
         val topPadding = with(density) { status.getTop(this).toDp() } + FocalLayout.topBar + Grid.x8

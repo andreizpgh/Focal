@@ -16,19 +16,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.IntOffset
 import app.focal.R
 import app.focal.core.SpeechTuning
 import app.focal.core.TextWords
 import app.focal.core.Title
+import app.focal.ui.components.inert
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTiming
@@ -168,15 +167,15 @@ internal class CaretSpec(private val top: () -> Float, private val margin: () ->
     }
 }
 
-/** The page's inert layers (a bar under Find, the bar Edit replaced): never read, focused or touched. */
-internal fun Modifier.inert(on: Boolean): Modifier = if (!on) this else this
-    .clearAndSetSemantics { }
-    .focusProperties { canFocus = false }
-    .pointerInput(Unit) {
+/** A bar that is out of play (the top bar under Find, the bar Edit replaced): never read, focused or touched. */
+internal fun Modifier.inertBar(on: Boolean): Modifier {
+    val untouchable = if (!on) Modifier else Modifier.pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
         }
     }
+    return inert(on).then(untouchable)
+}
 
 /** T7: a paragraph of the first screen fades in from +180 ms, the bottom one first, 24 ms apart. */
 internal fun entranceDelay(landing: Boolean, index: Int, count: Int): Long? {

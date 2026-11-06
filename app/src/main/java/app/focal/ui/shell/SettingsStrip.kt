@@ -18,7 +18,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
@@ -28,11 +27,11 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import app.focal.ui.components.inert
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
@@ -206,7 +205,3 @@ private class SeamSideShape(private val radius: Dp, private val seamAtEnd: Boole
         return Outline.Rounded(RoundRect(0f, 0f, size.width, size.height, left, right, right, left))
     }
 }
-
-/** An off-screen page is excluded from accessibility and from keyboard and D-pad focus (spec 4.23.1, I3). */
-private fun Modifier.inert(inert: Boolean): Modifier =
-    if (inert) clearAndSetSemantics { }.focusProperties { canFocus = false } else this

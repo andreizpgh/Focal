@@ -23,12 +23,10 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.ui.NavDisplay
@@ -37,6 +35,7 @@ import app.focal.ui.components.BottomColumnState
 import app.focal.ui.components.Dock
 import app.focal.ui.components.DockActions
 import app.focal.ui.components.DockState
+import app.focal.ui.components.inert
 import app.focal.ui.components.rememberBottomColumnState
 import app.focal.ui.design.FocalSettle
 import app.focal.ui.design.FocalTheme
@@ -184,7 +183,7 @@ fun FocalShell(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .then(if (behindScene) Modifier.clearAndSetSemantics { }.focusProperties { canFocus = false } else Modifier)
+                    .inert(behindScene)
                     // The dim covers the whole window, the paper the scaled pages leave at its edges included.
                     .drawWithContent {
                         drawContent()
@@ -248,7 +247,7 @@ private fun ShellBottom(shell: ShellState) {
         state = shell.bottom,
         modifier = Modifier
             .fillMaxSize()
-            .then(if (onLibrary && behindSettings) Modifier.clearAndSetSemantics { }.focusProperties { canFocus = false } else Modifier)
+            .inert(onLibrary && behindSettings)
             .graphicsLayer {
                 // The library's dock and feedback pill move with the library page (spec 4.23.2).
                 if (onLibrary) {
