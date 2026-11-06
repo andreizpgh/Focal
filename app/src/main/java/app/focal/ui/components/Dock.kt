@@ -55,6 +55,7 @@ import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -345,7 +346,7 @@ private const val PERCENT = 100
 
 @Composable
 private fun progressDescription(progress: NotePill.Progress): String = when (progress.phase) {
-    ProgressPhase.Transcribing -> stringResource(R.string.a11y_transcribing, (announcedStep(progress.fraction) * PERCENT).roundToInt())
+    ProgressPhase.Transcribing -> (announcedStep(progress.fraction) * PERCENT).roundToInt().let { pluralStringResource(R.plurals.a11y_transcribing, it, it) }
     ProgressPhase.Waiting -> stringResource(R.string.stage_waiting)
     ProgressPhase.Preparing -> stringResource(R.string.stage_preparing)
 }
