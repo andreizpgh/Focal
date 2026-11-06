@@ -7,7 +7,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -267,7 +266,7 @@ fun LibraryPage(
             if (model.loaded) LibraryContent(
                 model, dates, today, meter, listState, stageActions, rowActions, noteMenu,
                 renaming = renaming, renameField = renameField, imePadded = renaming != null,
-                reserve = bottom.contentReserve(LocalDensity.current), openSettings = actions.openSettings, stageFocus = stageFocus,
+                openSettings = actions.openSettings, stageFocus = stageFocus,
             )
         }
         if (searchState.open || searchState.content.value > 0f) {
@@ -300,7 +299,6 @@ private fun LibraryContent(
     renaming: String?,
     renameField: @Composable (NoteRow, Boolean) -> Unit,
     imePadded: Boolean,
-    reserve: androidx.compose.ui.unit.Dp,
     openSettings: () -> Unit,
     stageFocus: FocusRequester?,
 ) {
@@ -322,7 +320,7 @@ private fun LibraryContent(
     }
     if (!empty || listAlpha.value > 0f) {
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = listAlpha.value }) {
-            LibraryList(model, dates, today, meter, listState, stageActions, rowActions, noteMenu, renaming, renameField, imePadded, reserve, stageFocus)
+            LibraryList(model, dates, today, meter, listState, stageActions, rowActions, noteMenu, renaming, renameField, imePadded, stageFocus)
         }
     }
 }
@@ -345,7 +343,6 @@ private fun LibraryList(
     renaming: String?,
     renameField: @Composable (NoteRow, Boolean) -> Unit,
     imePadded: Boolean,
-    reserve: androidx.compose.ui.unit.Dp,
     stageFocus: FocusRequester?,
 ) {
     val shell = LocalShell.current
@@ -386,6 +383,7 @@ private fun LibraryList(
     }
     val status = WindowInsets.statusBars
     val top = with(density) { status.getTop(this).toDp() } + FocalLayout.topFade
+    val padding = remember(top, shell.bottom, density) { shell.bottom.contentPadding(top, density) }
     val isLive = model.stage is StageUi.Live
     val placement = rememberRowPlacement(
         remember(model.stage?.key, model.days) {
@@ -422,7 +420,7 @@ private fun LibraryList(
                         expandDrag.arm(false)
                     }
                 },
-            contentPadding = PaddingValues(top = top, bottom = reserve),
+            contentPadding = padding,
         ) {
             model.stage?.let { stage ->
                 item(key = STAGE_KEY, contentType = STAGE_KEY) {

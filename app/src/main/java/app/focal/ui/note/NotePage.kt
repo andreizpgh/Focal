@@ -9,7 +9,6 @@ import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -668,8 +667,8 @@ fun NotePage(
                 modifier = Modifier.zIndex(BARS_Z).graphicsLayer { alpha = editT.value * chrome() }.inert(!page.editing || find.open),
             )
         }
-        val reserve = bottom.contentReserve(density)
         val topPadding = with(density) { status.getTop(this).toDp() } + FocalLayout.topBar + Grid.x8
+        val padding = remember(topPadding, bottom, density) { bottom.contentPadding(topPadding, density) }
         val bringSpec = remember(density, status) { CaretSpec({ bandTop() + with(density) { CaretMargin.toPx() } }, { with(density) { CaretMargin.toPx() } }) }
         CompositionLocalProvider(LocalBringIntoViewSpec provides bringSpec) {
             SelectionContainer(selection, Modifier.fillMaxSize()) {
@@ -681,7 +680,7 @@ fun NotePage(
                             .widthIn(max = FocalLayout.contentMaxWidth + FocalLayout.gutter * 2)
                             .fillMaxWidth()
                             .imePadding(),
-                        contentPadding = PaddingValues(top = topPadding, bottom = reserve),
+                        contentPadding = padding,
                         verticalArrangement = Arrangement.spacedBy(ParagraphMetrics.gap),
                     ) {
                         items(items, key = { it.key }, contentType = { contentTypeOf(it) }) { item ->

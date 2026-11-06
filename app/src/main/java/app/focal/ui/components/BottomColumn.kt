@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -41,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
@@ -72,6 +74,20 @@ class BottomColumnState {
         if (target.isNaN() || windowHeight <= 0f) return FocalLayout.contentReserve + Grid.x56 + FocalLayout.dockInset
         (windowHeight - target).toDp() + FocalLayout.contentReserve
     }
+
+    /**
+     * A list's content padding: [top], and [contentReserve] at the bottom. The reserve follows the keyboard frame by
+     * frame while rows ride it, so it is read where the list measures, never in composition: the page does not
+     * recompose for the keyboard. Remember it per [top] and [density].
+     */
+    fun contentPadding(top: Dp, density: Density): PaddingValues = ReservePadding(top, this, density)
+}
+
+private class ReservePadding(private val top: Dp, private val column: BottomColumnState, private val density: Density) : PaddingValues {
+    override fun calculateTopPadding(): Dp = top
+    override fun calculateBottomPadding(): Dp = column.contentReserve(density)
+    override fun calculateLeftPadding(layoutDirection: LayoutDirection): Dp = 0.dp
+    override fun calculateRightPadding(layoutDirection: LayoutDirection): Dp = 0.dp
 }
 
 @Composable
