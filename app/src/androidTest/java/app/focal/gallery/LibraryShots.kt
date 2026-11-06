@@ -29,6 +29,7 @@ import app.focal.ui.library.LibraryPage
 import app.focal.ui.library.STAGE_PILL_TAG
 import app.focal.ui.library.SettingsLayerState
 import app.focal.ui.library.StageUi
+import app.focal.ui.library.rememberLibraryRenameState
 import app.focal.ui.library.rememberLibrarySearchState
 import app.focal.ui.settings.LicensesPage
 import app.focal.ui.settings.SettingsActions
@@ -214,7 +215,7 @@ internal fun LibraryDestination(
                 model, search ?: SearchUiState(), meter, dates, today, actions, listState = list,
                 searchState = rememberLibrarySearchState(open = search != null),
                 query = rememberTextFieldState(search?.query.orEmpty()),
-                initialRename = rename,
+                rename = rememberLibraryRenameState(rename),
             )
             if (menu) RowMenu()
         },

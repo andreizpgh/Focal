@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -146,15 +147,14 @@ fun LibraryPage(
     stageFocus: FocusRequester? = null,
     /** The live recording's whole seconds, read only by the live stage's timer (null: the model's own). */
     liveSeconds: (() -> Long)? = null,
-    /** A note whose title starts out renamed in place (the stage's or a row's). */
-    initialRename: String? = null,
+    rename: LibraryRenameState = rememberLibraryRenameState(),
 ) {
     val shell = LocalShell.current
     val bottom = shell.bottom
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     var menu by remember { mutableStateOf<MenuTarget?>(null) }
-    var renaming by rememberSaveable { mutableStateOf(initialRename) }
+    var renaming by rename::noteId
     val renameBounds = remember { RenameBounds() }
     val imeVisible = WindowInsets.isImeVisible
     val searchList = rememberLazyListState()
@@ -516,6 +516,20 @@ private fun Modifier.blockTouches(): Modifier = pointerInput(Unit) {
         while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
     }
 }
+
+/** Which note's title is renamed in place (the stage's or a row's), if any; kept across recreation. */
+@Stable
+class LibraryRenameState internal constructor(noteId: String?) {
+    var noteId by mutableStateOf(noteId)
+
+    companion object {
+        val Saver: Saver<LibraryRenameState, String> = Saver(save = { it.noteId }, restore = { LibraryRenameState(it) })
+    }
+}
+
+@Composable
+fun rememberLibraryRenameState(noteId: String? = null): LibraryRenameState =
+    rememberSaveable(saver = LibraryRenameState.Saver) { LibraryRenameState(noteId) }
 
 @Immutable
 private data class MenuLabels(val copyText: String, val share: String, val rename: String, val removeAudio: String, val delete: String) {
