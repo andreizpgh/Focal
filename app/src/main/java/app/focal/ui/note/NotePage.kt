@@ -10,9 +10,12 @@ import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -105,6 +108,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** One row of the note's list. */
@@ -134,6 +138,12 @@ private val FindBandInset = FocalGrid.x24
 /** Find's top fade: solid to the status bar, then 48 dp (spec 2.6). */
 private val FindFade = FocalGrid.x48
 
+/** The find match last centred in the band, and whether the keyboard was up then. */
+private class CentredMatch {
+    var match: Any? = null
+    var keyboardUp = false
+}
+
 /** Above the text: the fades and the jump pill, then the bars. */
 private const val FADES_Z = 1f
 private const val BARS_Z = 2f
@@ -151,7 +161,7 @@ private val CaretMargin = FocalGrid.x24
  * Everything is drawn from [note] and the page's own state, so the gallery renders it from fakes; [playback] and
  * [edits] are the activity's player and the note's store, or fakes.
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun NotePage(
     note: NoteUiState,
@@ -481,9 +491,20 @@ fun NotePage(
         }
     }
     val currentMatch = find.currentMatch
-    LaunchedEffect(currentMatch, find.open) {
+    // A keyboard that opens after the match was placed (a query already in the field) moves the band up: the match is
+    // brought to its new centre once the keyboard has settled, never left under the rows (spec 5.8, 5.14).
+    val ime = WindowInsets.ime
+    val imeTarget = WindowInsets.imeAnimationTarget
+    val keyboardUp = imeTarget.getBottom(density) > 0
+    val centred = remember { CentredMatch() }
+    LaunchedEffect(currentMatch, find.open, keyboardUp) {
         val match = currentMatch?.takeIf { find.open } ?: return@LaunchedEffect
         val index = indexOf[match.paragraphId] ?: return@LaunchedEffect
+        // The keyboard going away leaves a placed match where it is; only a new match or a rising keyboard moves it.
+        if (match == centred.match && centred.keyboardUp && !keyboardUp) return@LaunchedEffect
+        snapshotFlow { ime.getBottom(density) == imeTarget.getBottom(density) }.first { it }
+        centred.match = match
+        centred.keyboardUp = keyboardUp
         val top = status.getTop(density) + with(density) { FindBandInset.toPx() }
         val rows = bandBottom() - with(density) { FindBandInset.toPx() }
         val line = lineBox(page.layouts[match.paragraphId], match.start)
@@ -853,8 +874,14 @@ fun NotePage(
         }
         // The top fade under the bar; Find's is shorter (spec 2.6).
         PaperTopFade(topBar, Modifier.fillMaxSize().zIndex(FADES_Z), alpha = { (1 - findT.value) * reveal.chrome() })
-        PaperTopFade(0.dp, Modifier.fillMaxSize().zIndex(FADES_Z), fade = FindFade, alpha = { findT.value * reveal.chrome() })
-        BottomFade(bottom, Modifier.fillMaxSize().zIndex(FADES_Z).graphicsLayer { alpha = (1 - editT.value) * reveal.chrome() }, keyboard = find.open)
+        // In a short window Find's fades are the 16 dp soft edges: 48 dp ones would cover the little text a landscape
+        // keyboard leaves between the status bar and the rows (spec 5.8, 5.14).
+        val findFade = if (short.value) FocalLayout.topFade else FindFade
+        PaperTopFade(0.dp, Modifier.fillMaxSize().zIndex(FADES_Z), fade = findFade, alpha = { findT.value * reveal.chrome() })
+        BottomFade(
+            bottom, Modifier.fillMaxSize().zIndex(FADES_Z).graphicsLayer { alpha = (1 - editT.value) * reveal.chrome() },
+            keyboard = find.open, keyboardFade = if (short.value) FocalLayout.topFade else FocalLayout.keyboardFade,
+        )
         JumpPill(
             visible = page.playingOutside != null && stripWanted,
             up = page.playingOutside == true,

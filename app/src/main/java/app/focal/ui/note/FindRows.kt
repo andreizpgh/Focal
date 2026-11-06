@@ -1,6 +1,17 @@
 package app.focal.ui.note
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import app.focal.ui.design.FocalLayout
+import app.focal.ui.design.LocalWindowLayout
+import app.focal.ui.design.WindowLayout
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -84,6 +95,9 @@ object FindMetrics {
     val caret = FocalGrid.x2
     /** The count stacks under the query only when, beside the widest count, less than this is left for the query. */
     val minQuery = FocalGrid.x48
+    /** Side by side (a short window), each row is at most a phone's bottom column, and its field at least 180 dp. */
+    val phoneColumn = 364.dp
+    val minSideField = 180.dp
 }
 
 /** What the find rows do. */
@@ -103,16 +117,50 @@ internal class FindActions(
 @Composable
 internal fun ColumnScope.FindRows(find: FindState, actions: FindActions) {
     val count = find.matches.size
-    KeyboardRow(
-        field = { FindField(find, actions) },
-        control = { NavPill(enabled = count > 0, actions) },
-        modifier = Modifier.fillMaxWidth(),
-    )
-    KeyboardRow(
-        field = { ReplaceField(find.replacement) },
-        control = { ReplaceAll(count = count, enabled = find.query.text.isNotEmpty() && count > 0, onClick = actions.replaceAll) },
-        modifier = Modifier.fillMaxWidth(),
-    )
+    val findRow = @Composable { modifier: Modifier ->
+        KeyboardRow(
+            field = { FindField(find, actions) },
+            control = { NavPill(enabled = count > 0, actions) },
+            modifier = modifier,
+        )
+    }
+    val replaceRow = @Composable { modifier: Modifier ->
+        KeyboardRow(
+            field = { ReplaceField(find.replacement) },
+            control = { ReplaceAll(count = count, enabled = find.query.text.isNotEmpty() && count > 0, onClick = actions.replaceAll) },
+            modifier = modifier,
+        )
+    }
+    val pair = sideBySideWidth()
+    if (pair != null) {
+        // A short window: the two rows stand side by side, each as wide as a phone's bottom column, so a landscape
+        // keyboard leaves room above them for the current match (spec 5.8, 5.14). Centred on the column, wider than it.
+        Row(Modifier.requiredWidth(pair), horizontalArrangement = Arrangement.spacedBy(KeyboardRowMetrics.columnGap)) {
+            findRow(Modifier.weight(1f))
+            replaceRow(Modifier.weight(1f))
+        }
+        return
+    }
+    findRow(Modifier.fillMaxWidth())
+    replaceRow(Modifier.fillMaxWidth())
+}
+
+/**
+ * In a short window (the dock in the rail), the width of the two rows side by side: two 364 dp bottom columns and the
+ * 8 dp gap between them, or what the window has beside the rail; null when that leaves a find field under 180 dp.
+ */
+@Composable
+private fun sideBySideWidth(): Dp? {
+    val layout = LocalWindowLayout.current
+    if (!layout.rail) return null
+    val density = LocalDensity.current
+    val direction = LocalLayoutDirection.current
+    val sides = WindowInsets.safeDrawing
+    val insets = with(density) { (sides.getLeft(this, direction) + sides.getRight(this, direction)).toDp() }
+    val room = layout.width - WindowLayout.railWidth - FocalLayout.gutter * 2 - insets
+    val row = (room - KeyboardRowMetrics.columnGap) / 2
+    if (row - KeyboardRowMetrics.columnGap - KeyboardRowMetrics.controls < FindMetrics.minSideField) return null
+    return minOf(room, FindMetrics.phoneColumn * 2 + KeyboardRowMetrics.columnGap)
 }
 
 @Composable

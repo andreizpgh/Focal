@@ -299,11 +299,18 @@ fun BottomColumn(
  * bottom. Above search results and find rows ([keyboard]) it is 48 dp and ends at the element itself. With nothing in
  * the column (the dock in the landscape rail) it is a 16 dp soft edge over the navigation inset. It follows the
  * element on `move` (exactly, while the keyboard drives it). When the keyboard covers the topmost element (a rename),
- * the 48 dp fade ends at the keyboard's top instead. [alpha] lets a screen hold it off while nothing scrolls under it.
+ * the 48 dp fade ends at the keyboard's top instead; [keyboardFade] shortens both in a short window. [alpha] lets a
+ * screen hold it off while nothing scrolls under it.
  * Fill the window with [modifier].
  */
 @Composable
-fun BottomFade(state: BottomColumnState, modifier: Modifier, keyboard: Boolean = false, alpha: () -> Float = { 1f }) {
+fun BottomFade(
+    state: BottomColumnState,
+    modifier: Modifier,
+    keyboard: Boolean = false,
+    keyboardFade: Dp = FocalLayout.keyboardFade,
+    alpha: () -> Float = { 1f },
+) {
     val paper = FocalTheme.colors.paper
     val ime = WindowInsets.ime
     Spacer(
@@ -318,7 +325,7 @@ fun BottomFade(state: BottomColumnState, modifier: Modifier, keyboard: Boolean =
             val elementEnd = if (keyboard) top else state.fadeEnd(this)
             val overKeyboard = imeTop < elementEnd
             val end = if (overKeyboard) imeTop else elementEnd
-            val start = end - (if (keyboard || overKeyboard) FocalLayout.keyboardFade.toPx() else state.fadeHeight(this))
+            val start = end - (if (keyboard || overKeyboard) keyboardFade.toPx() else state.fadeHeight(this))
             drawRect(
                 Brush.verticalGradient(0f to Color.Transparent, 1f to paper, startY = start, endY = end),
                 topLeft = Offset(0f, start), size = Size(size.width, end - start), alpha = strength,
