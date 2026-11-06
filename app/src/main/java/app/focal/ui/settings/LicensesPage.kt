@@ -22,9 +22,9 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.toMutableStateList
@@ -96,16 +96,20 @@ object LicenseText {
     /** Paragraphs reflowed for a phone's measure: only the files' column wraps of prose become spaces ([reflow]). */
     fun paragraphs(section: String): List<String> = paragraphBreak.split(section).map(::reflow).filter { it.isNotEmpty() }
 
+    /** The loaded [files] split into paragraphs, once per file, for [entry]. Large: call it off the main thread. */
+    fun split(files: Map<String, String>): Map<String, List<String>> = files.mapValues { (_, text) -> paragraphBreak.split(text) }
+
     /**
-     * Every entry's reflowed paragraphs, in [LicenseEntries] order, from the loaded [files]: each file is split once.
-     * The notices are large (the speech runtime's alone is thousands of lines): call it off the main thread.
+     * Entry [index]'s reflowed paragraphs from the [split] files. The speech runtime's notice alone is thousands of
+     * lines: call it off the main thread.
      */
-    fun entries(files: Map<String, String>): List<List<String>> {
-        val split = files.mapValues { (_, text) -> paragraphBreak.split(text) }
-        return LicenseEntries.map { entry ->
-            slice(split[entry.asset].orEmpty(), entry.start, entry.end).flatMap { paragraphBreak.split(it) }.map(::reflow).filter { it.isNotEmpty() }
-        }
+    fun entry(split: Map<String, List<String>>, index: Int): List<String> {
+        val entry = LicenseEntries[index]
+        return slice(split[entry.asset].orEmpty(), entry.start, entry.end).flatMap { paragraphBreak.split(it) }.map(::reflow).filter { it.isNotEmpty() }
     }
+
+    /** Every entry's reflowed paragraphs, in [LicenseEntries] order (each file split once). */
+    fun entries(files: Map<String, String>): List<List<String>> = split(files).let { split -> LicenseEntries.indices.map { entry(split, it) } }
 
     /** The file's paragraphs from the one whose first line starts with [start] to the one before [end] (see [section]). */
     private fun slice(paragraphs: List<String>, start: String?, end: String?): List<String> {
@@ -166,9 +170,14 @@ object LicenseText {
 fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val colors = FocalTheme.colors
     val context = LocalContext.current
-    // Read and reflowed once, off the main thread; expanding an entry only shows its list.
-    val texts by produceState<List<List<String>>?>(null) {
-        value = LicenseText.load(context).let { files -> withContext(Dispatchers.Default) { LicenseText.entries(files) } }
+    // Read once and reflowed off the main thread, each entry shown as soon as it is ready (the model's, first, at once);
+    // expanding an entry only shows its list.
+    val texts = remember { mutableStateMapOf<Int, List<String>>() }
+    LaunchedEffect(Unit) {
+        val split = LicenseText.load(context).let { files -> withContext(Dispatchers.Default) { LicenseText.split(files) } }
+        for (index in LicenseEntries.indices) {
+            if (index !in texts) texts[index] = withContext(Dispatchers.Default) { LicenseText.entry(split, index) }
+        }
     }
     val expanded = rememberSaveable(saver = listSaver()) { mutableStateListOf<Int>() }
     val list = rememberLazyListState()
@@ -213,7 +222,7 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     }
                 }
                 if (index in expanded) {
-                    val paragraphs = texts?.getOrNull(index).orEmpty()
+                    val paragraphs = texts[index].orEmpty()
                     items(paragraphs.withIndex().toList(), key = { "text:$index:${it.index}" }) { (_, paragraph) ->
                         SelectionContainer(
                             Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()),

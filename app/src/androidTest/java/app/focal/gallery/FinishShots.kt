@@ -13,8 +13,8 @@ import app.focal.ui.state.SearchUiState
 object FinishShots {
     val all: List<Shot> = buildList {
         add(Shot("licenses-dark", dark = true) { LicensesPage(onBack = {}) })
-        add(Shot("licenses-open-light", dark = false, click = "$LICENSE_ENTRY_TAG:0") { LicensesPage(onBack = {}) })
-        add(Shot("licenses-open-dark", dark = true, click = "$LICENSE_ENTRY_TAG:0") { LicensesPage(onBack = {}) })
+        add(Shot("licenses-open-light", dark = false, click = "$LICENSE_ENTRY_TAG:0", await = LICENSE_TEXT) { LicensesPage(onBack = {}) })
+        add(Shot("licenses-open-dark", dark = true, click = "$LICENSE_ENTRY_TAG:0", await = LICENSE_TEXT) { LicensesPage(onBack = {}) })
         add(Shot("licenses-light-200", dark = false, fontScale = LARGE) { LicensesPage(onBack = {}) })
         add(Shot("settings-dark-200", dark = true, fontScale = LARGE) { Strip(1f) })
         add(Shot("home-dark-200", dark = true, fontScale = LARGE) { Library(idleModel()) })
@@ -35,3 +35,6 @@ object FinishShots {
     private const val MEDIUM = 1.3f
     private const val LARGE = 2f
 }
+
+/** A phrase of the speech model's attribution, the first entry's text. */
+private const val LICENSE_TEXT = "Moondream"

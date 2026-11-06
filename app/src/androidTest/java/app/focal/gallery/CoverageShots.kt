@@ -85,7 +85,7 @@ object CoverageShots {
 internal fun scaled(name: String, settleMs: Long = 1_000L, click: String? = null, content: @Composable () -> Unit): List<Shot> =
     listOf(1f to "", 1.3f to "-130", 2f to "-200").flatMap { (scale, suffix) ->
         listOf(false, true).map { dark ->
-            Shot("$name-${if (dark) "dark" else "light"}$suffix", dark, scale, settleMs, click, content)
+            Shot("$name-${if (dark) "dark" else "light"}$suffix", dark, scale, settleMs, click, content = content)
         }
     }
 

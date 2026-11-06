@@ -27,6 +27,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
@@ -116,6 +117,13 @@ class GalleryTest {
                 rule.mainClock.advanceTimeBy(SETTLE_MS)
                 rule.onNodeWithTag(tag, useUnmergedTree = true).performClick()
             }
+            // Content prepared off the main thread arrives in real time: frames run until it is on screen.
+            next.await?.let { text ->
+                rule.waitUntil(AWAIT_TIMEOUT_MS) {
+                    rule.mainClock.advanceTimeByFrame()
+                    rule.onAllNodesWithText(text, substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+                }
+            }
             rule.mainClock.advanceTimeBy(next.settleMs)
             rule.waitForIdle()
             // The keyboard moves in real time, not on the test's clock: a shot with a focused field is taken with the
@@ -151,6 +159,7 @@ class GalleryTest {
         const val PNG_QUALITY = 100
         const val SHOTS_ARGUMENT = "shots"
         const val KEYBOARD_TIMEOUT_MS = 3_000L
+        const val AWAIT_TIMEOUT_MS = 10_000L
     }
 }
 
@@ -184,6 +193,8 @@ class Shot(
     val settleMs: Long = 1_000L,
     /** A node to click (by test tag) once the shot has settled, before [settleMs] more. */
     val click: String? = null,
+    /** Text the shot waits for (real time) after [click]: content that is prepared off the main thread. */
+    val await: String? = null,
     val content: @Composable () -> Unit,
 )
 
