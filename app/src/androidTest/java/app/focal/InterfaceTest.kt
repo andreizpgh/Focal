@@ -160,11 +160,14 @@ class InterfaceTest {
         val ctrl = KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
         // Nothing on the page has focus after a tap: the activity hears the keys and hands them to the page.
         press(KeyEvent.KEYCODE_C, ctrl)
-        await("Copied", hasContentDescription("Copied"))
         val clipboard = app.getSystemService(ClipboardManager::class.java)
         var text: String? = null
-        scenario!!.onActivity { text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() }
-        assertEquals(words.joinToString("\n\n"), text)
+        compose.waitUntil(TIMEOUT_MS) {
+            scenario!!.onActivity { text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() }
+            text == words.joinToString("\n\n")
+        }
+        // It went through the dock's Copy, which confirms as a tap does.
+        await("Copied", hasContentDescription("Copied"))
         press(KeyEvent.KEYCODE_F, ctrl)
         await("Find", hasSetTextAction() and hasContentDescription("Find in note"))
     }

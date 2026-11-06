@@ -60,6 +60,9 @@ import kotlin.math.min
 class BottomColumnState {
     val feedback = FeedbackHostState()
 
+    /** The keyboard's way to the dock's controls (Ctrl+C on a note's Copy). */
+    val dock = DockRequests()
+
     /** The topmost element's top (feedback pill included), in pixels from the top of the window. Layout writes it. */
     internal var topTarget by mutableFloatStateOf(Float.NaN)
     internal var windowHeight by mutableFloatStateOf(0f)

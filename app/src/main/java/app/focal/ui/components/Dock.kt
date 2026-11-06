@@ -27,10 +27,13 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -136,6 +139,20 @@ class DockActions(
     val openSettings: (() -> Unit)? = null,
 )
 
+/**
+ * What a keyboard asks of the dock (spec 8.5): Ctrl+C runs the Copy pill's own tap, so it copies and confirms (check,
+ * "Copied", `Confirm`) exactly as a tap does, and does nothing where a tap would do nothing.
+ */
+@Stable
+class DockRequests {
+    internal var copies by mutableIntStateOf(0)
+        private set
+
+    fun copy() {
+        copies++
+    }
+}
+
 /** The dock's two dresses: on paper, or on the recording material (spec 4.7). */
 enum class Dress { Paper, Material }
 
@@ -197,6 +214,7 @@ fun Dock(
     materialEdge: (() -> Float)? = null,
     clock: TriggerClock? = null,
     hidden: Boolean = false,
+    requests: DockRequests? = null,
 ) {
     val circle = circleFace(state)
     val pill = pillFace(state)
@@ -228,6 +246,7 @@ fun Dock(
                 actions = actions,
                 edge = edge,
                 hidden = hidden,
+                requests = requests,
                 modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
                     .weight(1f).heightIn(min = DockMetrics.height),
             )
@@ -304,6 +323,7 @@ private fun PillSlot(
     edge: (() -> Float)?,
     modifier: Modifier,
     hidden: Boolean,
+    requests: DockRequests?,
 ) {
     val source = remember { MutableInteractionSource() }
     val scope = rememberCoroutineScope()
@@ -335,6 +355,17 @@ private fun PillSlot(
                 }
             }
         } else null
+    }
+    // A keyboard's Copy is this pill's tap (only while it is the note's Copy).
+    val tap by rememberUpdatedState(onClick.takeIf { face == PillFace.NotePrimary })
+    if (requests != null) LaunchedEffect(requests) {
+        var seen = requests.copies
+        snapshotFlow { requests.copies }.collect { count ->
+            if (count != seen) {
+                seen = count
+                tap?.invoke()
+            }
+        }
     }
     val control = modifier
         .clearAndSetSemantics {

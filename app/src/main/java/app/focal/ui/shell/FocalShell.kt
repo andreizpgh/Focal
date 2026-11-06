@@ -256,7 +256,12 @@ private fun ShellBottom(shell: ShellState) {
                     else translationX = (if (rtl) 1 else -1) * s * settingsTravel(size.width, this)
                 }
             },
-        dock = { Dock(content.dock, content.actions, materialEdge = shell.live.materialEdge, clock = shell.dockClock, hidden = content.dockHidden) },
+        dock = {
+            Dock(
+                content.dock, content.actions, materialEdge = shell.live.materialEdge, clock = shell.dockClock, hidden = content.dockHidden,
+                requests = shell.bottom.dock,
+            )
+        },
         strip = content.strip,
         rows = content.rows,
         dockHidden = content.dockHidden,

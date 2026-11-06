@@ -709,8 +709,9 @@ fun NotePage(
             PageKey.Redo -> page.editing.also { if (it) redo() }
             PageKey.Find -> (!find.open).also { if (it) openFind() }
             PageKey.PlayPause -> (reading && canPlay).also { if (it) { if (playingHere && audio.playing) playback.toggle() else dockActions.play() } }
+            // Through the dock's Copy, so it confirms as a tap does (spec 5.5).
             PageKey.Copy -> (reading && selection.selectedTexts.none { it.isNotEmpty() } && dockState.pill is NotePill.Copy).also {
-                if (it) scope.launch { actions.copy() }
+                if (it) bottom.dock.copy()
             }
         }
     }
