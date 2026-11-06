@@ -144,6 +144,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun commitRemoveAudio(noteId: String) =
         UndoableActions.commitRemoveAudio(app, noteId) { eventFlow.tryEmit(LibraryEvent.Error(it)) }
 
+    /** The bytes the note's audio takes, for the menu's "Remove audio · 9 MB" (0 when it has none). */
+    suspend fun audioBytes(noteId: String): Long = withContext(Dispatchers.IO) { store.audioBytes(noteId) }
+
     /** The note's body as Copy puts it (visible paragraphs joined by a blank line; no title). */
     suspend fun copyText(noteId: String): String = withContext(Dispatchers.IO) { store.transcript(noteId) }
 
