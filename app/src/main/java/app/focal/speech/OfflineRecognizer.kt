@@ -26,9 +26,6 @@ internal class AsrResult(
     }
 
     companion object {
-        /** A result without tokens, for decoders that only produce text. */
-        fun textOnly(text: String) = AsrResult(text, emptyList(), FloatArray(0), FloatArray(0), null)
-
         /**
          * Checks the bridge's raw result: token timings are required whenever there are tokens, every
          * per-token array matches the token count, and all values are finite.
