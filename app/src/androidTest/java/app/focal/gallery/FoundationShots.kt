@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,7 +39,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -54,14 +52,11 @@ import app.focal.ui.components.FeedbackPill
 import app.focal.ui.components.FixedMeter
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.FocalIconButton
-import app.focal.ui.components.FocalMenuDivider
-import app.focal.ui.components.FocalMenuItem
 import app.focal.ui.components.FocalPrimaryPill
 import app.focal.ui.components.FocalTextButton
 import app.focal.ui.components.FeedbackHostState
 import app.focal.ui.components.Glyph
 import app.focal.ui.components.Mark
-import app.focal.ui.components.MenuSurface
 import app.focal.ui.components.NineBars
 import app.focal.ui.components.NotePill
 import app.focal.ui.components.PauseBadge
@@ -94,12 +89,10 @@ object FoundationShots {
         addAll(themed("waves") { WaveSheet() })
         add(Shot("scene-live", dark = false) { SceneMock(paused = false) })
         add(Shot("scene-paused", dark = false) { SceneMock(paused = true) })
-        addAll(themed("empty") { EmptyMock() })
         add(Shot("ready-morph-light", dark = false, settleMs = after(READY_AT_MS, 80)) { ReadyMorph() })
         add(Shot("copied-light", dark = false, settleMs = 300, click = COPY_TAG) { CopiedDock() })
         add(Shot("controls-library-light-200", dark = false, fontScale = 2f) { LibraryControls() })
         add(Shot("controls-note-light-200", dark = false, fontScale = 2f) { NoteControls() })
-        add(Shot("empty-light-200", dark = false, fontScale = 2f) { EmptyMock() })
     }
 }
 
@@ -217,15 +210,6 @@ private fun LibraryControls() {
             FocalTextButton("Not now", {})
         }
         FocalPrimaryPill("Allow microphone", {}, Modifier.fillMaxWidth(), leading = { RecordDot(it) })
-        FakeCaption("Menu")
-        MenuSurface {
-            FocalMenuItem("Copy text", {})
-            FocalMenuItem("Share", {})
-            FocalMenuItem("Rename", {})
-            FocalMenuDivider()
-            FocalMenuItem("Remove audio", {}, trailing = "9 MB")
-            FocalMenuItem("Delete", {})
-        }
     }
 }
 
@@ -366,33 +350,6 @@ private fun SceneMock(paused: Boolean) {
         BottomColumn(bottom, dock = { Dock(DockState.Live(paused), noActions, materialEdge = { Float.MAX_VALUE }) }, modifier = Modifier.fillMaxSize())
     }
 }
-
-/** The empty library (spec 4.22.5): the instrument at rest, the two lines, Record alone. */
-@Composable
-private fun EmptyMock() {
-    val c = FocalTheme.colors
-    val bottom = rememberBottomColumnState()
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().padding(top = 268.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            NineBars(WaveMode.Rest, WaveDress.paper(c), Modifier.markBox(112.dp))
-            Text(
-                "Speak, and it’s written down.", style = FocalType.title.copy(lineBreak = LineBreak.Heading), color = c.ink,
-                textAlign = TextAlign.Center, modifier = Modifier.padding(top = Grid.x36).widthIn(max = 300.dp),
-            )
-            Text(
-                "Tap Record and talk.\nText appears after each pause.", style = FocalType.field, color = c.muted,
-                textAlign = TextAlign.Center, modifier = Modifier.padding(top = Grid.x12, start = Grid.x24, end = Grid.x24),
-            )
-        }
-        BottomColumn(bottom, dock = { Dock(DockState.LibraryEmpty, noActions) }, modifier = Modifier.fillMaxSize())
-    }
-}
-
-
-
-
-
-
 
 /** T8: the dock's progress pill a few frames into its one morph into Copy. */
 @Composable
