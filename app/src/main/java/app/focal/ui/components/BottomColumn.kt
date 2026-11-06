@@ -188,20 +188,27 @@ fun BottomColumn(
  * The paper fade above the bottom column (spec 2.6), drawn by the screen under its own content: a gradient from
  * transparent to paper ending 8 dp above the topmost bottom element (64 dp tall), then solid paper to the window
  * bottom. Above search results and find rows ([keyboard]) it is 48 dp and ends at the element itself. It follows the
- * element on `move` (exactly, while the keyboard drives it). [alpha] lets a screen hold it off while nothing scrolls
- * under it. Fill the window with [modifier].
+ * element on `move` (exactly, while the keyboard drives it). When the keyboard covers the topmost element (a rename),
+ * the 48 dp fade ends at the keyboard's top instead. [alpha] lets a screen hold it off while nothing scrolls under it.
+ * Fill the window with [modifier].
  */
 @Composable
 fun BottomFade(state: BottomColumnState, modifier: Modifier, keyboard: Boolean = false, alpha: () -> Float = { 1f }) {
     val paper = FocalTheme.colors.paper
+    val ime = WindowInsets.ime
     Spacer(
         modifier.drawBehind {
             val top = state.top.value
             if (top.isNaN()) return@drawBehind
             val strength = alpha()
             if (strength <= 0f) return@drawBehind
-            val end = if (keyboard) top else top - FocalLayout.bottomGap.toPx()
-            val start = end - (if (keyboard) FocalLayout.keyboardFade else FocalLayout.bottomFade).toPx()
+            // A keyboard over the bottom column (an inline rename hides the dock and rides nothing on the keyboard):
+            // the content that ends at its top gets the keyboard rows' fade instead of a cut through a line.
+            val imeTop = size.height - ime.getBottom(this)
+            val elementEnd = if (keyboard) top else top - FocalLayout.bottomGap.toPx()
+            val overKeyboard = imeTop < elementEnd
+            val end = if (overKeyboard) imeTop else elementEnd
+            val start = end - (if (keyboard || overKeyboard) FocalLayout.keyboardFade else FocalLayout.bottomFade).toPx()
             drawRect(
                 Brush.verticalGradient(0f to Color.Transparent, 1f to paper, startY = start, endY = end),
                 topLeft = Offset(0f, start), size = Size(size.width, end - start), alpha = strength,
