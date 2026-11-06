@@ -53,6 +53,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
@@ -159,8 +160,9 @@ fun NoteRowItem(
         Column {
             TitleLine(
                 title = title ?: {
+                    // Balanced, so a title never ends on a lone word.
                     Text(
-                        titleText, style = FocalType.rowTitle, color = if (row.title.isBlank()) colors.recede else colors.ink,
+                        titleText, style = RowTitleStyle, color = if (row.title.isBlank()) colors.recede else colors.ink,
                         maxLines = RowMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
                     )
                 },
@@ -177,6 +179,8 @@ fun NoteRowItem(
         menu()
     }
 }
+
+private val RowTitleStyle = FocalType.rowTitle.copy(lineBreak = LineBreak.Heading)
 
 /** The title and, flush right on its first baseline, the duration (it wraps under the title from 1.5×). */
 @Composable

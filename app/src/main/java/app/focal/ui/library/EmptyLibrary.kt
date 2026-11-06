@@ -104,8 +104,10 @@ fun EmptyLibrary(openSettings: () -> Unit, modifier: Modifier = Modifier) {
                 )
             },
             {
+                // Each of its two lines wraps balanced at large font sizes ("Text appears after / each pause.").
                 Text(
-                    stringResource(R.string.empty_body), style = FocalType.field, color = colors.recede, textAlign = TextAlign.Center,
+                    stringResource(R.string.empty_body), style = FocalType.field.copy(lineBreak = LineBreak.Heading),
+                    color = colors.recede, textAlign = TextAlign.Center,
                     modifier = Modifier.graphicsLayer { alpha = invitationAlpha(waking(), live.wake.value) },
                 )
             },
