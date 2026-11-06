@@ -20,17 +20,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalTheme
-import app.focal.ui.design.Grid
 
-/**
+/*
  * Edge fades replace bars and dividers (spec 2.6): draw-only, alpha-only overlays, identical on every API level. Each
  * fills the window and is drawn above the content it fades.
  */
-object FadeMetrics {
-    /** The library's pin band: solid to status + 40 dp, gradient to status + 56 dp. */
-    val pinBandSolid = Grid.x40
-    val pinBandEnd = Grid.x56
-}
 
 /** Solid paper from the window top to [solidBelowStatus] under the status bar, then [fade] to transparent. */
 @Composable
@@ -47,8 +41,9 @@ fun PaperTopFade(solidBelowStatus: Dp, modifier: Modifier, fade: Dp = FocalLayou
 
 /**
  * The library's top (spec 2.6, G1): the status edge, solid paper to the status bar's bottom and 16 dp of gradient,
- * always at full alpha (at rest it covers only the paper above the stage); and the pin band, solid to status + 40
- * and fading to status + 56, which arrives only as the stage's bottom passes under the status edge:
+ * always at full alpha (at rest it covers only the paper above the stage); and the pin band, solid to the pinned
+ * label's bottom + 8 dp (status + 40 at 1.0x, lower as the font scale grows the label) and fading over 16 dp more,
+ * which arrives only as the stage's bottom passes under the status edge:
  * alpha = clamp01((status + 16 - stage bottom) / 16). [stageBottom] is the stage's window y (NaN without a stage,
  * or once it has scrolled away: the band is fully on).
  */
@@ -62,7 +57,7 @@ fun LibraryTopFade(stageBottom: () -> Float, modifier: Modifier) {
             val edge = FocalLayout.topFade.toPx()
             val bottom = stageBottom()
             val band = if (bottom.isNaN()) 1f else ((top + edge - bottom) / edge).coerceIn(0f, 1f)
-            if (band > 0f) drawEdge(paper, top + FadeMetrics.pinBandSolid.toPx(), top + FadeMetrics.pinBandEnd.toPx(), band)
+            if (band > 0f) drawEdge(paper, top + StickyLabelMetrics.bandSolid(this), top + StickyLabelMetrics.bandEnd(this), band)
             drawEdge(paper, top, top + edge, 1f)
         },
     )

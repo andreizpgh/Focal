@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalTheme
@@ -34,14 +35,29 @@ fun DayLabel(text: String, modifier: Modifier = Modifier) {
     Text(text, style = FocalType.section, color = FocalTheme.colors.recede, modifier = modifier.semantics { heading() })
 }
 
-/** Where pinned labels sit, relative to the status bar's bottom (spec 4.1.1, 4.12.1). */
+/**
+ * Where pinned labels sit, relative to the status bar's bottom (spec 4.1.1, 4.12.1, 2.6). The ref values (band solid
+ * to status + 40, its end at + 56, labels 36 dp apart) are the 20 dp label line plus fixed room, so they follow the
+ * label as the font scale grows it: the band always covers the pinned label and 8 dp under it.
+ */
 object StickyLabelMetrics {
     /** The pin line: status + 12 dp. */
     val pinLine = Grid.x12
-    /** Labels above this line (the pin band's end, status + 56 dp) are drawn by the overlay, above the fades. */
-    val bandEnd = Grid.x56
-    /** The next label pushes the pinned one up, keeping them this far apart. */
-    val pushDistance = Grid.x36
+    /** The pin band stays solid this far under the pinned label. */
+    val bandClearance = Grid.x8
+    /** The next label pushes the pinned one up, keeping this much room between them. */
+    val pushGap = Grid.x16
+
+    /** The pin band's solid end under the status bar: the pinned label's bottom + 8 dp (ref 40 at 1.0x). */
+    fun bandSolid(density: Density): Float = with(density) {
+        pinLine.toPx() + FocalType.section.lineHeight.toPx() + bandClearance.toPx()
+    }
+
+    /** The band's end (ref 56): labels above it are drawn by the overlay, above the fades. */
+    fun bandEnd(density: Density): Float = bandSolid(density) + with(density) { FocalLayout.topFade.toPx() }
+
+    /** How far apart the next label keeps the pinned one (ref 36). */
+    fun pushDistance(density: Density): Float = with(density) { FocalType.section.lineHeight.toPx() + pushGap.toPx() }
 }
 
 /**
@@ -110,8 +126,8 @@ fun StickyLabelOverlay(labels: StickyLabels, text: (key: Any) -> String, modifie
                 val top = status.getTop(density).toFloat()
                 labels.statusPx = top
                 labels.pinPx = top + StickyLabelMetrics.pinLine.toPx()
-                labels.bandPx = top + StickyLabelMetrics.bandEnd.toPx()
-                labels.pushPx = StickyLabelMetrics.pushDistance.toPx()
+                labels.bandPx = top + StickyLabelMetrics.bandEnd(this)
+                labels.pushPx = StickyLabelMetrics.pushDistance(this)
                 val column = min(size.width - 2 * FocalLayout.gutter.toPx(), FocalLayout.contentMaxWidth.toPx())
                 val start = (size.width - column) / 2
                 for (placement in labels.placements()) {
