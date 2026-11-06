@@ -179,7 +179,8 @@ private class PressPoint { var at = Offset.Zero }
 /**
  * The stage (spec 4.22): one card in the instrument's material at the top of the library that holds whatever is
  * current: the live capture, or one note (transcribing, waiting, ready). [menu] draws the row menu of the stage's
- * note when it is open; [title] replaces the title while it is renamed in place.
+ * note when it is open; [title] replaces the title while it is renamed in place. [shown] says whether the card is on
+ * screen now (the readiness moment plays only there).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -192,6 +193,7 @@ fun StageCard(
     modifier: Modifier = Modifier,
     menu: @Composable () -> Unit = {},
     title: (@Composable () -> Unit)? = null,
+    shown: () -> Boolean = { true },
 ) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
@@ -246,7 +248,7 @@ fun StageCard(
         when (stage) {
             is StageUi.Live -> RecordedStage { LiveStage(stage, meter) }
             is StageUi.Note -> RecordedStage { NoteStage(
-                stage, dates, today, actions, title, origin,
+                stage, dates, today, actions, title, origin, shown,
                 onReadyMoment = {
                     if (!reduced) scope.launch {
                         delay(FocalTiming.READY_SHIMMER_DELAY_MS)
@@ -505,6 +507,7 @@ private fun NoteStage(
     actions: StageActions,
     renameField: (@Composable () -> Unit)?,
     origin: Origin,
+    shown: () -> Boolean,
     onReadyMoment: () -> Unit,
 ) {
     val colors = FocalTheme.colors
@@ -546,7 +549,7 @@ private fun NoteStage(
             },
             { Box(Modifier.clearAndSetSemantics { }) { StageText(row, noSpeech) } },
             { Box(Modifier.graphicsLayer { alpha = lengthYields.value }) { StageLength(row.durationMs) } },
-            { StagePill(pill, row.id, onCopy = { actions.copy(row) }, onReadyMoment = onReadyMoment, Modifier.testTag(STAGE_PILL_TAG)) },
+            { StagePill(pill, row.id, onCopy = { actions.copy(row) }, onReadyMoment = onReadyMoment, Modifier.testTag(STAGE_PILL_TAG), shown = shown) },
         ),
     ) { (titles, times, texts, lengths, pills), constraints ->
         val width = constraints.maxWidth

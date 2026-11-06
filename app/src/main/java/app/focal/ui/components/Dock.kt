@@ -196,6 +196,7 @@ fun Dock(
     modifier: Modifier = Modifier,
     materialEdge: (() -> Float)? = null,
     clock: TriggerClock? = null,
+    hidden: Boolean = false,
 ) {
     val circle = circleFace(state)
     val pill = pillFace(state)
@@ -226,6 +227,7 @@ fun Dock(
                 notePill = (state as? DockState.Note)?.pill,
                 actions = actions,
                 edge = edge,
+                hidden = hidden,
                 modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
                     .weight(1f).heightIn(min = DockMetrics.height),
             )
@@ -301,6 +303,7 @@ private fun PillSlot(
     actions: DockActions,
     edge: (() -> Float)?,
     modifier: Modifier,
+    hidden: Boolean,
 ) {
     val source = remember { MutableInteractionSource() }
     val scope = rememberCoroutineScope()
@@ -364,7 +367,7 @@ private fun PillSlot(
                     PrimaryContainer(dress, containerAlpha)
                     PillContent(dress, contentAlpha) { ink -> LabelRow(stringResource(R.string.action_finish), ink) { FinishSquare(ink) } }
                 }
-                PillFace.NotePrimary -> NotePrimaryPill(notePill ?: NotePill.Copy(), copied, containerAlpha, contentAlpha)
+                PillFace.NotePrimary -> NotePrimaryPill(notePill ?: NotePill.Copy(), copied, containerAlpha, contentAlpha, hidden)
             }
         }
     }
@@ -408,7 +411,7 @@ private fun LabelRow(text: String, color: Color, glyph: @Composable () -> Unit) 
  * Copy confirms with the check and "Copied" for 1600 ms.
  */
 @Composable
-private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerAlpha: () -> Float, contentAlpha: () -> Float) {
+private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerAlpha: () -> Float, contentAlpha: () -> Float, hidden: Boolean) {
     val colors = FocalTheme.colors
     val haptics = rememberFocalHaptics()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -423,7 +426,8 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
     var wasReady by remember { mutableStateOf(ready) }
     LaunchedEffect(target) { if (target > fill.value) fill.animateTo(target, FocalMotion.move()) }
     LaunchedEffect(ready) {
-        if (ready && !wasReady && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) haptics.ready()
+        // Felt only with the dock in sight: not while Edit or Find has it down behind the keyboard.
+        if (ready && !wasReady && !hidden && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) haptics.ready()
         wasReady = ready
         launch { inverted.animateTo(if (ready) 1f else 0f, FocalMotion.fade()) }
         copyShown.animateTo(if (ready) 1f else 0f, FocalMotion.fade())

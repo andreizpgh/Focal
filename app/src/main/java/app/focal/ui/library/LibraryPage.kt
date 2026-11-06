@@ -270,6 +270,8 @@ fun LibraryPage(
                 model, dates, today, meter, listState, stageActions, rowActions, noteMenu,
                 renaming = renaming, renameField = renameField, imePadded = renaming != null,
                 openSettings = actions.openSettings, stageFocus = stageFocus,
+                // The library itself is on screen: no settings page, search or scene over it.
+                onScreen = { !searchState.open && shell.settings.progress.value <= 0f && shell.live.expansion.value <= 0f },
             )
         }
         if (searchState.open || searchState.content.value > 0f) {
@@ -304,6 +306,7 @@ private fun LibraryContent(
     imePadded: Boolean,
     openSettings: () -> Unit,
     stageFocus: FocusRequester?,
+    onScreen: () -> Boolean,
 ) {
     val empty = model.empty
     // Deleting the last note: the stage leaves on `fadeFast`, the composition arrives on `fade` (4.22.5).
@@ -323,7 +326,7 @@ private fun LibraryContent(
     }
     if (!empty || listAlpha.value > 0f) {
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = listAlpha.value }) {
-            LibraryList(model, dates, today, meter, listState, stageActions, rowActions, noteMenu, renaming, renameField, imePadded, stageFocus)
+            LibraryList(model, dates, today, meter, listState, stageActions, rowActions, noteMenu, renaming, renameField, imePadded, stageFocus, onScreen)
         }
     }
 }
@@ -347,6 +350,7 @@ private fun LibraryList(
     renameField: @Composable (NoteRow, Boolean) -> Unit,
     imePadded: Boolean,
     stageFocus: FocusRequester?,
+    onScreen: () -> Boolean,
 ) {
     val shell = LocalShell.current
     val live = shell.live
@@ -380,6 +384,7 @@ private fun LibraryList(
     }
     val labels = rememberStickyLabels(listState) { key -> sections[key] }
     val texts = remember(model.days, dates, today) { model.days.associate { dayKey(it.epochDay) to dates.dayLabel(it.epochDay, today) } }
+    val stageShown = { onScreen() && listState.layoutInfo.visibleItemsInfo.any { it.key == STAGE_KEY } }
     val stageBottom = {
         val info = listState.layoutInfo
         info.visibleItemsInfo.firstOrNull { it.key == STAGE_KEY }?.let { (it.offset + it.size - info.viewportStartOffset).toFloat() } ?: Float.NaN
@@ -452,6 +457,7 @@ private fun LibraryList(
                             ),
                         menu = { if (row != null) noteMenu(row) },
                         title = if (row != null && renaming == row.id) { { renameField(row, true) } } else null,
+                        shown = stageShown,
                     )
                 }
             }

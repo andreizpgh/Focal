@@ -113,7 +113,7 @@ object StagePillMetrics {
 
 /**
  * The stage's pill. Progress and Copy are one control, so readiness is one morph (T8″): when the note turns Ready
- * on screen (the activity RESUMED, the first time for this note), the pill narrows to 136 dp with its right edge
+ * on screen (the activity RESUMED, the stage [shown], the first time for this note), the pill narrows to 136 dp with its right edge
  * fixed (`move`), its fill goes from glass to white (`fade`) and its content fades through from "Transcribing ·
  * 100%" and the track to the copy glyph and "Copy" (`fade`), all from the same frame; `Confirm` fires on that frame
  * and [onReadyMoment] starts the card's one shimmer. Off screen, or a second time, the pill simply shows the white
@@ -126,6 +126,7 @@ fun StagePill(
     onCopy: suspend () -> Boolean,
     onReadyMoment: () -> Unit,
     modifier: Modifier = Modifier,
+    shown: () -> Boolean = { true },
 ) {
     val density = LocalDensity.current
     val reduced = LocalReducedMotion.current
@@ -181,7 +182,9 @@ fun StagePill(
             return@LaunchedEffect
         }
         if (q.value >= 1f) return@LaunchedEffect
-        val moment = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && FreshNotes.claimMoment(noteId)
+        // Only where it can be seen: behind settings, search or the scene, or scrolled away, the stage simply shows
+        // the white Copy and the moment stays unclaimed for the next time it is on screen.
+        val moment = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && shown() && FreshNotes.claimMoment(noteId)
         if (moment) {
             haptics.ready()
             announced = true
