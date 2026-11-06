@@ -60,7 +60,8 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
     val model = remember(libraryState, shown, fresh) { LibraryModels.of(libraryState, shown, fresh) }
     val dates = rememberLibraryDates()
     val today = rememberToday()
-    val reduced = LocalReducedMotion.current
+    // Read when an action runs: the remembered actions below outlive a change of the setting.
+    val reduced by rememberUpdatedState(LocalReducedMotion.current)
     val haptics = rememberFocalHaptics()
     val scope = rememberCoroutineScope()
     val layer = remember { SettingsLayerState() }

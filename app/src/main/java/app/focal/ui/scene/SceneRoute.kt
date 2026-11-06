@@ -56,7 +56,8 @@ fun SceneRoute(shell: ShellState, recording: RecordingViewModel, library: Librar
     val live = shell.live
     val state by recording.state.collectAsStateWithLifecycle()
     val notes by library.state.collectAsStateWithLifecycle()
-    val reduced = LocalReducedMotion.current
+    // Read when an action runs: the remembered actions below outlive a change of the setting.
+    val reduced by rememberUpdatedState(LocalReducedMotion.current)
     val haptics = rememberFocalHaptics()
     val notificationsOff = rememberNotificationsOff()
     val firstRecordings = notes.days.sumOf { it.rows.size } < FocalTiming.HINT_RECORDINGS
