@@ -20,6 +20,8 @@
   "LONG_PAUSE_MS": 3500,
   "MIN_SENTENCES": 2,
   "MAX_WORDS": 80,
+  "CAP_WORDS": 160,
+  "CAP_LOOKBACK_WORDS": 40,
   "TITLE_MAX": 48,
   "MIN_TITLE_CHARS": 12,
   "FLAG_THRESHOLD": 0.5,
@@ -14434,6 +14436,8938 @@
     "title": "I called Dr. meier today",
     "flagged_word_indices": [],
     "copy_text": "I called Dr. meier today."
+   }
+  },
+  {
+   "id": "para_cap_longest_pause",
+   "description": "No sentence end in 200 words: at CAP_WORDS (160) the paragraph closes at the longest pause among its last 40 words (before word 140); the longer pause before word 100 lies outside that range.",
+   "source": "review-cap",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " so",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 0.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 0.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 0.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 1.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 1.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 1.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 1.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 2.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 2.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 2.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 2.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 3.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 3.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 3.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 3.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 4.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 4.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 4.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 4.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 5.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 5.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 5.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 5.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 6.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 6.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 6.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 6.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 6.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 7.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 7.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 7.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 7.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 8.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 8.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 8.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 8.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 9.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 9.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 9.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 9.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 10.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 10.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 10.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 10.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 11.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 11.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 11.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 11.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 12.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 12.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 12.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 12.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 12.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 13.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 13.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 13.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 13.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 14.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 14.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 14.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 14.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 15.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 15.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 15.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 15.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 16.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 16.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 16.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 16.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 17.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 17.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 17.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 17.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 18.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 18.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 18.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 18.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 18.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 19.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 19.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 19.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 19.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 20.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 20.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 20.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 20.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 21.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 21.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 21.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 21.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 22.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 22.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 22.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 22.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 23.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 23.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 23.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 23.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 24.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 25.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 25.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 25.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 26.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 26.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 26.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 26.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 27.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 27.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 27.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 27.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 28.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 28.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 28.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 28.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 28.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 29.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 29.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 29.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 29.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 30.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 30.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 30.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 30.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 31.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 31.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 31.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 31.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 32.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 32.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 32.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 32.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 33.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 33.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 33.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 33.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 34.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 34.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 34.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 34.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 35.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 35.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 35.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 36.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 36.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 36.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 36.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 37.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 37.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 37.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 38.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 38.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 38.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 38.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 39.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 39.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 39.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 39.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 40.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 40.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 40.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 40.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 41.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 41.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 41.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 41.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 42.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 42.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 42.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 42.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 42.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 43.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 43.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 43.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 43.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 44.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 44.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 44.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 44.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 45.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 45.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 45.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 45.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 46.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 46.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 46.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 46.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 47.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 47.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 47.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 47.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 48.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 48.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 48.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 48.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 48.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 49.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 49.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 49.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 49.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "so",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 480,
+      "end_ms": 640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 720,
+      "end_ms": 880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 960,
+      "end_ms": 1120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 1200,
+      "end_ms": 1360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 1440,
+      "end_ms": 1600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 1680,
+      "end_ms": 1840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 1920,
+      "end_ms": 2080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 2160,
+      "end_ms": 2320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 2400,
+      "end_ms": 2560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 2640,
+      "end_ms": 2800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 2880,
+      "end_ms": 3040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 3120,
+      "end_ms": 3280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 3360,
+      "end_ms": 3520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 3600,
+      "end_ms": 3760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 3840,
+      "end_ms": 4000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 4080,
+      "end_ms": 4240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 4320,
+      "end_ms": 4480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 4560,
+      "end_ms": 4720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 4800,
+      "end_ms": 4960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 5040,
+      "end_ms": 5200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 5280,
+      "end_ms": 5440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 5520,
+      "end_ms": 5680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 5760,
+      "end_ms": 5920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 6000,
+      "end_ms": 6160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 6240,
+      "end_ms": 6400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 6480,
+      "end_ms": 6640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 6720,
+      "end_ms": 6880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 6960,
+      "end_ms": 7120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 7200,
+      "end_ms": 7360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 7440,
+      "end_ms": 7600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 7680,
+      "end_ms": 7840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 7920,
+      "end_ms": 8080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 8160,
+      "end_ms": 8320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 8400,
+      "end_ms": 8560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 8640,
+      "end_ms": 8800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 8880,
+      "end_ms": 9040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 9120,
+      "end_ms": 9280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 9360,
+      "end_ms": 9520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 9600,
+      "end_ms": 9760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 9840,
+      "end_ms": 10000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 10080,
+      "end_ms": 10240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 10320,
+      "end_ms": 10480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 10560,
+      "end_ms": 10720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 10800,
+      "end_ms": 10960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 11040,
+      "end_ms": 11200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 11280,
+      "end_ms": 11440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 11520,
+      "end_ms": 11680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 11760,
+      "end_ms": 11920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 12000,
+      "end_ms": 12160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 12240,
+      "end_ms": 12400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 12480,
+      "end_ms": 12640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 12720,
+      "end_ms": 12880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 12960,
+      "end_ms": 13120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 13200,
+      "end_ms": 13360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 13440,
+      "end_ms": 13600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 13680,
+      "end_ms": 13840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 13920,
+      "end_ms": 14080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 14160,
+      "end_ms": 14320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 14400,
+      "end_ms": 14560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 14640,
+      "end_ms": 14800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 14880,
+      "end_ms": 15040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 15120,
+      "end_ms": 15280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 15360,
+      "end_ms": 15520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 15600,
+      "end_ms": 15760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 15840,
+      "end_ms": 16000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 16080,
+      "end_ms": 16240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 16320,
+      "end_ms": 16480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 16560,
+      "end_ms": 16720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 16800,
+      "end_ms": 16960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 17040,
+      "end_ms": 17200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 17280,
+      "end_ms": 17440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 17520,
+      "end_ms": 17680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 17760,
+      "end_ms": 17920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 18000,
+      "end_ms": 18160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 18240,
+      "end_ms": 18400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 18480,
+      "end_ms": 18640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 18720,
+      "end_ms": 18880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 18960,
+      "end_ms": 19120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 19200,
+      "end_ms": 19360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 19440,
+      "end_ms": 19600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 19680,
+      "end_ms": 19840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 19920,
+      "end_ms": 20080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 20160,
+      "end_ms": 20320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 20400,
+      "end_ms": 20560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 20640,
+      "end_ms": 20800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 20880,
+      "end_ms": 21040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 21120,
+      "end_ms": 21280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 21360,
+      "end_ms": 21520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 21600,
+      "end_ms": 21760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 21840,
+      "end_ms": 22000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 22080,
+      "end_ms": 22240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 22320,
+      "end_ms": 22480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 22560,
+      "end_ms": 22720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 22800,
+      "end_ms": 22960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 23040,
+      "end_ms": 23200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 23280,
+      "end_ms": 23440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 23520,
+      "end_ms": 23680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 23760,
+      "end_ms": 23920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 24000,
+      "end_ms": 24160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 25360,
+      "end_ms": 25520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 25600,
+      "end_ms": 25760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 25840,
+      "end_ms": 26000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 26080,
+      "end_ms": 26240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 26320,
+      "end_ms": 26480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 26560,
+      "end_ms": 26720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 26800,
+      "end_ms": 26960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 27040,
+      "end_ms": 27200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 27280,
+      "end_ms": 27440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 27520,
+      "end_ms": 27680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 27760,
+      "end_ms": 27920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 28000,
+      "end_ms": 28160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 28240,
+      "end_ms": 28400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 28480,
+      "end_ms": 28640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 28720,
+      "end_ms": 28880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 28960,
+      "end_ms": 29120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 29200,
+      "end_ms": 29360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 29440,
+      "end_ms": 29600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 29680,
+      "end_ms": 29840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 29920,
+      "end_ms": 30080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 30160,
+      "end_ms": 30320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 30400,
+      "end_ms": 30560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 30640,
+      "end_ms": 30800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 30880,
+      "end_ms": 31040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 31120,
+      "end_ms": 31280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 31360,
+      "end_ms": 31520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 31600,
+      "end_ms": 31760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 31840,
+      "end_ms": 32000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 32080,
+      "end_ms": 32240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 32320,
+      "end_ms": 32480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 32560,
+      "end_ms": 32720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 32800,
+      "end_ms": 32960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 33040,
+      "end_ms": 33200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 33280,
+      "end_ms": 33440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 33520,
+      "end_ms": 33680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 33760,
+      "end_ms": 33920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 34000,
+      "end_ms": 34160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 34240,
+      "end_ms": 34400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 34480,
+      "end_ms": 34640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 34720,
+      "end_ms": 34880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 35440,
+      "end_ms": 35600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 35680,
+      "end_ms": 35840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 35920,
+      "end_ms": 36080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 36160,
+      "end_ms": 36320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 36400,
+      "end_ms": 36560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 36640,
+      "end_ms": 36800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 36880,
+      "end_ms": 37040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 37120,
+      "end_ms": 37280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 37360,
+      "end_ms": 37520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 37600,
+      "end_ms": 37760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 38160,
+      "end_ms": 38320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 38400,
+      "end_ms": 38560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 38640,
+      "end_ms": 38800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 38880,
+      "end_ms": 39040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 39120,
+      "end_ms": 39280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 39360,
+      "end_ms": 39520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 39600,
+      "end_ms": 39760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 39840,
+      "end_ms": 40000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 40080,
+      "end_ms": 40240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 40320,
+      "end_ms": 40480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 40560,
+      "end_ms": 40720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 40800,
+      "end_ms": 40960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 41040,
+      "end_ms": 41200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 41280,
+      "end_ms": 41440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 41520,
+      "end_ms": 41680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 41760,
+      "end_ms": 41920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 42000,
+      "end_ms": 42160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 42240,
+      "end_ms": 42400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 42480,
+      "end_ms": 42640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 42720,
+      "end_ms": 42880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 42960,
+      "end_ms": 43120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 43200,
+      "end_ms": 43360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 43440,
+      "end_ms": 43600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 43680,
+      "end_ms": 43840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 43920,
+      "end_ms": 44080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 44160,
+      "end_ms": 44320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 44400,
+      "end_ms": 44560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 44640,
+      "end_ms": 44800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 44880,
+      "end_ms": 45040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 45120,
+      "end_ms": 45280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 45360,
+      "end_ms": 45520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 45600,
+      "end_ms": 45760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 45840,
+      "end_ms": 46000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 46080,
+      "end_ms": 46240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 46320,
+      "end_ms": 46480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 46560,
+      "end_ms": 46720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 46800,
+      "end_ms": 46960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 47040,
+      "end_ms": 47200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 47280,
+      "end_ms": 47440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 47520,
+      "end_ms": 47680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 47760,
+      "end_ms": 47920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 48000,
+      "end_ms": 48160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 48240,
+      "end_ms": 48400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 48480,
+      "end_ms": 48640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 48720,
+      "end_ms": 48880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 48960,
+      "end_ms": 49120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 49200,
+      "end_ms": 49360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 49440,
+      "end_ms": 49600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 49680,
+      "end_ms": 49840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 49920,
+      "end_ms": 50080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room"
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      140
+     ],
+     [
+      140,
+      200
+     ]
+    ],
+    "title": "so we keep going over the numbers and the plan…",
+    "flagged_word_indices": [],
+    "copy_text": "so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room\n\nso we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room"
+   }
+  },
+  {
+   "id": "para_cap_even_pauses",
+   "description": "No sentence end and even pauses: the paragraph closes at CAP_WORDS exactly.",
+   "source": "review-cap",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " so",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 0.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 0.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 0.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 1.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 1.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 1.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 1.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 2.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 2.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 2.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 2.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 3.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 3.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 3.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 3.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 4.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 4.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 4.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 4.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 5.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 5.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 5.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 5.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 6.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 6.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 6.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 6.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 6.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 7.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 7.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 7.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 7.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 8.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 8.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 8.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 8.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 9.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 9.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 9.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 9.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 10.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 10.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 10.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 10.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 11.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 11.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 11.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 11.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 12.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 12.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 12.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 12.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 12.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 13.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 13.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 13.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 13.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 14.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 14.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 14.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 14.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 15.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 15.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 15.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 15.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 16.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 16.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 16.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 16.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 17.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 17.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 17.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 17.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 18.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 18.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 18.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 18.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 18.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 19.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 19.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 19.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 19.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 20.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 20.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 20.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 20.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 21.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 21.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 21.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 21.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 22.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 22.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 22.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 22.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 23.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 23.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 23.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 23.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 24.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 24.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 24.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 24.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 24.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 25.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 25.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 25.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 25.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 26.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 26.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 26.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 26.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 27.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 27.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 27.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 27.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 28.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 28.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 28.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 28.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 29.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 29.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 29.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 29.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 30.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 30.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 30.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 30.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 30.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 31.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 31.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 31.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 31.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 32.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 32.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 32.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 32.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 33.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 33.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 33.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 33.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 34.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 34.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 34.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 34.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 35.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 35.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 35.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 35.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 36.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 36.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 36.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 36.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 36.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 37.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 37.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 37.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 37.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 38.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 38.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 38.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 38.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 39.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 39.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 39.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 39.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 40.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 40.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 40.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 40.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "so",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 480,
+      "end_ms": 640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 720,
+      "end_ms": 880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 960,
+      "end_ms": 1120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 1200,
+      "end_ms": 1360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 1440,
+      "end_ms": 1600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 1680,
+      "end_ms": 1840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 1920,
+      "end_ms": 2080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 2160,
+      "end_ms": 2320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 2400,
+      "end_ms": 2560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 2640,
+      "end_ms": 2800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 2880,
+      "end_ms": 3040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 3120,
+      "end_ms": 3280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 3360,
+      "end_ms": 3520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 3600,
+      "end_ms": 3760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 3840,
+      "end_ms": 4000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 4080,
+      "end_ms": 4240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 4320,
+      "end_ms": 4480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 4560,
+      "end_ms": 4720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 4800,
+      "end_ms": 4960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 5040,
+      "end_ms": 5200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 5280,
+      "end_ms": 5440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 5520,
+      "end_ms": 5680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 5760,
+      "end_ms": 5920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 6000,
+      "end_ms": 6160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 6240,
+      "end_ms": 6400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 6480,
+      "end_ms": 6640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 6720,
+      "end_ms": 6880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 6960,
+      "end_ms": 7120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 7200,
+      "end_ms": 7360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 7440,
+      "end_ms": 7600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 7680,
+      "end_ms": 7840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 7920,
+      "end_ms": 8080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 8160,
+      "end_ms": 8320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 8400,
+      "end_ms": 8560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 8640,
+      "end_ms": 8800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 8880,
+      "end_ms": 9040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 9120,
+      "end_ms": 9280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 9360,
+      "end_ms": 9520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 9600,
+      "end_ms": 9760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 9840,
+      "end_ms": 10000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 10080,
+      "end_ms": 10240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 10320,
+      "end_ms": 10480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 10560,
+      "end_ms": 10720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 10800,
+      "end_ms": 10960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 11040,
+      "end_ms": 11200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 11280,
+      "end_ms": 11440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 11520,
+      "end_ms": 11680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 11760,
+      "end_ms": 11920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 12000,
+      "end_ms": 12160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 12240,
+      "end_ms": 12400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 12480,
+      "end_ms": 12640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 12720,
+      "end_ms": 12880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 12960,
+      "end_ms": 13120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 13200,
+      "end_ms": 13360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 13440,
+      "end_ms": 13600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 13680,
+      "end_ms": 13840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 13920,
+      "end_ms": 14080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 14160,
+      "end_ms": 14320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 14400,
+      "end_ms": 14560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 14640,
+      "end_ms": 14800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 14880,
+      "end_ms": 15040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 15120,
+      "end_ms": 15280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 15360,
+      "end_ms": 15520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 15600,
+      "end_ms": 15760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 15840,
+      "end_ms": 16000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 16080,
+      "end_ms": 16240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 16320,
+      "end_ms": 16480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 16560,
+      "end_ms": 16720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 16800,
+      "end_ms": 16960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 17040,
+      "end_ms": 17200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 17280,
+      "end_ms": 17440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 17520,
+      "end_ms": 17680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 17760,
+      "end_ms": 17920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 18000,
+      "end_ms": 18160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 18240,
+      "end_ms": 18400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 18480,
+      "end_ms": 18640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 18720,
+      "end_ms": 18880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 18960,
+      "end_ms": 19120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 19200,
+      "end_ms": 19360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 19440,
+      "end_ms": 19600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 19680,
+      "end_ms": 19840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 19920,
+      "end_ms": 20080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 20160,
+      "end_ms": 20320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 20400,
+      "end_ms": 20560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 20640,
+      "end_ms": 20800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 20880,
+      "end_ms": 21040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 21120,
+      "end_ms": 21280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 21360,
+      "end_ms": 21520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 21600,
+      "end_ms": 21760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 21840,
+      "end_ms": 22000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 22080,
+      "end_ms": 22240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 22320,
+      "end_ms": 22480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 22560,
+      "end_ms": 22720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 22800,
+      "end_ms": 22960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 23040,
+      "end_ms": 23200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 23280,
+      "end_ms": 23440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 23520,
+      "end_ms": 23680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 23760,
+      "end_ms": 23920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 24000,
+      "end_ms": 24160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 24240,
+      "end_ms": 24400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 24480,
+      "end_ms": 24640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 24720,
+      "end_ms": 24880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 24960,
+      "end_ms": 25120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 25200,
+      "end_ms": 25360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 25440,
+      "end_ms": 25600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 25680,
+      "end_ms": 25840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 25920,
+      "end_ms": 26080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 26160,
+      "end_ms": 26320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 26400,
+      "end_ms": 26560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 26640,
+      "end_ms": 26800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 26880,
+      "end_ms": 27040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 27120,
+      "end_ms": 27280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 27360,
+      "end_ms": 27520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 27600,
+      "end_ms": 27760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 27840,
+      "end_ms": 28000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 28080,
+      "end_ms": 28240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 28320,
+      "end_ms": 28480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 28560,
+      "end_ms": 28720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 28800,
+      "end_ms": 28960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 29040,
+      "end_ms": 29200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 29280,
+      "end_ms": 29440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 29520,
+      "end_ms": 29680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 29760,
+      "end_ms": 29920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 30000,
+      "end_ms": 30160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 30240,
+      "end_ms": 30400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 30480,
+      "end_ms": 30640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 30720,
+      "end_ms": 30880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 30960,
+      "end_ms": 31120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 31200,
+      "end_ms": 31360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 31440,
+      "end_ms": 31600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 31680,
+      "end_ms": 31840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 31920,
+      "end_ms": 32080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 32160,
+      "end_ms": 32320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 32400,
+      "end_ms": 32560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 32640,
+      "end_ms": 32800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 32880,
+      "end_ms": 33040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 33120,
+      "end_ms": 33280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 33360,
+      "end_ms": 33520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 33600,
+      "end_ms": 33760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 33840,
+      "end_ms": 34000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 34080,
+      "end_ms": 34240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 34320,
+      "end_ms": 34480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 34560,
+      "end_ms": 34720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 34800,
+      "end_ms": 34960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 35040,
+      "end_ms": 35200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 35280,
+      "end_ms": 35440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 35520,
+      "end_ms": 35680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 35760,
+      "end_ms": 35920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 36000,
+      "end_ms": 36160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 36240,
+      "end_ms": 36400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 36480,
+      "end_ms": 36640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 36720,
+      "end_ms": 36880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 36960,
+      "end_ms": 37120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 37200,
+      "end_ms": 37360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 37440,
+      "end_ms": 37600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 37680,
+      "end_ms": 37840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 37920,
+      "end_ms": 38080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 38160,
+      "end_ms": 38320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 38400,
+      "end_ms": 38560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 38640,
+      "end_ms": 38800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 38880,
+      "end_ms": 39040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 39120,
+      "end_ms": 39280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 39360,
+      "end_ms": 39520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 39600,
+      "end_ms": 39760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 39840,
+      "end_ms": 40000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 40080,
+      "end_ms": 40240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 40320,
+      "end_ms": 40480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 40560,
+      "end_ms": 40720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 40800,
+      "end_ms": 40960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan"
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      160
+     ],
+     [
+      160,
+      170
+     ]
+    ],
+    "title": "so we keep going over the numbers and the plan…",
+    "flagged_word_indices": [],
+    "copy_text": "so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room\n\nso we keep going over the numbers and the plan"
+   }
+  },
+  {
+   "id": "para_cap_across_windows",
+   "description": "The cap counts words across pause-cut windows and cuts at the window seam with the longest pause in range (word 135); the longer seam before word 90 lies outside it.",
+   "source": "review-cap",
+   "options": {},
+   "input": {
+    "windows": [
+     {
+      "audio_start_ms": 0,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " so",
+        "start_s": 0.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 0.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 0.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 0.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 1.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 1.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 1.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 1.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 2.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 2.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 2.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 2.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 3.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 3.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 3.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 3.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 4.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 4.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 4.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 4.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 5.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 5.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 5.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 5.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 6.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 6.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 6.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 6.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 6.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 7.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 7.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 7.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 7.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 8.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 8.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 8.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 8.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 9.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 9.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 9.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 9.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 10.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 10.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 10.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 10.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       }
+      ]
+     },
+     {
+      "audio_start_ms": 11080,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " the",
+        "start_s": 0.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 0.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 0.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 0.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 1.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 1.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 1.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 1.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 2.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 2.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 2.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 2.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 2.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 3.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 3.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 3.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 3.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 4.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 4.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 4.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 4.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 5.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 5.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 5.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 5.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 6.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 6.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 6.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 6.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 7.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 7.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 7.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 7.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 8.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 8.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 8.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 8.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 8.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 9.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 9.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 9.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 9.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 10.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 10.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 10.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       }
+      ]
+     },
+     {
+      "audio_start_ms": 22500,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " for",
+        "start_s": 0.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 0.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 0.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 0.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 1.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 1.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 1.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 1.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 2.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 2.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 2.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 2.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 2.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 3.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 3.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 3.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 3.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 4.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 4.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 4.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 4.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 5.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 5.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 5.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 5.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 6.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 6.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 6.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 6.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 7.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 7.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 7.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 7.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 8.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 8.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 8.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 8.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 8.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 9.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 9.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 9.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 9.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 10.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 10.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 10.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       }
+      ]
+     },
+     {
+      "audio_start_ms": 33520,
+      "keep_lo_ms": null,
+      "keep_hi_ms": null,
+      "tokens": [
+       {
+        "text": " listens",
+        "start_s": 0.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 0.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 0.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 0.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 1.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 1.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 1.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 1.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 2.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 2.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 2.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 2.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 2.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 3.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 3.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 3.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 3.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 4.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 4.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 4.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 4.88,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 5.12,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 5.36,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 5.6,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 5.84,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " so",
+        "start_s": 6.08,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " we",
+        "start_s": 6.32,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " keep",
+        "start_s": 6.56,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " going",
+        "start_s": 6.8,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " over",
+        "start_s": 7.04,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 7.28,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " numbers",
+        "start_s": 7.52,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " and",
+        "start_s": 7.76,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 8.0,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " plan",
+        "start_s": 8.24,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " for",
+        "start_s": 8.48,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " next",
+        "start_s": 8.72,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " week",
+        "start_s": 8.96,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " while",
+        "start_s": 9.2,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " everyone",
+        "start_s": 9.44,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " listens",
+        "start_s": 9.68,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " quietly",
+        "start_s": 9.92,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " in",
+        "start_s": 10.16,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " the",
+        "start_s": 10.4,
+        "dur_s": 0.16,
+        "logp": 0.0
+       },
+       {
+        "text": " room",
+        "start_s": 10.64,
+        "dur_s": 0.16,
+        "logp": 0.0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "words": [
+     {
+      "text": "so",
+      "start_ms": 240,
+      "end_ms": 400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 480,
+      "end_ms": 640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 720,
+      "end_ms": 880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 960,
+      "end_ms": 1120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 1200,
+      "end_ms": 1360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 1440,
+      "end_ms": 1600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 1680,
+      "end_ms": 1840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 1920,
+      "end_ms": 2080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 2160,
+      "end_ms": 2320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 2400,
+      "end_ms": 2560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 2640,
+      "end_ms": 2800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 2880,
+      "end_ms": 3040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 3120,
+      "end_ms": 3280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 3360,
+      "end_ms": 3520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 3600,
+      "end_ms": 3760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 3840,
+      "end_ms": 4000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 4080,
+      "end_ms": 4240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 4320,
+      "end_ms": 4480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 4560,
+      "end_ms": 4720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 4800,
+      "end_ms": 4960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 5040,
+      "end_ms": 5200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 5280,
+      "end_ms": 5440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 5520,
+      "end_ms": 5680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 5760,
+      "end_ms": 5920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 6000,
+      "end_ms": 6160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 6240,
+      "end_ms": 6400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 6480,
+      "end_ms": 6640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 6720,
+      "end_ms": 6880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 6960,
+      "end_ms": 7120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 7200,
+      "end_ms": 7360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 7440,
+      "end_ms": 7600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 7680,
+      "end_ms": 7840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 7920,
+      "end_ms": 8080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 8160,
+      "end_ms": 8320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 8400,
+      "end_ms": 8560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 8640,
+      "end_ms": 8800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 8880,
+      "end_ms": 9040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 9120,
+      "end_ms": 9280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 9360,
+      "end_ms": 9520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 9600,
+      "end_ms": 9760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 9840,
+      "end_ms": 10000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 10080,
+      "end_ms": 10240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 10320,
+      "end_ms": 10480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 10560,
+      "end_ms": 10720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 10800,
+      "end_ms": 10960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 0,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 11160,
+      "end_ms": 11320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 11400,
+      "end_ms": 11560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 11640,
+      "end_ms": 11800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 11880,
+      "end_ms": 12040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 12120,
+      "end_ms": 12280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 12360,
+      "end_ms": 12520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 12600,
+      "end_ms": 12760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 12840,
+      "end_ms": 13000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 13080,
+      "end_ms": 13240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 13320,
+      "end_ms": 13480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 13560,
+      "end_ms": 13720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 13800,
+      "end_ms": 13960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 14040,
+      "end_ms": 14200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 14280,
+      "end_ms": 14440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 14520,
+      "end_ms": 14680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 14760,
+      "end_ms": 14920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 15000,
+      "end_ms": 15160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 15240,
+      "end_ms": 15400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 15480,
+      "end_ms": 15640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 15720,
+      "end_ms": 15880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 15960,
+      "end_ms": 16120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 16200,
+      "end_ms": 16360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 16440,
+      "end_ms": 16600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 16680,
+      "end_ms": 16840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 16920,
+      "end_ms": 17080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 17160,
+      "end_ms": 17320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 17400,
+      "end_ms": 17560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 17640,
+      "end_ms": 17800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 17880,
+      "end_ms": 18040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 18120,
+      "end_ms": 18280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 18360,
+      "end_ms": 18520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 18600,
+      "end_ms": 18760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 18840,
+      "end_ms": 19000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 19080,
+      "end_ms": 19240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 19320,
+      "end_ms": 19480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 19560,
+      "end_ms": 19720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 19800,
+      "end_ms": 19960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 20040,
+      "end_ms": 20200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 20280,
+      "end_ms": 20440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 20520,
+      "end_ms": 20680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 20760,
+      "end_ms": 20920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 21000,
+      "end_ms": 21160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 21240,
+      "end_ms": 21400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 21480,
+      "end_ms": 21640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 21720,
+      "end_ms": 21880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 1,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 22580,
+      "end_ms": 22740,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 22820,
+      "end_ms": 22980,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 23060,
+      "end_ms": 23220,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 23300,
+      "end_ms": 23460,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 23540,
+      "end_ms": 23700,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 23780,
+      "end_ms": 23940,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 24020,
+      "end_ms": 24180,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 24260,
+      "end_ms": 24420,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 24500,
+      "end_ms": 24660,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 24740,
+      "end_ms": 24900,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 24980,
+      "end_ms": 25140,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 25220,
+      "end_ms": 25380,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 25460,
+      "end_ms": 25620,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 25700,
+      "end_ms": 25860,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 25940,
+      "end_ms": 26100,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 26180,
+      "end_ms": 26340,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 26420,
+      "end_ms": 26580,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 26660,
+      "end_ms": 26820,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 26900,
+      "end_ms": 27060,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 27140,
+      "end_ms": 27300,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 27380,
+      "end_ms": 27540,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 27620,
+      "end_ms": 27780,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 27860,
+      "end_ms": 28020,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 28100,
+      "end_ms": 28260,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 28340,
+      "end_ms": 28500,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 28580,
+      "end_ms": 28740,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 28820,
+      "end_ms": 28980,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 29060,
+      "end_ms": 29220,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 29300,
+      "end_ms": 29460,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 29540,
+      "end_ms": 29700,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 29780,
+      "end_ms": 29940,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 30020,
+      "end_ms": 30180,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 30260,
+      "end_ms": 30420,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 30500,
+      "end_ms": 30660,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 30740,
+      "end_ms": 30900,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 30980,
+      "end_ms": 31140,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 31220,
+      "end_ms": 31380,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 31460,
+      "end_ms": 31620,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 31700,
+      "end_ms": 31860,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 31940,
+      "end_ms": 32100,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 32180,
+      "end_ms": 32340,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 32420,
+      "end_ms": 32580,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 32660,
+      "end_ms": 32820,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 32900,
+      "end_ms": 33060,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 33140,
+      "end_ms": 33300,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 2,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 33600,
+      "end_ms": 33760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 33840,
+      "end_ms": 34000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 34080,
+      "end_ms": 34240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 34320,
+      "end_ms": 34480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 34560,
+      "end_ms": 34720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 34800,
+      "end_ms": 34960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 35040,
+      "end_ms": 35200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 35280,
+      "end_ms": 35440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 35520,
+      "end_ms": 35680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 35760,
+      "end_ms": 35920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 36000,
+      "end_ms": 36160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 36240,
+      "end_ms": 36400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 36480,
+      "end_ms": 36640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 36720,
+      "end_ms": 36880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 36960,
+      "end_ms": 37120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 37200,
+      "end_ms": 37360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 37440,
+      "end_ms": 37600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 37680,
+      "end_ms": 37840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 37920,
+      "end_ms": 38080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 38160,
+      "end_ms": 38320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 38400,
+      "end_ms": 38560,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 38640,
+      "end_ms": 38800,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 38880,
+      "end_ms": 39040,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 39120,
+      "end_ms": 39280,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 39360,
+      "end_ms": 39520,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "so",
+      "start_ms": 39600,
+      "end_ms": 39760,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "we",
+      "start_ms": 39840,
+      "end_ms": 40000,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "keep",
+      "start_ms": 40080,
+      "end_ms": 40240,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "going",
+      "start_ms": 40320,
+      "end_ms": 40480,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "over",
+      "start_ms": 40560,
+      "end_ms": 40720,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 40800,
+      "end_ms": 40960,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "numbers",
+      "start_ms": 41040,
+      "end_ms": 41200,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "and",
+      "start_ms": 41280,
+      "end_ms": 41440,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 41520,
+      "end_ms": 41680,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "plan",
+      "start_ms": 41760,
+      "end_ms": 41920,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "for",
+      "start_ms": 42000,
+      "end_ms": 42160,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "next",
+      "start_ms": 42240,
+      "end_ms": 42400,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "week",
+      "start_ms": 42480,
+      "end_ms": 42640,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "while",
+      "start_ms": 42720,
+      "end_ms": 42880,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "everyone",
+      "start_ms": 42960,
+      "end_ms": 43120,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "listens",
+      "start_ms": 43200,
+      "end_ms": 43360,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "quietly",
+      "start_ms": 43440,
+      "end_ms": 43600,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "in",
+      "start_ms": 43680,
+      "end_ms": 43840,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "the",
+      "start_ms": 43920,
+      "end_ms": 44080,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     },
+     {
+      "text": "room",
+      "start_ms": 44160,
+      "end_ms": 44320,
+      "conf_min": 1.0,
+      "punct_only": false,
+      "window": 3,
+      "unknown_piece": false
+     }
+    ],
+    "raw_texts": [
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room",
+     "so",
+     "we",
+     "keep",
+     "going",
+     "over",
+     "the",
+     "numbers",
+     "and",
+     "the",
+     "plan",
+     "for",
+     "next",
+     "week",
+     "while",
+     "everyone",
+     "listens",
+     "quietly",
+     "in",
+     "the",
+     "room"
+    ],
+    "seam_ops": [],
+    "paragraphs": [
+     [
+      0,
+      135
+     ],
+     [
+      135,
+      180
+     ]
+    ],
+    "title": "so we keep going over the numbers and the plan…",
+    "flagged_word_indices": [],
+    "copy_text": "so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone\n\nlistens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room"
    }
   }
  ],

@@ -23,6 +23,8 @@ class TranscriptVectorsTest {
         maxWords = constants["MAX_WORDS"].long().toInt(),
         dedupeMs = constants["DEDUPE_MS"].long(),
         minWordEndMs = constants["MIN_WORD_END_MS"].long(),
+        capWords = constants["CAP_WORDS"].long().toInt(),
+        capLookbackWords = constants["CAP_LOOKBACK_WORDS"].long().toInt(),
     )
 
     @Test
@@ -38,7 +40,7 @@ class TranscriptVectorsTest {
     @Test
     fun formatCases() {
         val cases = vectors["format_cases"].list()
-        assertEquals(80, cases.size)
+        assertEquals(83, cases.size)
         for (c in cases.map { it.obj() }) {
             val id = c["id"] as String
             assertTrue(c["options"].obj().isEmpty(), id)
@@ -97,6 +99,27 @@ class TranscriptVectorsTest {
         assertTrue(repaired > 100, "the random inputs exercise seam repair ($repaired repairs)")
     }
 
+    /**
+     * The paragraph cap on random token streams, with a cap small enough to be reached often: batch and
+     * window-by-window assembly agree, no paragraph exceeds the cap, and the words are preserved.
+     */
+    @Test
+    fun theParagraphCapKeepsAssemblyEqualToTheBatch() {
+        var capped = 0
+        for (seed in 0 until 3_000) {
+            val random = kotlin.random.Random(seed)
+            val config = format.copy(maxWords = 2 + random.nextInt(6), capWords = 1 + random.nextInt(12), capLookbackWords = random.nextInt(6))
+            val windows = randomWindows(random)
+            val result = Formatter.format(windows, config)
+            assertInvariant("seed $seed", result)
+            assertTrue(result.paragraphs.all { it.count() <= config.capWords }, "seed $seed sizes")
+            // A closed paragraph that does not end a sentence was closed by the cap.
+            capped += result.paragraphs.dropLast(1).count { !TextRules.endsSentence(result.words[it.last].text) }
+            assertIncrementalMatches("seed $seed", windows, result, config)
+        }
+        assertTrue(capped > 100, "the random inputs reach the cap ($capped capped paragraphs)")
+    }
+
     private fun assertInvariant(id: String, result: FormattedTranscript) {
         val raw = result.rawWords
         val words = result.words
@@ -151,11 +174,12 @@ class TranscriptVectorsTest {
     }
 
     /** The worker's window-by-window assembly, restored from storage after every window, equals the batch. */
-    private fun assertIncrementalMatches(id: String, windows: List<DecodedWindow>, batch: FormattedTranscript) {
+    private fun assertIncrementalMatches(id: String, windows: List<DecodedWindow>, batch: FormattedTranscript,
+                                         config: FormatConfig = format) {
         val closed = ArrayList<List<Word>>()
         var open = emptyList<Word>()
         windows.forEachIndexed { index, window ->
-            val update = TranscriptAssembler(format, open).append(window, index)
+            val update = TranscriptAssembler(config, open).append(window, index)
             if (update.paragraphs.isEmpty()) return@forEachIndexed
             closed += update.paragraphs.dropLast(1)
             open = update.paragraphs.last()

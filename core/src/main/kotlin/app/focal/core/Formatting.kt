@@ -9,7 +9,13 @@ data class FormatConfig(
     val maxWords: Int = SpeechTuning.PARAGRAPH_MAX_WORDS,
     val dedupeMs: Long = SpeechTuning.DEDUPE_MS,
     val minWordEndMs: Long = SpeechTuning.MIN_WORD_END_MS,
-)
+    val capWords: Int = SpeechTuning.PARAGRAPH_CAP_WORDS,
+    val capLookbackWords: Int = SpeechTuning.PARAGRAPH_CAP_LOOKBACK_WORDS,
+) {
+    init {
+        require(capWords >= 1 && capLookbackWords >= 0) { "A paragraph cap needs at least one word." }
+    }
+}
 
 /** One seam repair: the period removed from word [afterWord] because word [nextWord] continues it. */
 data class SeamOp(val afterWord: Int, val nextWord: Int, val before: String, val after: String)
@@ -47,10 +53,13 @@ object SeamRepair {
 }
 
 /**
- * Paragraph breaks from pauses and sentence ends. Only a sentence end can close a paragraph: after a long
- * pause, after a shorter pause once the paragraph holds enough sentences, or once it holds enough words.
- * Any '.', '!', '?' or '…' counts ([TextRules.endsSentence]): a pause that long after '3.' or 'Dr.' is a
- * sentence end in speech. Only the title knows ordinals and abbreviations.
+ * Paragraph breaks from pauses and sentence ends. A sentence end closes a paragraph after a long pause, after
+ * a shorter pause once the paragraph holds enough sentences, or once it holds enough words. Any '.', '!', '?'
+ * or '…' counts ([TextRules.endsSentence]): a pause that long after '3.' or 'Dr.' is a sentence end in speech.
+ * Only the title knows ordinals and abbreviations.
+ *
+ * Speech the recognizer did not punctuate has no sentence ends, so a paragraph that reaches
+ * [FormatConfig.capWords] closes anyway, at the longest pause near its end ([capCut]).
  */
 object Paragraphs {
     /** Whether a paragraph closes between [previous] and [next] (call only when [previous] ends a sentence). */
@@ -60,20 +69,43 @@ object Paragraphs {
             words >= config.maxWords
     }
 
+    /**
+     * Where a paragraph of [size] words (word i is [word] of i; [size] is the word that follows) that reached the
+     * cap closes: the boundary b, between words b - 1 and b, with the longest pause among b in
+     * [max(1, size - lookback), size]. Ties go to the latest boundary, so even pauses close it at [size].
+     */
+    internal inline fun capCut(size: Int, lookback: Int, word: (Int) -> Word): Int {
+        var best = size
+        var longest = Long.MIN_VALUE
+        for (b in size downTo maxOf(1, size - lookback)) {
+            val pause = word(b).startMs - word(b - 1).endMs
+            if (pause > longest) { best = b; longest = pause }
+        }
+        return best
+    }
+
     /** Paragraph index ranges over [words]. */
     fun split(words: List<Word>, config: FormatConfig = FormatConfig()): List<IntRange> {
         val out = ArrayList<IntRange>()
         var start = 0
         var sentences = 0
-        for (j in 1..words.size) {
+        for (j in 1 until words.size) {
             val previous = words[j - 1]
             val end = TextRules.endsSentence(previous.text)
-            if (end) sentences++
-            if (j == words.size || !end) continue
-            if (breaks(previous, words[j], sentences, j - start, config)) {
-                out += start until j
-                start = j
-                sentences = 0
+            if (end) {
+                sentences++
+                if (breaks(previous, words[j], sentences, j - start, config)) {
+                    out += start until j
+                    start = j
+                    sentences = 0
+                    continue
+                }
+            }
+            if (j - start >= config.capWords) {
+                val cut = start + capCut(j - start, config.capLookbackWords) { words[start + it] }
+                out += start until cut
+                start = cut
+                sentences = (cut until j).count { TextRules.endsSentence(words[it].text) }
             }
         }
         if (start < words.size) out += start until words.size
@@ -191,7 +223,9 @@ object Formatter {
 /**
  * Incremental formatter for the speech worker: windows arrive in order and the paragraphs grow. Only the
  * last paragraph is open; a closed paragraph never changes again, so the worker can persist each update
- * with the window it came from. Feeding all windows gives exactly [Formatter.format].
+ * with the window it came from. Feeding all windows gives exactly [Formatter.format]. A paragraph closes at
+ * [FormatConfig.capWords] words at the latest, so the open paragraph the worker stores and reads back stays
+ * bounded however long the speech runs without a sentence end.
  *
  * Restore after process death with the words of the open paragraph as stored. Start with an empty
  * open paragraph when the last stored paragraph has no word timings (legacy text): new words then start
@@ -235,6 +269,15 @@ class TranscriptAssembler(
                     open.clear()
                     sentences = 0
                 }
+            }
+            if (open.size >= config.capWords) {
+                // The words after the cut carry over into the next paragraph, which stays open.
+                val cut = Paragraphs.capCut(open.size, config.capLookbackWords) { if (it == open.size) word else open[it] }
+                result += open.subList(0, cut).toList()
+                val carried = open.subList(cut, open.size).toList()
+                open.clear()
+                open += carried
+                sentences = carried.count { TextRules.endsSentence(it.text) }
             }
             open += word
         }

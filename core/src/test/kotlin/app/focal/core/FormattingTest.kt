@@ -102,6 +102,62 @@ class FormattingTest {
         assertEquals("", Title.remainder("   "))
     }
 
+    /**
+     * Four hours of speech the recognizer never punctuated (35,000 words over 14,000 s, in 20 s windows) once
+     * made one open paragraph whose stored words outgrew a cursor window. Every paragraph now closes at the cap,
+     * at the longest pause near its end, and the worker's window-by-window assembly gives the same paragraphs.
+     */
+    @Test
+    fun speechWithoutSentenceEndsNeverGrowsOneUnboundedParagraph() {
+        val config = FormatConfig()
+        val vocabulary = listOf(" and", " then", " we", " keep", " talking", " about", " the", " plan", " for", " it")
+        val windows = (0 until 700).map { w ->
+            // 50 words per 20 s window; every 7th gap is a longer breath, so cuts land on pauses.
+            DecodedWindow(w * 20_000L, null, null, (0 until 50).map { k ->
+                val n = w * 50 + k
+                AsrToken(vocabulary[n % vocabulary.size], 0.1 + k * 0.38 + (k / 7) * 0.06 + if (n % 13 == 0) 0.02 else 0.0, 0.16, -0.01)
+            })
+        }
+        val batch = Formatter.format(windows, config)
+        assertEquals(35_000, batch.words.size)
+        assertTrue(batch.words.last().endMs > 13_990_000)
+        assertTrue(batch.words.none { TextRules.endsSentence(it.text) })
+        val sizes = batch.paragraphs.map { it.count() }
+        assertTrue(sizes.all { it <= config.capWords }, "largest paragraph ${sizes.max()}")
+        assertTrue(sizes.dropLast(1).all { it >= config.capWords - config.capLookbackWords }, "smallest closed ${sizes.dropLast(1).min()}")
+        // Each cut is the longest pause in its range (the latest of equal ones).
+        var start = 0
+        for (range in batch.paragraphs.dropLast(1)) {
+            val cut = range.last + 1
+            val reach = start + config.capWords
+            val pauses = (maxOf(start + 1, reach - config.capLookbackWords)..reach).associateWith {
+                batch.words[it].startMs - batch.words[it - 1].endMs
+            }
+            assertEquals(pauses.entries.last { it.value == pauses.values.max() }.key, cut)
+            start = cut
+        }
+
+        var open = emptyList<Word>()
+        val assembled = ArrayList<List<Word>>()
+        windows.forEachIndexed { index, window ->
+            val update = TranscriptAssembler(config, open).append(window, index)
+            assembled += update.paragraphs.dropLast(1)
+            open = update.paragraphs.last()
+            assertTrue(open.size <= config.capWords, "window $index open ${open.size}")
+        }
+        assembled += open
+        assertEquals(batch.paragraphs.map { r -> r.map { batch.words[it] } }, assembled)
+
+        // A stored open paragraph from before the cap closes at the next word, near its end.
+        val oversized = batch.words.subList(0, 1_000)
+        val next = DecodedWindow(batch.words[999].endMs + 400, null, null, listOf(AsrToken(" more", 0.1, 0.16, -0.01)))
+        val update = TranscriptAssembler(config, oversized).append(next, 700)
+        assertEquals(2, update.paragraphs.size)
+        assertEquals(oversized + update.paragraphs.last().last(), update.paragraphs.flatten())
+        assertEquals("more", update.paragraphs.last().last().text)
+        assertTrue(update.paragraphs.last().size <= config.capLookbackWords + 1)
+    }
+
     @Test
     fun assemblerStartsANewParagraphAfterLegacyText() {
         val window = DecodedWindow(0, null, null, listOf(AsrToken(" Hello", 0.24, 0.16, 0.0), AsrToken(".", 0.4, 0.08, 0.0)))

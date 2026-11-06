@@ -62,6 +62,13 @@ object SpeechTuning {
     const val PARAGRAPH_MIN_SENTENCES = 2
     /** Provisional: a paragraph closes at the first sentence end once it holds this many words. */
     const val PARAGRAPH_MAX_WORDS = 80
+    /**
+     * A paragraph that reaches this many words without closing at a sentence end closes anyway (speech the
+     * recognizer did not punctuate), so no paragraph grows without bound.
+     */
+    const val PARAGRAPH_CAP_WORDS = 2 * PARAGRAPH_MAX_WORDS
+    /** ... at the longest pause among its last this many words (ties: the latest, so even pauses cut at the cap). */
+    const val PARAGRAPH_CAP_LOOKBACK_WORDS = 40
     const val TITLE_MAX_CHARS = 48
     /** A first sentence shorter than this is extended by the next one for the title. */
     const val TITLE_MIN_CHARS = 12
