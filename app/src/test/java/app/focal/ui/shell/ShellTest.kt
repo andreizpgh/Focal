@@ -66,6 +66,25 @@ class SystemBarsTest {
         assertFalse(bars.statusOnMaterial)
     }
 
+    /** Three buttons on a phone turned to landscape: the bar is on a side, and the clip's side edge flips it (5.14). */
+    @Test fun aSideNavigationBarFlipsWithTheClipsSideEdge() {
+        val right = NavigationBar.of(1830f, 824f, left = 0, right = 96, bottom = 0)
+        assertEquals(NavigationBar(NavigationBar.Side.Right, 1734f), right)
+        val bars = SystemBarsState()
+        bars.followMaterial(Rect(0f, 0f, 1734f + 20f, 824f), right, density)
+        assertFalse("the bottom edge alone never reaches a side bar", bars.navigationOnMaterial)
+        bars.followMaterial(Rect(0f, 0f, 1734f + 24f, 824f), right, density)
+        assertTrue(bars.navigationOnMaterial)
+        bars.followLanding(Rect(1660f, 500f, 1772f, 612f), statusBottom = 48f, right)
+        assertTrue("the settling clip still covers the bar's inner edge", bars.navigationOnMaterial)
+        bars.followLanding(Rect(1600f, 500f, 1712f, 612f), statusBottom = 48f, right)
+        assertFalse(bars.navigationOnMaterial)
+        val left = NavigationBar.of(1830f, 824f, left = 96, right = 0, bottom = 0)
+        bars.followMaterial(Rect(96f - 24f, 0f, 1830f, 824f), left, density)
+        assertTrue(bars.navigationOnMaterial)
+        assertEquals(NavigationBar.bottom(776f), NavigationBar.of(1830f, 824f, left = 0, right = 0, bottom = 48))
+    }
+
     @Test fun reducedMotionFlipsAtHalfTheCrossfade() {
         val bars = SystemBarsState()
         bars.followCrossfade(0.49f)

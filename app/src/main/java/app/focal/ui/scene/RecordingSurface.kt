@@ -128,6 +128,7 @@ import app.focal.ui.library.StageMetrics
 import app.focal.ui.library.spokenDuration
 import app.focal.ui.shell.LiveSurfaceState
 import app.focal.ui.shell.LocalDockAreas
+import app.focal.ui.shell.NavigationBar
 import app.focal.ui.shell.SceneChoreography
 import app.focal.ui.shell.SceneEntry
 import app.focal.ui.shell.SystemBarsState
@@ -250,8 +251,14 @@ fun RecordingSurface(
     }
     // The status and navigation icons turn light where the material is behind them (spec 6.2).
     if (bars != null) {
-        val navigationTop = slots.height - navigationBottom
-        LaunchedEffect(bars, spatial, slots) {
+        // Along the bottom, or on a side in a phone turned to landscape with three buttons (spec 5.14).
+        val navigationInsets = WindowInsets.navigationBars
+        val navigation = NavigationBar.of(
+            slots.width, slots.height,
+            left = navigationInsets.getLeft(density, LayoutDirection.Ltr), right = navigationInsets.getRight(density, LayoutDirection.Ltr),
+            bottom = navigationBottom.roundToInt(),
+        )
+        LaunchedEffect(bars, spatial, slots, navigation) {
             snapshotFlow {
                 when {
                     live.landingNote != null && spatial -> BarsInput.Landing(Morph.landing(live.landing.value, slots).first)
@@ -261,13 +268,13 @@ fun RecordingSurface(
                 }
             }.collect { input ->
                 when (input) {
-                    is BarsInput.Morph -> bars.followMaterial(input.clip, navigationTop, density)
-                    is BarsInput.Landing -> bars.followLanding(input.clip, slots.statusTop, navigationTop)
+                    is BarsInput.Morph -> bars.followMaterial(input.clip, navigation, density)
+                    is BarsInput.Landing -> bars.followLanding(input.clip, slots.statusTop, navigation)
                     is BarsInput.Fade -> bars.followCrossfade(input.alpha)
                 }
             }
         }
-        DisposableEffect(bars) { onDispose { bars.followMaterial(null, navigationTop, density) } }
+        DisposableEffect(bars) { onDispose { bars.followMaterial(null, navigation, density) } }
     }
     // The library switches to its live layout only once it is covered (spec 2.8.2).
     LaunchedEffect(live, live.entries, spatial) {
