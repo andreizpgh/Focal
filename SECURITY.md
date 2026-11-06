@@ -2,11 +2,11 @@
 
 ## Reporting a problem
 
-Please report security problems privately, not in a public issue. Use
-**Report a vulnerability** on the repository's
-[Security tab](https://github.com/andreizpgh/Focal/security). If that option is
-not shown, open an issue titled "Security contact" with no details, and you will
-be given a private way to send them.
+Please report security problems privately, not in a public issue, through
+GitHub's private vulnerability reporting: **Report a vulnerability** on the
+repository's [Security tab](https://github.com/andreizpgh/Focal/security). If
+that button is missing, open an issue that only asks for a private contact and
+contains no details of the problem.
 
 Include the Focal version, the Android version and device, and the steps to
 reproduce. Do not include real recordings or transcripts; a synthetic example is
@@ -30,7 +30,7 @@ by size and SHA-256 in `models/`, and a way around that check is a security issu
 
 The repository contains no credentials, signing keys, model weights or user data,
 and must never contain them. GitHub Actions scans the full history with Gitleaks
-on every push and pull request. If you find a secret in the repository or a
-release, report it privately as above and do not repeat it anywhere public. An
-exposed credential is revoked or rotated by its owner; deleting the latest copy
-does not remove it from history.
+on every push to `main` and every pull request. If you find a secret in the
+repository or a release, report it privately as above and do not repeat it
+anywhere public. An exposed credential is revoked or rotated by its owner;
+deleting the latest copy does not remove it from history.
