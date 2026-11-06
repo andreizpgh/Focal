@@ -313,9 +313,10 @@ fun StageTranscript(
 private const val STAGE_PARAGRAPHS = 6
 
 /**
- * The scene's live typesetting (spec 4.21.6): the whole transcript in a list that starts at the latest paragraph and
- * is anchored to the region's bottom, so the latest line rides the bottom edge; older text scrolls up under the
- * mask. While [follow] is on (the list shows the latest paragraph), a new paragraph is brought into view and opens
+ * The scene's live typesetting (spec 4.21.6): the whole transcript in a list that starts at the latest paragraph. It
+ * opens at the region's top under the instrument (T2) and is bottom-anchored once it overflows, so from then on the
+ * latest line rides the bottom edge and older text scrolls up under the mask. The morph lays out the same list in its
+ * moving region, so a short transcript sits under the timer at every p and the scene's frame at p = 1 is the morph's. While [follow] is on (the list shows the latest paragraph), a new paragraph is brought into view and opens
  * from zero height, so the text above slides up on `move`; scrolled back by more than a paragraph, the list holds
  * still and the caller shows "Latest".
  */
@@ -345,7 +346,8 @@ fun SceneTranscript(
         modifier = modifier,
         contentPadding = contentPadding,
         reverseLayout = true,
-        verticalArrangement = Arrangement.spacedBy(SceneMetrics.paragraphGap, Alignment.Bottom),
+        // Top: a transcript shorter than the region sits at its top; a longer one fills it from the bottom.
+        verticalArrangement = Arrangement.spacedBy(SceneMetrics.paragraphGap, Alignment.Top),
     ) {
         itemsIndexed(reversed, key = { _, paragraph -> paragraph.id }, contentType = { _, _ -> PARAGRAPH }) { position, paragraph ->
             val index = view.paragraphs.lastIndex - position

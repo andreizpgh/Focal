@@ -33,6 +33,9 @@ object SceneShots {
     val all: List<Shot> = buildList {
         addAll(themed("rec-start") { SceneFrame(1f, start()) })
         addAll(themed("rec-live") { SceneFrame(1f, live()) })
+        // Just after the lift (T2): one short paragraph opens at the region's top, under the instrument.
+        addAll(themed("rec-first-text") { SceneFrame(1f, firstText()) })
+        add(Shot("expand-first-text-60-light", dark = false) { SceneFrame(0.6f, firstText()) })
         addAll(themed("rec-paused") { SceneFrame(1f, paused()) })
         add(Shot("rec-paused-storage-light", dark = false) { SceneFrame(1f, paused(PauseReason.STORAGE)) })
         add(Shot("rec-preparing-light", dark = false) { SceneFrame(1f, start().copy(speech = SpeechAvailability.PREPARING)) })
@@ -64,6 +67,7 @@ private const val LATEST_SCROLL = 3
 internal fun paragraphs(texts: List<String>) = texts.mapIndexed { i, text -> LiveParagraph(i.toLong(), text, open = i == texts.lastIndex) }
 
 internal fun start() = SceneUi(elapsedSeconds = 4, hint = true)
+internal fun firstText() = SceneUi(elapsedSeconds = 9, paragraphs = paragraphs(FakeScene.take(1)))
 internal fun live() = SceneUi(elapsedSeconds = 256, paragraphs = paragraphs(FakeScene))
 internal fun paused(reason: PauseReason? = null) =
     SceneUi(elapsedSeconds = 768, paused = true, pauseReason = reason, paragraphs = paragraphs(FakeLive))

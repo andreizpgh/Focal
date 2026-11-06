@@ -45,6 +45,7 @@ object AdaptiveShots {
         addAll(sized("tablet-library", Tablet) { Library(idleModel()) })
         addAll(sized("tablet-note", Tablet) { Note(design()) })
         add(sized("tablet-scene", Tablet, dark = false) { SceneFrame(1f, live()) })
+        add(sized("tablet-scene-first-text", Tablet, dark = false) { SceneFrame(1f, firstText()) })
     }
 
     val wide: List<Shot> = buildList {

@@ -515,8 +515,14 @@ private fun TextRegion(
             .drawWithContent {
                 val f = frame.value
                 clipRect(top = f.textTop, bottom = f.textBottom) { this@drawWithContent.drawContent() }
-                drawRect(
-                    Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, startY = f.textTop, endY = f.textTop + f.textMask),
+                // The mask dissolves text that has scrolled up to the region's top. A transcript that still fits sits
+                // at the top, latest stretch and all, unmasked: the mask grows in as the text overflows, full once a
+                // line has gone under the edge (and whenever the stage's typesetting shows, always bottom-anchored), so
+                // a line the edge cuts is always faded out at it.
+                val masked = max(listState.overflow(FocalType.sceneText.lineHeight.toPx()), f.stageTextAlpha)
+                val mask = f.textMask * masked
+                if (mask >= 1f) drawRect(
+                    Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, startY = f.textTop, endY = f.textTop + mask),
                     blendMode = BlendMode.DstIn,
                 )
                 // While "↓ Latest" shows, the text ends 8 dp above it: no glyph sits under or against its glass.
@@ -576,6 +582,19 @@ private fun TextRegion(
     }
     // "Read latest paragraph" speaks through a polite live region (spec 5.3.2).
     Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite; contentDescription = announced })
+}
+
+/**
+ * How far the scene's list runs past its region, over [line] (0 while it all fits, 1 from a line on), read where it
+ * is drawn. Arriving paragraphs open from zero height, so it grows smoothly as the text starts to overflow.
+ */
+private fun LazyListState.overflow(line: Float): Float {
+    val info = layoutInfo
+    val items = info.visibleItemsInfo
+    if (items.isEmpty()) return 0f
+    if (items.size < info.totalItemsCount || line <= 0f) return 1f
+    val content = items.sumOf { it.size } + info.mainAxisItemSpacing * (items.size - 1) + info.beforeContentPadding + info.afterContentPadding
+    return ((content - info.viewportSize.height) / line).coerceIn(0f, 1f)
 }
 
 /** The stage's last line: "Storage is full" in ink (the only caption), or a model condition, receded. */
