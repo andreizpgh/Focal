@@ -37,21 +37,32 @@ the copy is done.
 
 ## Updating from an earlier alpha
 
-Version 0.2.0 is signed with the same development certificate as Alpha 2 to
-Alpha 9, so installing it over one of them updates the app in place and keeps
-your notes, edits and audio.
+Android updates an app in place only when the new APK is signed with the same
+key. Alpha 2 to Alpha 9 share one development key, and each release, 0.2.0
+included, is checked to carry the same certificate before it is published.
 
-- The first launch converts your notes to the new format. Text, edits, custom
-  titles and audio are kept. Older notes have no word timings, so playback starts
-  at the beginning of the paragraph you tap.
+- **Over Alpha 9:** tested on Android emulators. Every note, edit, custom title
+  and audio file was kept.
+- **Over Alpha 2 to Alpha 8:** same key, and migration tests cover their older
+  database formats, but installing over them has not been tried.
+
+What changes on the first launch:
+
+- Your notes are converted to the new format. Text, edits, custom titles and
+  audio are kept. Older notes have no word timings, so playback starts at the
+  beginning of the paragraph you tap.
+- **Restore original** works where the earlier version saved the original text.
+  Where it did not, your edits stay but there is no original to restore.
 - A note that was still waiting for transcription is finished with the new speech
   model, for the parts that were missing.
-- The Whisper model and older research files are deleted, which frees space.
+- Model files that earlier versions copied to the phone, such as the Whisper
+  model, are deleted, which frees space.
 - The speech-language setting is gone: the model detects the language itself.
 
-Alpha 1 was signed with a different certificate, so Android refuses to install
-0.2.0 over it. Uninstalling deletes Focal’s notes and audio: copy any text you
-want to keep first.
+Alpha 1 was built in the cloud with its own development key, and installing
+0.2.0 over it has not been checked. If Android refuses the update, copy out any
+text you want to keep before you uninstall Alpha 1: uninstalling deletes Focal’s
+notes and audio.
 
 ## While testing
 

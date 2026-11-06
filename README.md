@@ -27,7 +27,7 @@ Tap **Finish**, then **Copy**.
 - **Hear any word.** Tap a word to play the recording from just before it. Words
   the recognizer was unsure of carry a faint dotted underline.
 - **Fix it in place.** Edit paragraphs where they are, find and replace across a
-  note, and restore any paragraph’s original text.
+  note, and restore a paragraph’s original text.
 - **Keep the receipt.** The original audio stays with the note until you remove
   it. Copy gives you clean paragraphs, nothing else.
 

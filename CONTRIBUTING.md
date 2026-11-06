@@ -115,8 +115,10 @@ APK named `Focal-X.Y.Z.apk`.
 1. Build the release APK from a clean checkout of the release commit, with the
    verified model in place.
 2. Run the checks above and the instrumented suite against that exact APK.
-3. Sign it outside Git. Testing releases use the same development certificate as
-   Alpha 2 to Alpha 9, so updates install in place and keep notes.
+3. Sign it outside Git with the development key used since Alpha 2, and check
+   that the APK's signing-certificate SHA-256 matches the one recorded in
+   `releases/stt-alpha-9.json`. Only then does it install over earlier alphas in
+   place and keep their notes.
 4. Record the commit, APK and signing-certificate SHA-256, model and runtime hashes,
    the checks run and what remains unverified, and attach that with checksums.
 5. Create a draft pre-release with notes from [CHANGELOG.md](CHANGELOG.md), check

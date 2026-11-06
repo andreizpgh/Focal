@@ -7,8 +7,9 @@ pre-release.
 
 ## [0.2.0] - 2026-11-06
 
-A rebuilt app around one offline speech engine and a new interface. It installs
-over Alpha 2–9 and keeps your notes.
+A rebuilt app around one offline speech engine and a new interface. Installing
+it over Alpha 9 kept every note in emulator tests. Alpha 2–8 share Alpha 9's
+signing key, and migration tests cover their older database formats.
 
 ### Added
 
@@ -18,7 +19,8 @@ over Alpha 2–9 and keeps your notes.
   highlighted and the text follows playback.
 - Edit in place: paragraphs become editable where they are, Enter splits and
   Backspace joins, with undo and redo for the session and **Restore original**
-  for any edited paragraph.
+  for edited paragraphs. Notes from earlier alphas keep their edits, but where
+  their original text was not saved there is nothing to restore.
 - Find and replace within a note, with one-step Undo.
 - Words the recognizer was unsure of get a faint dotted underline (provisional).
 - Automatic paragraphs and a title taken from the first sentence.
