@@ -18,7 +18,7 @@ generator instead of editing Android files or `generated/` independently.
   status-bar contrast, uniformly mapped to a 20 px-wide mark in a 24 px canvas.
   Its core strokes remain nine separate components at 24 px.
 - `generated/focal-lockup-*-outlined.svg` replaces the supplied text with paths
-  from the repository's Inter 4.001, weight 600. Native kerning, source placement,
+  from Inter 4.001 (`Inter.woff2`), weight 600. Native kerning, source placement,
   120-unit size, and −4.2-unit tracking are retained. No system-font fallback is
   used. The supplied lockups in `source/` remain unmodified references; use the
   outlined versions for distribution. Inter is covered by `Inter-LICENSE.txt`.
