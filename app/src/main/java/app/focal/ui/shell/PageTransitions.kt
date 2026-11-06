@@ -914,7 +914,7 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
     if (stageLike) Spacer(
         Modifier.fillMaxSize().drawBehind {
             val f = frame() ?: return@drawBehind
-            val fadeTop = bottom.top.value - (FocalLayout.bottomGap + FocalLayout.bottomFade).toPx()
+            val fadeTop = bottom.fadeEnd(this) - bottom.fadeHeight(this)
             if (fadeTop.isNaN() || f.clip.bottom >= size.height) return@drawBehind
             val cover = smoothstep(fadeTop - FocalLayout.bottomFade.toPx(), fadeTop, f.clip.bottom)
             if (cover > 0f) drawRect(colors.paper, Offset(0f, f.clip.bottom), Size(size.width, size.height - f.clip.bottom), alpha = cover)

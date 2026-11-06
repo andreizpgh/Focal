@@ -425,7 +425,7 @@ private fun LibraryList(
                 // the window's edges land inside a pixel that the paper covers only partly, and the glyphs under it
                 // would show there as a dotted line.
                 .drawWithContent {
-                    val solidBottom = shell.bottom.top.value - FocalLayout.bottomGap.toPx()
+                    val solidBottom = shell.bottom.fadeEnd(this)
                     clipRect(top = status.getTop(this).toFloat(), bottom = if (solidBottom.isNaN()) size.height else solidBottom) {
                         this@drawWithContent.drawContent()
                     }

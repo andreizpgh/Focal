@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
@@ -53,6 +54,7 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.WindowLayout
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -71,9 +73,26 @@ class BottomColumnState {
     internal var topTarget by mutableFloatStateOf(Float.NaN)
     internal var windowHeight by mutableFloatStateOf(0f)
     internal var keyboardDriven by mutableStateOf(false)
+    /** Nothing stands in the column (a landscape rail with no strip, rows or pill): its edge is the navigation inset. */
+    internal var bareTarget by mutableStateOf(false)
 
     /** The same edge on `move` (exact while the keyboard drives it). Read it in draw or layout only. */
     internal val top = Animatable(Float.NaN)
+    /** [bareTarget] on `move`, 0 to 1, so the fade changes height with the edge it ends at. */
+    internal val bare = Animatable(0f)
+
+    /**
+     * Where the paper fade over the content ends, solid paper below (spec 2.6), in window pixels; read in draw or
+     * layout only. 8 dp above the topmost element; with nothing in the column, at the navigation inset's top.
+     */
+    fun fadeEnd(density: Density): Float = top.value - with(density) { FocalLayout.bottomGap.toPx() } * (1 - bare.value)
+
+    /**
+     * The fade's height: 64 dp over a bottom element; with nothing in the column (the dock stands in the landscape
+     * rail), the 16 dp soft edge the status bar has at the top, so a short window's last rows are not washed out by a
+     * fade over nothing.
+     */
+    fun fadeHeight(density: Density): Float = with(density) { lerp(FocalLayout.bottomFade, FocalLayout.topFade, bare.value).toPx() }
 
     /** Scrolling content reserves the column's height plus 64 dp, so the last line scrolls clear of the fade. */
     fun contentReserve(density: Density): Dp = with(density) {
@@ -140,9 +159,16 @@ private fun Density.railX(circles: Rect, width: Int, rtl: Boolean): Int {
 fun rememberBottomColumnState(): BottomColumnState {
     val state = remember { BottomColumnState() }
     LaunchedEffect(state) {
-        snapshotFlow { state.topTarget to state.keyboardDriven }.distinctUntilChanged().collect { (target, keyboard) ->
+        snapshotFlow { Triple(state.topTarget, state.keyboardDriven, state.bareTarget) }.distinctUntilChanged().collect { (target, keyboard, bare) ->
             if (target.isNaN()) return@collect
-            if (keyboard || state.top.value.isNaN()) state.top.snapTo(target) else state.top.animateTo(target, FocalMotion.move())
+            val bareValue = if (bare) 1f else 0f
+            if (keyboard || state.top.value.isNaN()) {
+                state.top.snapTo(target)
+                state.bare.snapTo(bareValue)
+            } else coroutineScope {
+                launch { state.bare.animateTo(bareValue, FocalMotion.move()) }
+                state.top.animateTo(target, FocalMotion.move())
+            }
         }
     }
     return state
@@ -235,14 +261,15 @@ fun BottomColumn(
             railDock(span.start, span.endInclusive, status.getTop(this).toFloat(), navigationTop.toFloat(), layoutDirection == LayoutDirection.Rtl, this)
         } else null
         val dockBottom = railBox?.bottom?.roundToInt() ?: baseline
-        // In the rail nothing stands on the bottom line, so the strip takes it.
-        val dockTop = if (rail) baseline + gap else dockBottom - dockHeight
+        // In the rail nothing stands on the bottom line: the strip takes it, and without a strip the navigation inset
+        // is the column's edge, so the feedback pill rides 8 dp above it (spec 5.14).
+        val dockTop = if (rail) navigationTop else dockBottom - dockHeight
         val rowPlaceables = rowMeasurables.map { it.measure(childConstraints) }
         val rowsHeight = rowPlaceables.maxOfOrNull { it.height } ?: 0
         val rowsBottom = min(imeTop, navigationTop - gap) - gap
         val stripPlaceables = if (rows == null) stripMeasurables.map { it.measure(childConstraints) } else emptyList()
         val stripHeight = stripPlaceables.maxOfOrNull { it.height } ?: 0
-        val stripBottom = dockTop - gap
+        val stripBottom = if (rail) baseline else dockTop - gap
         val topmost = when {
             rows != null -> rowsBottom - rowsHeight
             stripHeight > 0 -> stripBottom - stripHeight
@@ -254,7 +281,9 @@ fun BottomColumn(
         // the keyboard is then the topmost visible bottom element (spec 2.5, 4.1.3).
         val feedbackBottom = if (dockHidden && rows == null) rowsBottom else topmost - gap
         state.windowHeight = height.toFloat()
-        state.topTarget = (if (state.feedback.current != null) feedbackBottom - feedbackHeight else topmost).toFloat()
+        val feedbackShown = state.feedback.current != null
+        state.topTarget = (if (feedbackShown) feedbackBottom - feedbackHeight else topmost).toFloat()
+        state.bareTarget = rail && rows == null && stripHeight == 0 && !feedbackShown
         layout(width, height) {
             feedbackPlaceables.forEach { it.place(left, feedbackBottom - it.height) }
             stripPlaceables.forEach { it.place(left, stripBottom - it.height) }
@@ -267,7 +296,8 @@ fun BottomColumn(
 /**
  * The paper fade above the bottom column (spec 2.6), drawn by the screen under its own content: a gradient from
  * transparent to paper ending 8 dp above the topmost bottom element (64 dp tall), then solid paper to the window
- * bottom. Above search results and find rows ([keyboard]) it is 48 dp and ends at the element itself. It follows the
+ * bottom. Above search results and find rows ([keyboard]) it is 48 dp and ends at the element itself. With nothing in
+ * the column (the dock in the landscape rail) it is a 16 dp soft edge over the navigation inset. It follows the
  * element on `move` (exactly, while the keyboard drives it). When the keyboard covers the topmost element (a rename),
  * the 48 dp fade ends at the keyboard's top instead. [alpha] lets a screen hold it off while nothing scrolls under it.
  * Fill the window with [modifier].
@@ -285,10 +315,10 @@ fun BottomFade(state: BottomColumnState, modifier: Modifier, keyboard: Boolean =
             // A keyboard over the bottom column (an inline rename hides the dock and rides nothing on the keyboard):
             // the content that ends at its top gets the keyboard rows' fade instead of a cut through a line.
             val imeTop = size.height - ime.getBottom(this)
-            val elementEnd = if (keyboard) top else top - FocalLayout.bottomGap.toPx()
+            val elementEnd = if (keyboard) top else state.fadeEnd(this)
             val overKeyboard = imeTop < elementEnd
             val end = if (overKeyboard) imeTop else elementEnd
-            val start = end - (if (keyboard || overKeyboard) FocalLayout.keyboardFade else FocalLayout.bottomFade).toPx()
+            val start = end - (if (keyboard || overKeyboard) FocalLayout.keyboardFade.toPx() else state.fadeHeight(this))
             drawRect(
                 Brush.verticalGradient(0f to Color.Transparent, 1f to paper, startY = start, endY = end),
                 topLeft = Offset(0f, start), size = Size(size.width, end - start), alpha = strength,
