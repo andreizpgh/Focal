@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.focal.FocalApplication
 import app.focal.R
+import app.focal.recording.RecordingState
 import app.focal.recording.ServiceEvent
 import app.focal.recording.StartFailure
 import app.focal.ui.components.FeedbackAction
@@ -173,7 +174,9 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
             when (request) {
                 is EntryRequest.OpenNote -> shell.open(Destination.Note(request.noteId))
                 EntryRequest.Record -> onRecord()
-                is EntryRequest.ShowRecording -> {
+                // Only for a capture that is live, or the one the shortcut has just started (no note yet): a stale
+                // notification, or another app, never puts up a scene with nothing behind it.
+                is EntryRequest.ShowRecording -> if (request.noteId == null || RecordingState.live.value.capturing) {
                     // Settings snaps closed under the covering scene (4.23.7); the scene is simply open (5.13).
                     shell.settings.snapClosed()
                     shell.live.show(reduced)
