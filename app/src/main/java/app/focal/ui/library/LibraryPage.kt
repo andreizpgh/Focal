@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
@@ -186,6 +187,8 @@ fun LibraryPage(
         )
     }
 
+    // A data class from the resolved words: equal across recompositions, so the row and stage actions built on it
+    // below stay the same objects and the list's rows can skip.
     val menuLabels = MenuLabels(
         copyText = stringResource(R.string.menu_copy_text), share = stringResource(R.string.menu_share),
         rename = stringResource(R.string.menu_rename), removeAudio = stringResource(R.string.menu_remove_audio),
@@ -376,7 +379,7 @@ private fun LibraryList(
         }
     }
     val labels = rememberStickyLabels(listState) { key -> sections[key] }
-    val texts = model.days.associate { dayKey(it.epochDay) to dates.dayLabel(it.epochDay, today) }
+    val texts = remember(model.days, dates, today) { model.days.associate { dayKey(it.epochDay) to dates.dayLabel(it.epochDay, today) } }
     val stageBottom = {
         val info = listState.layoutInfo
         info.visibleItemsInfo.firstOrNull { it.key == STAGE_KEY }?.let { (it.offset + it.size - info.viewportStartOffset).toFloat() } ?: Float.NaN
@@ -500,8 +503,8 @@ private fun Modifier.blockTouches(): Modifier = pointerInput(Unit) {
     }
 }
 
-@Stable
-private class MenuLabels(val copyText: String, val share: String, val rename: String, val removeAudio: String, val delete: String) {
+@Immutable
+private data class MenuLabels(val copyText: String, val share: String, val rename: String, val removeAudio: String, val delete: String) {
     fun of(item: MenuItem) = when (item) {
         MenuItem.CopyText -> copyText
         MenuItem.Share -> share
