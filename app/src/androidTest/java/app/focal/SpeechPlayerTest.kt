@@ -8,6 +8,7 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
+import androidx.activity.ComponentActivity
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -42,7 +43,7 @@ class SpeechPlayerTest {
     private lateinit var store: NoteStore
     private lateinit var player: SpeechPlayer
     private lateinit var owner: CoroutineScope
-    private lateinit var activity: ActivityScenario<MainActivity>
+    private lateinit var activity: ActivityScenario<ComponentActivity>
     private val created = mutableListOf<String>()
     private val errors = CopyOnWriteArrayList<String>()
     private val onError: (String) -> Unit = { errors += it }
@@ -52,7 +53,7 @@ class SpeechPlayerTest {
         runBlocking { app.storageReady.await() }
         store = app.store
         // Android 15 grants media focus only to a foreground app or eligible service.
-        activity = ActivityScenario.launch(MainActivity::class.java)
+        activity = ActivityScenario.launch(ComponentActivity::class.java)
         owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         player = SpeechPlayer(app, store, owner)
     }

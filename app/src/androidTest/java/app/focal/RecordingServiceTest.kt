@@ -9,6 +9,7 @@ import android.media.AudioRecord
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -57,7 +58,7 @@ import java.util.concurrent.atomic.AtomicLong
 @RunWith(AndroidJUnit4::class)
 class RecordingServiceTest {
     private val app get() = ApplicationProvider.getApplicationContext<FocalApplication>()
-    private lateinit var activity: ActivityScenario<MainActivity>
+    private lateinit var activity: ActivityScenario<ComponentActivity>
     private var originalIds: Set<String>? = null
     private val inputs = CopyOnWriteArrayList<SyntheticInput>()
 
@@ -74,7 +75,9 @@ class RecordingServiceTest {
         RecordingService.metadataCapacityForTests = null
         RecordingService.decoderFactoryForTests = { error("Synthetic decoder unavailable for capture-only test") }
         RecordingService.inputFactoryForTests = { SyntheticInput().also { inputs += it } }
-        activity = ActivityScenario.launch(MainActivity::class.java)
+        // A plain visible activity lets the service start in the foreground. The interface is not needed here,
+        // and its live wave draws every frame, so waitForIdleSync (inside onActivity) would never return.
+        activity = ActivityScenario.launch(ComponentActivity::class.java)
     }
 
     @After fun cleanup() {

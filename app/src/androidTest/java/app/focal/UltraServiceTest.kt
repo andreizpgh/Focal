@@ -6,6 +6,7 @@ import android.content.Intent
 import android.media.AudioRecord
 import android.os.Build
 import android.os.SystemClock
+import androidx.activity.ComponentActivity
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -49,7 +50,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class UltraServiceTest {
     private val app get() = ApplicationProvider.getApplicationContext<FocalApplication>()
     private val store get() = app.store
-    private lateinit var activity: ActivityScenario<MainActivity>
+    private lateinit var activity: ActivityScenario<ComponentActivity>
     private var fixtureId: String? = null
 
     @Before fun setup() {
@@ -64,7 +65,7 @@ class UltraServiceTest {
         RecordingService.inputFactoryForTests = null
         // Staged waiting notes are transcribed by explicit commands only.
         app.autoResumeTranscription = false
-        activity = ActivityScenario.launch(MainActivity::class.java)
+        activity = ActivityScenario.launch(ComponentActivity::class.java)
     }
 
     @After fun cleanup() {

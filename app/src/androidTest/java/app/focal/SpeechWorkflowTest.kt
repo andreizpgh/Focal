@@ -3,6 +3,7 @@ package app.focal
 import android.Manifest
 import android.content.Intent
 import android.os.SystemClock
+import androidx.activity.ComponentActivity
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -30,7 +31,7 @@ class SpeechWorkflowTest {
     /** A digitally silent tail is recorded as silent without decoding, so this recovery needs no model. */
     @Test fun recoveryOfASilentTailKeepsTextAndOriginalWithoutAddingParagraphs() {
         kotlinx.coroutines.runBlocking { app.storageReady.await() }
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
             run {
                 val id = app.store.create()
                 try {
@@ -79,7 +80,7 @@ class SpeechWorkflowTest {
             automation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
         var id: String? = null
         try {
-            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
                 scenario.onActivity { RecordingService.command(it, RecordingService.START) }
                 await { RecordingState.live.value.noteId != null }
                 id = RecordingState.live.value.noteId!!
