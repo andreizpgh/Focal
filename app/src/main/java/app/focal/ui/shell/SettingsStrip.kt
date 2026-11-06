@@ -12,6 +12,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -39,6 +40,7 @@ import app.focal.ui.design.FullMotion
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.smoothstep
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -117,12 +119,20 @@ fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, se
     val settingsHidden by remember(state) { derivedStateOf { state.progress.value <= 0f } }
     if (!settingsHidden) SideEffect { state.composedSettings = true }
     val corner = FocalShapes.sheetRadius
+    // The handler's own coroutine is cancelled with the gesture, so the spring back runs in this scope; a back that
+    // follows at once stops it before it can undo the close.
+    val scope = rememberCoroutineScope()
+    val springBack = remember { PendingJob() }
     PredictiveBackHandler(enabled = !settingsHidden) { events ->
+        springBack.cancel()
+        var committed = false
         try {
             events.collect { event -> state.progress.snapTo(1f - event.progress) }
+            committed = true
             state.close(reduced)
         } catch (cancelled: CancellationException) {
-            state.settle(1f, reduced)
+            // Only a cancelled gesture springs back; a committed close may end by disabling this handler.
+            if (!committed) springBack.job = scope.launch { state.settle(1f, reduced) }
             throw cancelled
         }
     }
