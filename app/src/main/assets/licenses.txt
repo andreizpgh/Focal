@@ -23,7 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-Kotlin, AndroidX and Material Symbols (Apache License 2.0)
+Apache License 2.0: Kotlin and kotlinx.coroutines, AndroidX and Jetpack Compose, Material Symbols
 
 
                                  Apache License

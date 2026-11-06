@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -32,6 +33,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.collapse
+import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
@@ -52,15 +55,24 @@ import kotlinx.coroutines.withContext
 @Immutable
 data class LicenseEntry(@param:StringRes val name: Int, @param:StringRes val origin: Int, val asset: String, val start: String?, val end: String?)
 
-/** What Focal ships (spec 5.10), in the order the page lists them. */
+/** The Apache License 2.0 section of the app's notices, which the AndroidX, Material Symbols and Kotlin entries share. */
+private const val APACHE = "Apache License 2.0:"
+
+/**
+ * Everything Focal ships (spec 5.10), in the order the page lists them: the speech model with its attribution, the
+ * speech runtime, the typeface, the platform libraries and the app itself. The headings (the [LicenseEntry.start]
+ * and [LicenseEntry.end] prefixes) are the bundled notices' own.
+ */
 val LicenseEntries = listOf(
     LicenseEntry(R.string.lic_parakeet, R.string.lic_parakeet_origin, LicenseText.ULTRA, null, "Silero VAD — "),
     LicenseEntry(R.string.lic_silero, R.string.lic_silero_origin, LicenseText.ULTRA, "Silero VAD — ", "sherpa-onnx "),
     LicenseEntry(R.string.lic_sherpa, R.string.lic_sherpa_origin, LicenseText.ULTRA, "sherpa-onnx ", "ONNX Runtime "),
     LicenseEntry(R.string.lic_onnxruntime, R.string.lic_onnxruntime_origin, LicenseText.ULTRA, "ONNX Runtime ", null),
     LicenseEntry(R.string.lic_inter, R.string.lic_inter_origin, LicenseText.APP, "Inter ", null),
-    LicenseEntry(R.string.lic_platform, R.string.lic_platform_origin, LicenseText.APP, "Kotlin, AndroidX", "Inter "),
-    LicenseEntry(R.string.lic_focal, R.string.lic_focal_origin, LicenseText.APP, null, "Kotlin, AndroidX"),
+    LicenseEntry(R.string.lic_androidx, R.string.lic_androidx_origin, LicenseText.APP, APACHE, "Inter "),
+    LicenseEntry(R.string.lic_symbols, R.string.lic_symbols_origin, LicenseText.APP, APACHE, "Inter "),
+    LicenseEntry(R.string.lic_kotlin, R.string.lic_kotlin_origin, LicenseText.APP, APACHE, "Inter "),
+    LicenseEntry(R.string.lic_focal, R.string.lic_focal_origin, LicenseText.APP, null, APACHE),
 )
 
 /** Slices the bundled notices (assets/licenses.txt, assets/ultra-licenses.txt) into entries and paragraphs. */
@@ -127,11 +139,15 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 item(key = "entry:$index") {
                     val source = remember { MutableInteractionSource() }
                     val open = index in expanded
+                    val toggle = { if (open) expanded.remove(index) else expanded.add(index) }
                     Column(
                         Modifier
                             .fillMaxWidth()
+                            .heightIn(min = SettingsMetrics.rowMinHeight)
                             .focusRing(FocalShapes.block)
-                            .clickable(source, indication = EntryPlate, role = Role.Button) { if (open) expanded.remove(index) else expanded.add(index) }
+                            .clickable(source, indication = EntryPlate, role = Role.Button) { toggle() }
+                            // TalkBack says whether the text is shown and offers the opposite.
+                            .semantics { if (open) collapse { toggle(); true } else expand { toggle(); true } }
                             .padding(horizontal = FocalLayout.gutter, vertical = SettingsMetrics.rowPadding),
                     ) {
                         Text(stringResource(entry.name), style = FocalType.rowTitle, color = colors.ink)

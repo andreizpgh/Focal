@@ -175,8 +175,12 @@
     <string name="lic_onnxruntime_origin">MIT, with its third-party notices</string>
     <string name="lic_inter" translatable="false">Inter</string>
     <string name="lic_inter_origin">SIL Open Font License 1.1 · The typeface</string>
-    <string name="lic_platform" translatable="false">Kotlin, AndroidX, Jetpack Compose and Material Symbols</string>
-    <string name="lic_platform_origin">Apache 2.0</string>
+    <string name="lic_androidx" translatable="false">AndroidX and Jetpack Compose</string>
+    <string name="lic_androidx_origin">Apache 2.0 · The interface toolkit</string>
+    <string name="lic_symbols" translatable="false">Material Symbols</string>
+    <string name="lic_symbols_origin">Apache 2.0 · The icons</string>
+    <string name="lic_kotlin" translatable="false">Kotlin</string>
+    <string name="lic_kotlin_origin">Apache 2.0 · The standard library and kotlinx.coroutines</string>
     <string name="lic_focal" translatable="false">Focal</string>
     <string name="lic_focal_origin">MIT · This app</string>
 
