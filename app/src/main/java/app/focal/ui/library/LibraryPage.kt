@@ -144,6 +144,8 @@ fun LibraryPage(
     searchState: LibrarySearchState = rememberLibrarySearchState(),
     query: TextFieldState = rememberTextFieldState(search.query),
     stageFocus: FocusRequester? = null,
+    /** The live recording's whole seconds, read only by the live stage's timer (null: the model's own). */
+    liveSeconds: (() -> Long)? = null,
     /** A note whose title starts out renamed in place (the stage's or a row's). */
     initialRename: String? = null,
 ) {
@@ -269,7 +271,7 @@ fun LibraryPage(
             if (model.loaded) LibraryContent(
                 model, dates, today, meter, listState, stageActions, rowActions, noteMenu,
                 renaming = renaming, renameField = renameField, imePadded = renaming != null,
-                openSettings = actions.openSettings, stageFocus = stageFocus,
+                openSettings = actions.openSettings, stageFocus = stageFocus, liveSeconds = liveSeconds,
                 // The library itself is on screen: no settings page, search or scene over it.
                 onScreen = { !searchState.open && shell.settings.progress.value <= 0f && shell.live.expansion.value <= 0f },
             )
@@ -306,6 +308,7 @@ private fun LibraryContent(
     imePadded: Boolean,
     openSettings: () -> Unit,
     stageFocus: FocusRequester?,
+    liveSeconds: (() -> Long)?,
     onScreen: () -> Boolean,
 ) {
     val empty = model.empty
@@ -326,7 +329,10 @@ private fun LibraryContent(
     }
     if (!empty || listAlpha.value > 0f) {
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = listAlpha.value }) {
-            LibraryList(model, dates, today, meter, listState, stageActions, rowActions, noteMenu, renaming, renameField, imePadded, stageFocus, onScreen)
+            LibraryList(
+                model, dates, today, meter, listState, stageActions, rowActions, noteMenu, renaming, renameField, imePadded, stageFocus,
+                liveSeconds, onScreen,
+            )
         }
     }
 }
@@ -350,6 +356,7 @@ private fun LibraryList(
     renameField: @Composable (NoteRow, Boolean) -> Unit,
     imePadded: Boolean,
     stageFocus: FocusRequester?,
+    liveSeconds: (() -> Long)?,
     onScreen: () -> Boolean,
 ) {
     val shell = LocalShell.current
@@ -458,6 +465,7 @@ private fun LibraryList(
                         menu = { if (row != null) noteMenu(row) },
                         title = if (row != null && renaming == row.id) { { renameField(row, true) } } else null,
                         shown = stageShown,
+                        liveSeconds = liveSeconds,
                     )
                 }
             }

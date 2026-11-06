@@ -37,6 +37,7 @@ import app.focal.ui.state.NoteRow
 import app.focal.ui.state.RecordingUiState
 import app.focal.ui.state.RecordingViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -51,7 +52,12 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
     val library: LibraryViewModel = viewModel()
     val recording: RecordingViewModel = viewModel()
     val libraryState by library.state.collectAsStateWithLifecycle()
-    val recordingState by recording.state.collectAsStateWithLifecycle()
+    // The recording without its timer: the library is rebuilt when the session changes, not once a second. The time
+    // reaches only the live stage's timer and its spoken description.
+    val recordingState by remember(recording) { recording.state.map { it.copy(elapsedSeconds = 0L) }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(recording.state.value.copy(elapsedSeconds = 0L))
+    val liveSeconds = remember(recording) { recording.state.map { it.elapsedSeconds }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(recording.state.value.elapsedSeconds)
     val search by library.search.collectAsStateWithLifecycle()
     val fresh = FreshNotes.current
     // After Record the library keeps its layout until the scene covers it (spec 2.8.2 `liveLayoutSwitch`).
@@ -137,7 +143,7 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
         capturing = model.live != null,
         blocked = sheetOpen,
         layer = layer,
-        library = { LibraryPage(model, search, meter, dates, today, actions, stageFocus = stageFocus) },
+        library = { LibraryPage(model, search, meter, dates, today, actions, stageFocus = stageFocus, liveSeconds = { liveSeconds.value }) },
         settings = {
             SettingsRoute(
                 onBack = { scope.launch { shell.settings.close(reduced) } },

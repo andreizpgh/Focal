@@ -43,11 +43,13 @@ import app.focal.ui.state.LibraryViewModel
 import app.focal.ui.state.PlaybackViewModel
 import app.focal.ui.state.RecordingPhase
 import app.focal.ui.state.RecordingViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -130,10 +132,14 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
             }
         }
     }
-    // Notes that turn Ready while Focal watches become fresh (the stage's white Copy).
+    // Notes that turn Ready while Focal watches become fresh (the stage's white Copy). Compared off the main thread,
+    // and not for the recording's timer: only when the notes or the session change.
     LaunchedEffect(library, recording) {
         val watch = ReadyWatch()
-        combine(library.state, recording.state) { notes, capture -> watch.update(notes, capture) }.collect { FreshNotes.markReady(it) }
+        val session = recording.state.map { it.copy(elapsedSeconds = 0L) }.distinctUntilChanged()
+        combine(library.state, session) { notes, capture -> watch.update(notes, capture) }
+            .flowOn(Dispatchers.Default)
+            .collect { if (it.isNotEmpty()) FreshNotes.markReady(it) }
     }
     // Recording started: the tick when the service confirms capture; a start dismisses the feedback pill (4.8).
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }

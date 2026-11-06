@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -59,6 +61,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.style.LineBreak
@@ -180,7 +183,8 @@ private class PressPoint { var at = Offset.Zero }
  * The stage (spec 4.22): one card in the instrument's material at the top of the library that holds whatever is
  * current: the live capture, or one note (transcribing, waiting, ready). [menu] draws the row menu of the stage's
  * note when it is open; [title] replaces the title while it is renamed in place. [shown] says whether the card is on
- * screen now (the readiness moment plays only there).
+ * screen now (the readiness moment plays only there). [liveSeconds] is the recording's time, read only where it is
+ * shown and spoken, so the card does not recompose once a second (the model's own when null).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -194,6 +198,7 @@ fun StageCard(
     menu: @Composable () -> Unit = {},
     title: (@Composable () -> Unit)? = null,
     shown: () -> Boolean = { true },
+    liveSeconds: (() -> Long)? = null,
 ) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
@@ -204,7 +209,11 @@ fun StageCard(
     val source = remember { MutableInteractionSource() }
     val press = remember { PressPoint() }
     val settingsLabel = stringResource(R.string.a11y_open_settings)
-    val description = stageDescription(stage, dates, today)
+    // A live stage's description changes with its time: it is resolved apart, so only that part recomposes.
+    val seconds = liveSeconds ?: { (stage as? StageUi.Live)?.elapsedSeconds ?: 0L }
+    val spoken = remember { SpokenText() }
+    if (stage is StageUi.Live) Speaks(spoken) { stageDescription(stage.copy(elapsedSeconds = seconds()), dates, today) }
+    val description = if (stage is StageUi.Live) null else stageDescription(stage, dates, today)
     val note = (stage as? StageUi.Note)?.row
     val clickLabel = stringResource(if (note != null) R.string.a11y_open_note else R.string.a11y_expand_recording)
     val large = LocalDensity.current.fontScale >= StageMetrics.LARGE_FONT
@@ -220,7 +229,7 @@ fun StageCard(
             // The page transforms grow out of the card at rest (outside its press scale).
             .pageOrigin(origin)
             .semantics(mergeDescendants = true) {
-                contentDescription = description
+                contentDescription = description ?: spoken.text
                 customActions = note?.let(actions.menuActions).orEmpty() + CustomAccessibilityAction(settingsLabel) { actions.openSettings(); true }
                 if (note == null) expand(clickLabel) { actions.expand(); true }
             }
@@ -246,7 +255,7 @@ fun StageCard(
     ) {
         if (shimmering) Spacer(Modifier.matchParentSize().shimmer { shimmer.value })
         when (stage) {
-            is StageUi.Live -> RecordedStage { LiveStage(stage, meter) }
+            is StageUi.Live -> RecordedStage { LiveStage(stage, meter, seconds) }
             is StageUi.Note -> RecordedStage { NoteStage(
                 stage, dates, today, actions, title, origin, shown,
                 onReadyMoment = {
@@ -288,6 +297,24 @@ private fun RecordedStage(content: @Composable () -> Unit) {
             drawLayer(layer)
         },
     ) { content() }
+}
+
+/** The live stage's timer: the only part of the card that reads the recording's time while it composes. */
+@Composable
+private fun LiveTimer(seconds: () -> Long, style: TextStyle, width: (Long) -> Float, color: ColorProducer) =
+    TimerText(seconds(), style, width, color)
+
+/** A description that changes on its own clock, kept apart from the node that speaks it. */
+@Stable
+private class SpokenText {
+    var text by mutableStateOf("")
+}
+
+/** Resolves [text] in a scope of its own and hands it to [holder], read by the stage's semantics. */
+@Composable
+private fun Speaks(holder: SpokenText, text: @Composable () -> String) {
+    val resolved = text()
+    SideEffect { holder.text = resolved }
 }
 
 /** TalkBack's reading of the stage (spec 7.8, 8.2). */
@@ -397,7 +424,7 @@ private const val HALF_TURN = 180f
  * "Paused"; only a storage-full pause writes one line.
  */
 @Composable
-private fun LiveStage(stage: StageUi.Live, meter: WaveMeter) {
+private fun LiveStage(stage: StageUi.Live, meter: WaveMeter, seconds: () -> Long) {
     val shell = LocalShell.current
     val colors = FocalTheme.colors
     val density = LocalDensity.current
@@ -429,7 +456,7 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter) {
                         )
                     }
                     Spacer(Modifier.width(StageMetrics.liveGap))
-                    TimerText(stage.elapsedSeconds, timers.stage, timers::stageWidth, color = { timerColor.value })
+                    LiveTimer(seconds, timers.stage, timers::stageWidth, color = { timerColor.value })
                 }
             },
             {

@@ -60,7 +60,7 @@ fun SceneRoute(shell: ShellState, recording: RecordingViewModel, library: Librar
     val reduced by rememberUpdatedState(LocalReducedMotion.current)
     val haptics = rememberFocalHaptics()
     val notificationsOff = rememberNotificationsOff()
-    val firstRecordings = notes.days.sumOf { it.rows.size } < FocalTiming.HINT_RECORDINGS
+    val firstRecordings = remember(notes.days) { notes.days.sumOf { it.rows.size } < FocalTiming.HINT_RECORDINGS }
     val paused = state.phase == RecordingPhase.PAUSED
     val scene = SceneUi(
         elapsedSeconds = state.elapsedSeconds, paused = paused, pauseReason = state.pauseReason, speech = state.speech,
