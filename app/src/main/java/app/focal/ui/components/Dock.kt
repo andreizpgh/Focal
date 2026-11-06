@@ -170,8 +170,9 @@ private fun pillFace(state: DockState) = when (state) {
     is DockState.Note -> PillFace.NotePrimary
 }
 
+/** Every dock morph follows a tap (Search, Record, Pause, Finish, a page change): it counts from it. */
 @OptIn(ExperimentalSharedTransitionApi::class)
-private val MoveBounds = BoundsTransform { _, _ -> FocalMotion.move() }
+private val MoveBounds = BoundsTransform { _, _ -> FocalMotion.fromTrigger(FocalMotion.move()) }
 
 /**
  * The dock (spec 4.3): at most a 56 dp circle and a 56 dp pill on the bottom column. Bounds animate on `move`
@@ -473,7 +474,7 @@ private fun <F : Any> SlotSwap(target: F, face: @Composable BoxScope.(F, contain
         if (leaving == null || q.value >= 0.5f) leaving = shown
         shown = target
         q.snapTo(0f)
-        q.animateTo(1f, FocalMotion.fadeFast())
+        q.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.fadeFast()))
         leaving = null
     }
     Box(Modifier.fillMaxWidth().heightIn(min = DockMetrics.height), contentAlignment = Alignment.Center) {
@@ -555,19 +556,22 @@ private class SlotPlacement { var coordinates: LayoutCoordinates? = null }
 
 /**
  * Draws [content] in both dresses split at the material's edge (window y from [edge]): paper below it, the material
- * above it, glyphs and labels included (`dockDress`, spec 2.8.6). Without an edge only the paper dress exists.
+ * above it, glyphs and labels included (`dockDress`, spec 2.8.6). Without an edge only the paper dress exists. The
+ * slot and its paper dress keep their place in the composition whether or not an edge exists, so the slot's bounds
+ * animation and the paper content's fade-through carry on when the material arrives behind the dock (T1′e: Pause
+ * grows from 0 while Record's left edge moves 24 → 92, as the scene registers its edge).
  */
 @Composable
 private fun DressWipe(edge: (() -> Float)?, modifier: Modifier, content: @Composable BoxScope.(Dress) -> Unit) {
-    if (edge == null) {
-        Box(modifier, contentAlignment = Alignment.Center) { content(Dress.Paper) }
-        return
-    }
     val placement = remember { SlotPlacement() }
     fun local(windowY: Float): Float = windowY - (placement.coordinates?.takeIf { it.isAttached }?.positionInWindow()?.y ?: 0f)
     Box(modifier.onPlaced { placement.coordinates = it }, contentAlignment = Alignment.Center) {
         Box(
             Modifier.drawWithContent {
+                if (edge == null) {
+                    drawContent()
+                    return@drawWithContent
+                }
                 val e = local(edge())
                 if (e < size.height) clipRect(top = e.coerceAtLeast(0f), left = -size.width, right = 2 * size.width, bottom = 2 * size.height) {
                     this@drawWithContent.drawContent()
@@ -575,7 +579,7 @@ private fun DressWipe(edge: (() -> Float)?, modifier: Modifier, content: @Compos
             },
             contentAlignment = Alignment.Center,
         ) { content(Dress.Paper) }
-        Box(
+        if (edge != null) Box(
             Modifier.matchParentSize().drawWithContent {
                 val e = local(edge())
                 if (e > 0f) clipRect(top = -size.height, left = -size.width, right = 2 * size.width, bottom = e.coerceAtMost(2 * size.height)) {
