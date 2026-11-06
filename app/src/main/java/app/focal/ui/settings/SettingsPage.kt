@@ -71,6 +71,7 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.LocalWindowLayout
+import app.focal.ui.design.chromeAlign
 import app.focal.ui.design.tabular
 import app.focal.ui.state.SettingsUiState
 import app.focal.ui.state.ThemeMode
@@ -248,8 +249,8 @@ private fun SettingsRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(SettingsMetrics.descriptionGap)) {
-            Text(title, style = FocalType.field.copy(fontWeight = FocalWeight.Medium), color = colors.ink)
-            if (description != null) Text(description, style = FocalType.secondary, color = colors.recede)
+            Text(title, style = FocalType.field.copy(fontWeight = FocalWeight.Medium), color = colors.ink, textAlign = chromeAlign())
+            if (description != null) Text(description, style = FocalType.secondary, color = colors.recede, textAlign = chromeAlign())
         }
         if (value != null) {
             Spacer(Modifier.width(SettingsMetrics.trailingGap))

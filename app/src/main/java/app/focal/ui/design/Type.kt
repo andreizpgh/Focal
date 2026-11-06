@@ -1,6 +1,9 @@
 package app.focal.ui.design
 
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -11,8 +14,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -67,6 +72,11 @@ private fun style(
     fontSynthesis = FontSynthesis.None,
     lineHeightStyle = CssLines,
     platformStyle = PlatformTextStyle(includeFontPadding = false),
+    // Every text takes its paragraph direction from its first strong letter, as a TextView does (spec 8.5). The
+    // interface is English, so in a mirrored layout a label still reads "8 min" with its full stop at the end; a title
+    // derived from a note reads in the note's own direction, aligned with its text. Layout (which side a control or a
+    // column sits on) still mirrors, and interface text that fills a column keeps to its start edge ([chromeAlign]).
+    textDirection = TextDirection.Content,
 )
 
 /** The type scale (spec 2.3). Tracking follows Inter's dynamic metrics; the scene tokens are tuned by eye. */
@@ -108,10 +118,19 @@ object FocalType {
 /**
  * The user's words (the transcript, its live text, row previews, search snippets) take their direction from their
  * first strong letter, as a TextView's do: an Arabic or Hebrew note reads right to left, aligned to its own start, in
- * an English interface, and an English note left to right in a mirrored one. Chrome (labels, states, hints) keeps the
- * layout's direction, the default for a style (spec 8.5).
+ * an English interface, and an English note left to right in a mirrored one. Every style of the scale already does
+ * (chrome is English, so it reads left to right in a mirrored layout too); this names the intent where words are set.
  */
 fun TextStyle.words(): TextStyle = copy(textDirection = TextDirection.Content)
+
+/**
+ * Where interface text that fills a column aligns: the layout's start edge, mirrored right to left, while its English
+ * still reads left to right (spec 8.5). Without it such text would align to its own direction, the left, and part
+ * from the labels and controls that mirror around it.
+ */
+@Composable
+@ReadOnlyComposable
+fun chromeAlign(): TextAlign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) TextAlign.Right else TextAlign.Left
 
 /** Tabular figures on a style whose numbers change in place ("tnum on numbers" in the scale). */
 fun TextStyle.tabular(): TextStyle = copy(fontFeatureSettings = TNUM)

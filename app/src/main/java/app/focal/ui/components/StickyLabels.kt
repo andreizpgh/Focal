@@ -29,12 +29,13 @@ import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
+import app.focal.ui.design.chromeAlign
 import kotlin.math.min
 
 /** A day label in the list (spec 4.12.1): `section` in `muted`, a heading for TalkBack. */
 @Composable
 fun DayLabel(text: String, modifier: Modifier = Modifier) {
-    Text(text, style = FocalType.section, color = FocalTheme.colors.recede, modifier = modifier.semantics { heading() })
+    Text(text, style = FocalType.section, color = FocalTheme.colors.recede, textAlign = chromeAlign(), modifier = modifier.semantics { heading() })
 }
 
 /**
