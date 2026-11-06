@@ -76,6 +76,7 @@ import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.smoothstep
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -132,6 +133,9 @@ internal class Origin {
     /** The note the stage holds (null while it is live); a row's own note. */
     var noteId: String? = null
     var titleLines: Int = 2
+    /** The title as the origin sets it: the flight starts as this text before the page has laid out its own. */
+    var titleText: String = ""
+    var titleMuted: Boolean = false
 }
 
 /** The page title a flight lands on or leaves from (spec 6.1 T16, T16′: a shared element). */
@@ -192,9 +196,26 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     /** v when a predictive back was released: the fold runs from the previewed page over what remains of v. */
     internal var commitAt = 1f
 
-    /** Whether this change's origin is on screen (resolved once, at its first frame): else it fades through. */
-    private var resolvedFor: PageChange? = null
-    private var resolved = false
+    /**
+     * Whether this change's origin is on screen (decided once, [decide]): else it fades through. State, so whatever
+     * read the change while it was undecided is drawn again once it is decided.
+     */
+    private var resolvedFor by mutableStateOf<PageChange?>(null)
+    private var resolved by mutableStateOf(false)
+
+    /**
+     * Whether the title flies in this frame (T16, T16′): decided at the start of each frame from the last frame's
+     * layout, so the origin's title (hidden in the layout phase) and the flight (drawn in the draw phase) never
+     * disagree in the frame a page is first placed (both titles drawn at once).
+     */
+    private var flightReady by mutableStateOf(false)
+
+    /**
+     * Opening: the clock time at which the page's title was first laid out. Until then the flight holds the origin's
+     * title in place (NavDisplay composes the page a frame or two after the tap); from then it flies on its own
+     * `move` from there, so it never jumps.
+     */
+    private var titleFrom = Float.NaN
 
     /** [destination] opens on top with [motion], timed from now. */
     internal fun push(destination: Destination, motion: PageMotion) {
@@ -208,7 +229,13 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         if (current != null && current.predictive && !current.committed && current.document == top) {
             commitAt = document?.value ?: 1f
             predictiveBody = Animatable(1f)
-            change = current.copy(committed = true, serial = ++serial)
+            val committed = current.copy(committed = true, serial = ++serial)
+            change = committed
+            // No clock runs for a released predictive back: its fold decides at once, from the previewed layout.
+            if (committed.motion in CONTAINERS) {
+                resolved = originCard(committed) != null
+                resolvedFor = committed
+            }
         } else {
             change = PageChange(reverse(opened[top]), top, push = false, serial = ++serial)
             startClock()
@@ -238,16 +265,64 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
             return
         }
         elapsed = 0f
-        clock = scope.launch {
+        flightReady = false
+        titleFrom = Float.NaN
+        val lead = FocalTiming.TRIGGER_LEAD_MS * NANOS_PER_MS
+        // Undispatched, so it waits for the very next frame: the one the trigger is drawn in.
+        clock = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             var trigger = Long.MIN_VALUE
             do {
                 withFrameNanos { now ->
-                    if (trigger == Long.MIN_VALUE) trigger = now - FocalTiming.TRIGGER_LEAD_MS * NANOS_PER_MS
+                    if (trigger == Long.MIN_VALUE) trigger = now - lead
                     elapsed = (now - trigger).toFloat() / NANOS_PER_MS
+                    // A transform that had to wait for its pages runs from the frame that can draw it, so it never
+                    // jumps ahead of what was on screen.
+                    if (decide(c)) {
+                        trigger = now - lead
+                        elapsed = (now - trigger).toFloat() / NANOS_PER_MS
+                    }
                 }
             } while (elapsed < end)
             elapsed = Float.POSITIVE_INFINITY
         }
+    }
+
+    /**
+     * At the start of a frame, from the last frame's layout: whether the change transforms (its origin is laid out
+     * and on screen), and whether its title flies. Opening grows out of the origin from the tap; the page arrives in
+     * it once NavDisplay has composed it, and its title flies from the moment it is laid out ([titleFrom]). On Back,
+     * NavDisplay composes the library a frame or two after the trigger, so the page holds until its origin is laid
+     * out ([undecided]) and the clock restarts there; without an origin by [DECIDE_MS] it fades through. Deciding
+     * before layout, never during it, keeps every part of one frame on one decision. Returns true in the frame it
+     * decides after waiting.
+     */
+    private fun decide(c: PageChange): Boolean {
+        if (c.motion !in CONTAINERS || change !== c) return false
+        var waited = false
+        if (resolvedFor !== c) {
+            val ready = originCard(c) != null
+            if (!ready && elapsed <= DECIDE_MS) return false
+            resolved = ready
+            resolvedFor = c
+            waited = elapsed > FocalTiming.TRIGGER_LEAD_MS
+        }
+        val titled = c.motion == PageMotion.Stage || c.motion == PageMotion.Row
+        flightReady = resolved && titled && originTitle(c) != null && (c.push || titleFlies(c))
+        if (c.push && titleFrom.isNaN() && flightReady && titleFlies(c)) titleFrom = elapsed
+        return waited
+    }
+
+    private fun originTitle(c: PageChange): LayoutCoordinates? = originOf(c)?.title?.takeIf { it.isAttached && it.size.width > 0 }
+
+    /**
+     * The flying title's progress, 0 = the page's title, 1 = the origin's: opening, its own `move` from the frame the
+     * page's title was laid out (until then it holds at the origin); folding and after a predictive release, the
+     * change's own.
+     */
+    internal fun titleProgress(c: PageChange): Float {
+        if (!c.push) return progress(c)
+        if (titleFrom.isNaN()) return 1f
+        return 1 - move(elapsed - titleFrom)
     }
 
     /** How long a change's clock runs: until its slowest part has settled (spec 2.8). */
@@ -305,22 +380,21 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         originOf(c)?.card?.takeIf { it.isAttached && it.size.width > 0 && !it.boundsInWindowOrEmpty().isEmpty }
 
     /**
-     * Whether the change in flight is a container transform whose origin is on screen. Decided once, when the origin
-     * is laid out or the upper page has started to move: NavDisplay composes the incoming page a frame or two after
-     * the back stack changes, so until then nothing has moved and the decision waits.
+     * Whether the change in flight is a container transform whose origin is on screen: decided by the clock at the
+     * start of a frame ([decide]); a released predictive back decides as it is released ([pop]).
      */
     internal fun transforms(c: PageChange? = change): Boolean {
         if (c == null || c.motion !in CONTAINERS) return false
         if (c.predictive && !c.committed) return false
-        if (resolvedFor !== c) {
-            val found = originCard(c) != null
-            val started = c.predictive || documentProgress() != (if (c.push) 0f else 1f)
-            if (!found && !started) return false
-            resolved = found
-            resolvedFor = c
-        }
-        return resolved
+        return resolvedFor === c && resolved
     }
+
+    /**
+     * A container change whose clock has not decided yet (see [decide]): the page that was on screen holds. Under
+     * reduced motion no clock runs and the change snaps.
+     */
+    private fun undecided(c: PageChange): Boolean =
+        c.motion in CONTAINERS && !c.predictive && resolvedFor !== c && elapsed.isFinite()
 
     /** Whether the transform is still drawing: the upper page has not reached its end. */
     internal fun active(c: PageChange? = change): Boolean {
@@ -334,7 +408,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         val c = change ?: return false
         if (c.motion != PageMotion.Stage && c.motion != PageMotion.Row) return false
         if (noteIdOf(c.document) != noteId) return false
-        return transforms(c) && active(c) && titleFlies(c)
+        if (c.predictive) return transforms(c) && active(c) && titleFlies(c)
+        return flightReady && active(c)
     }
 
     private fun titleFlies(c: PageChange): Boolean {
@@ -446,6 +521,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         }
         // T7: the scene covers the change; the page below leaves at once (pages are transparent sheets on one paper).
         if (c.motion == PageMotion.Cut) return if (upper) PageLook.Shown else PageLook.Gone
+        if (undecided(c)) return if (upper == !c.push) PageLook.Shown else PageLook.Gone
         if (transforms(c)) {
             if (!upper) {
                 val alpha = when {
@@ -486,6 +562,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         const val HOLD_MARGIN_MS = 3 * FocalTiming.TRIGGER_LEAD_MS.toInt()
         /** `bodyFadeDelay` (spec 2.8.3): the page's meta and text start to arrive this long after the trigger. */
         const val BODY_DELAY_MS = 80f
+        /** How long a container change may wait for its two ends to be laid out before it fades through instead. */
+        const val DECIDE_MS = 4f * FocalTiming.TRIGGER_LEAD_MS
         /** T16: the page's body develops once the flying title is this close to its landing line. */
         val TITLE_CLEARANCE = 16.dp
         private const val NANOS_PER_MS = 1_000_000L
@@ -722,7 +800,7 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, chan
                 if (!pages.flying(id)) return@drawBehind
                 val flight = pages.flight(change, f, placement.coordinates ?: return@drawBehind, this, colors) ?: return@drawBehind
                 val layout = measurer.measure(
-                    pages.pageTitle.text, flight.style, overflow = TextOverflow.Ellipsis, maxLines = flight.lines,
+                    flight.text, flight.style, overflow = TextOverflow.Ellipsis, maxLines = flight.lines,
                     constraints = Constraints(maxWidth = max(1, flight.width.roundToInt())), density = this, layoutDirection = layoutDirection,
                 )
                 drawText(layout, color = flight.color, topLeft = flight.topLeft)
@@ -739,7 +817,7 @@ private class OverlayPlacement {
 }
 
 /** The flying title in one frame. */
-private class Flight(val style: TextStyle, val color: Color, val topLeft: Offset, val width: Float, val lines: Int)
+private class Flight(val text: String, val style: TextStyle, val color: Color, val topLeft: Offset, val width: Float, val lines: Int)
 
 /** The rect of [of] in [into]'s space, unclipped. */
 private fun LayoutCoordinates.rectOf(of: LayoutCoordinates): Rect = localBoundingBoxOf(of, clipBounds = false)
@@ -783,8 +861,29 @@ private fun PageTransitions.frameIn(c: PageChange, overlay: LayoutCoordinates, d
 private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: LayoutCoordinates, density: Density, colors: app.focal.ui.design.FocalColors): Flight? {
     val originSlot = (if (c.motion == PageMotion.Row) rows[(c.document as? Destination.Note)?.id] else stage) ?: return null
     val originTitle = originSlot.title?.takeIf { it.isAttached } ?: return null
-    val pageCoordinates = pageTitle.coordinates?.takeIf { it.isAttached } ?: return null
+    val row = c.motion == PageMotion.Row
+    val originStyle = if (row) FocalType.rowTitle else FocalType.headline
     val from = overlay.rectOf(originTitle)
+    val pageInkFor = { muted: Boolean -> if (muted) colors.recede else colors.ink }
+    val originInkFor = { muted: Boolean ->
+        when {
+            row -> pageInkFor(muted)
+            muted -> colors.stageRecede
+            else -> colors.stageInk
+        }
+    }
+    val pageCoordinates = pageTitle.coordinates?.takeIf { it.isAttached && pageTitle.noteId == (c.document as? Destination.Note)?.id }
+    val p = titleProgress(c)
+    // Opening, before the page has laid out its title: the title holds where the origin set it.
+    if (pageCoordinates == null || p >= 1f) {
+        // Its ink follows what is under it: the material while it lasts, then paper.
+        val muted = originSlot.titleMuted
+        return Flight(
+            text = originSlot.titleText, style = originStyle.copy(lineBreak = LineBreak.Heading),
+            color = lerp(pageInkFor(muted), originInkFor(muted), if (row) 1f else f.material),
+            topLeft = from.topLeft, width = from.width, lines = originSlot.titleLines,
+        )
+    }
     var to = overlay.rectOf(pageCoordinates)
     val scale = previewScale(f.preview)
     if (f.preview > 0f) with(density) {
@@ -793,10 +892,7 @@ private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: La
         val cy = overlay.size.height / 2f
         to = Rect(cx + (to.left - cx) * scale + shift, cy + (to.top - cy) * scale, cx + (to.right - cx) * scale + shift, cy + (to.bottom - cy) * scale)
     }
-    val row = c.motion == PageMotion.Row
-    val originStyle = if (row) FocalType.rowTitle else FocalType.headline
     val pageStyle = FocalType.title
-    val p = f.p
     val style = with(density) {
         val size = lerp(pageStyle.fontSize.toPx() * scale, originStyle.fontSize.toPx(), p)
         val line = lerp(pageStyle.lineHeight.toPx() * scale, originStyle.lineHeight.toPx(), p)
@@ -808,15 +904,10 @@ private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: La
         )
     }
     val muted = pageTitle.muted
-    val pageInk = if (muted) colors.recede else colors.ink
-    val originInk = when {
-        row -> pageInk
-        muted -> colors.stageRecede
-        else -> colors.stageInk
-    }
     return Flight(
+        text = pageTitle.text,
         style = style,
-        color = lerp(pageInk, originInk, if (row) p else f.material),
+        color = lerp(pageInkFor(muted), originInkFor(muted), if (row) p else f.material),
         topLeft = lerp(to.topLeft, from.topLeft, p),
         width = lerp(to.width, from.width, p),
         lines = if (p < PageTransitions.HALF) pageTitle.lines else originSlot.titleLines,
@@ -828,23 +919,29 @@ internal fun Modifier.pageOrigin(origin: Origin, title: Boolean = false): Modifi
     if (title) origin.title = it else origin.card = it
 }
 
-/** The stage's origin (one per library): which note it holds and how many lines its title may take. */
+/** The stage's origin (one per library): which note it holds, its title and how many lines that may take. */
 @Composable
-internal fun rememberStageOrigin(noteId: String?, titleLines: Int): Origin {
+internal fun rememberStageOrigin(noteId: String?, titleLines: Int, titleText: String, titleMuted: Boolean): Origin {
     val origin = LocalShell.current.pages.stage
     SideEffect {
         origin.noteId = noteId
         origin.titleLines = titleLines
+        origin.titleText = titleText
+        origin.titleMuted = titleMuted
     }
     return origin
 }
 
 /** A row's origin, registered while the row is composed. */
 @Composable
-internal fun rememberRowOrigin(noteId: String, titleLines: Int): Origin {
+internal fun rememberRowOrigin(noteId: String, titleLines: Int, titleText: String, titleMuted: Boolean): Origin {
     val pages = LocalShell.current.pages
     val origin = remember(noteId) { Origin().also { it.noteId = noteId } }
-    SideEffect { origin.titleLines = titleLines }
+    SideEffect {
+        origin.titleLines = titleLines
+        origin.titleText = titleText
+        origin.titleMuted = titleMuted
+    }
     DisposableEffect(pages, noteId, origin) {
         pages.rows[noteId] = origin
         onDispose { if (pages.rows[noteId] === origin) pages.rows.remove(noteId) }

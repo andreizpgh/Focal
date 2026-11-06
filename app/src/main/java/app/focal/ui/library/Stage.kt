@@ -205,7 +205,10 @@ fun StageCard(
     val note = (stage as? StageUi.Note)?.row
     val clickLabel = stringResource(if (note != null) R.string.a11y_open_note else R.string.a11y_expand_recording)
     val large = LocalDensity.current.fontScale >= StageMetrics.LARGE_FONT
-    val origin = rememberStageOrigin(note?.id, if (large) StageMetrics.TITLE_LINES_LARGE else StageMetrics.TITLE_LINES)
+    val origin = rememberStageOrigin(
+        note?.id, if (large) StageMetrics.TITLE_LINES_LARGE else StageMetrics.TITLE_LINES,
+        titleText = note?.let { noteTitle(it, dates) }.orEmpty(), titleMuted = note?.title?.isBlank() == true,
+    )
     Box(
         modifier
             .fillMaxWidth()

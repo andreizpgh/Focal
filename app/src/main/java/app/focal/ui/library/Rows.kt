@@ -141,7 +141,7 @@ fun NoteRowItem(
     val titleText = noteTitle(row, dates)
     val menuActions = actions.menuActions(row)
     val pages = LocalShell.current.pages
-    val origin = rememberRowOrigin(row.id, RowMetrics.TITLE_LINES)
+    val origin = rememberRowOrigin(row.id, RowMetrics.TITLE_LINES, titleText, titleMuted = row.title.isBlank())
     Box(
         modifier
             .fillMaxWidth()
