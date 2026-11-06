@@ -106,6 +106,8 @@ class LiveSurfaceState internal constructor(open: Boolean) {
     /**
      * Whether the scene has covered the library since Record (p reached 0.95): until then the library keeps its
      * layout from before Record, and switches to its live layout only while covered (spec 2.8.2 `liveLayoutSwitch`).
+     * A fold that starts before that (Back within the first frames of T1′, a fling back) counts as covered too, so a
+     * capture that goes on is never left behind the library's idle layout.
      */
     var covered by mutableStateOf(true)
         internal set
@@ -192,6 +194,7 @@ class LiveSurfaceState internal constructor(open: Boolean) {
      * counts from the release or the tap (FocalMotion.fromTrigger), so the first frame after it has already moved.
      */
     suspend fun settle(target: Float, reducedMotion: Boolean, velocity: Float = 0f) {
+        if (target <= 0f) cover()
         if (reducedMotion || !spatial) withContext(FullMotion) { expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.reducedCrossfade)) }
         else expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.stage()), initialVelocity = velocity)
     }
