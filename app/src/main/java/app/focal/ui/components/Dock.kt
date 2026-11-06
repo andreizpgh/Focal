@@ -451,35 +451,13 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
     ) { CopyContent(copied, ink) }
 }
 
-/**
- * Copy and Copied (spec 4.5.1): the copy glyph turns into a check with a 0.7 to 1 scale (`press`) while the labels
- * crossfade (`fadeFast`). Both labels share one slot as wide as the wider, so the glyph never shifts.
- */
+/** Copy and Copied in the dock's pill (spec 4.5.1): `label`, a 20 dp glyph and an 8 dp gap, centred on "Copy". */
 @Composable
 private fun CopyContent(copied: Boolean, ink: Color) {
-    val check = remember { Animatable(if (copied) 1f else 0f) }
-    val checkScale = remember { Animatable(1f) }
-    LaunchedEffect(copied) {
-        if (copied) launch { checkScale.snapTo(CHECK_START_SCALE); checkScale.animateTo(1f, FocalMotion.press()) }
-        check.animateTo(if (copied) 1f else 0f, FocalMotion.fadeFast())
-    }
-    Row(Modifier.padding(horizontal = Grid.x16), verticalAlignment = Alignment.CenterVertically) {
-        Box(contentAlignment = Alignment.Center) {
-            Glyph(FocalIcon.Copy, ink, size = GlyphSize.inPill, modifier = Modifier.graphicsLayer { alpha = 1 - check.value })
-            Glyph(
-                FocalIcon.Check, ink, size = GlyphSize.inPill,
-                modifier = Modifier.graphicsLayer { alpha = check.value; scaleX = checkScale.value; scaleY = checkScale.value },
-            )
-        }
-        Spacer(Modifier.width(DockMetrics.glyphGap))
-        Box {
-            Text(stringResource(R.string.action_copy), style = FocalType.label, color = ink, modifier = Modifier.graphicsLayer { alpha = 1 - check.value })
-            Text(stringResource(R.string.action_copied), style = FocalType.label, color = ink, modifier = Modifier.graphicsLayer { alpha = check.value })
-        }
-    }
+    CopyLabel(copied, ink, FocalType.label, GlyphSize.inPill, DockMetrics.glyphGap, Modifier.padding(horizontal = Grid.x16))
 }
 
-private const val CHECK_START_SCALE = 0.7f
+
 
 /**
  * Keeps the outgoing face during a swap (spec 4.3, Q7): the incoming container beneath at full alpha and the

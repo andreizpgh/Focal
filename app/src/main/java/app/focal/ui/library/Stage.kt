@@ -523,35 +523,39 @@ private fun NoteStage(
         val inset = StageMetrics.inset.roundToPx()
         val column = width - 2 * inset
         val time = times.first().measure(Constraints(maxWidth = column))
-        val timeOwnLine = time.width + StageMetrics.timeGap.roundToPx() > StageMetrics.TIME_SHARE * column
+        // From 1.5x, or when the time is long (a date), it takes its own line under the title (spec 4.22.4, 4.22.7).
+        val timeOwnLine = large || time.width + StageMetrics.timeGap.roundToPx() > StageMetrics.TIME_SHARE * column
         val titleWidth = if (timeOwnLine) column else column - time.width - StageMetrics.timeGap.roundToPx()
         val title = titles.first().measure(Constraints(maxWidth = titleWidth))
         val timeTop = if (timeOwnLine) inset + title.height else inset + title[FirstBaseline] - time[FirstBaseline]
         val headBottom = if (timeOwnLine) inset + title.height + time.height else inset + title.height
         val textTop = headBottom + StageMetrics.textGap.roundToPx()
-        val footer = StageMetrics.footer.roundToPx()
+        // The pill may grow past 48 dp at large font sizes; the footer row grows with it.
+        val pill = pills.first().measure(Constraints())
+        val footer = max(StageMetrics.footer.roundToPx(), pill.height)
         val footerInset = StageMetrics.footerInset.roundToPx()
-        val footerRows = if (large) 2 else 1
+        // From 1.5x the length takes its own 48 dp row above the pill's.
+        val lengthRow = if (large) StageMetrics.footer.roundToPx() else 0
         // At the card's rest height, the lines that fit above the footer; never fewer than two (the card grows).
-        val restFooterTop = StageMetrics.minHeight.roundToPx() - footerInset - footerRows * footer
+        val restFooterTop = StageMetrics.minHeight.roundToPx() - footerInset - footer - lengthRow
         val fit = ((restFooterTop - StageMetrics.textClearance.roundToPx() - textTop) / lineHeight).toInt()
         val lines = fit.coerceIn(StageMetrics.TEXT_LINES_MIN, StageMetrics.TEXT_LINES_MAX)
         val text = texts.first().measure(Constraints(maxWidth = column, maxHeight = (lines * lineHeight).roundToInt()))
         val height = max(
             StageMetrics.minHeight.roundToPx(),
-            textTop + text.height + StageMetrics.textClearance.roundToPx() + footerRows * footer + footerInset,
+            textTop + text.height + StageMetrics.textClearance.roundToPx() + lengthRow + footer + footerInset,
         )
-        val pill = pills.first().measure(Constraints())
         val length = lengths.first().measure(Constraints(maxWidth = column))
         val footerTop = height - footerInset - footer
         val pillX = width - footerInset - pill.width
-        val lengthTop = if (large) footerTop - footer else footerTop
+        val lengthTop = if (large) footerTop - lengthRow else footerTop
+        val lengthSlot = if (large) lengthRow else footer
         overlapping = !large && inset + length.width + StageMetrics.footerYield.roundToPx() > pillX
         layout(width, height) {
             title.place(inset, inset)
             time.place(if (timeOwnLine) inset else width - inset - time.width, timeTop)
             text.place(inset, textTop)
-            length.place(inset, lengthTop + (footer - length.height) / 2)
+            length.place(inset, lengthTop + (lengthSlot - length.height) / 2)
             pill.place(pillX, footerTop)
         }
     }

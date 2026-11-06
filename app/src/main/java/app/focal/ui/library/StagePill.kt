@@ -4,7 +4,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -56,10 +55,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.focal.R
-import app.focal.ui.components.FocalIcon
-import app.focal.ui.components.Glyph
+import app.focal.ui.components.CopyLabel
 import app.focal.ui.components.ProgressPhase
 import app.focal.ui.components.actionShadowPaint
+import app.focal.ui.components.copyPillWidth
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.glassHighlight
 import app.focal.ui.components.pressScale
@@ -67,6 +66,7 @@ import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
+import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.Scene
 import app.focal.ui.design.Stage
@@ -96,8 +96,11 @@ object StagePillMetrics {
     val glyphGap = 6.dp
     /** The progress label's line box and the track inside the 48 dp pill (measured: 9-29 and 35-37). */
     val labelTop = 9.dp
-    val trackTop = 35.dp
+    val labelTrackGap = 6.dp
     val track = 2.dp
+    val trackBottom = 11.dp
+    /** Copy's label keeps at least this much above and below it when a large font grows the pill past 48 dp. */
+    val copyInsetY = Grid.x12
     /** The white Copy's shadow: 0 6 20 (a CSS blur, so sigma 10). */
     val shadowY = 6.dp
     val shadowSigma = 10.dp
@@ -135,8 +138,30 @@ fun StagePill(
     var copied by remember { mutableStateOf(false) }
     val label = progress?.let { progressLabel(it) }
     val labelWidth = label?.let { remember(it, density) { measurer.measure(it, FocalType.action).size.width } } ?: 0
+    val copyText = stringResource(R.string.action_copy)
+    val copiedText = stringResource(R.string.action_copied)
+    // At large font sizes the pill widens to keep "Copied" inside it and grows taller than 48 dp (spec 8.4).
+    val copyWidth = remember(copyText, copiedText, density) {
+        with(density) {
+            maxOf(
+                StagePillMetrics.copyWidth.roundToPx(),
+                copyPillWidth(
+                    measurer.measure(copyText, FocalType.action).size.width, measurer.measure(copiedText, FocalType.action).size.width,
+                    StagePillMetrics.glyph.roundToPx(), StagePillMetrics.glyphGap.roundToPx(), StagePillMetrics.padding.roundToPx(),
+                ),
+            )
+        }
+    }
+    val line = with(density) { FocalType.action.lineHeight.toPx() }
+    val trackTop = with(density) { StagePillMetrics.labelTop.toPx() + line + StagePillMetrics.labelTrackGap.toPx() }
+    val pillHeight = with(density) {
+        maxOf(
+            StagePillMetrics.height.toPx(),
+            if (progress != null) trackTop + (StagePillMetrics.track + StagePillMetrics.trackBottom).toPx() else line + 2 * StagePillMetrics.copyInsetY.toPx(),
+        ).roundToInt()
+    }
     val targetWidth = with(density) {
-        if (progress == null) StagePillMetrics.copyWidth.toPx()
+        if (progress == null) copyWidth.toFloat()
         else maxOf(StagePillMetrics.copyWidth.toPx(), labelWidth + 2 * StagePillMetrics.padding.toPx())
     }
     val width = remember { Animatable(targetWidth) }
@@ -187,7 +212,7 @@ fun StagePill(
     val source = remember { MutableInteractionSource() }
     val enabled = copy?.enabled == true
     val copyLabel = stringResource(if (copy?.fresh == true) R.string.a11y_copy_note_new else R.string.a11y_copy_note)
-    val copiedLabel = stringResource(R.string.action_copied)
+    val copiedLabel = copiedText
     val progressSpoken = progress?.let { progressDescription(it) }
     val readyLabel = stringResource(R.string.a11y_note_ready)
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -205,7 +230,7 @@ fun StagePill(
         modifier
             .layout { measurable, _ ->
                 val w = width.value.roundToInt()
-                val h = StagePillMetrics.height.roundToPx()
+                val h = pillHeight
                 val placeable = measurable.measure(Constraints.fixed(w, h))
                 layout(w, h) { placeable.place(0, 0) }
             }
@@ -267,7 +292,7 @@ fun StagePill(
                 )
                 if (withTrack) {
                     Spacer(
-                        Modifier.align(Alignment.TopCenter).padding(top = StagePillMetrics.trackTop)
+                        Modifier.align(Alignment.TopCenter).padding(top = with(density) { trackTop.toDp() })
                             .padding(horizontal = StagePillMetrics.padding).fillMaxWidth().height(StagePillMetrics.track)
                             .drawWithCache {
                                 val corner = CornerRadius(size.height / 2)
@@ -303,35 +328,15 @@ private const val HALF = 0.5f
 private const val MAX_ALPHA = 255f
 
 /**
- * The copy glyph and "Copy", or the check and "Copied": glyph 18 + 6 + `action` (spec 4.22.4). The ink follows the
- * fill: `stageInk` on glass, `#111111` on white (it recomposes only while the fill changes).
+ * The copy glyph and "Copy", or the check and "Copied": glyph 18 + 6 + `action` (spec 4.22.4), centred on "Copy".
+ * The ink follows the fill: `stageInk` on glass, `#111111` on white (it recomposes only while the fill changes).
  */
 @Composable
 private fun CopyFace(copied: Boolean, white: Animatable<Float, *>) {
-    val check = remember { Animatable(if (copied) 1f else 0f) }
-    val checkScale = remember { Animatable(1f) }
-    LaunchedEffect(copied) {
-        if (copied) launch { checkScale.snapTo(CHECK_START_SCALE); checkScale.animateTo(1f, FocalMotion.press()) }
-        check.animateTo(if (copied) 1f else 0f, FocalMotion.fadeFast())
-    }
     val color = lerp(Scene.ink, Scene.actionLabel, white.value)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(contentAlignment = Alignment.Center) {
-            Glyph(FocalIcon.Copy, color, size = StagePillMetrics.glyph, modifier = Modifier.graphicsLayer { alpha = 1 - check.value })
-            Glyph(
-                FocalIcon.Check, color, size = StagePillMetrics.glyph,
-                modifier = Modifier.graphicsLayer { alpha = check.value; scaleX = checkScale.value; scaleY = checkScale.value },
-            )
-        }
-        Spacer(Modifier.width(StagePillMetrics.glyphGap))
-        Box {
-            Text(stringResource(R.string.action_copy), style = FocalType.action, color = color, maxLines = 1, modifier = Modifier.graphicsLayer { alpha = 1 - check.value })
-            Text(stringResource(R.string.action_copied), style = FocalType.action, color = color, maxLines = 1, modifier = Modifier.graphicsLayer { alpha = check.value })
-        }
-    }
+    CopyLabel(copied, color, FocalType.action, StagePillMetrics.glyph, StagePillMetrics.glyphGap)
 }
 
-private const val CHECK_START_SCALE = 0.7f
 
 @Composable
 private fun progressLabel(progress: StagePillUi.Progress): String = when (progress.phase) {
