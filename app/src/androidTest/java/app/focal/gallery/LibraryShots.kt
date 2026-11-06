@@ -14,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.focal.recording.SpeechAvailability
 import app.focal.ui.components.FeedbackAction
-import app.focal.ui.components.FixedMeter
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.FocalMenuDivider
 import app.focal.ui.components.FocalMenuItem

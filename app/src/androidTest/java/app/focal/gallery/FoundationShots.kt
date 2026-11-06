@@ -49,7 +49,6 @@ import app.focal.ui.components.DockActions
 import app.focal.ui.components.DockState
 import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FeedbackPill
-import app.focal.ui.components.FixedMeter
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.FocalIconButton
 import app.focal.ui.components.FocalPrimaryPill

@@ -164,15 +164,6 @@ class LiveMeter(private val input: () -> Float) : WaveMeter {
     private companion object { const val HISTORY_SIZE = 64 }
 }
 
-/** Fixed levels by bar distance (0 = centre): previews, screenshots and tests. */
-@Immutable
-class FixedMeter(private val levels: FloatArray) : WaveMeter {
-    init { require(levels.size == MeterMath.SIDE_BARS + 1) }
-    override val animated: Boolean get() = false
-    override fun advance(nowMs: Long) = Unit
-    override fun level(distance: Int, nowMs: Long, history: Boolean): Float = levels[if (history) distance else 0]
-}
-
 /**
  * How a live wave arrives (spec 3.2 "entering", T1′, T1′e): pair d of bars arrives with [pair] (0..1, read in the
  * draw phase); the glow with [glow]. With [restLevel] null the bars arrive by alpha (the light-up, and on API 31+ the
