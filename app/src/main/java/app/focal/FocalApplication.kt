@@ -3,6 +3,7 @@ package app.focal
 import android.app.Activity
 import android.app.Application
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import app.focal.data.NoteStore
@@ -23,8 +24,9 @@ class FocalApplication : Application() {
     lateinit var models: SpeechModels
         private set
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    /** Device tests that stage waiting notes turn the automatic foreground resume off. */
-    @Volatile var autoResumeTranscription = true
+    /** Device tests that stage waiting notes turn the automatic foreground resume off (debug builds only). */
+    @VisibleForTesting
+    @Volatile internal var autoResumeTranscription = true
     @Volatile lateinit var storageReady: Deferred<Unit>
         private set
     override fun onCreate() {
@@ -62,7 +64,7 @@ class FocalApplication : Application() {
         // A failed model install (usually storage) is retried at every foreground start, unless the APK's
         // own copy is damaged: that needs a reinstall, and only the user's Retry tries it again.
         models.retry(automatic = true)
-        if (!autoResumeTranscription) return
+        if (BuildConfig.DEBUG && !autoResumeTranscription) return
         scope.launch {
             try {
                 storageReady.await()
