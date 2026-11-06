@@ -126,13 +126,12 @@ fun FeedbackPill(state: FeedbackHostState, modifier: Modifier = Modifier) {
     val density = LocalDensity.current
     LaunchedEffect(message) {
         if (message != null) {
-            val replacing = shown != null && alpha.value > 0f
             shown = message
             drag.snapTo(0f)
-            if (!replacing) {
-                launch { enter.animateTo(1f, FocalMotion.move()) }
-                alpha.animateTo(1f, FocalMotion.fade())
-            }
+            // Always settled, so a message that arrives during the last one's exit never stays half risen or faded.
+            // Both are no-ops for a message that replaces one on screen: its text crossfades in place (FadeThrough).
+            launch { enter.animateTo(1f, FocalMotion.move()) }
+            alpha.animateTo(1f, FocalMotion.fade())
         } else {
             launch { enter.animateTo(0f, FocalMotion.move()) }
             alpha.animateTo(0f, FocalMotion.fadeFast())
