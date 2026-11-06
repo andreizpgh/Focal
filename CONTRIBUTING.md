@@ -1,105 +1,127 @@
 # Contributing
 
-Small, focused changes are welcome. Describe the behavior being changed and how
-you checked it. Keep the application offline; new network calls, analytics, and
-cloud-dependent features do not belong in Focal.
+Small, focused changes are welcome. Describe the behaviour you change and how you
+checked it. Focal stays offline: network calls, analytics, accounts and
+cloud-dependent features do not belong in it.
 
-## Build
+## Prerequisites
 
-Use JDK 17, SDK 35, NDK 28.0.13004108, and CMake 3.22.1. Android Studio can install
-these. Set `ANDROID_HOME`, or `sdk.dir` in your untracked `local.properties`.
+- JDK 17.
+- Android SDK with platform 37 (`compileSdk 37`, `targetSdk 36`, `minSdk 26`),
+  NDK `28.2.13676358` and CMake `3.22.1`. Android Studio can install them; set
+  `ANDROID_HOME`, or `sdk.dir` in an untracked `local.properties`.
+- Python 3 for the scripts.
+
+The Gradle wrapper (9.8.0) pins the build; versions of AGP, Kotlin and libraries
+are in `gradle/libs.versions.toml`.
+
+## Speech model and runtime
+
+The model and the sherpa-onnx runtime are never committed. `scripts/fetch-model.py`
+downloads them over HTTPS and accepts each file only when its size and SHA-256
+match the lock files `models/parakeet-ultra.json` and `models/sherpa-onnx.json`,
+which Gradle reads too.
 
 ```sh
-git submodule update --init --recursive
-python3 scripts/fetch-model.py
-python3 scripts/fetch-vad-model.py
+python3 scripts/fetch-model.py                 # model (~670 MB) and runtime (~50 MB)
+python3 scripts/fetch-model.py --runtime-only  # runtime only: enough for tests and lint
+python3 scripts/fetch-model.py --check         # verify what is in place, no network
+python3 scripts/fetch-model.py --from DIR --aar FILE   # reuse verified local copies
+```
+
+`--from` can be repeated when the files are in several directories; each file is
+taken from the first directory that has it. Files land in `models/parakeet-ultra/`
+and `libs/`, both ignored by Git.
+
+Every build needs the runtime. Release builds also need the model and refuse a
+missing or mismatched one. Debug builds without the model work, but the app then
+records without transcribing; add `-Pfocal.requireModel=true` to make a missing
+model an error.
+
+## Build and test
+
+```sh
 ./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+python3 -m unittest discover -s scripts/tests
 ```
 
-The model downloader verifies the upstream LFS SHA-256 and records the immutable
-upstream revision in the APK. Reproduce a model with
-`python3 scripts/fetch-model.py --revision <revision-from-model-provenance.json>`.
-The separate speech-presence model is pinned by `models/speech-presence.json`;
-the downloader verifies its exact size and SHA-256 before installation. To reuse
-an existing copy without another transfer, run
-`python3 scripts/fetch-vad-model.py --local-file /path/to/ggml-silero-v5.1.2.bin`.
-Both debug and release builds reject a missing or corrupt presence model.
-Never commit model binaries, private recordings, signing keys, or local SDK paths.
-
-An Android emulator or connected phone is needed for device tests:
+With an emulator or a test device connected (not a phone with real notes):
 
 ```sh
-./gradlew :app:connectedDebugAndroidTest
+./gradlew :app:connectedDebugAndroidTest -Pfocal.requireModel=true
 ```
 
-`scripts/smoke-stt.sh` builds the same pinned speech engine on the host and checks
-a real English speech fixture. This validates model loading and decoding; it does
-not measure Android performance or Russian accuracy.
+[Testing](docs/testing.md) describes each suite, the screenshot gallery
+(`gallery/GalleryTest`) and the phone checklist. Report the checks you actually
+ran; emulator timing says nothing about phone speed, heat or battery.
 
-Host evaluation regressions use Python 3.11+ and the pinned NumPy dependency
-(including the VAD-only conditioning checks). Run them in a local virtual environment:
+## Project layout
 
-```sh
-python3 -m venv build/host-tools
-build/host-tools/bin/python -m pip install --require-hashes --only-binary=:all: -r scripts/requirements-host.txt
-build/host-tools/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
-
-On Windows, use `build/host-tools/Scripts/python.exe`. This dependency is for host
-research/tests only; it is not packaged in the Android application.
-
-The debug APK is for development. Distribution releases need a separately managed,
-stable signing key; release builds refuse to package an absent speech model.
+app/                    Android app: Compose UI, recording service, store, speech bridge
+  src/main/cpp/         JNI bridge over the sherpa-onnx C API (the only native code)
+  src/androidTest/      instrumented tests and the screenshot gallery
+core/                   pure Kotlin: segmentation, formatting, alignment, tuning constants
+models/                 lock files for the speech model and runtime (no weights)
+scripts/                fetch-model.py, subset-inter.py (Inter font subset), score-wer.py
+design/brand/           the logo and launcher icon sources and their generator
+docs/                   architecture, design, speech quality, testing, install guide
+```
 
 ## Product boundaries
 
-- English interface by default. Speech language is explicit and stored per note.
-- Preserve the original audio and the speaker's meaning. Automatic correction is
-  currently disabled; research candidates must clear the accuracy, provenance,
-  undo and phone-resource gates in [speech-quality experiments](docs/stt-quality-experiments.md)
-  before being enabled.
-- Review cues are heuristics, not guarantees of correctness.
-- Recording must not depend on an Activity remaining alive.
-- Keep work and queues bounded in memory. Audio and completed transcript segments
-  must survive process death; the last unsynced audio buffer may be lost.
-- Respect Android microphone, foreground service, and notification permissions.
-- Test meaningful lifecycle and recovery behavior when changing capture or storage.
+- **One engine.** Parakeet Ultra through sherpa-onnx. The model has no language
+  input; there is no language or model picker.
+- **Capture is sacred.** Never let inference, SQLite or the interface block the
+  capture thread. Audio must be synced before anything depends on it. Do not add
+  unbounded in-memory audio queues.
+- **Keep what was said.** Raw recognizer output and the original audio are kept;
+  user edits are an overlay with Restore original. Formatting may not change
+  words. Automatic correction stays disabled until a candidate clears the gates
+  in [speech quality](docs/speech-quality.md#automatic-correction-is-disabled).
+- **Recovery.** Changes to capture or storage need tests for process death,
+  migration and recovery. A dead process must never reopen the microphone.
+- **Interface.** English, with every user-facing string in `strings.xml`. Use the
+  design tokens in `ui/design` ([design](docs/design.md)), keep 48 dp targets,
+  and give every gesture a button, key or accessibility action.
 
-See [architecture](docs/architecture.md) and [device validation](docs/device-validation.md).
+See [architecture](docs/architecture.md) for the invariants in detail.
 
-## Before publishing
+## Privacy and secrets
 
-Review the staged diff and your Git author email. Use GitHub's private commit
-email if you do not want a personal address in public history. Keep commits
-focused and explain observable changes and relevant verification.
+Never commit credentials, signing keys, `local.properties`, model weights, private
+recordings, transcripts, device logs or screenshots of real notes. Use synthetic
+data and the public fixtures: the JFK excerpt in `app/src/androidTest/assets` and
+the FLEURS clips listed in `docs/benchmarks/fleurs-references.json`. Ignoring a
+file does not remove copies already committed.
 
-Never commit credentials, local configuration, signing keys, private recordings,
-transcripts, or device logs. Use synthetic data or documented public fixtures.
-Ignoring a file does not remove earlier committed copies.
-
-With [Gitleaks 8.24.3](https://github.com/gitleaks/gitleaks/releases/tag/v8.24.3):
+Before publishing, check your Git author email, review the staged diff and scan
+the full history with [Gitleaks](https://github.com/gitleaks/gitleaks) (CI pins
+8.24.3):
 
 ```sh
 gitleaks git --redact=100 --log-opts="--all --full-history" .
 git diff --cached --check
 ```
 
-CI scans the full fetched history on pushes and pull requests. Treat any finding
-as a blocker; do not paste secret values into issues or logs. Coordinate credential
-revocation and any history cleanup with the owner before rewriting public refs.
+Treat any finding as a blocker. See [SECURITY.md](SECURITY.md) for what to do if
+a secret is exposed.
 
-Testing releases promote an existing successful Android build using the pinned
-manifest in `releases/`. The tag workflow checks the build, artifact checksum,
-unchanged app inputs, and embedded model before publishing the APK and checksums.
-Release notes live in `docs/releases/`. Alpha APKs use development signing;
-stable distribution needs a persistent, separately managed release signing key.
+## Releases
 
-Local UX previews use a distinct `ux-alpha-N` tag and a `local-emulator-qa`
-manifest in `releases/`. They promote the exact archived debug APK from a clean,
-successful `scripts/qa-local.py --release-checks` run, after focused review and
-manual checks. Publish through a new draft prerelease, verify the remote asset
-digest against the manifest, then publish the draft. Include a versioned APK filename,
-checksums, model provenance and the public verification manifest; never attach
-private QA logs, recordings or signing keys. Do not rebuild or re-sign between QA
-and upload, overwrite an existing release, or infer Alpha 1 signing compatibility.
-The existing `v*` CI-artifact workflow and its verification requirements stay intact.
+Testing releases are published as GitHub pre-releases with a `vX.Y.Z` tag and an
+APK named `Focal-X.Y.Z.apk`.
+
+1. Build the release APK from a clean checkout of the release commit, with the
+   verified model in place.
+2. Run the checks above and the instrumented suite against that exact APK.
+3. Sign it outside Git. Testing releases use the same development certificate as
+   Alpha 2 to Alpha 9, so updates install in place and keep notes.
+4. Record the commit, APK and signing-certificate SHA-256, model and runtime hashes,
+   the checks run and what remains unverified, and attach that with checksums.
+5. Create a draft pre-release with notes from [CHANGELOG.md](CHANGELOG.md), check
+   the uploaded asset's digest, then publish.
+
+Never rebuild or re-sign between verification and upload, and never overwrite a
+published asset. The automated release workflow is disabled until it is rebuilt
+for the single-engine app.
