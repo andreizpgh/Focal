@@ -14,20 +14,6 @@
 
 <br>
 
-<!--
-  TODO(release): the four screenshots below are captured from the final 0.2.0 build
-  (unretouched, synthetic notes, light theme) and committed as
-  docs/screenshots/home.png, recording.png, note.png and edit.png. Keep these
-  names, or update the paths and alt text here.
--->
-<p align="center">
-  <img src="docs/screenshots/home.png" width="23%" alt="The library: the latest note on a dark card at the top, earlier notes grouped by day, Search and Record at the bottom">
-  <img src="docs/screenshots/recording.png" width="23%" alt="Recording: the live wave, a large timer and the transcript appearing after each pause, with Pause and Finish">
-  <img src="docs/screenshots/note.png" width="23%" alt="A finished note set as a document: title, date and paragraphs, with Play and Copy at the bottom">
-  <img src="docs/screenshots/edit.png" width="23%" alt="Editing a paragraph in place, with Edited · Restore original under it and the keyboard open">
-</p>
-<p align="center"><sub>Unretouched captures of synthetic notes.</sub></p>
-
 Tap **Record** and talk. Text appears after each pause while you keep speaking.
 Tap **Finish**, then **Copy**.
 
