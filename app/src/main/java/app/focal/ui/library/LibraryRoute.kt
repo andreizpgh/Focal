@@ -1,6 +1,5 @@
 package app.focal.ui.library
 
-import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -70,6 +69,8 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
     val inputMode = LocalInputModeManager.current
     val noteId by rememberUpdatedState(recordingState.noteId)
     val textCopied = stringResource(R.string.feedback_text_copied)
+    val transfers by rememberUpdatedState(rememberTransferWords())
+    val say: (String?) -> Unit = { message -> if (message != null) scope.launch { shell.bottom.feedback.show(message) } }
 
     val openSettings: () -> Unit = {
         layer.focusOnArrival = true
@@ -96,16 +97,21 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
                 shell.open(Destination.Note(result.row.id, hit))
             },
             expand = { scope.launch { shell.live.expand(reduced) } },
-            copy = { row -> copyNote(context, row, library.copyText(row.id)) },
+            copy = { row ->
+                val result = copyNote(context, row, library.copyText(row.id))
+                say(transfers.copy(result))
+                result == Transfer.Done
+            },
             copyText = { row ->
                 scope.launch {
-                    if (copyNote(context, row, library.copyText(row.id))) {
+                    val result = copyNote(context, row, library.copyText(row.id))
+                    if (result == Transfer.Done) {
                         haptics.copy()
                         if (confirmsCopyInApp) shell.bottom.feedback.show(textCopied)
-                    }
+                    } else say(transfers.copy(result))
                 }
             },
-            share = { row -> scope.launch { shareNote(context, row, library.copyText(row.id)) } },
+            share = { row -> scope.launch { say(transfers.share(shareNote(context, row, library.copyText(row.id)))) } },
             rename = { row, title -> library.rename(row.id, title) },
             removeAudio = { row -> library.removeAudio(row.id) },
             delete = { row -> library.delete(row.id) },
@@ -143,37 +149,78 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
     )
 }
 
+/** How a copy or a share went: [Empty] had nothing to send; [TooLong] was not sent (see [MAX_TRANSFER_CHARS]). */
+enum class Transfer { Done, Empty, TooLong, Failed }
+
+/**
+ * The longest text handed to the clipboard or the share sheet in one go. Both cross a Binder transaction, which fails
+ * (and, unhandled, crashes) near 1 MB with the text in UTF-16 beside the clip's other fields; the store budgets single
+ * paragraphs, not whole notes.
+ */
+const val MAX_TRANSFER_CHARS = 200_000
+
+/** What the feedback pill says when a copy or a share did not happen (null when it did, or there was nothing). */
+class TransferWords(private val copyTooLong: String, private val copyFailed: String, private val shareTooLong: String, private val shareFailed: String) {
+    fun copy(result: Transfer): String? = when (result) {
+        Transfer.TooLong -> copyTooLong
+        Transfer.Failed -> copyFailed
+        Transfer.Done, Transfer.Empty -> null
+    }
+
+    fun share(result: Transfer): String? = when (result) {
+        Transfer.TooLong -> shareTooLong
+        Transfer.Failed -> shareFailed
+        Transfer.Done, Transfer.Empty -> null
+    }
+}
+
+@Composable
+fun rememberTransferWords(): TransferWords {
+    val copyTooLong = stringResource(R.string.error_copy_too_long)
+    val copyFailed = stringResource(R.string.error_copy)
+    val shareTooLong = stringResource(R.string.error_share_too_long)
+    val shareFailed = stringResource(R.string.error_share)
+    return remember(copyTooLong, copyFailed, shareTooLong, shareFailed) { TransferWords(copyTooLong, copyFailed, shareTooLong, shareFailed) }
+}
+
 /**
  * Copies a note (spec 5.5): its visible paragraphs joined by a blank line, labelled with its title, marked
- * sensitive on API 33+ so the system preview hides it. Clears the stage's fresh mark. True when the clipboard took it.
+ * sensitive on API 33+ so the system preview hides it. Clears the stage's fresh mark once the clipboard took it.
  */
-fun copyNote(context: Context, row: NoteRow, text: String): Boolean = copyNoteText(context, row.id, row.title, text)
+fun copyNote(context: Context, row: NoteRow, text: String): Transfer = copyNoteText(context, row.id, row.title, text)
 
 /** [copyNote] by id: the note page and the stage share it. */
-fun copyNoteText(context: Context, noteId: String, title: String, text: String): Boolean {
-    if (text.isBlank()) return false
+fun copyNoteText(context: Context, noteId: String, title: String, text: String): Transfer {
+    if (text.isBlank()) return Transfer.Empty
+    if (text.length > MAX_TRANSFER_CHARS) return Transfer.TooLong
     return try {
         val clip = ClipData.newPlainText(title, text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             clip.description.extras = PersistableBundle().apply { putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true) }
         }
-        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(clip) ?: return false
+        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(clip) ?: return Transfer.Failed
         FreshNotes.copied(noteId)
-        true
-    } catch (_: SecurityException) {
-        false
-    } catch (_: IllegalStateException) {
-        false
+        Transfer.Done
+    } catch (_: RuntimeException) {
+        // A refusal (SecurityException, IllegalStateException) or a transaction the system would not take.
+        Transfer.Failed
     }
 }
 
 /** Shares a note through the system's share sheet (spec 4.15). */
-private fun shareNote(context: Context, row: NoteRow, text: String) = shareNoteText(context, row.title, text)
+private fun shareNote(context: Context, row: NoteRow, text: String): Transfer = shareNoteText(context, row.title, text)
 
 /** [shareNote] by title: the note page's menu shares the same way. */
-fun shareNoteText(context: Context, title: String, text: String) {
-    if (text.isBlank()) return
+fun shareNoteText(context: Context, title: String, text: String): Transfer {
+    if (text.isBlank()) return Transfer.Empty
+    if (text.length > MAX_TRANSFER_CHARS) return Transfer.TooLong
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
         .apply { if (title.isNotBlank()) putExtra(Intent.EXTRA_TITLE, title) }
-    try { context.startActivity(Intent.createChooser(send, null)) } catch (_: ActivityNotFoundException) { }
+    return try {
+        context.startActivity(Intent.createChooser(send, null))
+        Transfer.Done
+    } catch (_: RuntimeException) {
+        // No chooser (ActivityNotFoundException), or a transaction the system would not take.
+        Transfer.Failed
+    }
 }

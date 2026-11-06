@@ -27,7 +27,9 @@ import app.focal.ui.components.FocalIcon
 import app.focal.ui.library.confirmsCopyInApp
 import app.focal.ui.library.copyNoteText
 import app.focal.ui.library.rememberLibraryDates
+import app.focal.ui.library.Transfer
 import app.focal.ui.library.rememberToday
+import app.focal.ui.library.rememberTransferWords
 import app.focal.ui.library.shareNoteText
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.LocalShell
@@ -127,17 +129,23 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
         }
     }
 
+    val transfers by rememberUpdatedState(rememberTransferWords())
+    val say: (String?) -> Unit = { message -> if (message != null) appScope.launch { feedback.show(message) } }
     val actions = remember(note, player, library) {
         NoteActions(
             back = leave,
             rename = note::rename,
-            copy = { copyNoteText(context, id, current.title, note.copyText()) },
-            copyParagraph = { paragraph ->
-                if (copyNoteText(context, id, current.title, paragraph.text) && confirmsCopyInApp) {
-                    appScope.launch { feedback.show(words.textCopied) }
-                }
+            copy = {
+                val result = copyNoteText(context, id, current.title, note.copyText())
+                say(transfers.copy(result))
+                result == Transfer.Done
             },
-            share = { appScope.launch { shareNoteText(context, current.title, note.copyText()) } },
+            copyParagraph = { paragraph ->
+                val result = copyNoteText(context, id, current.title, paragraph.text)
+                if (result != Transfer.Done) say(transfers.copy(result))
+                else if (confirmsCopyInApp) appScope.launch { feedback.show(words.textCopied) }
+            },
+            share = { appScope.launch { say(transfers.share(shareNoteText(context, current.title, note.copyText()))) } },
             removeAudio = {
                 player.stopNote(id)
                 note.removeAudio()

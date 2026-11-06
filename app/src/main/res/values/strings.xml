@@ -139,6 +139,10 @@
     <string name="error_replace">Couldn’t replace the matches.</string>
     <string name="error_replace_too_large">A paragraph would get too long. Nothing was replaced.</string>
     <string name="error_restore">Couldn’t restore the original.</string>
+    <string name="error_copy">Couldn’t copy the text.</string>
+    <string name="error_copy_too_long">This note is too long to copy at once. Select the part you need.</string>
+    <string name="error_share">Couldn’t open sharing.</string>
+    <string name="error_share_too_long">This note is too long to share at once. Select the part you need.</string>
     <string name="error_retry">Couldn’t continue transcription.</string>
     <string name="error_save">Couldn’t save your edit.</string>
     <string name="error_playback">Couldn’t play the audio.</string>
