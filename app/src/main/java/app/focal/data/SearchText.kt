@@ -66,9 +66,13 @@ internal object SearchText {
     }
 
     /** The first word of [text] matched by [terms] (the last as a prefix), as a char range, or null. */
-    fun firstHit(text: String, terms: List<String>): IntRange? {
-        if (terms.isEmpty()) return null
+    fun firstHit(text: String, terms: List<String>): IntRange? = hits(text, terms, limit = 1).firstOrNull()
+
+    /** Every word of [text] matched by [terms] (the last as a prefix), as char ranges in order, at most [limit]. */
+    fun hits(text: String, terms: List<String>, limit: Int = Int.MAX_VALUE): List<IntRange> {
+        if (terms.isEmpty() || limit <= 0) return emptyList()
         val folded = fold(text)
+        val out = ArrayList<IntRange>()
         var i = 0
         while (i < folded.length) {
             while (i < folded.length && !isTokenChar(folded[i])) i++
@@ -76,11 +80,13 @@ internal object SearchText {
             while (i < folded.length && isTokenChar(folded[i])) i++
             if (i == start) break
             val word = folded.substring(start, i)
-            for ((index, term) in terms.withIndex()) {
-                if (word == term || (index == terms.lastIndex && word.startsWith(term))) return start until i
+            val matched = terms.withIndex().any { (index, term) -> word == term || (index == terms.lastIndex && word.startsWith(term)) }
+            if (matched) {
+                out += start until i
+                if (out.size >= limit) break
             }
         }
-        return null
+        return out
     }
 
     /** About [SNIPPET_CHARS] chars of [text] around [hit], cut at spaces, with ellipses where it was cut. */

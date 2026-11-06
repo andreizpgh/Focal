@@ -8,6 +8,7 @@ import app.focal.R
 import app.focal.data.Note
 import app.focal.data.NoteState
 import app.focal.data.SearchResult
+import app.focal.data.SearchText
 import app.focal.recording.LiveSession
 import app.focal.recording.RecordingState
 import app.focal.recording.SpeechAvailability
@@ -107,7 +108,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         live, speech, query, UndoableActions.audioRemovalsPending,
     ) { (resultsQuery, results), _, model, typed, removals ->
         val session = RecordingState.live.value
-        SearchUiState(typed, resultsQuery, results.map { searchRow(it, session, model, removals) }, searching = typed != resultsQuery)
+        val terms = SearchText.terms(resultsQuery)
+        SearchUiState(typed, resultsQuery, results.map { searchRow(it, terms, session, model, removals) }, searching = typed != resultsQuery)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState())
 
     fun setQuery(text: String) { query.value = text.take(MAX_QUERY_CHARS) }
@@ -179,11 +181,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             )
         }
 
-        private fun searchRow(result: SearchResult, live: LiveSession, speech: SpeechAvailability, removals: Set<String>) = SearchRow(
+        /** A result's row; every word of its snippet that the query's [terms] match is a hit (spec 5.2). */
+        private fun searchRow(result: SearchResult, terms: List<String>, live: LiveSession, speech: SpeechAvailability, removals: Set<String>) = SearchRow(
             row = row(result.note, live, speech, removals), paragraphId = result.paragraphId,
             hitStart = result.hitStart, hitEnd = result.hitEnd, snippet = result.snippet,
-            snippetHit = if (result.snippetHitStart < 0) null
-            else result.snippetHitStart until result.snippetHitStart + (result.hitEnd - result.hitStart),
+            snippetHits = if (result.snippetHitStart < 0) emptyList() else SearchText.hits(result.snippet, terms),
         )
     }
 }

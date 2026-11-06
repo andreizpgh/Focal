@@ -216,16 +216,19 @@ private fun TitleLine(title: @Composable () -> Unit, trailing: String, trailingI
 
 /** "16:05" (or the working state) in 500 ink, an en space, then the preview, cut on a whole word (G4). */
 @Composable
-private fun Preview(runIn: String, text: String, hit: IntRange? = null) {
+private fun Preview(runIn: String, text: String, hits: List<IntRange> = emptyList()) {
     val colors = FocalTheme.colors
-    val annotated = remember(runIn, text, hit, colors.ink) {
+    val annotated = remember(runIn, text, hits, colors.ink) {
         buildAnnotatedString {
             withStyle(SpanStyle(color = colors.ink, fontWeight = FocalWeight.Medium, fontFeatureSettings = TNUM)) { append(runIn) }
             append(RowMetrics.RUN_IN_GAP)
             val start = length
             append(text)
-            if (hit != null && hit.first >= 0 && hit.last < text.length) {
-                addStyle(SpanStyle(color = colors.ink, fontWeight = FocalWeight.Semibold), start + hit.first, start + hit.last + 1)
+            // Every hit in 600 ink inside the muted snippet (spec 5.2); snippets are static, so the weight may change.
+            for (hit in hits) {
+                if (hit.first >= 0 && hit.last < text.length) {
+                    addStyle(SpanStyle(color = colors.ink, fontWeight = FocalWeight.Semibold), start + hit.first, start + hit.last + 1)
+                }
             }
         }
     }
@@ -296,7 +299,7 @@ fun SearchResultItem(result: SearchRow, dates: LibraryDates, today: LocalDate, o
                 trailingInk = false,
             )
             Spacer(Modifier.height(RowMetrics.previewGap))
-            Preview(dates.searchDay(row.created, today), result.snippet, result.snippetHit)
+            Preview(dates.searchDay(row.created, today), result.snippet, result.snippetHits)
         }
     }
 }

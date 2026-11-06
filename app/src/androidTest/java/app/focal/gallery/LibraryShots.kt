@@ -168,8 +168,8 @@ private fun noSpeechModel(): LibraryModel = LibraryModel(
 internal fun searchResults(): SearchUiState {
     val all = rows()
     fun result(row: NoteRow, snippet: String): SearchRow {
-        val at = snippet.indexOf("Friday")
-        return SearchRow(row, paragraphId = 1, hitStart = 0, hitEnd = 6, snippet = snippet, snippetHit = at until at + 6)
+        val hits = Regex("Friday").findAll(snippet).map { it.range }.toList()
+        return SearchRow(row, paragraphId = 1, hitStart = 0, hitEnd = 6, snippet = snippet, snippetHits = hits)
     }
     val results = listOf(
         result(all[0], "…test it with five people and decide on Friday. Send the deck to Ines by Friday…"),

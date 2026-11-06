@@ -60,6 +60,14 @@ class SearchTextTest {
         assertNull(SearchText.firstHit(text, SearchText.terms("медведь")))
     }
 
+    @Test fun hitsFindEveryMatchingWord() {
+        val text = "Ёжик в тумане ищет лошадку и лошадь."
+        assertEquals(listOf(19..25, 29..34), SearchText.hits(text, SearchText.terms("лошад")))
+        assertEquals(listOf(0..3, 19..25), SearchText.hits(text, SearchText.terms("ежик лошадку")))
+        assertEquals(listOf(19..25), SearchText.hits(text, SearchText.terms("лошад"), limit = 1))
+        assertEquals(emptyList<IntRange>(), SearchText.hits(text, SearchText.terms("медведь")))
+    }
+
     @Test fun snippetCutsAtSpacesAroundTheHit() {
         val text = (1..60).joinToString(" ") { "word$it" }
         val hit = SearchText.firstHit(text, SearchText.terms("word30"))!!

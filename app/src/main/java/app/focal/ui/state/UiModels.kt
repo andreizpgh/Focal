@@ -129,9 +129,9 @@ data class LibraryUiState(
 )
 
 /**
- * A search result. [snippet] is about 40 characters either side of the first hit with [snippetHit] its
- * range (null when only the title matched). Open the note at [paragraphId] and highlight [hitStart] until
- * [hitEnd] in that paragraph's text.
+ * A search result. [snippet] is about 40 characters either side of the first hit with [snippetHits] the range of
+ * every hit inside it, first hit first (empty when only the title matched). Open the note at [paragraphId] and
+ * highlight [hitStart] until [hitEnd] in that paragraph's text.
  */
 @Immutable
 data class SearchRow(
@@ -140,7 +140,7 @@ data class SearchRow(
     val hitStart: Int,
     val hitEnd: Int,
     val snippet: String,
-    val snippetHit: IntRange?,
+    val snippetHits: List<IntRange>,
 )
 
 /** [query] as typed; [results] belong to [resultsQuery] (results lag the query by the debounce). */
