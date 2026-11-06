@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlendMode
@@ -309,7 +310,9 @@ private fun WithBadge(height: Dp, diameter: Dp, wave: @Composable () -> Unit) {
         val k = height.value / Mark.BADGE_REFERENCE_HEIGHT
         PauseBadge(
             diameter = { diameter },
-            modifier = Modifier.offset((Mark.BADGE_X * k).dp - PauseBadgeMetrics.scene / 2, (Mark.BADGE_Y * k).dp - PauseBadgeMetrics.scene / 2),
+            modifier = Modifier
+                .align(AbsoluteAlignment.TopLeft)
+                .absoluteOffset((Mark.BADGE_X * k).dp - PauseBadgeMetrics.scene / 2, (Mark.BADGE_Y * k).dp - PauseBadgeMetrics.scene / 2),
         )
     }
 }

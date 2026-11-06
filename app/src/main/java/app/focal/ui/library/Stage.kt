@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -447,11 +448,15 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter, seconds: () -> Long
                             WaveMode.Live(meter, stage.paused), WaveDress.Material, Modifier.markBox(StageMetrics.wave),
                             active = { !shell.live.open },
                         )
+                        // The badge is part of the mark, which never mirrors: placed from the wave's left edge in every
+                        // layout direction, as the morph places it (wave.left + BADGE_X), so the first frame of an
+                        // expand does not move it.
                         val k = StageMetrics.wave.value / Mark.BADGE_REFERENCE_HEIGHT
                         PauseBadge(
                             diameter = { PauseBadgeMetrics.stage },
                             modifier = Modifier
-                                .offset((Mark.BADGE_X * k).dp - PauseBadgeMetrics.scene / 2, (Mark.BADGE_Y * k).dp - PauseBadgeMetrics.scene / 2)
+                                .align(AbsoluteAlignment.TopLeft)
+                                .absoluteOffset((Mark.BADGE_X * k).dp - PauseBadgeMetrics.scene / 2, (Mark.BADGE_Y * k).dp - PauseBadgeMetrics.scene / 2)
                                 .graphicsLayer { alpha = badge.value },
                         )
                     }
