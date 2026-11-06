@@ -83,7 +83,7 @@ object FindMetrics {
     /** The caret the query's end must still show (BasicTextField's 2 dp cursor, spec 4.9.1). */
     val caret = FocalGrid.x2
     /** The count stacks under the query only when, beside the widest count, less than this is left for the query. */
-    val minQuery = FocalGrid.x64
+    val minQuery = FocalGrid.x48
 }
 
 /** What the find rows do. */
