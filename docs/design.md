@@ -16,7 +16,7 @@ differ.
   unmistakable from across a room.
 - **One focus.** Whatever is current is in full ink: new text while recording,
   the paragraph being played or edited, the current find match. Everything else
-  recedes exactly one step to a muted grey. Text is never blurred, hidden or
+  recedes exactly one step to a muted gray. Text is never blurred, hidden or
   replaced by placeholders.
 - **One bottom column.** Everything touched often sits in one column at the
   bottom, 24 dp from each edge: the dock, the feedback pill, the player strip, the
@@ -26,9 +26,9 @@ differ.
 - **Honest states.** Progress is real, failures say what happened and what is
   kept, and nothing pretends to be finished before it is.
 
-## Colour
+## Color
 
-Two inks and the greys between them; no accent colour and no dynamic colour.
+Two inks and the grays between them; no accent color and no dynamic color.
 
 | Role | Light | Dark | Used for |
 | --- | --- | --- | --- |
@@ -46,7 +46,7 @@ a 7% grain, ink `#EDEDED` and muted `#8C8C8C`. The stage card uses the same
 material with muted `#999999`.
 
 Text contrast is at least 4.5:1 in every state and meaningful non-text at least
-3:1. With Android's contrast setting at medium or high, every receded grey moves
+3:1. With Android's contrast setting at medium or high, every receded gray moves
 one step closer to ink; with high-contrast text, nothing recedes.
 
 ## Typography
@@ -98,13 +98,13 @@ They match Material 3's standard motion scheme value for value.
 | `fadeFast` | 1.0, 3800 | 150 ms | Icon and label swaps, exits |
 | `fade` | 1.0, 1600 | 231 ms | Layers, menus, notices, the theme switch |
 | `fadeSlow` | 1.0, 800 | 326 ms | Arriving text |
-| `develop` | 1.0, 300 | 533 ms | Text colour: faint to ink, ink to muted |
+| `develop` | 1.0, 300 | 533 ms | Text color: faint to ink, ink to muted |
 
 The only tweens: a 150 ms linear crossfade that replaces the expand, fold and
 settle under reduced motion; the 1.2 s sweep of the writing head; and the single
 720 ms band of light when a note becomes ready.
 
-New text **develops**: it fades in from a faint colour to ink over about half a
+New text **develops**: it fades in from a faint color to ink over about half a
 second, and the text before it recedes 140 ms later. There are no double-tap
 gestures anywhere, so every tap acts on release without a delay.
 
@@ -166,7 +166,7 @@ a keyboard, and App info's settings link.
 
 At most two controls, a 56 dp circle and a 56 dp pill, whose meaning changes and
 whose position never does: Search and Record in the library; Pause and Finish
-while recording (Resume becomes a labelled pill while paused); Play and
+while recording (Resume becomes a labeled pill while paused); Play and
 Transcribing, then Play and Copy, on a note. When transcription finishes, the
 progress pill turns into Copy once, with a single band of light and one tick.
 
@@ -221,7 +221,7 @@ shown inverted and scrolled into view. Replace all is one undoable step.
   every swipe have a tap, key or accessibility action.
 - **Keyboard.** Space plays and pauses; Ctrl+F finds; Ctrl+Z and Ctrl+Shift+Z
   undo and redo in Edit; Esc closes the innermost layer; Ctrl+, opens settings.
-- **Not by colour alone.** Playback adds the lens shape and the pause glyph; the
+- **Not by color alone.** Playback adds the lens shape and the pause glyph; the
   current match is inverted and counted; recording adds the moving wave and the
   running timer; paused adds a badge on the wave.
 - **Large text.** Layouts are checked at 1.3× and 2.0× font scale: rows, pills

@@ -1,6 +1,6 @@
 # Speech quality
 
-This page summarises what has been measured about Focal's transcription, what the
+This page summarizes what has been measured about Focal's transcription, what the
 measurements chose, and what is still unknown. Every figure below comes from read
 speech on a desktop host or an Android emulator. None of it is a phone measurement
 or a test of natural dictation.
@@ -35,7 +35,7 @@ The held-out set was opened once, for the engine decision below. The later
 segmentation experiments used both sets to make choices, so no unused hold-out
 remains. Treat every figure after the engine comparison as in-sample.
 
-Word and character errors use one normalisation: Unicode NFC, case folding, and
+Word and character errors use one normalization: Unicode NFC, case folding, and
 letter and digit runs only. Character errors compare the words joined without
 spaces. Russian `ё` is not folded into `е`, and digits versus spelled-out numbers
 count as errors, so absolute error rates are somewhat pessimistic. Comparisons
@@ -183,7 +183,7 @@ unchanged.
 - **Seam repair.** A period before a lowercase continuation across a short pause
   (under 0.8 s) is removed. With the shipped segmentation it fixed 8 of 271 seams
   and damaged 1. Without right context the same rule fixed 38 and damaged 1, but
-  right context already prevents most of those periods. Lowercasing a capitalised
+  right context already prevents most of those periods. Lowercasing a capitalized
   word after a seam was rejected: 14 fixed against 23 damaged.
 - **Duplicate guard.** On 86 forced hard cuts, words repeated near the cut fell
   from 16 to 2, and the guard removed no correct word.

@@ -23,7 +23,7 @@ python3 -m unittest discover -s scripts/tests
 - **App unit tests** cover pure parts of the app: storage thresholds, the live
   state's generations, model install bookkeeping, transcript JSON, the edit
   session's undo log, motion springs, library formatting, the settings gesture
-  rules and the bundled licence list.
+  rules and the bundled license list.
 - **Script tests** cover the model fetcher (against synthetic lock files) and the
   word-error scorer.
 

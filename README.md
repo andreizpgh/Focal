@@ -36,7 +36,7 @@ Version 0.2.0 installs over Alpha 9 and keeps your notes.
 **Status:** a testing release. It has been checked on Android emulators, not yet
 on phones: speed, memory, battery, heat, long background recordings and natural
 (not read) speech still need [phone validation](docs/testing.md#phone-validation).
-Check important transcripts against the audio.
+Check important text against the audio.
 
 ---
 

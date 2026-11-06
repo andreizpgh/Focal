@@ -1,7 +1,7 @@
 # Third-party notices
 
 Focal's own source code and original artwork are covered by the root
-[MIT license](LICENSE). The components below keep their own licences. The app
+[MIT license](LICENSE). The components below keep their own licenses. The app
 shows every notice that ships with it under **Settings › Open-source licenses**;
 the full texts are in `app/src/main/assets/licenses.txt` and
 `app/src/main/assets/ultra-licenses.txt`.
@@ -15,7 +15,7 @@ the full texts are in `app/src/main/assets/licenses.txt` and
   [release v1](https://github.com/maxwhipw/marmalade-stt-engines/releases/tag/v1),
   distributed unchanged. Sizes and SHA-256 digests are pinned in
   `models/parakeet-ultra.json`.
-- **Licence:** [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/legalcode.en).
+- **License:** [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/legalcode.en).
 - **Attribution:** Parakeet Ultra was created by Moondream (M87 Labs, Inc.) by
   post-training NVIDIA's Parakeet TDT 0.6B v3, which is also licensed under CC BY
   4.0. Original models:
@@ -32,7 +32,7 @@ the full texts are in `app/src/main/assets/licenses.txt` and
 - **What:** the Silero VAD v4 ONNX model (`silero_vad.onnx`), unchanged, as
   published in sherpa-onnx's
   [asr-models release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models).
-- **Licence:** MIT, Copyright (c) 2020-present Silero Team
+- **License:** MIT, Copyright (c) 2020-present Silero Team
   ([silero-vad](https://github.com/snakers4/silero-vad)).
 
 ### sherpa-onnx 2.0.1
@@ -40,13 +40,13 @@ the full texts are in `app/src/main/assets/licenses.txt` and
 - **What:** the C API library (`libsherpa-onnx-c-api.so`) from the
   [2.0.1 Android AAR](https://github.com/k2-fsa/sherpa-onnx/tree/af2d8d81dbfa61c4cea4c568da78f3982edca005),
   shipped byte for byte. Focal's JNI bridge compiles against the C API header,
-  vendored unchanged with its licence in `app/src/main/cpp/third_party/sherpa-onnx/`.
-- **Licence:** Apache License 2.0.
+  vendored unchanged with its license in `app/src/main/cpp/third_party/sherpa-onnx/`.
+- **License:** Apache License 2.0.
 
 ### ONNX Runtime 1.28.2
 
 - **What:** `libonnxruntime.so`, from the same AAR, shipped byte for byte.
-- **Licence:** MIT, Copyright (c) Microsoft Corporation
+- **License:** MIT, Copyright (c) Microsoft Corporation
   ([source](https://github.com/microsoft/onnxruntime/tree/v1.28.2)). Its
   third-party notices also apply and ship in `ultra-licenses.txt`.
 
@@ -55,19 +55,19 @@ the full texts are in `app/src/main/assets/licenses.txt` and
 - **What:** `app/src/main/res/font/inter_var.ttf`, a subset of `InterVariable.ttf`
   from the [Inter 4.1 release](https://github.com/rsms/inter/releases/tag/v4.1),
   made by `scripts/subset-inter.py`.
-- **Licence:** SIL Open Font License 1.1, Copyright (c) 2016 The Inter Project
+- **License:** SIL Open Font License 1.1, Copyright (c) 2016 The Inter Project
   Authors.
 
 ### AndroidX, Jetpack Compose, Kotlin and kotlinx.coroutines
 
-- **Licence:** Apache License 2.0. Versions are pinned in
+- **License:** Apache License 2.0. Versions are pinned in
   `gradle/libs.versions.toml`.
 
 ### Material Symbols
 
 - **What:** the Rounded icons drawn as `ic_*.xml` vectors in
   `app/src/main/res/drawable` (Focal's own mark and shortcut icons excepted).
-- **Licence:** Apache License 2.0
+- **License:** Apache License 2.0
   ([material-design-icons](https://github.com/google/material-design-icons)).
 
 ## In the repository only

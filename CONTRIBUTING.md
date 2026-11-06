@@ -1,6 +1,6 @@
 # Contributing
 
-Small, focused changes are welcome. Describe the behaviour you change and how you
+Small, focused changes are welcome. Describe the behavior you change and how you
 checked it. Focal stays offline: network calls, analytics, accounts and
 cloud-dependent features do not belong in it.
 

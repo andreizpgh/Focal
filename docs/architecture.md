@@ -10,12 +10,12 @@ interface is Jetpack Compose.
 
 | Area | Where | What it holds |
 | --- | --- | --- |
-| `core` | `core/src/main/kotlin/app/focal/core` | Segmenter and window gate, word building and window merge, formatter (seams, paragraphs, title, doubtful words), alignment of edited text, meter maths, thread policy and every tuning constant (`SpeechTuning`). No Android dependencies; unit-tested with shared test vectors. |
+| `core` | `core/src/main/kotlin/app/focal/core` | Segmenter and window gate, word building and window merge, formatter (seams, paragraphs, title, doubtful words), alignment of edited text, meter math, thread policy and every tuning constant (`SpeechTuning`). No Android dependencies; unit-tested with shared test vectors. |
 | Recording | `app.focal.recording` | `RecordingService` (capture and the transcription queue), `WindowFeed` (synced PCM into the segmenter), `SessionOperations` (process-wide ownership), notifications and the live state the UI reads. |
 | Speech | `app.focal.speech` | The JNI bridge (`SherpaBridge`, `OfflineRecognizer`, `SileroVad`), model installation (`UltraModel`, `SpeechModels`), `UltraEngine`/`UltraTranscriber`, the device thread policy and `SpeechPlayer`. |
 | Data | `app.focal.data` | `NoteStore` (SQLite, schema 5), schema and migrations, paragraph edit rules, search folding, transcript JSON. |
 | Interface | `app.focal.ui.*` | `state` (view models and the UI contract), `shell` (navigation, overlay, bottom column), `library`, `scene`, `note`, `settings`, `components`, `design` (tokens). |
-| Native | `app/src/main/cpp` | `focal_speech.cpp`, the only native code, plus the vendored sherpa-onnx C API header and licence. |
+| Native | `app/src/main/cpp` | `focal_speech.cpp`, the only native code, plus the vendored sherpa-onnx C API header and license. |
 
 ## Invariants
 
@@ -78,9 +78,9 @@ The cut rule works on 10 ms slots:
 
 - Once a window holds 6 seconds, it closes 250 ms into the first pause of at least
   500 ms.
-- If no pause qualifies by 20 seconds, it is hard-cut at the centre of the longest
+- If no pause qualifies by 20 seconds, it is hard-cut at the center of the longest
   quiet run (at least 60 ms) between 6 and 20 seconds, or else at the lowest
-  five-frame energy. Hard-cut neighbours overlap by 0.5 s on each side; a word
+  five-frame energy. Hard-cut neighbors overlap by 0.5 s on each side; a word
   belongs to the window that holds its midpoint, and a repeated word starting
   within 480 ms is dropped.
 - A pause-cut window is decoded with 250 ms of pause audio before it and 1 second
