@@ -60,6 +60,9 @@ class GalleryTest {
     @Test
     fun scene() = render("scene", SceneShots.all)
 
+    @Test
+    fun note() = render("note", NoteShots.all)
+
     private fun render(stage: String, shots: List<Shot>) {
         val directory = File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "gallery/$stage")
             .apply { deleteRecursively(); mkdirs() }
@@ -76,6 +79,12 @@ class GalleryTest {
                 }
             }
         }
+        // The first composition of the window still lacks its insets: warm up on the first shot, uncaptured.
+        shot = shots.firstOrNull()
+        rule.mainClock.advanceTimeBy(SETTLE_MS)
+        rule.waitForIdle()
+        shot = null
+        rule.mainClock.advanceTimeByFrame()
         for (next in shots) {
             shot = next
             rule.mainClock.advanceTimeByFrame()

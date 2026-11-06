@@ -1,30 +1,14 @@
 package app.focal.gallery
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
 import app.focal.recording.SpeechAvailability
 import app.focal.ui.components.DockActions
 import app.focal.ui.components.DockState
-import app.focal.ui.components.NotePill
-import app.focal.ui.components.PlayCircle
-import app.focal.ui.components.ProgressPhase
-import app.focal.ui.design.FocalLayout
-import app.focal.ui.design.FocalTheme
-import app.focal.ui.design.FocalType
-import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.library.LibraryModel
 import app.focal.ui.library.StageUi
@@ -32,7 +16,6 @@ import app.focal.ui.scene.RecordingSurface
 import app.focal.ui.scene.SceneActions
 import app.focal.ui.scene.SceneUi
 import app.focal.ui.shell.Destination
-import app.focal.ui.shell.DestinationBottom
 import app.focal.ui.shell.FocalShell
 import app.focal.ui.shell.SceneBottom
 import app.focal.ui.shell.ShellState
@@ -131,7 +114,7 @@ private fun SettleFrame() {
         shell,
         destination = { destination ->
             when (destination) {
-                is Destination.Note -> TranscribingPage(destination)
+                is Destination.Note -> TranscribingNote(destination)
                 else -> LibraryDestination(libraryOf(scene))
             }
         },
@@ -139,21 +122,3 @@ private fun SettleFrame() {
     )
 }
 
-/** A stand-in for the note page under T7 (the note stage builds the real one): title, meta, the text so far. */
-@Composable
-private fun TranscribingPage(destination: Destination.Note) {
-    val colors = FocalTheme.colors
-    DestinationBottom(destination, DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Transcribing, 0.64f)), remember { DockActions() })
-    Column(
-        Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = FocalLayout.gutter)
-            .padding(top = FocalLayout.topBar + Grid.x8),
-        verticalArrangement = Arrangement.spacedBy(Grid.x16),
-    ) {
-        Text(saturday.title, style = FocalType.title, color = colors.ink)
-        Text("Today, 17:08 · 4 min", style = FocalType.meta, color = colors.muted)
-        FakeScene.forEach { Text(it, style = FocalType.body, color = colors.ink) }
-    }
-}
