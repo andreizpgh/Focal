@@ -145,8 +145,9 @@ internal fun PlayerStrip(position: PlayerPosition, onSeek: (Long) -> Unit, modif
             .clearAndSetSemantics {
                 contentDescription = label
                 stateDescription = state
+                // The whole seconds the labels show, not the per-frame position: the node changes once a second.
                 progressBarRangeInfo = ProgressBarRangeInfo(
-                    position.ms().toFloat(), 0f..PlayerSteps.rangeEnd(duration), PlayerSteps.steps(duration),
+                    (position.seconds * MS).toFloat(), 0f..PlayerSteps.rangeEnd(duration), PlayerSteps.steps(duration),
                 )
                 setProgress { target ->
                     seek(target.roundToInt().toLong().coerceIn(0, duration))
