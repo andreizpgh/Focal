@@ -114,7 +114,8 @@ class RowActions(
 /**
  * A ready row (spec 4.12.2), or a transcribing or waiting one (4.12.4): the title with the duration flush right
  * like a page number, and a preview opening with a run-in. The hit area is the full width, 12 dp above the title
- * and below the preview; the press plate spans x 8-404. Long-press opens the menu at the touch point.
+ * and below the preview; the press plate spans x 8-404. Long-press opens the menu at the touch point. [capturing]: a
+ * recording holds the microphone, so the row's page will open with ▶ unavailable.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -125,6 +126,7 @@ fun NoteRowItem(
     modifier: Modifier = Modifier,
     menu: @Composable () -> Unit = {},
     title: (@Composable () -> Unit)? = null,
+    capturing: Boolean = false,
 ) {
     val colors = FocalTheme.colors
     val source = remember { MutableInteractionSource() }
@@ -141,7 +143,7 @@ fun NoteRowItem(
     val titleText = noteTitle(row, dates)
     val menuActions = actions.menuActions(row)
     val pages = LocalShell.current.pages
-    val origin = rememberRowOrigin(row.id, RowMetrics.TITLE_LINES, titleText, titleMuted = row.title.isBlank())
+    val origin = rememberRowOrigin(row.id, RowMetrics.TITLE_LINES, titleText, titleMuted = row.title.isBlank(), dock = pageDock(row, capturing))
     Box(
         modifier
             .fillMaxWidth()

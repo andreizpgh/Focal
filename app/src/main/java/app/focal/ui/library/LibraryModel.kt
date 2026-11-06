@@ -5,6 +5,9 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateMapOf
 import app.focal.recording.SpeechAvailability
 import app.focal.ui.components.DockState
+import app.focal.ui.components.NotePill
+import app.focal.ui.components.PlayCircle
+import app.focal.ui.components.ProgressPhase
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.state.LibraryDay
 import app.focal.ui.state.LibraryUiState
@@ -72,6 +75,37 @@ data class LibraryModel(
         }
     }
 }
+
+/**
+ * The dock of a note's page (spec 4.3): ▶ (‖ while it plays there; a faint ▶ while a recording holds the microphone;
+ * nothing for a note without audio) and the progress pill, or Copy once the note is ready.
+ */
+fun noteDock(audioPresent: Boolean, canPlay: Boolean, playing: Boolean, phase: NotePhase, progress: Float?, copyEnabled: Boolean): DockState.Note =
+    DockState.Note(
+        circle = when {
+            !audioPresent -> PlayCircle.None
+            !canPlay -> PlayCircle.Unavailable
+            playing -> PlayCircle.PausePlayback
+            else -> PlayCircle.Play
+        },
+        pill = when (phase) {
+            NotePhase.READY, NotePhase.PARTIAL_FAILURE, NotePhase.ERROR -> NotePill.Copy(enabled = copyEnabled)
+            NotePhase.PREPARING_MODEL -> NotePill.Progress(ProgressPhase.Preparing, progress ?: 0f)
+            NotePhase.WAITING -> NotePill.Progress(ProgressPhase.Waiting, progress ?: 0f)
+            else -> NotePill.Progress(ProgressPhase.Transcribing, progress ?: 0f)
+        },
+    )
+
+/** The dock [row]'s page will show when it opens from the stage or the list, before it has loaded the note. */
+fun pageDock(row: NoteRow, capturing: Boolean): DockState.Note = noteDock(
+    audioPresent = row.audioPresent, canPlay = row.audioPresent && !capturing, playing = false,
+    phase = row.phase, progress = row.progress, copyEnabled = row.preview.isNotBlank(),
+)
+
+/** The dock of the note Finish opens from the live stage (T7b): its audio is there and it starts transcribing. */
+val FinishedDock: DockState.Note = noteDock(
+    audioPresent = true, canPlay = true, playing = false, phase = NotePhase.TRANSCRIBING, progress = 0f, copyEnabled = false,
+)
 
 object LibraryModels {
     /**

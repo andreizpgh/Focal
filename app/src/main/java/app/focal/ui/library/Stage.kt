@@ -209,6 +209,8 @@ fun StageCard(
     val origin = rememberStageOrigin(
         note?.id, if (large) StageMetrics.TITLE_LINES_LARGE else StageMetrics.TITLE_LINES,
         titleText = note?.let { noteTitle(it, dates) }.orEmpty(), titleMuted = note?.title?.isBlank() == true,
+        // The stage holds a note only while nothing records; live, Finish opens the note it is recording (T7b).
+        dock = note?.let { pageDock(it, capturing = false) } ?: FinishedDock,
     )
     Box(
         modifier

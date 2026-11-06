@@ -106,7 +106,7 @@ private fun RecordFrame(fromEmpty: Boolean) {
     val model = if (fromEmpty) LibraryModel(loaded = true) else idleModel()
     LaunchedEffect(shell) {
         waitFrames(RECORD_AT_MS)
-        shell.live.record(fromEmpty, reducedMotion = false)
+        shell.record(fromEmpty, reducedMotion = false)
     }
     FocalShell(shell, destination = { LibraryDestination(model) }, scene = { SceneLayer(shell, SceneUi(hint = true)) })
 }

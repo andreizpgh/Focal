@@ -22,13 +22,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -75,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.focal.R
+import app.focal.ui.design.FocalClock
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
@@ -82,6 +86,7 @@ import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.Grid
 import app.focal.ui.design.Scene
+import app.focal.ui.design.TriggerClock
 import app.focal.ui.design.rememberFocalHaptics
 import app.focal.ui.design.smoothstep
 import kotlinx.coroutines.delay
@@ -177,15 +182,25 @@ private val MoveBounds = BoundsTransform { _, _ -> FocalMotion.fromTrigger(Focal
 /**
  * The dock (spec 4.3): at most a 56 dp circle and a 56 dp pill on the bottom column. Bounds animate on `move`
  * (`animateBounds` in a `LookaheadScope`); glyphs and labels fade through; containers that change crossfade without
- * a coverage dip. While a capture runs, [materialEdge] (the window y of the recording material's bottom edge, read in
+ * a coverage dip. Both slots swap on one q, so the circle and the pill are always at the same phase; a change that a
+ * tap announced counts from the tap ([clock], started in its handler), even when the new contents arrive a frame or
+ * two later. While a capture runs, [materialEdge] (the window y of the recording material's bottom edge, read in
  * the draw phase) wipes each control from its paper dress to its material dress (spec 2.8.6), so a drag never
  * recomposes the dock. Touch and semantics belong to the control, never to a dress.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun Dock(state: DockState, actions: DockActions, modifier: Modifier = Modifier, materialEdge: (() -> Float)? = null) {
+fun Dock(
+    state: DockState,
+    actions: DockActions,
+    modifier: Modifier = Modifier,
+    materialEdge: (() -> Float)? = null,
+    clock: TriggerClock? = null,
+) {
     val circle = circleFace(state)
     val pill = pillFace(state)
+    val swap = rememberDockSwap(DockFaces(circle, pill), clock)
+    val leaving = swap.leaving()
     val circleWidth = when (circle) {
         CircleFace.None -> 0.dp
         CircleFace.Resume -> DockMetrics.resume
@@ -196,6 +211,8 @@ fun Dock(state: DockState, actions: DockActions, modifier: Modifier = Modifier, 
         Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             CircleSlot(
                 face = circle,
+                leaving = leaving?.circle,
+                q = swap::q,
                 actions = actions,
                 edge = edge,
                 modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
@@ -204,6 +221,8 @@ fun Dock(state: DockState, actions: DockActions, modifier: Modifier = Modifier, 
             Spacer(Modifier.width(if (circleWidth > 0.dp) DockMetrics.gap else 0.dp))
             PillSlot(
                 face = pill,
+                leaving = leaving?.pill,
+                q = swap::q,
                 notePill = (state as? DockState.Note)?.pill,
                 actions = actions,
                 edge = edge,
@@ -215,7 +234,7 @@ fun Dock(state: DockState, actions: DockActions, modifier: Modifier = Modifier, 
 }
 
 @Composable
-private fun CircleSlot(face: CircleFace, actions: DockActions, edge: (() -> Float)?, modifier: Modifier) {
+private fun CircleSlot(face: CircleFace, leaving: CircleFace?, q: () -> Float, actions: DockActions, edge: (() -> Float)?, modifier: Modifier) {
     val source = remember { MutableInteractionSource() }
     val description = when (face) {
         CircleFace.None -> null
@@ -245,7 +264,7 @@ private fun CircleSlot(face: CircleFace, actions: DockActions, edge: (() -> Floa
         .focusRing(FocalShapes.pill)
         .clickable(source, indication = null, enabled = onClick != null, onClick = { onClick?.invoke() })
     DressWipe(edge, control) { dress ->
-        SlotSwap(face) { shown, containerAlpha, contentAlpha ->
+        SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
             if (shown != CircleFace.None) {
                 TonalContainer(dress, containerAlpha)
                 // Unbounded: "● Resume" keeps its width (never wraps) while the circle widens under it.
@@ -274,7 +293,15 @@ private fun CircleContent(face: CircleFace, dress: Dress) {
 }
 
 @Composable
-private fun PillSlot(face: PillFace, notePill: NotePill?, actions: DockActions, edge: (() -> Float)?, modifier: Modifier) {
+private fun PillSlot(
+    face: PillFace,
+    leaving: PillFace?,
+    q: () -> Float,
+    notePill: NotePill?,
+    actions: DockActions,
+    edge: (() -> Float)?,
+    modifier: Modifier,
+) {
     val source = remember { MutableInteractionSource() }
     val scope = rememberCoroutineScope()
     val haptics = rememberFocalHaptics()
@@ -327,7 +354,7 @@ private fun PillSlot(face: PillFace, notePill: NotePill?, actions: DockActions, 
         .focusRing(FocalShapes.pill)
         .clickable(source, indication = null, enabled = onClick != null, onClick = { onClick?.invoke() })
     DressWipe(edge, control) { dress ->
-        SlotSwap(face) { shown, containerAlpha, contentAlpha ->
+        SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
             when (shown) {
                 PillFace.Record -> {
                     PrimaryContainer(dress, containerAlpha)
@@ -458,30 +485,71 @@ private fun CopyContent(copied: Boolean, ink: Color) {
     CopyLabel(copied, ink, FocalType.label, GlyphSize.inPill, DockMetrics.glyphGap, Modifier.padding(horizontal = Grid.x16))
 }
 
-
+/** What the dock's two slots show. */
+@Immutable
+private data class DockFaces(val circle: CircleFace, val pill: PillFace)
 
 /**
- * Keeps the outgoing face during a swap (spec 4.3, Q7): the incoming container beneath at full alpha and the
- * outgoing one on top at 1 - q, so the coverage never dips; contents fade through. q runs on `fadeFast`.
+ * One fade-through for the whole dock (spec 4.3, Q7): the faces that leave and the faces that arrive, on one q
+ * (`fadeFast`). It counts from the tap that changed the dock when [clock] was started for it (claimed in the first
+ * frame after the tap); a change no tap announced (a pause from the notification, a page that loaded) runs its own.
+ */
+@Stable
+private class DockSwap(val shown: DockFaces, private val from: DockFaces?, private val clock: TriggerClock?, private val serial: Int) {
+    val own = Animatable(if (from == null || clock != null) 1f else 0f)
+    val runsOwn: Boolean get() = from != null && clock == null
+    val claimed: Int? get() = if (clock != null) serial else null
+
+    fun q(): Float = when {
+        from == null -> 1f
+        clock != null -> if (clock.serial == serial) FocalClock.fadeFast(clock.elapsed) else 1f
+        else -> own.value
+    }
+
+    /** The faces still leaving, read in composition (a derived state: it changes once, when the swap ends). */
+    val settled = derivedStateOf { q() >= 1f }
+    fun leaving(): DockFaces? = if (settled.value) null else from
+
+    /** What leaves if the dock changes again now: a swap caught before its midpoint keeps what was leaving. */
+    fun outgoing(): DockFaces = if (from != null && q() < HALF) from else shown
+}
+
+private class DockSwapMemory(var swap: DockSwap, var claimed: Int = 0)
+
+@Composable
+private fun rememberDockSwap(faces: DockFaces, clock: TriggerClock?): DockSwap {
+    val memory = remember { DockSwapMemory(DockSwap(faces, null, null, 0)) }
+    val swap = remember(faces) {
+        val last = memory.swap
+        if (last.shown == faces) last else Snapshot.withoutReadObservation {
+            val from = last.outgoing().takeIf { it != faces }
+            val fresh = clock?.takeIf { it.elapsed <= FocalTiming.TRIGGER_LEAD_MS && it.serial != memory.claimed }
+            DockSwap(faces, from, fresh, fresh?.serial ?: 0)
+        }
+    }
+    SideEffect {
+        memory.swap = swap
+        swap.claimed?.let { memory.claimed = it }
+    }
+    if (swap.runsOwn) LaunchedEffect(swap) { swap.own.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.fadeFast())) }
+    return swap
+}
+
+/**
+ * Draws the slot's face during a swap (spec 4.3, Q7): the incoming container beneath at full alpha and the outgoing
+ * one on top at 1 - q, so the coverage never dips; contents fade through, the outgoing at 1 - smoothstep(0, 0.5, q)
+ * and the incoming at smoothstep(0.5, 1, q).
  */
 @Composable
-private fun <F : Any> SlotSwap(target: F, face: @Composable BoxScope.(F, containerAlpha: () -> Float, contentAlpha: () -> Float) -> Unit) {
-    var shown by remember { mutableStateOf(target) }
-    var leaving by remember { mutableStateOf<F?>(null) }
-    val q = remember { Animatable(1f) }
-    LaunchedEffect(target) {
-        if (target == shown) return@LaunchedEffect
-        if (leaving == null || q.value >= 0.5f) leaving = shown
-        shown = target
-        q.snapTo(0f)
-        q.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.fadeFast()))
-        leaving = null
-    }
+private fun <F : Any> SlotSwap(shown: F, leaving: F?, q: () -> Float, face: @Composable BoxScope.(F, containerAlpha: () -> Float, contentAlpha: () -> Float) -> Unit) {
+    val outgoing = leaving?.takeIf { it != shown }
     Box(Modifier.fillMaxWidth().heightIn(min = DockMetrics.height), contentAlignment = Alignment.Center) {
-        key(shown) { face(shown, { 1f }, { if (leaving == null) 1f else smoothstep(0.5f, 1f, q.value) }) }
-        leaving?.let { old -> key(old) { face(old, { 1 - q.value }, { 1 - smoothstep(0f, 0.5f, q.value) }) } }
+        key(shown) { face(shown, { 1f }, { if (outgoing == null) 1f else smoothstep(HALF, 1f, q()) }) }
+        outgoing?.let { old -> key(old) { face(old, { 1 - q() }, { 1 - smoothstep(0f, HALF, q()) }) } }
     }
 }
+
+private const val HALF = 0.5f
 
 /** Search, Pause, Play circles and the Resume pill: `s1` on paper, glass on the material. */
 @Composable

@@ -38,8 +38,10 @@ import app.focal.ui.components.Dock
 import app.focal.ui.components.DockActions
 import app.focal.ui.components.DockState
 import app.focal.ui.components.rememberBottomColumnState
+import app.focal.ui.design.FocalSettle
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.design.TriggerClock
 import app.focal.ui.design.smoothstep
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -60,12 +62,15 @@ class ShellState internal constructor(
     val bottom: BottomColumnState,
     val bars: SystemBarsState,
     val pages: PageTransitions,
+    /** The dock's swaps count from the tap that changed what it holds (a page change, Record), see Dock. */
+    internal val dockClock: TriggerClock,
 ) {
     val current: Destination get() = backStack.last()
 
     /** Opens [destination] on top; [motion] says how (spec 6.1): a fade-through unless it grows out of the library. */
     fun open(destination: Destination, motion: PageMotion = PageMotion.FadeThrough) {
         if (backStack.lastOrNull() == destination) return
+        dockClock.start()
         pages.push(destination, motion)
         backStack.add(destination)
     }
@@ -73,8 +78,18 @@ class ShellState internal constructor(
     /** Back from the top page: it folds into where it came from if that is on screen, else it fades through. */
     fun back() {
         if (backStack.size <= 1) return
+        dockClock.start()
         pages.pop(backStack.last())
         backStack.removeAt(backStack.lastIndex)
+    }
+
+    /**
+     * Record (T1′, T1′e): the scene grows out of the stage or the resting instrument while the dock's Search | Record
+     * fade through to Pause | Finish from the tap.
+     */
+    suspend fun record(fromEmpty: Boolean, reducedMotion: Boolean = false) {
+        dockClock.start()
+        live.record(fromEmpty, reducedMotion)
     }
 
     /** What each destination asked the bottom column to show; only the current destination's is drawn. */
@@ -95,7 +110,9 @@ fun rememberShellState(capturing: () -> Boolean = { false }): ShellState {
     val bottom = rememberBottomColumnState()
     // Page changes run their clock in the composition's scope, on its frame clock.
     val scope = rememberCoroutineScope()
-    return remember(backStack, settings, live, bottom) { ShellState(backStack, settings, live, bottom, SystemBarsState(), PageTransitions(scope)) }
+    return remember(backStack, settings, live, bottom) {
+        ShellState(backStack, settings, live, bottom, SystemBarsState(), PageTransitions(scope), TriggerClock(scope, FocalSettle.FADE_FAST_MS))
+    }
 }
 
 /** The bottom column's contents for one destination. */
@@ -211,9 +228,17 @@ private class ShownBottom { var content: BottomContent? = null }
 private fun ShellBottom(shell: ShellState) {
     val current = shell.current
     val shown = remember { ShownBottom() }
-    // The scene's controls while it is up and not settling into the note's page (T7).
-    val scene = shell.sceneBottom?.takeIf { shell.live.visible && shell.live.landingNote == null }
-    val content = scene ?: shell.bottomContent[current]?.also { shown.content = it } ?: shown.content?.takeIf { current.hasDock } ?: return
+    val live = shell.live
+    // The scene's controls while it is up and not settling into the note's page (T7). Until the scene has registered
+    // them (it is composed in the frame p leaves 0), the dock already holds Pause | Finish, so its swap starts with
+    // the tap. A page that opens out of the stage or a row shows the dock it will register (its origin knows the
+    // note), for the same reason; actions arrive with the page, a frame or two later.
+    val scene = if (live.visible && live.landingNote == null) shell.sceneBottom ?: sceneDock(shell) else null
+    val content = scene
+        ?: shell.bottomContent[current]?.also { shown.content = it }
+        ?: shell.pages.arrivingDock(current)?.let { BottomContent(it, NoActions, strip = null, rows = null, dockHidden = false) }
+        ?: shown.content?.takeIf { current.hasDock }
+        ?: return
     val onLibrary = current == Destination.Library
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val reduced = LocalReducedMotion.current
@@ -232,12 +257,23 @@ private fun ShellBottom(shell: ShellState) {
                     else translationX = (if (rtl) 1 else -1) * s * settingsTravel(size.width, this)
                 }
             },
-        dock = { Dock(content.dock, content.actions, materialEdge = shell.live.materialEdge) },
+        dock = { Dock(content.dock, content.actions, materialEdge = shell.live.materialEdge, clock = shell.dockClock) },
         strip = content.strip,
         rows = content.rows,
         dockHidden = content.dockHidden,
     )
 }
+
+/** The scene's dock before the scene has registered its own: a live recording's, paused as the library's says. */
+private fun sceneDock(shell: ShellState): BottomContent {
+    val paused = (shell.bottomContent[Destination.Library]?.dock as? DockState.Live)?.paused ?: false
+    return if (paused) PausedSceneDock else LiveSceneDock
+}
+
+/** A dock shown ahead of its page or scene: it does nothing until their own actions arrive. */
+private val NoActions = DockActions()
+private val LiveSceneDock = BottomContent(DockState.Live(paused = false), NoActions, strip = null, rows = null, dockHidden = false)
+private val PausedSceneDock = BottomContent(DockState.Live(paused = true), NoActions, strip = null, rows = null, dockHidden = false)
 
 private const val HALF = 0.5f
 /** The pages behind the morph darken (spec 2.8.2 `libraryDim`). */

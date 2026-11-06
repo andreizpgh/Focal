@@ -48,7 +48,7 @@ fun FocalApp(preferences: Preferences, commands: Flow<ShellCommand>) {
         val recordFlow = rememberRecordFlow {
             val running = recording.state.value.live
             recording.record()
-            if (!running && !shell.live.visible) scope.launch { shell.live.record(fromEmpty = library.state.value.empty, reduced) }
+            if (!running && !shell.live.visible) scope.launch { shell.record(fromEmpty = library.state.value.empty, reduced) }
         }
         SystemBarsEffect(shell.bars, dark)
         ShellCommands(shell, commands)

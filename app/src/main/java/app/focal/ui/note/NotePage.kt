@@ -66,15 +66,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.focal.R
 import app.focal.ui.components.BottomFade
 import app.focal.ui.components.DockActions
-import app.focal.ui.components.DockState
 import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FeedbackResult
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.NotePill
 import app.focal.ui.components.PaperTopFade
 import app.focal.ui.components.rememberRowPlacement
-import app.focal.ui.components.PlayCircle
-import app.focal.ui.components.ProgressPhase
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTheme
@@ -82,6 +79,7 @@ import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.library.LibraryDates
+import app.focal.ui.library.noteDock
 import app.focal.ui.shell.BackEase
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.DestinationBottom
@@ -478,19 +476,9 @@ fun NotePage(
     BackHandler(enabled = page.renaming) { page.renaming = false }
 
     // The dock (spec 4.3) and the bottom column.
-    val dockState = DockState.Note(
-        circle = when {
-            !note.audioPresent -> PlayCircle.None
-            !note.canPlay -> PlayCircle.Unavailable
-            playingHere && audio.playing -> PlayCircle.PausePlayback
-            else -> PlayCircle.Play
-        },
-        pill = when (note.phase) {
-            NotePhase.READY, NotePhase.PARTIAL_FAILURE, NotePhase.ERROR -> NotePill.Copy(enabled = !note.noSpeech && paragraphs.isNotEmpty())
-            NotePhase.PREPARING_MODEL -> NotePill.Progress(ProgressPhase.Preparing, note.progress ?: 0f)
-            NotePhase.WAITING -> NotePill.Progress(ProgressPhase.Waiting, note.progress ?: 0f)
-            else -> NotePill.Progress(ProgressPhase.Transcribing, note.progress ?: 0f)
-        },
+    val dockState = noteDock(
+        audioPresent = note.audioPresent, canPlay = note.canPlay, playing = playingHere && audio.playing,
+        phase = note.phase, progress = note.progress, copyEnabled = !note.noSpeech && paragraphs.isNotEmpty(),
     )
     val currentParagraphs by rememberUpdatedState(paragraphs)
     val currentItems by rememberUpdatedState(items)
@@ -513,7 +501,9 @@ fun NotePage(
     val findActions = run {
         FindActions(close = { closeFind() }, next = { find.next() }, previous = { find.previous() }, replaceAll = { replaceAll() })
     }
-    DestinationBottom(
+    // Only once the note has loaded: an empty state would put a waiting note's dock up for a frame or two (and turn
+    // it into Copy with the readiness morph); until then the dock holds what the page's origin said it would show.
+    if (note.loaded) DestinationBottom(
         destination,
         dockState,
         dockActions,

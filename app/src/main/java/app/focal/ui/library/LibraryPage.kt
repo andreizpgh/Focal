@@ -473,6 +473,7 @@ private fun LibraryList(
                         modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
                         menu = { noteMenu(row) },
                         title = if (renaming == row.id) { { renameField(row, false) } } else null,
+                        capturing = model.live != null,
                     )
                 }
             }

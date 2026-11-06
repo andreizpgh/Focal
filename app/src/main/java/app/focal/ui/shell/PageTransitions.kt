@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.util.lerp
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigationevent.NavigationEvent
+import app.focal.ui.components.DockState
 import app.focal.ui.components.sceneMaterial
 import app.focal.ui.design.FocalClock
 import app.focal.ui.design.FocalMotion
@@ -138,6 +139,8 @@ internal class Origin {
     /** The title as the origin sets it: the flight starts as this text before the page has laid out its own. */
     var titleText: String = ""
     var titleMuted: Boolean = false
+    /** The dock the note's page will show: the dock holds it from the tap, before the page has loaded its note. */
+    var dock: DockState? = null
 }
 
 /** The page title a flight lands on or leaves from (spec 6.1 T16, T16′: a shared element). */
@@ -219,14 +222,23 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      */
     private var titleFrom = Float.NaN
 
+    /** The page that is opening and the dock its origin says it will show (see [Origin.dock]). */
+    private var arriving by mutableStateOf<Pair<Destination, DockState>?>(null)
+
+    /** The dock [destination] will show, while it opens out of the stage or a row and has not registered its own. */
+    internal fun arrivingDock(destination: Destination): DockState? = arriving?.takeIf { it.first == destination }?.second
+
     /** [destination] opens on top with [motion], timed from now. */
     internal fun push(destination: Destination, motion: PageMotion) {
         opened[destination] = motion
-        change = PageChange(motion, destination, push = true, serial = ++serial)
+        val c = PageChange(motion, destination, push = true, serial = ++serial)
+        change = c
+        arriving = originOf(c)?.dock?.let { destination to it }
         startClock()
     }
 
     internal fun pop(top: Destination) {
+        arriving = null
         val current = change
         if (current != null && current.predictive && !current.committed && current.document == top) {
             commitAt = document?.value ?: 1f
@@ -916,28 +928,33 @@ internal fun Modifier.pageOrigin(origin: Origin, title: Boolean = false): Modifi
     if (title) origin.title = it else origin.card = it
 }
 
-/** The stage's origin (one per library): which note it holds, its title and how many lines that may take. */
+/**
+ * The stage's origin (one per library): which note it holds, its title and how many lines that may take, and the
+ * dock its note's page will show.
+ */
 @Composable
-internal fun rememberStageOrigin(noteId: String?, titleLines: Int, titleText: String, titleMuted: Boolean): Origin {
+internal fun rememberStageOrigin(noteId: String?, titleLines: Int, titleText: String, titleMuted: Boolean, dock: DockState?): Origin {
     val origin = LocalShell.current.pages.stage
     SideEffect {
         origin.noteId = noteId
         origin.titleLines = titleLines
         origin.titleText = titleText
         origin.titleMuted = titleMuted
+        origin.dock = dock
     }
     return origin
 }
 
 /** A row's origin, registered while the row is composed. */
 @Composable
-internal fun rememberRowOrigin(noteId: String, titleLines: Int, titleText: String, titleMuted: Boolean): Origin {
+internal fun rememberRowOrigin(noteId: String, titleLines: Int, titleText: String, titleMuted: Boolean, dock: DockState?): Origin {
     val pages = LocalShell.current.pages
     val origin = remember(noteId) { Origin().also { it.noteId = noteId } }
     SideEffect {
         origin.titleLines = titleLines
         origin.titleText = titleText
         origin.titleMuted = titleMuted
+        origin.dock = dock
     }
     DisposableEffect(pages, noteId, origin) {
         pages.rows[noteId] = origin
