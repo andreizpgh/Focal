@@ -2,7 +2,7 @@ package app.focal.ui.design
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 
@@ -181,4 +181,8 @@ object Stage {
     const val SHIMMER_SHOULDER = 0.035f
 }
 
-val LocalFocalColors = staticCompositionLocalOf { FocalColors.Light }
+/**
+ * The palette on screen. Dynamic: during a theme switch (2.8 `fade`) it changes every frame, and only what reads it
+ * recomposes, not every composable under the theme.
+ */
+val LocalFocalColors = compositionLocalOf { FocalColors.Light }

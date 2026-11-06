@@ -52,6 +52,7 @@ import app.focal.core.MeterMath
 import app.focal.ui.design.FocalColors
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.design.LocalThemeFade
 import app.focal.ui.design.Scene
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -107,10 +108,11 @@ fun Modifier.markBox(height: Dp): Modifier = size(Mark.width(height), height)
 
 /** How the bars are coloured: on paper (ink, the centre bar's paper gradient, no glow) or on the material. */
 @Immutable
-data class WaveDress(val bar: Color, val centreTop: Color, val centreBottom: Color, val glow: Color?) {
+data class WaveDress(val bar: Color, val centreTop: Color, val centreBottom: Color, val glow: Color?, val paper: Boolean = false) {
     companion object {
         val Material = WaveDress(Scene.waveBar, Scene.waveCentreTop, Scene.waveCentreBottom, Scene.glow)
-        fun paper(colors: FocalColors) = WaveDress(colors.ink, colors.centreBarTop, colors.centreBarBottom, glow = null)
+        /** The paper dress of [colors]; it follows the theme (a still instance draws the theme's own raster). */
+        fun paper(colors: FocalColors) = WaveDress(colors.ink, colors.centreBarTop, colors.centreBarBottom, glow = null, paper = true)
     }
 }
 
@@ -604,16 +606,29 @@ private object BarSprites {
 
 /**
  * Still instances (the empty library's resting bars, the settings footer, the rationale sheet, gap rows): rasterised
- * once per size, level and dress in software, where BlurMaskFilter blurs on every API level, and cached.
+ * once per size, level and dress in software, where BlurMaskFilter blurs on every API level, and cached. A paper dress
+ * is the theme's: during a theme switch the two themes' rasters cross-fade, so no in-between palette is rasterised.
  */
 @Composable
 private fun StillBars(level: Float, dress: WaveDress, modifier: Modifier) {
+    val theme = LocalThemeFade.current?.takeIf { dress.paper }
     Spacer(
         modifier.drawBehind {
             val heightPx = size.height.roundToInt()
             if (heightPx <= 0) return@drawBehind
-            val raster = StillMarks.get(heightPx, level, dress)
-            drawImage(raster.image, topLeft = Offset(-raster.margin, -raster.margin))
+            fun draw(dressed: WaveDress, alpha: Float) {
+                val raster = StillMarks.get(heightPx, level, dressed)
+                drawImage(raster.image, topLeft = Offset(-raster.margin, -raster.margin), alpha = alpha)
+            }
+            val t = theme?.fraction ?: 1f
+            when {
+                theme == null -> draw(dress, 1f)
+                t >= 1f -> draw(WaveDress.paper(theme.to), 1f)
+                else -> {
+                    draw(WaveDress.paper(theme.from), 1f - t)
+                    draw(WaveDress.paper(theme.to), t)
+                }
+            }
         },
     )
 }
