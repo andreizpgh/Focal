@@ -54,7 +54,7 @@ remains part of the evidence. The follow-up did not exercise hard fallback or
 prove boundary correctness on arbitrary recordings. [DEV aggregate](ultra-android-dev-framing.json).
 
 The separate
-[bundled-app verification](../../quality-report.md#alpha-8-bundled-ultra--final-emulator-verification)
+[bundled-app verification](https://github.com/andreizpgh/Focal/blob/stt-alpha-9/docs/quality-report.md#alpha-8-bundled-ultra--final-emulator-verification)
 records full emulator QA and minified runtime smoke for Alpha 8. Physical-phone
 resources and behavior, quiet speech and natural language switching remain
 open. Automatic LLM correction stays disabled.
