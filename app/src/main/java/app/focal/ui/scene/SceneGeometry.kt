@@ -60,6 +60,9 @@ object SceneMetrics {
     /** The "Latest" jump pill: 40 dp visual in a 48 dp target, 12 dp above the dock (ref 767-807, spec 4.11). */
     val jumpHeight = Grid.x40
     val jumpAboveDock = Grid.x12
+    /** While the jump pill shows, the text region ends this far above it, fading out over [jumpFade]. */
+    val jumpClearance = Grid.x8
+    val jumpFade = Grid.x16
     val jumpStart = Grid.x12
     val jumpEnd = Grid.x16
     val jumpGlyph = 18.dp

@@ -202,6 +202,8 @@ fun RecordingSurface(
     SideEffect { live.spatial = spatial }
     val choreography = live.choreography
     EntryEffects(live, choreography, meter)
+    // "↓ Latest"'s alpha: the text region clears a band above it while it shows.
+    val latest = remember { Animatable(0f) }
     val lift = remember { Animatable(if (scene.hasText) 1f else 0f) }
     LaunchedEffect(scene.hasText) {
         when {
@@ -296,13 +298,16 @@ fun RecordingSurface(
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = choreography.chrome.value * live.landingContent.value }) {
                 // The stage's typesetting travels only out of (and into) a live stage: Record grows the scene out of a
                 // note or the resting instrument, whose text leaves on its own (T1′, T1′e).
-                TextRegion(live, scene, frame, slots, fold, listState, stage = spatial && live.covered && !(entry == SceneEntry.RecordEmpty && live.restBounds != null))
+                TextRegion(
+                    live, scene, frame, slots, fold, listState, latest,
+                    stage = spatial && live.covered && !(entry == SceneEntry.RecordEmpty && live.restBounds != null),
+                )
                 Hint(scene, frame, slots, reduced)
                 StateLine(scene, frame, slots, lift, spatial)
                 Wave(scene, meter, frame, live, choreography, spatial, entry)
                 Timer(scene, frame, timers, live, choreography, spatial, timerFocus)
                 Chevron(frame, slots, actions.collapse)
-                LatestPill(open, listState, slots)
+                LatestPill(open, listState, slots, latest)
             }
             if (landing) LandingDock(scene.paused, live)
         }
@@ -467,6 +472,7 @@ private fun TextRegion(
     slots: SceneSlots,
     fold: FoldScroll,
     listState: LazyListState,
+    latest: Animatable<Float, *>,
     stage: Boolean,
 ) {
     val colors = FocalTheme.colors
@@ -487,6 +493,18 @@ private fun TextRegion(
                     Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, startY = f.textTop, endY = f.textTop + f.textMask),
                     blendMode = BlendMode.DstIn,
                 )
+                // While "↓ Latest" shows, the text ends 8 dp above it: no glyph sits under or against its glass.
+                val a = latest.value
+                if (a > 0f) {
+                    val end = slots.dockTop - (SceneMetrics.jumpAboveDock + SceneMetrics.jumpHeight + SceneMetrics.jumpClearance).toPx()
+                    drawRect(
+                        Brush.verticalGradient(
+                            0f to Color.Black, 1f to Color.Black.copy(alpha = 1 - a),
+                            startY = end - SceneMetrics.jumpFade.toPx(), endY = end,
+                        ),
+                        blendMode = BlendMode.DstIn,
+                    )
+                }
             },
     ) {
         if (stage) {
@@ -711,10 +729,9 @@ private fun Chevron(frame: State<MorphFrame>, slots: SceneSlots, collapse: () ->
  * 12 dp above the dock, right edge on the column; a tap scrolls back on `move` and follow resumes.
  */
 @Composable
-private fun LatestPill(open: Boolean, listState: LazyListState, slots: SceneSlots) {
+private fun LatestPill(open: Boolean, listState: LazyListState, slots: SceneSlots, alpha: Animatable<Float, *>) {
     val away by remember(listState) { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
     val shown = open && away
-    val alpha = remember { Animatable(if (shown) 1f else 0f) }
     val scale = remember { Animatable(if (shown) 1f else JUMP_START_SCALE) }
     LaunchedEffect(shown) {
         if (shown) {
