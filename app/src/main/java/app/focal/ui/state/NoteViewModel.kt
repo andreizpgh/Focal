@@ -54,6 +54,8 @@ sealed interface EditOutcome {
     data object TooLarge : EditOutcome
     /** The paragraph has no recognizer text to restore. */
     data object NoOriginal : EditOutcome
+    /** Merge refused: joining would lose a recognizer original. Both paragraphs stay; nothing failed. */
+    data object CannotMerge : EditOutcome
     /** Storage failed: show "Not saved" and keep the draft. */
     data class Failed(val message: String) : EditOutcome
 }
@@ -246,6 +248,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         EditResult.NotEditable -> EditOutcome.NotEditable
         EditResult.TooLarge -> EditOutcome.TooLarge
         EditResult.NoOriginal -> EditOutcome.NoOriginal
+        EditResult.CannotMerge -> EditOutcome.CannotMerge
     }
 
     private fun launch(block: suspend () -> Unit) = viewModelScope.launch(Dispatchers.IO) {

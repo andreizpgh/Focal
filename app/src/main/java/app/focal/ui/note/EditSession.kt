@@ -155,7 +155,8 @@ class EditSession(private val backend: EditBackend) {
 
     /**
      * Backspace at the start of [id]: its saved [draft] joins the paragraph drawn before it, with one space. The
-     * caret lands where the joined text begins. Null when there is nothing before it or a write failed.
+     * caret lands where the joined text begins. Null when there is nothing before it, the store keeps the two apart
+     * ([EditOutcome.CannotMerge]: the caret stays) or a write failed.
      */
     suspend fun mergeIntoPrevious(id: Long, draft: String): CaretAt? = mutex.withLock {
         val shown = paragraphs(state)
@@ -255,6 +256,8 @@ class EditSession(private val backend: EditBackend) {
         val first = resolve(firstId)
         val second = resolve(secondId)
         val outcome = backend.merge(first, revision(first), second, revision(second))
+        // A refused merge is not a failed write: both paragraphs stay and the caret does not move.
+        if (outcome == EditOutcome.CannotMerge) return false
         if (outcome !is EditOutcome.Saved) {
             fail()
             return false

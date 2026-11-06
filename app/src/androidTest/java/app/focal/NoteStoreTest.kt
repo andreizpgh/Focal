@@ -232,6 +232,30 @@ class NoteStoreTest {
         assertSearchIndexIntact(store)
     }
 
+    @Test fun mergeNeverDropsAKnownOriginalNextToLegacyText() {
+        val id = store.insertNoteForTests(listOf("Legacy text.", "Recognized text."), legacy = true)
+        val (legacy, known) = store.paragraphs(id)
+        store.writableDatabase.execSQL("UPDATE paragraphs SET source_text=text,revision=revision+1 WHERE id=?", arrayOf<Any>(known.id))
+        val recognized = store.paragraph(known.id)!!
+        assertNull(legacy.sourceText)
+        assertEquals("Recognized text.", recognized.sourceText)
+        assertEquals(EditResult.CannotMerge, store.mergeParagraphs(legacy.id, legacy.revision, recognized.id, recognized.revision))
+        // Nothing changed: both rows, their texts, sources and revisions.
+        assertEquals(listOf(legacy, recognized), store.paragraphs(id))
+        // An edited recognized paragraph still keeps its original apart from the legacy text.
+        val edited = (store.editParagraph(recognized.id, recognized.revision, "Recognised text.") as EditResult.Saved).paragraphs.single()
+        assertEquals(EditResult.CannotMerge, store.mergeParagraphs(legacy.id, legacy.revision, edited.id, edited.revision))
+        assertTrue(store.paragraph(edited.id)!!.canRestore)
+        // Enter at the end of the legacy text makes a blank paragraph of unknown origin; joining the recognized
+        // paragraph into it keeps the original.
+        val (_, blank) = (store.splitParagraph(legacy.id, legacy.revision, legacy.text.length) as EditResult.Saved).paragraphs
+        assertNull(blank.sourceText)
+        val joined = (store.mergeParagraphs(blank.id, blank.revision, edited.id, edited.revision) as EditResult.Saved).paragraphs.single()
+        assertEquals("Recognised text." to "Recognized text.", joined.text to joined.sourceText)
+        assertTrue(joined.canRestore)
+        assertSearchIndexIntact(store)
+    }
+
     @Test fun findAndReplaceAllIgnoreCaseAndYoAndCanBeUndone() {
         val id = store.insertNoteForTests(listOf("Ёлка стоит. Елка растёт.", "No tree here.", "ЕЛКА"))
         assertEquals(3, store.findInNote(id, "елка").size)

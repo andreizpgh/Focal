@@ -33,6 +33,8 @@ private class FakeStore(vararg texts: String) : EditBackend {
     val source = HashMap<Long, String>()
     var nextId = order.size.toLong() + 1
     var failNext = false
+    /** Paragraphs whose original is unknown: the store refuses to join them with known ones. */
+    val legacy = HashSet<Long>()
 
     /** What the note's state shows: visible paragraphs only. */
     fun visible(): List<ParagraphUi> = order.filter { text.getValue(it).isNotBlank() }.map { ui(it) }
@@ -70,6 +72,7 @@ private class FakeStore(vararg texts: String) : EditBackend {
     override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditOutcome {
         check(firstId, firstRevision)?.let { return it }
         check(secondId, secondRevision)?.let { return it }
+        if ((firstId in legacy) != (secondId in legacy)) return EditOutcome.CannotMerge
         write(firstId, listOf(text.getValue(firstId).trim(), text.getValue(secondId).trim()).filter { it.isNotEmpty() }.joinToString(" "))
         order.remove(secondId)
         text.remove(secondId)
@@ -154,6 +157,20 @@ class EditSessionTest {
         val back = edit.undo()
         assertEquals(listOf("Alpha.", "Beta."), edit.shown(store))
         assertEquals(back?.id, edit.resolve(2))
+    }
+
+    @Test fun aRefusedJoinKeepsBothParagraphsTheDraftAndTheCaretWithoutFailing() = runBlocking {
+        val store = FakeStore("Legacy text.", "Recognized text.")
+        store.legacy += 1L
+        val edit = session(store)
+        assertNull(edit.mergeIntoPrevious(2, "Recognized text, edited."))
+        assertEquals(listOf("Legacy text.", "Recognized text, edited."), edit.shown(store))
+        assertFalse(edit.failed)
+        assertEquals(0, edit.failures)
+        // Only the draft's autosave is logged; undo takes back the typing, not a join that never happened.
+        edit.undo()
+        assertEquals(listOf("Legacy text.", "Recognized text."), edit.shown(store))
+        assertFalse(edit.canUndo)
     }
 
     @Test fun anEditBeforeAJoinStillUndoesAfterTheJoinWasUndone() = runBlocking {

@@ -184,6 +184,11 @@ sealed interface EditResult {
     data object TooLarge : EditResult
     /** The paragraph has no recognizer text to restore (saved before schema 5 without one, or added by the user). */
     data object NoOriginal : EditResult
+    /**
+     * The paragraphs stay apart: one has a recognizer original and the other has text whose original is
+     * unknown (saved before schema 5), and one paragraph keeps only one source ([ParagraphEdits.merge]).
+     */
+    data object CannotMerge : EditResult
 }
 
 /** One-step undo of Replace all; valid while none of the replaced paragraphs changed again. */

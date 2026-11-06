@@ -655,7 +655,10 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         EditResult.Saved(paragraphsIn(this, "id IN (?,?)", listOf(id.toString(), added.toString())))
     }
 
-    /** Joins a paragraph with the next visible one (Backspace at the start of [secondId]). */
+    /**
+     * Joins a paragraph with the next visible one (Backspace at the start of [secondId]). [EditResult.CannotMerge]
+     * when that would drop a known recognizer original; both paragraphs then stay as they are.
+     */
     fun mergeParagraphs(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditResult = edit {
         val first = paragraphsIn(this, "id=?", listOf(firstId.toString())).firstOrNull()
         val second = paragraphsIn(this, "id=?", listOf(secondId.toString())).firstOrNull()
@@ -668,7 +671,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
             it.moveToFirst(); it.getInt(0)
         }
         if (between > 0) return@edit EditResult.Conflict
-        val merged = ParagraphEdits.merge(first.content(), second.content())
+        val merged = ParagraphEdits.merge(first.content(), second.content()) ?: return@edit EditResult.CannotMerge
         if (!fitsPassageDraftBudget(merged.text)) return@edit EditResult.TooLarge
         unindexParagraph(second.id)
         delete("paragraphs", "id=?", arrayOf(second.id.toString()))

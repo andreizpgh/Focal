@@ -58,11 +58,24 @@ internal object ParagraphEdits {
             part(rightText, rightSource, words?.subList(wordCut!!, words.size))
     }
 
-    /** Joins two adjacent paragraphs with one space. The source stays known only if both sides know theirs. */
-    fun merge(first: ParagraphContent, second: ParagraphContent): ParagraphContent {
+    /**
+     * Joins two adjacent paragraphs with one space, or returns null when that would lose a recognizer original.
+     * One paragraph has one source, so the joined source is known when every part with text knows its own (a
+     * blank part of unknown origin adds nothing) and unknown when a part with text has none (text saved before
+     * schema 5). An unknown part with text never joins a part whose known original is not empty: the original
+     * would be dropped, and Restore original could never bring it back.
+     */
+    fun merge(first: ParagraphContent, second: ParagraphContent): ParagraphContent? {
+        val parts = listOf(first, second)
+        val known = parts.mapNotNull { it.sourceText }
+        val unknownText = parts.any { it.sourceText == null && it.text.isNotBlank() }
+        val source = when {
+            known.isEmpty() -> null
+            !unknownText -> known.filter { it.isNotEmpty() }.joinToString(" ")
+            known.any { it.isNotEmpty() } -> return null
+            else -> null
+        }
         val text = listOf(first.text.trim(), second.text.trim()).filter { it.isNotEmpty() }.joinToString(" ")
-        val source = if (first.sourceText != null && second.sourceText != null)
-            listOf(first.sourceText, second.sourceText).filter { it.isNotEmpty() }.joinToString(" ") else null
         val words = if (first.words == null && second.words == null) null
         else first.words.orEmpty() + second.words.orEmpty()
         return ParagraphContent(

@@ -151,7 +151,7 @@ class ParagraphEditsTest {
         val whole = content("Hello world.", source)
         val (left, empty) = ParagraphEdits.split(whole, whole.text.length)
         val typed = empty.copy(text = "My addition", edited = true)
-        val merged = ParagraphEdits.merge(left, typed)
+        val merged = ParagraphEdits.merge(left, typed)!!
         assertEquals("Hello world. My addition", merged.text)
         assertEquals("Hello world.", merged.sourceText)
         assertEquals(source, merged.words)
@@ -164,7 +164,7 @@ class ParagraphEditsTest {
         val (left, right) = ParagraphEdits.split(added, added.text.indexOf("My"))
         assertEquals("Hello world." to "", left.sourceText to right.sourceText)
         assertEquals(false to true, left.edited to right.edited)
-        val merged = ParagraphEdits.merge(left, right)
+        val merged = ParagraphEdits.merge(left, right)!!
         assertEquals(added.text, merged.text)
         assertEquals("Hello world.", merged.sourceText)
         assertEquals(true, merged.edited)
@@ -175,11 +175,39 @@ class ParagraphEditsTest {
         val whole = content("One two. Three four five.", source)
         val (left, right) = ParagraphEdits.split(whole, 9)
         assertEquals(whole, ParagraphEdits.merge(left, right))
-        val unknown = ParagraphEdits.merge(left, ParagraphContent("Legacy.", null, null, 9_000, 9_500, false))
+        val legacy = ParagraphContent("Legacy.", null, null, 9_000, 9_500, true)
+        val unknown = ParagraphEdits.merge(legacy, legacy.copy(text = "More.", startMs = 9_500, endMs = 9_900))!!
         assertNull(unknown.sourceText)
-        assertEquals(source.subList(0, 2), unknown.words)
-        assertEquals("One two. Legacy.", unknown.text)
-        assertEquals(0L to 9_500L, unknown.startMs to unknown.endMs)
+        assertEquals("Legacy. More.", unknown.text)
+        assertEquals(9_000L to 9_900L, unknown.startMs to unknown.endMs)
+        assertEquals(true, unknown.edited)
+    }
+
+    @Test fun mergeNeverDropsAKnownOriginalForTextOfUnknownOrigin() {
+        val source = words("One", "two.")
+        val known = content("One two.", source)
+        val legacy = ParagraphContent("Legacy text.", null, null, 9_000, 9_500, false)
+        // Either order: the joined paragraph could keep only one source, so the two stay apart.
+        assertNull(ParagraphEdits.merge(known, legacy))
+        assertNull(ParagraphEdits.merge(legacy, known))
+        assertNull(ParagraphEdits.merge(known.copy(text = ""), legacy))
+
+        // A blank part of unknown origin (Enter at the end of legacy text) adds nothing: the original stays.
+        val blank = legacy.copy(text = "", edited = true)
+        val kept = ParagraphEdits.merge(blank, known)!!
+        assertEquals("One two." to "One two.", kept.text to kept.sourceText)
+        assertEquals(source, kept.words)
+        assertEquals(false, kept.edited)
+        assertEquals(0L to 9_500L, kept.startMs to kept.endMs)
+
+        // A part that is known to have no recognizer text (typed after Enter) joins legacy text as unknown.
+        val typed = ParagraphContent("My addition", "", null, 0, 4_800, true)
+        val joined = ParagraphEdits.merge(legacy, typed)!!
+        assertEquals("Legacy text. My addition", joined.text)
+        assertNull(joined.sourceText)
+        assertEquals(true, joined.edited)
+        // Two unknown blank parts stay unknown: nothing claims the recognizer produced none of them.
+        assertNull(ParagraphEdits.merge(blank, blank)!!.sourceText)
     }
 
     @Test fun coverageListsEveryUncoveredRange() {
