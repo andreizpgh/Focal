@@ -45,7 +45,13 @@
     <string name="action_try_again">Try again</string>
     <string name="action_undo">Undo</string>
     <string name="action_storage">Storage</string>
+    <string name="action_done">Done</string>
+    <string name="action_retry">Retry</string>
     <string name="cd_back">Back</string>
+    <string name="cd_edit">Edit</string>
+    <string name="cd_more">More options</string>
+    <string name="cd_undo">Undo</string>
+    <string name="cd_redo">Redo</string>
 
     <!-- The library, the stage and search (design 7.1). -->
     <string name="cd_search_open">Search notes</string>
@@ -98,6 +104,8 @@
     <string name="menu_rename">Rename</string>
     <string name="menu_remove_audio">Remove audio</string>
     <string name="menu_delete">Delete</string>
+    <string name="menu_find">Find and replace</string>
+    <string name="menu_restore">Restore original</string>
 
     <!-- The feedback pill (design 7.3). -->
     <string name="feedback_deleted">Note deleted</string>
@@ -108,6 +116,33 @@
     <string name="feedback_storage">Free up about %s to record.</string>
     <string name="feedback_storage_resume">Free up about %s, then resume.</string>
     <string name="feedback_mic_busy">Another app is using the microphone.</string>
+    <plurals name="feedback_replaced">
+        <item quantity="one">Replaced %d</item>
+        <item quantity="other">Replaced %d</item>
+    </plurals>
+    <string name="feedback_restored">Original restored</string>
+    <string name="feedback_save_failed">Couldn’t save your edit. Free up some space, then tap Retry.</string>
+
+    <!-- The note, Edit and Find (design 7.5). -->
+    <string name="meta">%1$s · %2$s</string>
+    <string name="meta_text_only">Text only</string>
+    <string name="gap_not_transcribed">%s not transcribed</string>
+    <string name="ended_unexpectedly">Recording stopped unexpectedly at %s. Everything before that was saved.</string>
+    <string name="ended_permission">Recording stopped at %s because microphone access was turned off. Everything before that was saved.</string>
+    <string name="waiting_after_recording">Transcription continues after the current recording.</string>
+    <string name="model_failed">Not enough free memory to transcribe right now.</string>
+    <string name="provenance_edited">Edited</string>
+    <string name="not_saved">Not saved</string>
+    <string name="find_hint">Find in note</string>
+    <string name="replace_hint">Replace with</string>
+    <string name="find_count">%1$d of %2$d</string>
+    <string name="find_none">No matches</string>
+    <string name="cd_find_close">Close find</string>
+    <string name="cd_find_prev">Previous match</string>
+    <string name="cd_find_next">Next match</string>
+    <string name="replace_all">Replace all</string>
+    <string name="replace_all_n">Replace all (%d)</string>
+    <string name="jump_now_playing">Now playing</string>
 
     <!-- Settings, licences and permissions (design 7.6). -->
     <string name="settings_title">Settings</string>
@@ -195,6 +230,20 @@
     <string name="a11y_note_ready">Note ready</string>
     <string name="a11y_source_code">Source code, opens in browser</string>
     <string name="settings_pane">Settings</string>
+    <string name="a11y_audio_position">Audio position</string>
+    <string name="a11y_position_of">%1$s of %2$s</string>
+    <string name="a11y_play_here">Play from here</string>
+    <string name="a11y_edit">Edit</string>
+    <string name="a11y_copy_paragraph">Copy paragraph</string>
+    <plurals name="a11y_unclear">
+        <item quantity="one">%1$d unclear word: %2$s</item>
+        <item quantity="other">%1$d unclear words: %2$s</item>
+    </plurals>
+    <string name="a11y_play_unclear">Play unclear word</string>
+    <plurals name="a11y_replace_all">
+        <item quantity="one">Replace all, %d match</item>
+        <item quantity="other">Replace all, %d matches</item>
+    </plurals>
 
     <!-- The system's keyboard-shortcuts helper (Meta+/). -->
     <string name="kbd_group" translatable="false">@string/app_name</string>
