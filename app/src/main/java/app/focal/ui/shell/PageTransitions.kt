@@ -60,6 +60,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
@@ -93,6 +94,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -256,6 +258,13 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      */
     private var titleFrom = Float.NaN
 
+    /**
+     * Opening (T16, T16′): the clock time at which the flying title came within [BODY_LANDING] of its line. The
+     * page's meta and text wait for it, then arrive whole on `fade`, so no part of a paragraph shows below a title
+     * that is still in flight.
+     */
+    private var bodyFrom = Float.NaN
+
     /** The page that is opening and the dock its origin says it will show (see [Origin.dock]). */
     private var arriving by mutableStateOf<Pair<Destination, DockState>?>(null)
 
@@ -345,6 +354,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         elapsed = 0f
         flightReady = false
         titleFrom = Float.NaN
+        bodyFrom = Float.NaN
         val lead = FocalTiming.TRIGGER_LEAD_MS * NANOS_PER_MS
         // Undispatched, so it waits for the very next frame: the one the trigger is drawn in.
         clock = scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -362,7 +372,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
                         elapsed = (now - trigger).toFloat() / NANOS_PER_MS / scale
                     }
                 }
-            } while (elapsed < end)
+                // An opening runs on while its body, which waited for the title, is still arriving.
+            } while (elapsed < end || (bodyArriving(c) && elapsed < BODY_LIMIT_MS))
             elapsed = Float.POSITIVE_INFINITY
         }
     }
@@ -389,8 +400,23 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         val titled = c.motion == PageMotion.Stage || c.motion == PageMotion.Row
         flightReady = resolved && titled && originTitle(c) != null && (c.push || titleFlies(c))
         if (c.push && titleFrom.isNaN() && flightReady && titleFlies(c)) titleFrom = elapsed
+        if (c.push && bodyFrom.isNaN() && !titleFrom.isNaN()) {
+            val gap = titleGap(c)
+            if (gap == null || gap <= with(density) { BODY_LANDING.toPx() }) bodyFrom = elapsed
+        }
         return waited
     }
+
+    /** How far the flying title still is from its line on the page (window pixels), while both ends are laid out. */
+    private fun titleGap(c: PageChange): Float? {
+        val origin = originTitle(c) ?: return null
+        val page = pageTitle.coordinates?.takeIf { it.isAttached && pageTitle.noteId == noteIdOf(c.document) } ?: return null
+        return abs(origin.positionInWindow().y - page.positionInWindow().y) * titleProgress(c)
+    }
+
+    /** An opening whose meta and text have not fully arrived (they wait for the flying title; see [bodyFrom]). */
+    private fun bodyArriving(c: PageChange): Boolean =
+        c.push && (c.motion == PageMotion.Stage || c.motion == PageMotion.Row) && body(c) < 1f
 
     private fun originTitle(c: PageChange): LayoutCoordinates? = originOf(c)?.title?.takeIf { it.isAttached && it.size.width > 0 }
 
@@ -522,8 +548,17 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     internal fun reveal(destination: Destination): PageReveal = PageReveal(
         chrome = {
             val c = change
-            if (c == null || c.document != destination || !transforms(c) || !active(c)) 1f
-            else if (c.motion == PageMotion.Row) body(c) else chrome(c)
+            when {
+                c == null || c.document != destination || !transforms(c) -> 1f
+                // A row's: opening, from +80 on `fade` (the meta and text wait for the title); folding, with the body.
+                c.motion == PageMotion.Row -> when {
+                    c.push -> rowChrome(c)
+                    active(c) -> body(c)
+                    else -> 1f
+                }
+                !active(c) -> 1f
+                else -> chrome(c)
+            }
         },
         title = {
             val id = noteIdOf(destination)
@@ -531,8 +566,12 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         },
         body = {
             val c = change
-            if (c == null || c.document != destination || !transforms(c) || !active(c) || c.motion == PageMotion.LiveStage) 1f
-            else body(c)
+            when {
+                c == null || c.document != destination || !transforms(c) || c.motion == PageMotion.LiveStage -> 1f
+                // Opening, the body waits for the title and may still be arriving once the clip has landed.
+                active(c) || c.push -> body(c)
+                else -> 1f
+            }
         },
         develop = { if (developing == destination && !reduced) developClock.elapsed else Float.POSITIVE_INFINITY },
     )
@@ -545,9 +584,20 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     private fun chrome(c: PageChange): Float = 1 - smoothstep(MATERIAL_FROM, CONTENT_FROM, progress(c))
 
     /**
-     * The page's meta and text in a transform (spec 6.1): opening, they arrive on `fade` from +80 (T16, T16′); folding,
-     * they leave on `fadeFast`, and folding into a row they fade through with the returning rows ([rows]). The overlay
-     * keeps them clear of the flying title, so two typesettings are never drawn over each other.
+     * A page opening out of a row: its chrome (top bar, fades) has no material to hand over from, so it arrives on
+     * `fade` from +80 (spec 6.1, T16), while its meta and text wait for the flying title ([body]).
+     */
+    private fun rowChrome(c: PageChange): Float {
+        if (!elapsed.isFinite()) return 1f
+        val from = c.start.body
+        return from + (1 - from) * fade(elapsed - BODY_DELAY_MS)
+    }
+
+    /**
+     * The page's meta and text in a transform (spec 6.1): opening, they arrive whole on `fade` once the flying title is
+     * within [BODY_LANDING] of its line (T16, T16′; [bodyFrom]), or from +80 when no title flies; folding, they leave on
+     * `fadeFast`, and folding into a row they fade through with the returning rows ([rows]). Two typesettings are
+     * never drawn over each other, and no paragraph shows in part below a title still in flight.
      */
     private fun body(c: PageChange): Float {
         val from = c.start.body
@@ -555,7 +605,18 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
             c.predictive -> predictiveBody.value
             !c.push && c.motion == PageMotion.Row -> from * (1 - smoothstep(0f, HALF, fadeFast(elapsed)))
             !c.push -> from * (1 - fadeFast(elapsed))
-            c.motion == PageMotion.Stage || c.motion == PageMotion.Row -> from + (1 - from) * fade(elapsed - BODY_DELAY_MS)
+            c.motion == PageMotion.Stage || c.motion == PageMotion.Row -> {
+                val at = when {
+                    !elapsed.isFinite() -> return 1f
+                    !bodyFrom.isNaN() -> bodyFrom
+                    // The title flies: the body waits for it.
+                    !titleFrom.isNaN() -> return from
+                    // No title has flown by now (the page's title was never laid out): the spec's +80.
+                    elapsed > TITLE_WAIT_MS -> TITLE_WAIT_MS
+                    else -> return from
+                }
+                from + (1 - from) * fade(elapsed - at)
+            }
             else -> 1f
         }
     }
@@ -666,6 +727,12 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         const val DECIDE_MS = 4f * FocalTiming.TRIGGER_LEAD_MS
         /** T16, T16′: the soft edge between the flying title and the text it has passed, while it is in flight. */
         val TITLE_CLEARANCE = 16.dp
+        /** T16, T16′: the page's meta and text arrive once the flying title is this close to its own line. */
+        val BODY_LANDING = 16.dp
+        /** Opening, how long the body waits for a page title that is never laid out before it arrives anyway. */
+        const val TITLE_WAIT_MS = DECIDE_MS + BODY_DELAY_MS
+        /** A clock kept running for an arriving body stops by then whatever happens. */
+        const val BODY_LIMIT_MS = 1_500f
         private const val NANOS_PER_MS = 1_000_000L
         const val MATERIAL_FROM = 0.4f
         /** The stage's time, text and footer arrive over the last 40 % of a fold (`smoothstep(0.6, 1, q)`). */
