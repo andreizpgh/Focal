@@ -87,6 +87,17 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecordingUiState())
 
+    /**
+     * [state] without its timer ([RecordingUiState.elapsedSeconds] is 0): it changes only when the session does, for
+     * what shows the recording but not its time (the library, apart from the live stage's timer).
+     */
+    val stateWithoutTime: StateFlow<RecordingUiState> = state.map { it.copy(elapsedSeconds = 0L) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecordingUiState())
+
+    /** The recording's whole seconds, for a timer that reads them on its own. */
+    val elapsedSeconds: StateFlow<Long> = state.map { it.elapsedSeconds }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+
     init {
         // STARTING ends when the service publishes the note or reports that it could not start.
         viewModelScope.launch { RecordingState.live.collect { if (it.capturing) startRequested.value = false } }

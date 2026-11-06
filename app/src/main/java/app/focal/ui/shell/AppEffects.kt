@@ -136,8 +136,7 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
     // and not for the recording's timer: only when the notes or the session change.
     LaunchedEffect(library, recording) {
         val watch = ReadyWatch()
-        val session = recording.state.map { it.copy(elapsedSeconds = 0L) }.distinctUntilChanged()
-        combine(library.state, session) { notes, capture -> watch.update(notes, capture) }
+        combine(library.state, recording.stateWithoutTime) { notes, capture -> watch.update(notes, capture) }
             .flowOn(Dispatchers.Default)
             .collect { if (it.isNotEmpty()) FreshNotes.markReady(it) }
     }
