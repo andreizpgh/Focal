@@ -41,8 +41,6 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.preferredFrameRate
-import androidx.compose.ui.semantics.hideFromAccessibility
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.core.graphics.createBitmap
@@ -230,12 +228,13 @@ fun NineBars(
     renderer: WaveRenderer = WaveRenderer.live,
     entry: WaveEntry? = null,
 ) {
-    val described = modifier.semantics { hideFromAccessibility() }
+    // Drawing only, with no semantics of its own: accessibility services never see it, and nothing leaks into the
+    // merged stage or timer node that speaks the state (a hidden child would hide that whole node).
     when (mode) {
-        WaveMode.Static -> StillBars(1f, dress, described)
-        WaveMode.Rest -> StillBars(Mark.REST, dress, described)
-        is WaveMode.Live -> MovingBars(mode, mode.paused, dress, described, renderer, entry)
-        is WaveMode.Working -> MovingBars(mode, mode.paused, dress, described, renderer, null)
+        WaveMode.Static -> StillBars(1f, dress, modifier)
+        WaveMode.Rest -> StillBars(Mark.REST, dress, modifier)
+        is WaveMode.Live -> MovingBars(mode, mode.paused, dress, modifier, renderer, entry)
+        is WaveMode.Working -> MovingBars(mode, mode.paused, dress, modifier, renderer, null)
     }
 }
 

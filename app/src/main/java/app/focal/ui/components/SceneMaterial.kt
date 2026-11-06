@@ -22,8 +22,6 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.semantics.hideFromAccessibility
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
@@ -38,7 +36,7 @@ import java.nio.ByteBuffer
  * area moves. The draw reads no animated state: it is recorded once per size.
  */
 fun Modifier.sceneMaterial(cornerRadius: Dp = 0.dp, ring: Color = Color.Transparent, grainOrigin: (() -> Offset)? = null): Modifier =
-    semantics { hideFromAccessibility() }.drawWithCache { buildMaterial(cornerRadius, ring, grainOrigin) }
+    drawWithCache { buildMaterial(cornerRadius, ring, grainOrigin) }
 
 private fun CacheDrawScope.buildMaterial(cornerRadius: Dp, ring: Color, grainOrigin: (() -> Offset)?): DrawResult {
     val gradient = Brush.verticalGradient(
@@ -143,7 +141,6 @@ fun PauseBadge(diameter: () -> Dp, modifier: Modifier = Modifier) {
     Spacer(
         modifier
             .size(PauseBadgeMetrics.scene)
-            .semantics { hideFromAccessibility() }
             .drawBehind { drawPauseBadge(diameter().toPx()) },
     )
 }

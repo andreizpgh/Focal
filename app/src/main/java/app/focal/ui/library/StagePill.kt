@@ -48,6 +48,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
@@ -208,6 +209,8 @@ fun StagePill(
                 val placeable = measurable.measure(Constraints.fixed(w, h))
                 layout(w, h) { placeable.place(0, 0) }
             }
+            // Its own node (spec 8.2: the stage, "then its Copy button"), not merged into the card's description.
+            .semantics(mergeDescendants = true) { }
             .clearAndSetSemantics {
                 if (progress != null) {
                     contentDescription = progressSpoken.orEmpty()
@@ -288,7 +291,7 @@ fun StagePill(
         }
         // A spoken-only "Note ready" for TalkBack at the moment (nothing is drawn).
         Box(
-            Modifier.width(1.dp).height(1.dp).clearAndSetSemantics {
+            Modifier.width(1.dp).height(1.dp).semantics(mergeDescendants = true) { }.clearAndSetSemantics {
                 liveRegion = LiveRegionMode.Polite
                 if (announced) contentDescription = readyLabel
             },
