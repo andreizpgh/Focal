@@ -281,6 +281,9 @@ class NoteStoreTest {
         val text = words.joinToString(" ") { it.text }
         store.writableDatabase.execSQL("UPDATE paragraphs SET text=?,source_text=?,words=?,start_ms=0,end_ms=? WHERE id=?",
             arrayOf<Any>(text, text, json, words.last().endMs, open.id))
+        // The store keeps its external-content search index in step on every write; this raw UPDATE goes around it,
+        // so the index is rebuilt here, or the commits below and an integrity check meet a stale index.
+        store.writableDatabase.execSQL("INSERT INTO paragraph_fts(paragraph_fts) VALUES('rebuild')")
 
         val stored = store.paragraphs(id).single()
         assertEquals(text, stored.text)
