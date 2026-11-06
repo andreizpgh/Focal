@@ -535,11 +535,12 @@ fun NotePage(
     // Back layers, lowest first: the player, Edit (= Done), Find, an inline rename (spec 2.8.5).
     PredictiveBackHandler(enabled = page.stripShown && stripWanted) { events ->
         try {
-            events.collect { page.stripBack = BackEase.transform(it.progress) }
+            events.collect { page.stripBack.snapTo(BackEase.transform(it.progress)) }
+            // Committed: the strip leaves from where the gesture left it, and is reset once it is gone.
             playback.stop()
-            page.stripBack = 0f
         } catch (cancelled: CancellationException) {
-            page.stripBack = 0f
+            // The handler's own coroutine is ending: the spring back runs in the page's scope (spec 2.8.5, `press`).
+            scope.launch { page.stripBack.animateTo(0f, FocalMotion.press()) }
             throw cancelled
         }
     }
@@ -581,8 +582,11 @@ fun NotePage(
         dockActions,
         strip = if (page.stripShown) {
             {
-                Box(Modifier.graphicsLayer { translationY = page.stripBack * Grid.x16.toPx(); alpha = 1 - page.stripBack }) {
-                    StripMotion(stripWanted, onGone = { page.stripShown = false }) {
+                Box(Modifier.graphicsLayer { translationY = page.stripBack.value * Grid.x16.toPx(); alpha = 1 - page.stripBack.value }) {
+                    StripMotion(stripWanted, onGone = {
+                        page.stripShown = false
+                        scope.launch { page.stripBack.snapTo(0f) }
+                    }) {
                         PlayerStrip(position, onSeek = { ms ->
                             page.rangeEndMs = null
                             playback.playFrom(ms)

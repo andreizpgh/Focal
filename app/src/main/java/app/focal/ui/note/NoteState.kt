@@ -1,5 +1,6 @@
 package app.focal.ui.note
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -90,8 +91,11 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
     var playingOutside by mutableStateOf<Boolean?>(null)
     /** The strip is in the bottom column (it stays while it leaves). */
     var stripShown by mutableStateOf(false)
-    /** Predictive back's progress on the player: the strip follows the gesture down. */
-    var stripBack by mutableFloatStateOf(0f)
+    /**
+     * Predictive back's progress on the player: the strip follows the gesture down. It stays where a committed
+     * gesture left it until the strip is gone, and springs back (`press`) when the gesture is cancelled.
+     */
+    val stripBack = Animatable(0f)
     /** Where a gap's range playback ends: playback that reaches it ends the session. */
     var rangeEndMs: Long? = null
 
