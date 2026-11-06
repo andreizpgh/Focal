@@ -203,7 +203,7 @@ private fun ShellBottom(shell: ShellState) {
     val shown = remember { ShownBottom() }
     // The scene's controls while it is up and not settling into the note's page (T7).
     val scene = shell.sceneBottom?.takeIf { shell.live.visible && shell.live.landingNote == null }
-    val content = scene ?: shell.bottomContent[current]?.also { shown.content = it } ?: shown.content ?: return
+    val content = scene ?: shell.bottomContent[current]?.also { shown.content = it } ?: shown.content?.takeIf { current.hasDock } ?: return
     val onLibrary = current == Destination.Library
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val reduced = LocalReducedMotion.current

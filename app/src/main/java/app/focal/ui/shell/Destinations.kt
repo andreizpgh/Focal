@@ -17,6 +17,9 @@ sealed interface Destination {
     data class Note(val id: String, val hit: NoteHit? = null) : Destination
     data object Licenses : Destination
 
+    /** Whether the page has a dock (spec 4.3: Settings and Licenses have none). */
+    val hasDock: Boolean get() = this !is Licenses
+
     companion object {
         private const val LIBRARY = "library"
         private const val LICENSES = "licenses"
