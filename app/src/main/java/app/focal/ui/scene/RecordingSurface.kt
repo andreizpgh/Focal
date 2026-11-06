@@ -85,6 +85,7 @@ import androidx.compose.ui.semantics.collapse
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.LineBreak
@@ -697,6 +698,7 @@ private fun Chevron(frame: State<MorphFrame>, slots: SceneSlots, collapse: () ->
             .clearAndSetSemantics {
                 contentDescription = label
                 role = Role.Button
+                onClick { collapse(); true }
             }
             .focusRing(FocalShapes.pill, Scene.ink)
             .clickable(source, indication = null, onClick = collapse),
@@ -725,6 +727,7 @@ private fun LatestPill(open: Boolean, listState: LazyListState, slots: SceneSlot
     val density = LocalDensity.current
     val source = remember { MutableInteractionSource() }
     val label = stringResource(R.string.jump_latest)
+    val latest: () -> Unit = { scope.launch { listState.animateScrollToItem(0) } }
     Box(
         Modifier
             .layout { measurable, constraints ->
@@ -743,9 +746,10 @@ private fun LatestPill(open: Boolean, listState: LazyListState, slots: SceneSlot
             .clearAndSetSemantics {
                 contentDescription = label
                 role = Role.Button
+                onClick { latest(); true }
             }
             .pressScale(source)
-            .clickable(source, indication = null) { scope.launch { listState.animateScrollToItem(0) } }
+            .clickable(source, indication = null, onClick = latest)
             .padding(vertical = (FocalLayout.target - SceneMetrics.jumpHeight) / 2),
         contentAlignment = Alignment.Center,
     ) {

@@ -26,10 +26,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import app.focal.R
 import app.focal.ui.components.FadeThrough
@@ -191,7 +195,10 @@ internal fun EditBar(
         Spacer(Modifier.weight(1f))
         Text(
             stringResource(R.string.not_saved), style = FocalType.meta, color = colors.recede, maxLines = 1,
-            modifier = Modifier.graphicsLayer { alpha = notSaved.value },
+            // Read only while it is shown, and announced when it appears.
+            modifier = Modifier
+                .graphicsLayer { alpha = notSaved.value }
+                .then(if (failed) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier.clearAndSetSemantics { }),
         )
         Box {
             FocalIconButton(FocalIcon.More, stringResource(R.string.cd_more), { onMenu(true) })
@@ -222,6 +229,7 @@ private fun DonePill(label: String, onClick: () -> Unit) {
             .clearAndSetSemantics {
                 contentDescription = label
                 role = Role.Button
+                this.onClick { onClick(); true }
             }
             .pressScale(source)
             .focusRing(FocalShapes.pill)

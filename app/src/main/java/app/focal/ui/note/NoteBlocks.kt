@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -224,6 +225,7 @@ private fun SmallPill(label: String, onClick: () -> Unit) {
             .clearAndSetSemantics {
                 contentDescription = label
                 role = Role.Button
+                this.onClick { onClick(); true }
             }
             .pressScale(source)
             .focusRing(FocalShapes.pill)

@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
@@ -121,8 +122,9 @@ private fun Segments(labels: List<String>, style: androidx.compose.ui.text.TextS
             },
     ) {
         labelRow(colors.ink, true)
+        // The labels again in `onInv`, clipped to the thumb: drawing only, so TalkBack reads each label once.
         Box(
-            Modifier.matchParentSize().drawWithContent {
+            Modifier.matchParentSize().clearAndSetSemantics { }.drawWithContent {
                 val (offset, rect) = thumbRect(size.width, size.height, SegmentMetrics.inset.toPx())
                 clipRect(offset.x, offset.y, offset.x + rect.width, offset.y + rect.height) { this@drawWithContent.drawContent() }
             },

@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -189,6 +190,16 @@ fun StagePill(
     val progressSpoken = progress?.let { progressDescription(it) }
     val readyLabel = stringResource(R.string.a11y_note_ready)
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    fun copyNow() {
+        scope.launch {
+            if (onCopy()) {
+                haptics.copy()
+                copied = true
+                delay(FocalTiming.COPIED_HOLD_MS)
+                copied = false
+            }
+        }
+    }
     Box(
         modifier
             .layout { measurable, _ ->
@@ -206,21 +217,12 @@ fun StagePill(
                     role = Role.Button
                     contentDescription = if (copied) copiedLabel else copyLabel
                     liveRegion = LiveRegionMode.Polite
-                    if (!enabled) disabled()
+                    if (!enabled) disabled() else if (!copied) this.onClick { copyNow(); true }
                 }
             }
             .pressScale(source)
             .focusRing(FocalShapes.pill, color = Scene.ink)
-            .clickable(source, indication = null, enabled = enabled && !copied) {
-                scope.launch {
-                    if (onCopy()) {
-                        haptics.copy()
-                        copied = true
-                        delay(FocalTiming.COPIED_HOLD_MS)
-                        copied = false
-                    }
-                }
-            }
+            .clickable(source, indication = null, enabled = enabled && !copied, onClick = ::copyNow)
             .drawWithCache {
                 val outline = FocalShapes.pill.createOutline(size, layoutDirection, this)
                 val path = Path().apply { addOutline(outline) }

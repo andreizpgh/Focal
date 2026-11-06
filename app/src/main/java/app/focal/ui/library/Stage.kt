@@ -165,6 +165,8 @@ class StageActions(
     val openSettings: () -> Unit,
     /** The row menu at a touch point inside the card. */
     val menu: (NoteRow, IntOffset) -> Unit,
+    /** The row menu's items as accessibility actions, offered on a note stage before "Open settings" (spec 12). */
+    val menuActions: (NoteRow) -> List<CustomAccessibilityAction> = { emptyList() },
 )
 
 /** Where the last press landed, for a long-press menu at the touch point. */
@@ -204,7 +206,7 @@ fun StageCard(
             .fillMaxWidth()
             .semantics(mergeDescendants = true) {
                 contentDescription = description
-                customActions = listOf(CustomAccessibilityAction(settingsLabel) { actions.openSettings(); true })
+                customActions = note?.let(actions.menuActions).orEmpty() + CustomAccessibilityAction(settingsLabel) { actions.openSettings(); true }
                 if (note == null) expand(clickLabel) { actions.expand(); true }
             }
             .pressScale(source)

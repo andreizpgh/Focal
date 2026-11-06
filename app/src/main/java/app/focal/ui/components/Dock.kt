@@ -66,6 +66,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.style.TextAlign
@@ -236,7 +237,8 @@ private fun CircleSlot(face: CircleFace, actions: DockActions, edge: (() -> Floa
         .clearAndSetSemantics {
             contentDescription = description
             role = Role.Button
-            if (onClick == null) disabled()
+            // Cleared semantics drop the click of `clickable` below, so the action is stated here.
+            if (onClick == null) disabled() else this.onClick { onClick(); true }
         }
         .pressScale(source)
         .focusRing(FocalShapes.pill)
@@ -313,6 +315,7 @@ private fun PillSlot(face: PillFace, notePill: NotePill?, actions: DockActions, 
             }
             // The progress pill is not a button (spec 8.2: disabled, with its range); Copied is a moment, not a state.
             if (onClick == null && !copied) disabled()
+            if (onClick != null) this.onClick { onClick(); true }
             if (face == PillFace.NotePrimary && progress == null) liveRegion = LiveRegionMode.Polite
             val openSettings = actions.openSettings
             if (openSettings != null && face != PillFace.NotePrimary) {

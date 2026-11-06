@@ -173,12 +173,6 @@ fun LibraryPage(
         )
     }
 
-    val stageActions = remember(actions) {
-        StageActions(
-            open = actions.open, expand = actions.expand, copy = actions.copy, openSettings = actions.openSettings,
-            menu = { row, at -> menu = MenuTarget(row.id, at) },
-        )
-    }
     val menuLabels = MenuLabels(
         copyText = stringResource(R.string.menu_copy_text), share = stringResource(R.string.menu_share),
         rename = stringResource(R.string.menu_rename), removeAudio = stringResource(R.string.menu_remove_audio),
@@ -195,6 +189,13 @@ fun LibraryPage(
             open = actions.open,
             menu = { row, at -> menu = MenuTarget(row.id, at) },
             menuActions = { row -> menuItems(row).map { item -> CustomAccessibilityAction(menuLabels.of(item)) { menuActions.run(item, row); true } } },
+        )
+    }
+    val stageActions = remember(actions, rowActions) {
+        StageActions(
+            open = actions.open, expand = actions.expand, copy = actions.copy, openSettings = actions.openSettings,
+            menu = { row, at -> menu = MenuTarget(row.id, at) },
+            menuActions = rowActions.menuActions,
         )
     }
     val noteMenu: @Composable (NoteRow) -> Unit = { row ->

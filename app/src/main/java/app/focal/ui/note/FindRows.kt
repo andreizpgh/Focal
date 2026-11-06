@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -214,7 +215,7 @@ private fun RowScope.NavButton(icon: FocalIcon, description: String, enabled: Bo
             .clearAndSetSemantics {
                 contentDescription = description
                 role = Role.Button
-                if (!enabled) disabled()
+                if (enabled) this.onClick { onClick(); true } else disabled()
             }
             .focusRing(FocalShapes.pill)
             .clickable(source, indication = LeadPlate, enabled = enabled, onClick = onClick),
@@ -236,7 +237,7 @@ private fun RowScope.ReplaceAll(count: Int, enabled: Boolean, onClick: () -> Uni
             .clearAndSetSemantics {
                 contentDescription = spoken
                 role = Role.Button
-                if (!enabled) disabled()
+                if (enabled) this.onClick { onClick(); true } else disabled()
             }
             .pressScale(source)
             .focusRing(FocalShapes.pill)
