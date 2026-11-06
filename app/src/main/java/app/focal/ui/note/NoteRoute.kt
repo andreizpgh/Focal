@@ -22,7 +22,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.focal.R
 import app.focal.ui.components.FeedbackAction
-import app.focal.ui.components.FeedbackResult
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.library.confirmsCopyInApp
 import app.focal.ui.library.copyNoteText
@@ -66,8 +65,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
 
     val words = RouteWords(
         undo = stringResource(R.string.action_undo), deleted = stringResource(R.string.feedback_deleted),
-        audioRemoved = stringResource(R.string.feedback_audio_removed), tooLate = stringResource(R.string.feedback_too_late),
-        textCopied = stringResource(R.string.feedback_text_copied),
+        audioRemoved = stringResource(R.string.feedback_audio_removed), textCopied = stringResource(R.string.feedback_text_copied),
     )
     // Playback belongs to its page (spec 5.6): leaving it stops the note's audio, whichever way it leaves.
     val leave = {
@@ -80,22 +78,23 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
     LaunchedEffect(note) {
         note.events.collect { event ->
             when (event) {
+                // The Undo or commit runs through the library's view model: its outcomes ("Too late to undo", a
+                // removal that failed) come after the page has gone, and only app-level effects still listen then.
                 NoteEvent.Deleted -> {
                     leave()
                     appScope.launch {
-                        when (feedback.show(words.deleted, FeedbackAction(words.undo, FocalIcon.Undo))) {
-                            FeedbackResult.ActionPerformed -> note.undoDelete()
-                            FeedbackResult.Dismissed -> note.commitDelete()
-                        }
+                        feedback.showDeferred(
+                            words.deleted, FeedbackAction(words.undo, FocalIcon.Undo),
+                            undo = { library.undoDelete(id) }, commit = { library.commitDelete(id) },
+                        )
                     }
                 }
                 NoteEvent.AudioRemoved -> appScope.launch {
-                    when (feedback.show(words.audioRemoved, FeedbackAction(words.undo, FocalIcon.Undo))) {
-                        FeedbackResult.ActionPerformed -> note.undoRemoveAudio()
-                        FeedbackResult.Dismissed -> note.commitRemoveAudio()
-                    }
+                    feedback.showDeferred(
+                        words.audioRemoved, FeedbackAction(words.undo, FocalIcon.Undo),
+                        undo = { library.undoRemoveAudio(id) }, commit = { library.commitRemoveAudio(id) },
+                    )
                 }
-                NoteEvent.TooLateToUndo -> appScope.launch { feedback.show(words.tooLate) }
                 // The page shows "Replaced N · Undo" itself: inside Edit its Undo belongs to the session's log.
                 is NoteEvent.Replaced -> Unit
                 is NoteEvent.Error -> appScope.launch { feedback.show(event.message) }
@@ -169,7 +168,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
 }
 
 /** The words the route's feedback uses, resolved in composition. */
-private data class RouteWords(val undo: String, val deleted: String, val audioRemoved: String, val tooLate: String, val textCopied: String)
+private data class RouteWords(val undo: String, val deleted: String, val audioRemoved: String, val textCopied: String)
 
 /** The activity's player for one note. [session] is the collected state, so the page observes it. */
 @Stable
