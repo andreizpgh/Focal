@@ -28,6 +28,20 @@
             <!-- The static "New recording" shortcut. -->
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+        <!--
+            Settings from App info (design 4.23.6): Android shows a gear for an activity that handles
+            APPLICATION_PREFERENCES. Its own empty task affinity keeps it off the library's task, so Back returns to
+            App info. It shows only the theme, the storage size and About, so it needs no permission. Enabled with
+            the rebuilt interface.
+        -->
+        <activity android:name=".SettingsActivity" android:exported="true" android:enabled="${focalNewUi}"
+            android:taskAffinity="" android:excludeFromRecents="true" android:configChanges="uiMode"
+            android:label="@string/settings_title">
+            <intent-filter>
+                <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <!-- The shortcut's target. Not exported, so no other app can make Focal record. -->
         <activity android:name=".ShortcutActivity" android:exported="false" android:excludeFromRecents="true"
             android:noHistory="true" android:theme="@android:style/Theme.NoDisplay" />

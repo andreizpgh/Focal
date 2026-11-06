@@ -4,20 +4,14 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.KeyboardShortcutGroup
 import android.view.KeyboardShortcutInfo
 import android.view.Menu
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.toDrawable
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -28,9 +22,9 @@ import app.focal.recording.RecordingState
 import app.focal.recording.ServiceEvent
 import app.focal.recording.StartFailure
 import app.focal.ui.FocalApp
-import app.focal.ui.design.FocalColors
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalSettle
+import app.focal.ui.shell.FocalWindow
 import app.focal.ui.shell.NightMode
 import app.focal.ui.shell.ShellCommand
 import app.focal.ui.state.EntryRequest
@@ -83,20 +77,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Edge-to-edge with transparent bars whose icons follow the app's setting (not the system's), the system's own
-     * night mode for the next splash, and the window background for gaps before Compose draws.
-     */
-    private fun applyTheme(mode: ThemeMode) {
-        val dark = NightMode.isDark(mode)
-        NightMode.applyToSystem(this, mode)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
-            navigationBarStyle = SystemBarStyle.auto(LIGHT_SCRIM, DARK_SCRIM) { dark },
-        )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
-        window.setBackgroundDrawable((if (dark) FocalColors.Dark else FocalColors.Light).paper.toArgb().toDrawable())
-    }
+    private fun applyTheme(mode: ThemeMode) = FocalWindow.apply(this, mode)
 
     /** Ctrl+, opens Settings with no focused node needed (spec 4.23.6). */
     override fun onKeyShortcut(keyCode: Int, event: KeyEvent): Boolean {
@@ -185,10 +166,6 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        /** API 26-28 keep a translucent scrim behind three-button navigation (spec 9); 29+ draw none. */
-        private val LIGHT_SCRIM = Color.argb(0xE6, 0xFF, 0xFF, 0xFF)
-        private val DARK_SCRIM = Color.argb(0x80, 0x1B, 0x1B, 0x1B)
-
         /** Sent by [ShortcutActivity] ("New recording", res/xml/shortcuts.xml); carries no request itself. */
         const val ACTION_FROM_SHORTCUT = "app.focal.action.FROM_SHORTCUT"
         /** The recording notification: show the recording screen. */

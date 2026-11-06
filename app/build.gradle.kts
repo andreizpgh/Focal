@@ -107,6 +107,7 @@ android {
         buildConfigField("String", "SPEECH_RUNTIME_REVISION", "\"${runtimeLock.getValue("revision")}\"")
         buildConfigField("String", "ONNXRUNTIME_VERSION", "\"${runtimeLock.getValue("onnxruntime")}\"")
         buildConfigField("boolean", "NEW_UI", newUi.toString())
+        manifestPlaceholders["focalNewUi"] = newUi.toString()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake { arguments += "-DFOCAL_SPEECH_RUNTIME_DIR=${speechRuntimeDirectory.path}" }
