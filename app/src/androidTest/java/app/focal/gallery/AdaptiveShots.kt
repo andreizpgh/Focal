@@ -34,6 +34,8 @@ object AdaptiveShots {
         add(sized("land-playing", Landscape, dark = false) { Note(design(), playing = true) })
         addAll(sized("land-edit", Landscape) { Note(design(edited = true), edit = true, scroll = 2 to 0, states = PageStates(focus = true)) })
         add(sized("land-find", Landscape, dark = false) { Note(design(), find = "screen" to "page", nextMatch = true) })
+        // The rows ride a landscape keyboard (the query takes focus, so the keyboard opens).
+        add(sized("land-find-keyboard", Landscape, dark = false) { Note(design(), find = "screen" to "page", states = PageStates(focus = true)) })
         add(sized("land-search", Landscape, dark = false) { Library(idleModel(), search = searchResults()) })
         add(sized("land-undo", Landscape, dark = false) { Library(idleModel(), feedback = true) })
         add(sized("land-settings", Landscape, dark = false) { Strip(1f) })

@@ -1,6 +1,7 @@
 package app.focal.gallery
 
 import android.graphics.Bitmap
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -53,8 +54,9 @@ import org.junit.runner.RunWith
  * shots, pass their name prefixes: `-e shots t16-open,now-playing` (the others in the stage's folder are kept).
  *
  * The window sizes of spec 5.14 ([AdaptiveShots]) need a display of their own size, and are skipped on any smaller
- * one: `landscape` with that display turned (`adb shell settings put system user_rotation 1`), `tablet` on 1600 x
- * 2560 px and `wide` on it turned. Run each alone (`-e class app.focal.gallery.GalleryTest#landscape`).
+ * one: `landscape` with that display turned and locked (`adb shell settings put system accelerometer_rotation 0;
+ * adb shell wm user-rotation lock 1`), `tablet` on 1600 x 2560 px and `wide` on it turned. Run each alone
+ * (`-e class app.focal.gallery.GalleryTest#landscape`).
  */
 @RunWith(AndroidJUnit4::class)
 class GalleryTest {
@@ -65,7 +67,13 @@ class GalleryTest {
 
     @Before
     fun edgeToEdge() {
-        rule.runOnUiThread { rule.activity.enableEdgeToEdge() }
+        rule.runOnUiThread {
+            rule.activity.enableEdgeToEdge()
+            // As MainActivity: the keyboard resizes the window, it never pans it (a landscape keyboard would push
+            // the frame up under the status bar).
+            @Suppress("DEPRECATION")
+            rule.activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
     }
 
     @Test
@@ -153,6 +161,12 @@ class GalleryTest {
             // keyboard fully open, every other one with it at rest.
             val typing = rule.onAllNodes(isFocused() and hasSetTextAction(), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
             awaitKeyboard { keyboard.atRest && (!typing || keyboard.bottom > 0) }
+            if (typing) {
+                // The page answers the keyboard on the test's clock (a focused field scrolls itself into view above
+                // it): let that land too.
+                rule.mainClock.advanceTimeBy(next.settleMs)
+                rule.waitForIdle()
+            }
             val image = rule.onNodeWithTag(FRAME).captureToImage().asAndroidBitmap()
             File(directory, "${next.name}.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, it) }
             // ... and the next shot starts with it closed, so no list is resized under it while it plays.
