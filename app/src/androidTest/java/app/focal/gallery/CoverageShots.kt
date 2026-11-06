@@ -58,6 +58,10 @@ object CoverageShots {
         // from the start edge, the settings strip mirrored. The words stay English: only the layout mirrors.
         addAll(themed("home-rtl") { Rtl { Library(idleModel()) } })
         add(Shot("recording-rtl-light", dark = false) { Rtl { Library(liveModel(paused = true)) } })
+        // The first frames of an expand from the mirrored live stage: the morph starts where the stage's row is.
+        add(Shot("expand-10-rtl-light", dark = false) { Rtl { SceneFrame(EXPAND_EARLY, live()) } })
+        add(Shot("expand-10-light", dark = false) { SceneFrame(EXPAND_EARLY, live()) })
+        add(Shot("rec-paused-rtl-light", dark = false) { Rtl { SceneFrame(1f, paused()) } })
         add(Shot("transcribing-rtl-light", dark = false) { Rtl { Library(workingModel(NotePhase.TRANSCRIBING)) } })
         add(Shot("settings-swipe-50-rtl-light", dark = false) { Rtl { Strip(HALF) } })
         add(Shot("note-rtl-light", dark = false) { Rtl { Note(design()) } })
@@ -78,6 +82,7 @@ object CoverageShots {
     private const val REDUCED_IN = 0.7f
     private const val PEEK = 32f / 420f
     private const val HALF = 0.5f
+    private const val EXPAND_EARLY = 0.1f
     private const val LARGE = 2f
 }
 
@@ -93,7 +98,7 @@ internal fun scaled(name: String, settleMs: Long = 1_000L, click: String? = null
 private fun Reduced(content: @Composable () -> Unit) = CompositionLocalProvider(LocalReducedMotion provides true) { content() }
 
 @Composable
-private fun Rtl(content: @Composable () -> Unit) = CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) { content() }
+internal fun Rtl(content: @Composable () -> Unit) = CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) { content() }
 
 /** Light and Dark with the palette the system's contrast setting or high-contrast text gives (FocalColors.of). */
 private fun contrasted(name: String, contrast: Float = 0f, highContrastText: Boolean = false, content: @Composable () -> Unit): List<Shot> =

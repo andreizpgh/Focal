@@ -310,8 +310,8 @@ private fun RecordedStage(content: @Composable () -> Unit) {
 
 /** The live stage's timer: the only part of the card that reads the recording's time while it composes. */
 @Composable
-private fun LiveTimer(seconds: () -> Long, style: TextStyle, width: (Long) -> Float, color: ColorProducer) =
-    TimerText(seconds(), style, width, color)
+private fun LiveTimer(seconds: () -> Long, style: TextStyle, width: (Long) -> Float, color: ColorProducer, modifier: Modifier = Modifier) =
+    TimerText(seconds(), style, width, color, modifier)
 
 /** A description that changes on its own clock, kept apart from the node that speaks it. */
 @Stable
@@ -470,7 +470,9 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter, seconds: () -> Long
                         )
                     }
                     Spacer(Modifier.width(StageMetrics.liveGap))
-                    LiveTimer(seconds, timers.stage, timers::stageWidth, color = { timerColor.value })
+                    // The timer's line is centred on the wave's centre (y 104) whatever its glyphs' box measures: a
+                    // taller box overhangs the row instead of pushing the wave down.
+                    LiveTimer(seconds, timers.stage, timers::stageWidth, color = { timerColor.value }, Modifier.wrapContentHeight(unbounded = true))
                 }
             },
             {
@@ -504,13 +506,18 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter, seconds: () -> Long
         val width = constraints.maxWidth
         val inset = StageMetrics.inset.roundToPx()
         val column = width - 2 * inset
-        val top = head.first().measure(Constraints(maxWidth = column))
-        val regionTop = inset + max(top.height, StageMetrics.wave.roundToPx()) + StageMetrics.liveGap.roundToPx()
+        // The head row is the wave's height (or the timer's line, if taller), exactly as the morph assumes: the wave
+        // box at the inset, the timer's line on its centre.
+        val headHeight = max(StageMetrics.wave.roundToPx(), timers.stageLine.roundToInt())
+        val top = head.first().measure(Constraints(maxWidth = column, minHeight = headHeight, maxHeight = headHeight))
+        val regionTop = inset + headHeight + StageMetrics.liveGap.roundToPx()
         val height = max(StageMetrics.minHeight(short).roundToPx(), regionTop + (StageMetrics.TEXT_LINES_MIN * lineHeight).roundToInt() + inset)
         val text = region.first().measure(Constraints.fixed(column, height - inset - regionTop))
+        // Relative: right to left, the row runs from the card's right edge (the wave at 296-368 on the reference
+        // frame), as the morph's origin mirrors it (spec 8.5).
         layout(width, height) {
-            top.place(inset, inset)
-            text.place(inset, regionTop)
+            top.placeRelative(inset, inset)
+            text.placeRelative(inset, regionTop)
         }
     }
 }
