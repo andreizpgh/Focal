@@ -574,12 +574,13 @@ private fun NoteStage(
         val lengthTop = if (large) footerTop - lengthRow else footerTop
         val lengthSlot = if (large) lengthRow else footer
         overlapping = !large && inset + length.width + StageMetrics.footerYield.roundToPx() > pillX
+        // Relative: right to left, the time sits at the title's left and the pill at the start of the footer (8.5).
         layout(width, height) {
-            title.place(inset, inset)
-            time.place(if (timeOwnLine) inset else width - inset - time.width, timeTop)
-            text.place(inset, textTop)
-            length.place(inset, lengthTop + (lengthSlot - length.height) / 2)
-            pill.place(pillX, footerTop)
+            title.placeRelative(inset, inset)
+            time.placeRelative(if (timeOwnLine) inset else width - inset - time.width, timeTop)
+            text.placeRelative(inset, textTop)
+            length.placeRelative(inset, lengthTop + (lengthSlot - length.height) / 2)
+            pill.placeRelative(pillX, footerTop)
         }
     }
 }
