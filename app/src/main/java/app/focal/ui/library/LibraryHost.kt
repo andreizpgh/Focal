@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.runtime.Composable
@@ -46,6 +47,8 @@ import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.design.LocalWindowLayout
+import app.focal.ui.design.WindowLayout
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.SettingsStrip
 import app.focal.ui.shell.SettingsStripState
@@ -156,6 +159,9 @@ fun LibraryHost(
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val gestures = WindowInsets.systemGestures
     val status = WindowInsets.statusBars
+    val sides = WindowInsets.safeDrawing
+    // A short window's dock is a 96 dp rail at the end edge (spec 5.14): it is excluded instead of the bottom row.
+    val rail = LocalWindowLayout.current.rail
     var touched by remember { mutableStateOf(false) }
     val currentArmed by rememberUpdatedState(armed)
     val expansion = shell.live.expansion
@@ -179,7 +185,7 @@ fun LibraryHost(
         Modifier
             .fillMaxSize()
             .preferredFrameRate(if (layer.moving) FrameRateCategory.High else FrameRateCategory.Normal)
-            .pointerInput(strip, rtl, reduced) {
+            .pointerInput(strip, rtl, reduced, rail) {
                 val slop = viewConfiguration.touchSlop
                 val opening = if (rtl) 1f else -1f
                 awaitEachGesture {
@@ -196,7 +202,12 @@ fun LibraryHost(
                     val direction = if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr
                     val edge = edgeZone(gestures.getLeft(this, direction), gestures.getRight(this, direction))
                     val x = down.position.x
-                    val inZone = x >= edge.first && x <= size.width - edge.second && down.position.y >= status.getTop(this)
+                    val onRail = rail && run {
+                        val width = WindowLayout.railWidth.toPx()
+                        if (rtl) x <= sides.getLeft(this, LayoutDirection.Ltr) + width
+                        else x >= size.width - sides.getRight(this, LayoutDirection.Ltr) - width
+                    }
+                    val inZone = x >= edge.first && x <= size.width - edge.second && down.position.y >= status.getTop(this) && !onRail
                     val allowed = when {
                         expansion.value > 0f -> false
                         start <= 0f -> currentArmed() && down.position.y <= shell.bottom.touchLimit(this)
