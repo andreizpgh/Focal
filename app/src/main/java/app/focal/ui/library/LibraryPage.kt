@@ -87,6 +87,7 @@ import app.focal.ui.scene.ExpandDrag
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.DestinationBottom
 import app.focal.ui.shell.LocalShell
+import app.focal.ui.shell.foldLabel
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.SearchRow
 import app.focal.ui.state.SearchUiState
@@ -487,6 +488,7 @@ private fun LibraryList(
                             .padding(horizontal = FocalLayout.gutter)
                             .padding(top = if (index == 0) firstLabelGap(model.stage != null) else SECTION_GAP, bottom = LABEL_TO_TITLE)
                             .stickyLabelSource(labels, key)
+                            .foldLabel(shell.pages, key)
                             .animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
                     )
                 }

@@ -91,6 +91,7 @@ import app.focal.ui.design.TriggerClock
 import app.focal.ui.design.smoothstep
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -211,6 +212,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     internal val stage = Origin()
     internal val rows = HashMap<String, Origin>()
     internal val pageTitle = PageTitle()
+    /** The library's day labels where they are laid out (a detached one is gone): T16's fold keeps them off the title. */
+    internal val labels = HashMap<String, LayoutCoordinates>()
 
     private var serial = 0
 
@@ -968,8 +971,9 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                 val layer = pages.layer ?: return@drawBehind
                 val title = titleInFlight(f)
                 val feather = pages.flightFeather(change)
-                if (title != null && !stageLike && !change.push) titleAhead(title, feather)?.let { ahead ->
-                    drawRect(ahead.brush(colors.paper), ahead.topLeft(), ahead.size(size.width))
+                if (title != null && !stageLike && !change.push) {
+                    titleAhead(title, feather)?.let { ahead -> drawRect(ahead.brush(colors.paper), ahead.topLeft(), ahead.size(size.width)) }
+                    placement.coordinates?.let { overlay -> coverLabelsAbove(pages, overlay, title, colors.paper) }
                 }
                 val wake = if (change.push) title?.let { titleWake(it, feather) } else null
                 drawIntoCanvas { canvas ->
@@ -1059,6 +1063,33 @@ private class TitlePath(val top: Float, val bottom: Float, val feather: Float, v
         }
     }
 }
+
+/**
+ * Folding into a row: a day label just above the sinking title heads a row still under paper, so it stays under
+ * paper too, and returns as the title leaves it ([LABEL_CLEARANCE] below its bottom), never sitting on the title.
+ */
+private fun DrawScope.coverLabelsAbove(pages: PageTransitions, overlay: LayoutCoordinates, title: FlightText, paper: Color) {
+    val titleTop = title.flight.topLeft.y
+    val clearance = LABEL_CLEARANCE.toPx()
+    val gone = ArrayList<String>()
+    for ((key, label) in pages.labels) {
+        if (!label.isAttached) {
+            gone += key
+            continue
+        }
+        val r = overlay.rectOf(label)
+        if (r.top >= titleTop || r.bottom <= titleTop - clearance) continue
+        val cover = 1 - smoothstep(0f, clearance, titleTop - r.bottom)
+        drawRect(paper, r.topLeft, Size(r.width, min(r.bottom, titleTop) - r.top), alpha = cover)
+    }
+    gone.forEach { pages.labels.remove(it) }
+}
+
+/** A day label returns once the folding title is this far below it. */
+private val LABEL_CLEARANCE = 24.dp
+
+/** Reports where a library day label sits, for T16's fold (see [coverLabelsAbove]). */
+internal fun Modifier.foldLabel(pages: PageTransitions, key: String): Modifier = onPlaced { pages.labels[key] = it }
 
 /** Opening: the page's text from its title's line down to the rising title. */
 private fun titleWake(title: FlightText, feather: Float): TitlePath? {
