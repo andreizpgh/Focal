@@ -247,6 +247,30 @@ private class WaveFrame {
     val pairs = FloatArray(Mark.CENTRE + 1) { 1f }
     var alpha = 1f
     var glow = 1f
+
+    /** The inputs these values were computed from: every layer of a frame asks, and only the first one computes. */
+    private var tick = Long.MIN_VALUE
+    private var profile = Float.NaN
+    private var dim = Float.NaN
+    private val entry = FloatArray(Mark.CENTRE + ENTRY_EXTRAS) { Float.NaN }
+
+    /** True when these values were already computed for the same inputs; otherwise records them and returns false. */
+    fun current(tick: Long, profile: Float, dim: Float, wave: WaveEntry?): Boolean {
+        var same = tick == this.tick && profile == this.profile && dim == this.dim
+        this.tick = tick
+        this.profile = profile
+        this.dim = dim
+        for (distance in 0..Mark.CENTRE) same = record(distance, wave?.pair(distance) ?: 1f) && same
+        same = record(Mark.CENTRE + 1, wave?.glow ?: 1f) && same
+        return record(Mark.CENTRE + 2, wave?.restLevel ?: -1f) && same
+    }
+
+    private fun record(slot: Int, value: Float): Boolean = (entry[slot] == value).also { entry[slot] = value }
+
+    private companion object {
+        /** Besides each pair's arrival: the entry's glow and its resting level. */
+        const val ENTRY_EXTRAS = 3
+    }
 }
 
 @Composable
@@ -277,9 +301,11 @@ private fun MovingBars(mode: WaveMode, paused: Boolean, dress: WaveDress, modifi
             }
         }
     }
-    val update: () -> Unit = {
+    val update: () -> Unit = update@{
         val nowMs = tick.longValue
         val profile = toProfile.value
+        // Each layer of a frame runs this (so each one redraws with the tick); the values are computed once.
+        if (frame.current(nowMs, profile, dim.value, entry)) return@update
         val rest = entry?.restLevel
         for (bar in 0 until Mark.BARS) {
             val full = Mark.height(bar)
@@ -318,8 +344,8 @@ private fun sweep(timeMs: Long, bar: Int): Float {
 
 /**
  * API 31+: pairs d = 4..1, the glow and the sharp centre bar, each in its own layer. Blurred layers are enlarged by
- * the blur's reach so the RenderEffect never clips. Every layer runs [update] (cheap and idempotent per frame), so
- * each one subscribes to the frame tick and redraws on its own.
+ * the blur's reach so the RenderEffect never clips. Every layer runs [update], so each one subscribes to the frame
+ * tick and redraws on its own; the first one in a frame computes the values, the others find them current.
  */
 @Composable
 private fun LayeredBars(frame: WaveFrame, update: () -> Unit, painter: BarPainter, modifier: Modifier, entry: WaveEntry?) {
@@ -390,9 +416,8 @@ private class BarPainter(val dress: WaveDress) {
     fun drawPair(scope: DrawScope, frame: WaveFrame, distance: Int, margin: Float) = with(scope) {
         val unit = (size.height - 2 * margin) / Mark.BOX_HEIGHT
         drawIntoCanvas { canvas ->
-            for (bar in intArrayOf(Mark.CENTRE - distance, Mark.CENTRE + distance)) {
-                plainBar(canvas.nativeCanvas, bar, frame, unit, margin)
-            }
+            plainBar(canvas.nativeCanvas, Mark.CENTRE - distance, frame, unit, margin)
+            plainBar(canvas.nativeCanvas, Mark.CENTRE + distance, frame, unit, margin)
         }
     }
 
