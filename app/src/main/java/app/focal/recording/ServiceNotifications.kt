@@ -111,7 +111,7 @@ internal class ServiceNotifications(private val context: Context) {
             .setPublicVersion(publicBuilder(READY, if (partial) R.string.n_partial else R.string.n_public_ready).build())
         noteTitle(title, created)?.let(builder::setContentText)
         post(READY_ID, noteId, builder.build())
-        summarizeReady(context)
+        summarizeReady(context, posted = noteId)
     }
 
     /** Android stopped background transcription (onTimeout): it continues when Focal is opened. */
@@ -192,18 +192,23 @@ internal class ServiceNotifications(private val context: Context) {
         fun cancelReady(context: Context, noteId: String) {
             runCatching {
                 context.getSystemService(NotificationManager::class.java)?.cancel(noteId, READY_ID)
-                summarizeReady(context)
+                summarizeReady(context, cancelled = noteId)
             }
         }
 
         /**
          * Keeps the group summary in step with the finished notes on display: posted (silently, the notes alert)
-         * from two on, removed below two. Tapping the summary opens the library.
+         * from two on, and removed with the last of them. Cancelling a summary would also take its notes, so with
+         * one left it stays: Android then shows that note on its own. Tapping the summary opens the library.
+         * Posting and cancelling reach the system asynchronously, so the note just [posted] or [cancelled] is
+         * counted by hand.
          */
-        private fun summarizeReady(context: Context) {
+        private fun summarizeReady(context: Context, posted: String? = null, cancelled: String? = null) {
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
-            val shown = runCatching { manager.activeNotifications.count { it.id == READY_ID && it.tag != null } }.getOrDefault(0)
-            if (shown < 2) { manager.cancel(READY_SUMMARY_ID); return }
+            val active = runCatching { manager.activeNotifications.filter { it.id == READY_ID }.mapNotNull { it.tag }.toSet() }.getOrDefault(emptySet())
+            val shown = (active + listOfNotNull(posted)) - setOfNotNull(cancelled)
+            if (shown.isEmpty()) manager.cancel(READY_SUMMARY_ID)
+            if (shown.size < 2) return
             val summary = NotificationCompat.Builder(context, READY)
                 .setSmallIcon(R.drawable.ic_notification).setColorized(false)
                 .setContentTitle(context.getString(R.string.n_ready))

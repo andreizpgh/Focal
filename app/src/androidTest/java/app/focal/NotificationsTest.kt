@@ -128,13 +128,17 @@ class NotificationsTest {
         assertTrue(partial.text!!.startsWith("Note at "))
         awaitState("the summary of two notes", true, ::summaryShown)
 
-        // Delete with Undo (the library's and the note's path) takes its notification, and the bundle opens up.
+        // Delete with Undo (the library's and the note's path) takes its notification and keeps the other.
         runBlocking { assertTrue(UndoableActions.delete(app, first) { fail(it) }) }
         awaitState("Note ready for the deleted note", false) { posted(first) }
+        SystemClock.sleep(SETTLE_MS)
         assertTrue("Another note keeps its notification", posted(second))
-        awaitState("the summary of one note", false, ::summaryShown)
         UndoableActions.commitDelete(app, first)
         assertNull(app.store.note(first))
+        // The last one takes the summary with it.
+        ServiceNotifications.cancelReady(app, second)
+        awaitState("Note ready for the last note", false) { posted(second) }
+        awaitState("the summary without notes", false, ::summaryShown)
     }
 
     private fun assertPrivate(notification: Notification, publicTitle: String) {
@@ -144,6 +148,11 @@ class NotificationsTest {
         assertEquals(publicTitle, public.title)
         assertNull("A locked screen never shows a title", public.text)
         assertEquals("The mark is never colourised", Notification.COLOR_DEFAULT, notification.color)
+    }
+
+    private companion object {
+        /** Time for the system to apply a cancellation that should not have taken another notification. */
+        const val SETTLE_MS = 500L
     }
 
     private fun posted(tag: String) = manager.activeNotifications.any { it.id == ServiceNotifications.READY_ID && it.tag == tag }
