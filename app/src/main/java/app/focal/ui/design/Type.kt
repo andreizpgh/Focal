@@ -11,6 +11,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.focal.R
@@ -98,3 +100,9 @@ object FocalType {
 
 /** Tabular figures on a style whose numbers change in place ("tnum on numbers" in the scale). */
 fun TextStyle.tabular(): TextStyle = copy(fontFeatureSettings = TNUM)
+
+/**
+ * How much the font scale has grown this style's line (its line height in pixels over the same number of dp), with
+ * Android's non-linear scaling: geometry measured in lines of a text (a mask over the top line) grows by it.
+ */
+fun Density.lineScale(style: TextStyle): Float = style.lineHeight.toPx() / style.lineHeight.value.dp.toPx()

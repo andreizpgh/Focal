@@ -11,7 +11,9 @@ import app.focal.ui.components.PauseBadgeMetrics
 import app.focal.ui.design.FocalGestures
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalShapes
+import app.focal.ui.design.FocalType
 import app.focal.ui.design.Grid
+import app.focal.ui.design.lineScale
 import app.focal.ui.design.smoothstep
 import kotlin.math.max
 import kotlin.math.min
@@ -159,7 +161,7 @@ data class SceneSlots(
                     dockTop = dockTop, dockBottom = dockBottom,
                     pill = Rect(pillLeft, dockTop, columnLeft + column, dockBottom),
                     corner = FocalShapes.sheetRadius.toPx(),
-                    stageMask = StageLiveMetrics.mask.toPx(), sceneMask = SceneMetrics.textMask.toPx(),
+                    stageMask = StageLiveMetrics.mask.toPx() * lineScale(FocalType.stageText), sceneMask = SceneMetrics.textMask.toPx(),
                     stageBadge = PauseBadgeMetrics.stage.toPx(), sceneBadge = PauseBadgeMetrics.scene.toPx(),
                 )
             }

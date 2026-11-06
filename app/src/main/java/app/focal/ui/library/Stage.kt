@@ -92,6 +92,7 @@ import app.focal.ui.design.Grid
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.Scene
 import app.focal.ui.design.Stage
+import app.focal.ui.design.lineScale
 import app.focal.ui.scene.StageTranscript
 import app.focal.ui.scene.TimerText
 import app.focal.ui.scene.TranscriptInks
@@ -144,7 +145,7 @@ object StageMetrics {
     val wave = Grid.x56
     /** The timer starts this far after the wave's box (x 132 = 44 + 72 + 16), as the text region below it. */
     val liveGap = Grid.x16
-    /** The live text region fades in over its top this far (`DstIn`). */
+    /** The live text region fades in over its top this far (`DstIn`): about 1.4 lines, growing with the font scale. */
     val liveMask = 34.dp
 
     // The readiness shimmer (2.2.1 `stageShimmer`).
@@ -432,7 +433,10 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter) {
                         .drawWithContent {
                             drawContent()
                             drawRect(
-                                Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, endY = StageMetrics.liveMask.toPx()),
+                                Brush.verticalGradient(
+                                    0f to Color.Transparent, 1f to Color.Black,
+                                    endY = StageMetrics.liveMask.toPx() * lineScale(FocalType.stageText),
+                                ),
                                 blendMode = BlendMode.DstIn,
                             )
                         },
