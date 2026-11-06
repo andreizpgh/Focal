@@ -9,6 +9,21 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.IntSize
+import app.focal.ui.design.LocalWindowLayout
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.text.selection.DisableSelection
@@ -328,13 +343,22 @@ internal fun LazyItemScope.ParagraphItem(
         }
     }
     val unclear = unclearDescription(paragraph)
+    // A short window (a phone in landscape) keeps the whole focused sheet above the keyboard (spec 5.7, 5.14).
+    val sheetView = remember { BringIntoViewRequester() }
+    val sizes = remember { SheetSizes() }
+    if (focused && LocalWindowLayout.current.rail) KeepSheetInView(sheetView, sizes)
     Column(
         Modifier
             .animateItem(fadeInSpec = null, placementSpec = placement, fadeOutSpec = null)
-            .padding(horizontal = FocalLayout.gutter),
+            .padding(horizontal = FocalLayout.gutter)
+            .bringIntoViewRequester(sheetView)
+            .onSizeChanged { sizes.item = it },
     ) {
         if (field != null) {
-            ParagraphField(field.text, paragraph.id, field.requester, page.layouts, onEnter, onJoin, sheet = { sheet.value })
+            ParagraphField(
+                field.text, paragraph.id, field.requester, page.layouts, onEnter, onJoin, sheet = { sheet.value },
+                modifier = Modifier.onSizeChanged { sizes.field = it.height },
+            )
         } else {
             val text: @Composable () -> Unit = {
                 ParagraphText(
@@ -347,6 +371,46 @@ internal fun LazyItemScope.ParagraphItem(
             if (page.editing || find.open) DisableSelection(text) else text()
         }
         ProvenanceLine(visible = focused && paragraph.edited && paragraph.canRestore, onRestore = onRestore)
+    }
+}
+
+/**
+ * In a short window Edit keeps the caret's line and a brought sheet this far inside the band: the sheet's own outset,
+ * so a three-line paragraph's whole sheet fits between a landscape top bar and keyboard (spec 5.7, 5.14).
+ */
+internal val EditSheetMargin = ParagraphMetrics.sheetOutsetY
+
+/** The focused paragraph's item (field and provenance line) and its field alone, in pixels, as last laid out. */
+private class SheetSizes {
+    var item = IntSize.Zero
+    var field = 0
+}
+
+/**
+ * In a short window, once the keyboard has settled (and whenever the focus lands on another paragraph while it is
+ * up), scrolls the focused paragraph whole between the top bar and the keyboard: its sheet, and its provenance line
+ * too when both fit. The caret alone would leave the sheet cut through by the keyboard's edge.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun KeepSheetInView(requester: BringIntoViewRequester, sizes: SheetSizes) {
+    val density = LocalDensity.current
+    val ime = WindowInsets.ime
+    val imeTarget = WindowInsets.imeAnimationTarget
+    val status = WindowInsets.statusBars
+    val window = LocalWindowInfo.current
+    val topBar = LocalWindowLayout.current.topBar
+    LaunchedEffect(requester) {
+        snapshotFlow { ime.getBottom(density).let { it > 0 && it == imeTarget.getBottom(density) } }
+            .distinctUntilChanged()
+            .collect { settled ->
+                if (!settled) return@collect
+                val band = window.containerSize.height - ime.getBottom(density) - status.getTop(density) -
+                    with(density) { (topBar + EditSheetMargin * 2).toPx() }
+                val item = sizes.item
+                val height = if (item.height <= band) item.height else sizes.field
+                if (height > 0) requester.bringIntoView(Rect(0f, 0f, item.width.toFloat(), height.toFloat()))
+            }
     }
 }
 

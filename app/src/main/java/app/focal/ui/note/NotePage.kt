@@ -775,7 +775,10 @@ fun NotePage(
             )
         }
         val topPadding = with(density) { status.getTop(this).toDp() } + topBar + FocalGrid.x8
-        val bringSpec = remember(density, status) { CaretSpec(bandTop, { with(density) { CaretMargin.toPx() } }, fadePx, topLines) }
+        val short = rememberUpdatedState(LocalWindowLayout.current.rail)
+        val bringSpec = remember(density, status) {
+            CaretSpec(bandTop, { with(density) { (if (short.value) EditSheetMargin else CaretMargin).toPx() } }, fadePx, topLines)
+        }
         CompositionLocalProvider(LocalBringIntoViewSpec provides bringSpec) {
             SelectionContainer(selection, Modifier.fillMaxSize()) {
                 BoxWithConstraints(Modifier.fillMaxSize().graphicsLayer { alpha = listFade.value * reveal.body() }) {
