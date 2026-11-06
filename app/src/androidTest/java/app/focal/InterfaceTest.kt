@@ -1,8 +1,11 @@
 package app.focal
 
+import android.app.UiAutomation
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.SystemClock
+import android.provider.Settings
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.ui.semantics.SemanticsActions
@@ -46,7 +49,9 @@ import java.util.UUID
  * library and Back returns, Copy fills the clipboard, the note's keyboard shortcuts reach it with nothing focused, Edit saves
  * through the store, search opens a note at its paragraph, Delete offers
  * Undo, Settings opens by its accessibility action and applies the theme at once, a recording shows its controls in
- * the dock, and a notification's intent opens its note. Notes are synthetic and removed afterwards.
+ * the dock, a notification's intent opens its note, and Edit, Find, an open scene and an open note (between one pane
+ * and two, on a tablet-size display) survive turning the display (spec 5.14). Notes are synthetic and removed
+ * afterwards.
  */
 @RunWith(AndroidJUnit4::class)
 class InterfaceTest {
@@ -69,6 +74,7 @@ class InterfaceTest {
     }
 
     @After fun cleanup() {
+        rotationBefore?.let { InstrumentationRegistry.getInstrumentation().uiAutomation.setRotation(it) }
         scenario?.close()
         RecordingState.live.value = LiveSession()
         app.preferences.theme(theme)
@@ -271,6 +277,125 @@ class InterfaceTest {
             compose.mainClock.advanceTimeBy(SETTLE_MS)
             compose.mainClock.autoAdvance = true
         }
+    }
+
+    /** How the display was turned before a test turned it, to put it back afterwards (a UiAutomation constant). */
+    private var rotationBefore: Int? = null
+
+    /**
+     * Turns the display as a person turning the phone would (spec 5.14: no orientation locks) and waits until the
+     * activity, recreated, is laid out for it: landscape on a phone is a short window with the dock in the rail, on a
+     * tablet two panes.
+     */
+    private fun turn(landscape: Boolean) {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        if (rotationBefore == null) {
+            val resolver = app.contentResolver
+            val automatic = Settings.System.getInt(resolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
+            // The user rotation setting holds a Surface rotation, which is also the matching freeze constant.
+            rotationBefore = if (automatic) UiAutomation.ROTATION_UNFREEZE else Settings.System.getInt(resolver, Settings.System.USER_ROTATION, 0)
+        }
+        automation.setRotation(if (landscape) UiAutomation.ROTATION_FREEZE_90 else UiAutomation.ROTATION_FREEZE_0)
+        val wanted = if (landscape) Configuration.ORIENTATION_LANDSCAPE else Configuration.ORIENTATION_PORTRAIT
+        compose.waitUntil(TIMEOUT_MS) {
+            var orientation = Configuration.ORIENTATION_UNDEFINED
+            scenario!!.onActivity { orientation = it.resources.configuration.orientation }
+            orientation == wanted
+        }
+        compose.waitForIdle()
+    }
+
+    @Test fun editKeepsItsFieldAcrossARotation() {
+        val title = "Rotate edit fixture $tag"
+        val words = listOf("The paragraph a rotation interrupts.", "A paragraph that stays.")
+        val id = note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        compose.onNodeWithContentDescription("Edit").performClick()
+        await("the edit bar", hasContentDescription("Done"))
+        compose.onNodeWithText(words[0]).performClick()
+        await("the paragraph's field", hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
+        turn(landscape = true)
+        // Still in Edit, the same paragraph's field holding the draft, its provenance shown (spec 4.14).
+        await("the edit bar after the turn", hasContentDescription("Done"))
+        await("the draft after the turn", hasSetTextAction() and hasText(REVISED))
+        await("the provenance line", hasText("Edited"))
+        turn(landscape = false)
+        await("the draft turned back", hasSetTextAction() and hasText(REVISED))
+        compose.onNode(hasContentDescription("Done")).performClick()
+        awaitGone("the field", hasSetTextAction())
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
+    }
+
+    @Test fun findKeepsItsQueryAcrossARotation() {
+        val title = "Rotate find fixture $tag"
+        val words = listOf("The harbour opens at six.", "Boats leave the harbour late, and the harbour master waits.")
+        note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        press(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val field = hasSetTextAction() and hasContentDescription("Find in note")
+        await("Find", field)
+        compose.onNode(field).performTextInput("harbour")
+        await("the count", hasText("1 of 3"))
+        turn(landscape = true)
+        await("the query after the turn", field and hasText("harbour"))
+        await("the count after the turn", hasText("of 3", substring = true))
+        compose.onNode(hasContentDescription("Next match") and hasClickAction()).assertIsDisplayed()
+    }
+
+    /**
+     * A tablet (one pane upright, two turned, spec 5.14): the open note moves into the detail pane beside the library
+     * and back, and Back from the detail pane leaves the library with Record. Skipped on a display that does not
+     * change panes when turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun aNoteMovesBetweenOneAndTwoPanesOnATurn() {
+        val config = app.resources.configuration
+        val short = minOf(config.screenWidthDp, config.screenHeightDp)
+        val long = maxOf(config.screenWidthDp, config.screenHeightDp)
+        assumeTrue("Needs a display that is one pane upright and two panes turned", short in 480 until 840 && long >= 840)
+        val title = "Panes fixture $tag"
+        val words = listOf("A synthetic paragraph that moves between panes.")
+        // The library's stage or row, never the page's own title (which also takes a tap, to rename).
+        val listed = hasContentDescription("Latest note. $title.", substring = true) or (hasText(title) and hasClickAction() and !isHeading())
+        note(title, words)
+        launch()
+        turn(landscape = false)
+        openFromLibrary(title, words[0])
+        turn(landscape = true)
+        // Side by side: the note's page and the library's stage or row at once.
+        await("the note in the detail pane", hasText(words[0]))
+        await("the library beside it", listed)
+        compose.onNode(hasText(title) and isHeading()).assertIsDisplayed()
+        turn(landscape = false)
+        await("the note alone", hasText(words[0]))
+        awaitGone("the library under the page", listed)
+        turn(landscape = true)
+        await("the note beside the library again", hasText(words[0]))
+        back()
+        awaitGone("the detail pane's note", hasText(words[0]))
+        await("Record in the list pane", hasContentDescription("Record") and hasClickAction())
+    }
+
+    @Test fun anOpenSceneStaysOpenAcrossARotation() {
+        val id = app.store.create().also { created += it }
+        app.store.state(id, NoteState.PAUSED)
+        // Synthetic presentation state (paused, so nothing draws every frame); the service is tested on its own.
+        RecordingState.live.value = LiveSession(noteId = id, paused = true, duration = 73_000)
+        launch()
+        val stage = hasContentDescription("Paused, 1 minute 13 seconds.", substring = true) and hasClickAction()
+        await("the live stage", stage)
+        compose.onNode(stage).performClick()
+        val chevron = hasContentDescription("Collapse. Recording continues")
+        await("the scene", chevron)
+        turn(landscape = true)
+        // The scene is still open, now in two columns with Resume and Finish in the rail (spec 5.14).
+        await("the scene after the turn", chevron)
+        compose.onNode(hasContentDescription("Resume") and hasClickAction()).assertIsDisplayed()
+        compose.onNode(hasContentDescription("Finish") and hasClickAction()).assertIsDisplayed()
+        turn(landscape = false)
+        await("the scene turned back", chevron)
     }
 
     /** What TalkBack, Switch Access and Voice Access get: Android's accessibility tree, not Compose's semantics. */
