@@ -77,6 +77,13 @@ val requireModel = when (val value = providers.gradleProperty("focal.requireMode
     "true" -> true
     else -> error("focal.requireModel must be true or false, not $value")
 }
+// The rebuilt interface is assembled screen by screen behind this switch and becomes the only one when it is
+// complete; -Pfocal.newUi=true runs it in a local build.
+val newUi = when (val value = providers.gradleProperty("focal.newUi").orNull) {
+    null, "false" -> false
+    "true" -> true
+    else -> error("focal.newUi must be true or false, not $value")
+}
 if (!modelPresent) logger.lifecycle(
     "Speech model not found in ${ultraModelDirectory.path}: debug APKs will record but not transcribe. " +
         "Run python3 scripts/fetch-model.py for a complete build."
@@ -99,6 +106,7 @@ android {
         buildConfigField("String", "SPEECH_RUNTIME_VERSION", "\"${runtimeLock.getValue("version")}\"")
         buildConfigField("String", "SPEECH_RUNTIME_REVISION", "\"${runtimeLock.getValue("revision")}\"")
         buildConfigField("String", "ONNXRUNTIME_VERSION", "\"${runtimeLock.getValue("onnxruntime")}\"")
+        buildConfigField("boolean", "NEW_UI", newUi.toString())
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake { arguments += "-DFOCAL_SPEECH_RUNTIME_DIR=${speechRuntimeDirectory.path}" }
@@ -141,6 +149,9 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
+    implementation(libs.navigation3.runtime)
+    implementation(libs.navigation3.ui)
+    implementation(libs.core.splashscreen)
     implementation(libs.coroutines.android)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The splash icon (spec 5.13): the mark in ink at its own alpha falloff, no blur, inside the 2/3 safe circle of
+    the 288 dp icon-without-background canvas. Same geometry as ic_focal_mono.xml (design/brand/build.py), at the
+    launcher icon's scale: 108 units over 288 dp. The splash API defines the 288 dp canvas, hence VectorRaster.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"
+    android:width="288dp" android:height="288dp" android:viewportWidth="108" android:viewportHeight="108"
+    tools:ignore="VectorRaster">
+    <path android:fillColor="@color/ink" android:fillAlpha="0.18" android:pathData="M29.2,50.5A1.6,1.6 0 0 1 30.8,52.1V55.9A1.6,1.6 0 0 1 29.2,57.5A1.6,1.6 0 0 1 27.6,55.9V52.1A1.6,1.6 0 0 1 29.2,50.5Z" />
+    <path android:fillColor="@color/ink" android:fillAlpha="0.3" android:pathData="M35.4,48A1.6,1.6 0 0 1 37,49.6V58.4A1.6,1.6 0 0 1 35.4,60A1.6,1.6 0 0 1 33.8,58.4V49.6A1.6,1.6 0 0 1 35.4,48Z" />
+    <path android:fillColor="@color/ink" android:fillAlpha="0.5" android:pathData="M41.6,44.5A1.6,1.6 0 0 1 43.2,46.1V61.9A1.6,1.6 0 0 1 41.6,63.5A1.6,1.6 0 0 1 40,61.9V46.1A1.6,1.6 0 0 1 41.6,44.5Z" />
+    <path android:fillColor="@color/ink" android:fillAlpha="0.75" android:pathData="M47.8,39A1.6,1.6 0 0 1 49.4,40.6V67.4A1.6,1.6 0 0 1 47.8,69A1.6,1.6 0 0 1 46.2,67.4V40.6A1.6,1.6 0 0 1 47.8,39Z" />
+    <path android:fillColor="@color/ink" android:fillAlpha="1" android:pathData="M54,34A1.6,1.6 0 0 1 55.6,35.6V72.4A1.6,1.6 0 0 1 54,74A1.6,1.6 0 0 1 52.4,72.4V35.6A1.6,1.6 0 0 1 54,34Z" />
+    <path android:fillColor="@color/ink" android:fillAlpha="0.75" android:pathData="M60.2,39A1.6,1.6 0 0 1 61.8,40.6V67.4A1.6,1.6 0 0 1 60.2,69A1.6,1.6 0 0 1 58.6,67.4V40.6A1.6,1.6 0 0 1 60.2,39Z" />
+    <path android:fillColor="@color/ink" android:fillAlpha="0.5" android:pathData="M66.4,44.5A1.6,1.6 0 0 1 68,46.1V61.9A1.6,1.6 0 0 1 66.4,63.5A1.6,1.6 0 0 1 64.8,61.9V46.1A1.6,1.6 0 0 1 66.4,44.5Z" />
+    <path android:fillColor="@color/ink" android:fillAlpha="0.3" android:pathData="M72.6,48A1.6,1.6 0 0 1 74.2,49.6V58.4A1.6,1.6 0 0 1 72.6,60A1.6,1.6 0 0 1 71,58.4V49.6A1.6,1.6 0 0 1 72.6,48Z" />
+    <path android:fillColor="@color/ink" android:fillAlpha="0.18" android:pathData="M78.8,50.5A1.6,1.6 0 0 1 80.4,52.1V55.9A1.6,1.6 0 0 1 78.8,57.5A1.6,1.6 0 0 1 77.2,55.9V52.1A1.6,1.6 0 0 1 78.8,50.5Z" />
+</vector>

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Strings used outside Compose: notifications, channels and the launcher shortcut. -->
+<!-- English is the default (design spec 7): sentence case, typographic punctuation, "note" is the one noun. -->
 <resources>
     <string name="app_name" translatable="false">Focal</string>
 
@@ -49,6 +49,10 @@
     <string name="a11y_transcribing">Transcribing, %d percent</string>
     <string name="a11y_play_unavailable">Play, unavailable while recording</string>
     <string name="a11y_open_settings">Open settings</string>
+
+    <!-- The system's keyboard-shortcuts helper (Meta+/). -->
+    <string name="kbd_group" translatable="false">@string/app_name</string>
+    <string name="kbd_open_settings">Open settings</string>
 
     <string name="shortcut_short">Record</string>
     <string name="shortcut_long">New recording</string>
