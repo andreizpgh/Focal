@@ -145,6 +145,7 @@
     <string name="error_share_too_long">This note is too long to share at once. Select the part you need.</string>
     <string name="error_retry">Couldn’t continue transcription.</string>
     <string name="error_save">Couldn’t save your edit.</string>
+    <string name="error_join">Can’t join these paragraphs.</string>
     <string name="error_playback">Couldn’t play the audio.</string>
     <string name="error_playback_recording">Finish recording before playing audio.</string>
 

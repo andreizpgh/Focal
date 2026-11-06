@@ -144,14 +144,14 @@ class EditSessionTest {
         assertEquals(listOf("Last line.", ""), edit.shown(store))
         // Backspace in it joins it to the paragraph before, which the state's own order could not find.
         val joined = edit.mergeIntoPrevious(2, "")
-        assertEquals(CaretAt(1, "Last line.".length), joined)
+        assertEquals(JoinResult.Joined(CaretAt(1, "Last line.".length)), joined)
         assertEquals(listOf("Last line."), edit.shown(store))
     }
 
     @Test fun backspaceJoinsWithOneSpaceAndTheCaretLandsWhereTheSecondBegins() = runBlocking {
         val store = FakeStore("Alpha.", "Beta.")
         val edit = session(store)
-        assertEquals(CaretAt(1, "Alpha. ".length), edit.mergeIntoPrevious(2, "Beta."))
+        assertEquals(JoinResult.Joined(CaretAt(1, "Alpha. ".length)), edit.mergeIntoPrevious(2, "Beta."))
         assertEquals(listOf("Alpha. Beta."), edit.shown(store))
         // Undoing the join brings Beta back under a new id; older steps follow it.
         val back = edit.undo()
@@ -163,7 +163,7 @@ class EditSessionTest {
         val store = FakeStore("Legacy text.", "Recognized text.")
         store.legacy += 1L
         val edit = session(store)
-        assertNull(edit.mergeIntoPrevious(2, "Recognized text, edited."))
+        assertEquals(JoinResult.Refused, edit.mergeIntoPrevious(2, "Recognized text, edited."))
         assertEquals(listOf("Legacy text.", "Recognized text, edited."), edit.shown(store))
         assertFalse(edit.failed)
         assertEquals(0, edit.failures)
@@ -171,6 +171,15 @@ class EditSessionTest {
         edit.undo()
         assertEquals(listOf("Legacy text.", "Recognized text."), edit.shown(store))
         assertFalse(edit.canUndo)
+    }
+
+    @Test fun backspaceInTheFirstParagraphJoinsNothing() = runBlocking {
+        val store = FakeStore("Only.", "Second.")
+        val edit = session(store)
+        assertEquals(JoinResult.Skipped, edit.mergeIntoPrevious(1, "Only."))
+        assertEquals(listOf("Only.", "Second."), edit.shown(store))
+        assertFalse(edit.canUndo)
+        assertFalse(edit.failed)
     }
 
     @Test fun anEditBeforeAJoinStillUndoesAfterTheJoinWasUndone() = runBlocking {

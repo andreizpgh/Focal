@@ -365,6 +365,21 @@ fun NotePage(
         }
     }
     val restore: () -> Unit = { withDraft { field -> field?.let { session.restore(it.id, it.text.text.toString()) } } }
+    // Backspace at a paragraph's start. A join the store refuses (a paragraph whose original is unknown beside one
+    // whose original is known) keeps both and the caret, and says so in the pill (spec 4.8: no haptic, 2.9).
+    val cannotJoin = stringResource(R.string.error_join)
+    val join: () -> Unit = {
+        page.field?.let { current ->
+            val draft = current.text.text.toString()
+            scope.launch {
+                when (val joined = session.mergeIntoPrevious(current.id, draft)) {
+                    is JoinResult.Joined -> joined.caret.takeIf { it.id >= 0 }?.let { focusField(it) }
+                    JoinResult.Refused -> bottom.feedback.show(cannotJoin)
+                    JoinResult.Skipped -> Unit
+                }
+            }
+        }
+    }
     // A page recreated in Edit (rotation, process death) starts its session once the note is there; the undo log is
     // not kept across recreation.
     LaunchedEffect(note.loaded) {
@@ -778,11 +793,7 @@ fun NotePage(
                                         val draft = current.text.text.toString()
                                         withDraft { session.split(current.id, draft, offset) }
                                     },
-                                    onJoin = {
-                                        val current = page.field ?: return@ParagraphItem
-                                        val draft = current.text.text.toString()
-                                        withDraft { session.mergeIntoPrevious(current.id, draft) }
-                                    },
+                                    onJoin = join,
                                     onRestore = restore,
                                 )
                                 is NoteItem.Gap -> GapRow(

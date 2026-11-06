@@ -1,6 +1,9 @@
 package app.focal.ui.note
 
 import android.os.SystemClock
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputConnectionWrapper
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -43,7 +46,11 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.PlatformTextInputInterceptor
+import androidx.compose.ui.platform.PlatformTextInputMethodRequest
+import androidx.compose.ui.platform.PlatformTextInputSession
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -347,7 +354,8 @@ internal fun Modifier.editSheet(color: Color, alpha: () -> Float): Modifier = dr
 /**
  * The focused paragraph in Edit (spec 4.14): a text field with the reading text's exact style and box, so the swap
  * moves nothing. Enter splits at the caret ([onEnter] with the offset; the line break itself is never inserted),
- * Backspace at the very start joins the paragraph before ([onJoin]); pasted line breaks become spaces.
+ * Backspace at the very start joins the paragraph before ([onJoin]), from a hardware key or a soft keyboard
+ * ([JoinAtStart]); pasted line breaks become spaces.
  */
 @Composable
 internal fun ParagraphField(
@@ -364,26 +372,66 @@ internal fun ParagraphField(
     val enter by rememberUpdatedState(onEnter)
     val join by rememberUpdatedState(onJoin)
     val input = remember { ParagraphInput { enter(it) } }
-    BasicTextField(
-        state = state,
-        modifier = modifier
-            .fillMaxWidth()
-            .editSheet(colors.s1, sheet)
-            .focusRequester(focusRequester)
-            .onPreviewKeyEvent { event ->
-                val atStart = state.selection == TextRange.Zero
-                if (event.type == KeyEventType.KeyDown && event.key == Key.Backspace && atStart) {
-                    join()
-                    true
-                } else false
-            },
-        inputTransformation = input,
-        textStyle = FocalType.bodyWords.copy(color = colors.ink),
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Default),
-        lineLimits = TextFieldLineLimits.MultiLine(),
-        onTextLayout = { result -> result()?.let { layouts.put(paragraphId, it) } },
-        cursorBrush = SolidColor(colors.ink),
+    val softJoin = remember(state) { JoinAtStart(state) { join() } }
+    InterceptPlatformTextInput(softJoin) {
+        BasicTextField(
+            state = state,
+            modifier = modifier
+                .fillMaxWidth()
+                .editSheet(colors.s1, sheet)
+                .focusRequester(focusRequester)
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.Backspace && JoinAtStart.atStart(state)) {
+                        join()
+                        true
+                    } else false
+                },
+            inputTransformation = input,
+            textStyle = FocalType.bodyWords.copy(color = colors.ink),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Default),
+            lineLimits = TextFieldLineLimits.MultiLine(),
+            onTextLayout = { result -> result()?.let { layouts.put(paragraphId, it) } },
+            cursorBrush = SolidColor(colors.ink),
+        )
+    }
+}
+
+/**
+ * Backspace from a soft keyboard at the very start of a paragraph (spec 5.7). Most keyboards send it as
+ * `deleteSurroundingText`, which at offset 0 deletes nothing, so neither the field nor its InputTransformation ever
+ * hears of it. The field's input connection is wrapped: a delete before a caret at 0 (no selection, no composition)
+ * joins instead, and is consumed. A keyboard that sends a DEL key event reaches the field's key handler instead.
+ * Called on the main thread, like every input connection of a Compose view.
+ */
+internal class JoinAtStart(private val state: TextFieldState, private val onJoin: () -> Unit) : PlatformTextInputInterceptor {
+    override suspend fun interceptStartInputMethod(
+        request: PlatformTextInputMethodRequest,
+        nextHandler: PlatformTextInputSession,
+    ): Nothing = nextHandler.startInputMethod(
+        object : PlatformTextInputMethodRequest {
+            override fun createInputConnection(outAttributes: EditorInfo): InputConnection =
+                Connection(request.createInputConnection(outAttributes))
+        },
     )
+
+    private inner class Connection(target: InputConnection) : InputConnectionWrapper(target, false) {
+        override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean =
+            if (joins(beforeLength)) true else super.deleteSurroundingText(beforeLength, afterLength)
+
+        override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean =
+            if (joins(beforeLength)) true else super.deleteSurroundingTextInCodePoints(beforeLength, afterLength)
+
+        private fun joins(beforeLength: Int): Boolean {
+            if (beforeLength <= 0 || !atStart(state)) return false
+            onJoin()
+            return true
+        }
+    }
+
+    companion object {
+        /** The caret sits before the first character, with nothing selected or being composed. */
+        fun atStart(state: TextFieldState): Boolean = state.selection == TextRange.Zero && state.composition == null
+    }
 }
 
 /** Enter is a split, never a line break inside a paragraph (spec 5.7). */

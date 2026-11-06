@@ -35,6 +35,16 @@ sealed interface EditStep {
 /** Where the caret goes after a step: paragraph [id] at [caret]. */
 data class CaretAt(val id: Long, val caret: Int)
 
+/** What Backspace at the start of a paragraph did ([EditSession.mergeIntoPrevious]). */
+sealed interface JoinResult {
+    /** It joined the paragraph before it; the caret goes to [caret]. */
+    data class Joined(val caret: CaretAt) : JoinResult
+    /** The store keeps the two apart ([EditOutcome.CannotMerge]): both stay, the draft is saved, the caret stays. */
+    data object Refused : JoinResult
+    /** Nothing to join it to (the first paragraph), or a write failed ("Not saved" says so). */
+    data object Skipped : JoinResult
+}
+
 /**
  * An Edit session over one note (spec 5.7). It runs every write through [backend] one at a time, keeps the session's
  * undo and redo log (the store keeps none), and lays the paragraphs it saved over the note's state until that state
@@ -155,19 +165,22 @@ class EditSession(private val backend: EditBackend) {
 
     /**
      * Backspace at the start of [id]: its saved [draft] joins the paragraph drawn before it, with one space. The
-     * caret lands where the joined text begins. Null when there is nothing before it, the store keeps the two apart
-     * ([EditOutcome.CannotMerge]: the caret stays) or a write failed.
+     * caret lands where the joined text begins.
      */
-    suspend fun mergeIntoPrevious(id: Long, draft: String): CaretAt? = mutex.withLock {
+    suspend fun mergeIntoPrevious(id: Long, draft: String): JoinResult = mutex.withLock {
         val shown = paragraphs(state)
         val index = shown.indexOfFirst { it.id == id }
-        val previous = shown.getOrNull(index - 1) ?: return@withLock null
-        if (!saveLocked(id, draft)) return@withLock null
+        val previous = shown.getOrNull(index - 1) ?: return@withLock JoinResult.Skipped
+        if (!saveLocked(id, draft)) return@withLock JoinResult.Skipped
         val first = previous.text
         val second = paragraphLocked(id)?.text.orEmpty()
-        if (!mergeLocked(previous.id, id)) return@withLock null
+        when (mergeLocked(previous.id, id)) {
+            Merge.Refused -> return@withLock JoinResult.Refused
+            Merge.Failed -> return@withLock JoinResult.Skipped
+            Merge.Done -> Unit
+        }
         push(EditStep.Merge(previous.id, id, first.length))
-        CaretAt(previous.id, joinPoint(first, second))
+        JoinResult.Joined(CaretAt(previous.id, joinPoint(first, second)))
     }
 
     /** Restore original (spec 4.14): the recognizer's text back, as one undoable step. */
@@ -252,21 +265,23 @@ class EditSession(private val backend: EditBackend) {
         return added.id
     }
 
-    private suspend fun mergeLocked(firstId: Long, secondId: Long): Boolean {
+    private enum class Merge { Done, Refused, Failed }
+
+    private suspend fun mergeLocked(firstId: Long, secondId: Long): Merge {
         val first = resolve(firstId)
         val second = resolve(secondId)
         val outcome = backend.merge(first, revision(first), second, revision(second))
         // A refused merge is not a failed write: both paragraphs stay and the caret does not move.
-        if (outcome == EditOutcome.CannotMerge) return false
+        if (outcome == EditOutcome.CannotMerge) return Merge.Refused
         if (outcome !is EditOutcome.Saved) {
             fail()
-            return false
+            return Merge.Failed
         }
         apply(outcome.paragraphs)
         overrides.remove(second)
         order = order?.filter { it != second }
         succeed()
-        return true
+        return Merge.Done
     }
 
     private suspend fun run(step: EditStep, forward: Boolean): CaretAt? = when (step) {
@@ -281,12 +296,12 @@ class EditSession(private val backend: EditBackend) {
                 CaretAt(added, 0)
             }
         } else {
-            if (mergeLocked(step.id, step.newId)) CaretAt(resolve(step.id), step.offset) else null
+            if (mergeLocked(step.id, step.newId) == Merge.Done) CaretAt(resolve(step.id), step.offset) else null
         }
         is EditStep.Merge -> if (forward) {
             val first = paragraphLocked(step.firstId)?.text.orEmpty()
             val second = paragraphLocked(step.secondId)?.text.orEmpty()
-            if (mergeLocked(step.firstId, step.secondId)) CaretAt(resolve(step.firstId), joinPoint(first, second)) else null
+            if (mergeLocked(step.firstId, step.secondId) == Merge.Done) CaretAt(resolve(step.firstId), joinPoint(first, second)) else null
         } else {
             splitLocked(step.firstId, step.offset)?.let { added ->
                 if (added != resolve(step.secondId)) alias[step.secondId] = added
