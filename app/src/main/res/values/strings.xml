@@ -278,6 +278,11 @@
     <!-- The system's keyboard-shortcuts helper (Meta+/). -->
     <string name="kbd_group" translatable="false">@string/app_name</string>
     <string name="kbd_open_settings">Open settings</string>
+    <string name="kbd_play">Play or pause the note</string>
+    <string name="kbd_find">Find and replace in the note</string>
+    <string name="kbd_copy">Copy the note</string>
+    <string name="kbd_undo">Undo an edit</string>
+    <string name="kbd_redo">Redo an edit</string>
 
     <string name="shortcut_short">Record</string>
     <string name="shortcut_long">New recording</string>

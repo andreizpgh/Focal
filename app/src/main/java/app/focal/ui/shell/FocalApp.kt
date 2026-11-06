@@ -1,6 +1,7 @@
 package app.focal.ui.shell
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -30,7 +31,12 @@ import kotlinx.coroutines.launch
  * and the app-wide effects.
  */
 @Composable
-fun FocalApp(preferences: Preferences, commands: Flow<ShellCommand>) {
+fun FocalApp(preferences: Preferences, commands: Flow<ShellCommand>, keys: PageKeys = PageKeys()) {
+    CompositionLocalProvider(LocalPageKeys provides keys) { FocalAppContent(preferences, commands) }
+}
+
+@Composable
+private fun FocalAppContent(preferences: Preferences, commands: Flow<ShellCommand>) {
     val settings by preferences.settings.collectAsStateWithLifecycle()
     val configuration = LocalConfiguration.current
     val systemDark = remember(configuration) { NightMode.systemDark() }

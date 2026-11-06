@@ -2,6 +2,8 @@ package app.focal
 
 import android.content.ClipboardManager
 import android.content.Intent
+import android.os.SystemClock
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ComposeTimeoutException
@@ -41,7 +43,8 @@ import java.util.UUID
 
 /**
  * The rebuilt interface end to end, through MainActivity and the real view models and store: a note opens from the
- * library and Back returns, Copy fills the clipboard, Edit saves through the store, search opens a note at its paragraph, Delete offers
+ * library and Back returns, Copy fills the clipboard, the note's keyboard shortcuts reach it with nothing focused, Edit saves
+ * through the store, search opens a note at its paragraph, Delete offers
  * Undo, Settings opens by its accessibility action and applies the theme at once, a recording shows its controls in
  * the dock, and a notification's intent opens its note. Notes are synthetic and removed afterwards.
  */
@@ -138,6 +141,32 @@ class InterfaceTest {
         var text: String? = null
         scenario!!.onActivity { text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() }
         assertEquals(words.joinToString("\n\n"), text)
+    }
+
+    /** Sends [keyCode] through the input pipeline, as a hardware keyboard would. */
+    private fun press(keyCode: Int, meta: Int = 0) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val now = SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, meta))
+        instrumentation.sendKeySync(KeyEvent(now, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, keyCode, 0, meta))
+    }
+
+    @Test fun theNotesShortcutsWorkWithNothingFocused() {
+        val title = "Keys fixture $tag"
+        val words = listOf("A keyboard copies this synthetic paragraph.", "And this one, after a blank line.")
+        note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        val ctrl = KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        // Nothing on the page has focus after a tap: the activity hears the keys and hands them to the page.
+        press(KeyEvent.KEYCODE_C, ctrl)
+        await("Copied", hasContentDescription("Copied"))
+        val clipboard = app.getSystemService(ClipboardManager::class.java)
+        var text: String? = null
+        scenario!!.onActivity { text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() }
+        assertEquals(words.joinToString("\n\n"), text)
+        press(KeyEvent.KEYCODE_F, ctrl)
+        await("Find", hasSetTextAction() and hasContentDescription("Find in note"))
     }
 
     @Test fun editSavesTheParagraphThroughTheStore() {

@@ -87,6 +87,8 @@ import app.focal.ui.shell.Destination
 import app.focal.ui.shell.DestinationBottom
 import app.focal.ui.shell.LocalPageReveal
 import app.focal.ui.shell.LocalShell
+import app.focal.ui.shell.PageKey
+import app.focal.ui.shell.PageKeysEffect
 import app.focal.ui.state.EditOutcome
 import app.focal.ui.state.GapUi
 import app.focal.ui.state.NotePhase
@@ -689,34 +691,36 @@ fun NotePage(
     }
     val focusedParagraph = page.field?.id?.let { id -> paragraphs.firstOrNull { it.id == id } }
 
+    // The page's shortcuts (spec 8.5): each where it applies; false leaves the key to whoever else wants it.
+    val reading = (mode == NoteMode.Reading || mode == NoteMode.Playing) && !page.renaming
+    val onKey: (PageKey) -> Boolean = { key ->
+        when (key) {
+            PageKey.Undo -> page.editing.also { if (it) undo() }
+            PageKey.Redo -> page.editing.also { if (it) redo() }
+            PageKey.Find -> (!find.open).also { if (it) openFind() }
+            PageKey.PlayPause -> (reading && canPlay).also { if (it) { if (playingHere && audio.playing) playback.toggle() else dockActions.play() } }
+            PageKey.Copy -> (reading && selection.selectedTexts.none { it.isNotEmpty() } && dockState.pill is NotePill.Copy).also {
+                if (it) scope.launch { actions.copy() }
+            }
+        }
+    }
+    // Heard by the activity when nothing on the page has focus; only the page on top answers.
+    PageKeysEffect { key -> shell.current == destination && onKey(key) }
+
     Box(
         Modifier
             .fillMaxSize()
+            // A focused field or control inside the page (Edit's field, Find's query) hears them first, here.
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when {
-                    page.editing && event.isCtrlPressed && event.key == Key.Z -> {
-                        if (event.isShiftPressed) redo() else undo()
-                        true
-                    }
-                    event.isCtrlPressed && event.key == Key.F && !find.open -> {
-                        openFind()
-                        true
-                    }
-                    mode == NoteMode.Reading || mode == NoteMode.Playing -> when {
-                        page.renaming -> false
-                        event.key == Key.Spacebar && canPlay -> {
-                            if (playingHere && audio.playing) playback.toggle() else dockActions.play()
-                            true
-                        }
-                        event.isCtrlPressed && event.key == Key.C && selection.selectedTexts.none { it.isNotEmpty() } && dockState.pill is NotePill.Copy -> {
-                            scope.launch { actions.copy() }
-                            true
-                        }
-                        else -> false
-                    }
-                    else -> false
+                val key = when {
+                    event.isCtrlPressed && event.key == Key.Z -> if (event.isShiftPressed) PageKey.Redo else PageKey.Undo
+                    event.isCtrlPressed && event.key == Key.F -> PageKey.Find
+                    event.isCtrlPressed && event.key == Key.C -> PageKey.Copy
+                    event.key == Key.Spacebar -> PageKey.PlayPause
+                    else -> null
                 }
+                key != null && onKey(key)
             }
             .then(
                 // While the title is renamed, a tap anywhere else commits it and does nothing else (spec 5.5).
