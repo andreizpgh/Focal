@@ -500,14 +500,19 @@ private class BarPainter(val dress: WaveDress) {
         if (sprite.tall) {
             val middle = sprite.middleRow
             val lowerRows = bitmap.height - middle - 1
+            // The two joins sit on whole pixels. At a fractional join both slices would antialias the same row with
+            // partial coverage, and two partial coverages composite to less than one: a darker hairline across the
+            // bright bar at each join (spec 3.4: slicing is exact and invisible).
+            val upperEnd = (top + middle * scale).roundToInt().toFloat()
+            val lowerStart = (bottom - lowerRows * scale).roundToInt().toFloat().coerceAtLeast(upperEnd)
             src.set(0, 0, bitmap.width, middle)
-            dst.set(left, top, right, top + middle * scale)
+            dst.set(left, top, right, upperEnd)
             canvas.drawBitmap(bitmap, src, dst, paint)
             src.set(0, middle + 1, bitmap.width, bitmap.height)
-            dst.set(left, bottom - lowerRows * scale, right, bottom)
+            dst.set(left, lowerStart, right, bottom)
             canvas.drawBitmap(bitmap, src, dst, paint)
             src.set(0, middle, bitmap.width, middle + 1)
-            dst.set(left, top + middle * scale, right, bottom - lowerRows * scale)
+            dst.set(left, upperEnd, right, lowerStart)
             if (dst.height() > 0f) canvas.drawBitmap(bitmap, src, dst, paint)
         } else {
             src.set(0, 0, bitmap.width, bitmap.height)
