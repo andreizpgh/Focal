@@ -187,6 +187,10 @@ The note page: title, dateline and paragraphs on paper.
 - **Long-press** selects text with the system toolbar.
 - **Tap the title** to rename it.
 - Doubtful words have a row of faint dots under them; nothing else changes.
+- **Delete** is hidden while a note is being transcribed or waits for the speech
+  model; if it is reached another way, the pill asks to finish first.
+- **Copy and Share** refuse a note longer than 200,000 characters; the pill asks
+  you to select the part you need.
 
 ### Edit
 

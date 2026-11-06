@@ -128,6 +128,8 @@ temperature before each run.
       idle.
 - [ ] Two against four recognizer threads on the same audio: speed, heat and
       battery.
+- [ ] A hot phone: whether transcription stops at thermal status severe, how
+      long it stays stopped, and that it resumes without losing audio.
 - [ ] First launch: how long the 670 MB model copy takes, and that a recording
       started during it is transcribed afterwards.
 - [ ] Finish with the screen off on Android 14, 15 and 16 (the service changes

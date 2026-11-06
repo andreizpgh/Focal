@@ -126,6 +126,9 @@ wait for it, and never blocks capture while loading.
   most two under battery saver or a thermal status of moderate or worse. Under
   that pressure the worker also pauses for a quarter of each decode's time
   (150 ms to 3 s) between windows.
+- **Severe heat:** at a thermal status of severe or worse (Android 10 and later),
+  the worker stops decoding and checks again every 3 seconds. Recording goes on;
+  windows stay pending and the text catches up once the phone cools.
 - **Memory arena:** ONNX Runtime's CPU arena is off on phones with 6 GB of RAM or
   less, through a session config file in no-backup storage.
 - **Failures:** if the model cannot load, recording continues and windows stay
@@ -136,8 +139,9 @@ wait for it, and never blocks capture while loading.
 
 ### Model install
 
-The APK carries the five model files (Parakeet Ultra's encoder, decoder, joiner
-and tokens, and Silero VAD) uncompressed. On first launch, and again whenever an
+The APK carries the five model files: Parakeet Ultra's encoder, decoder, joiner
+and tokens, and Silero VAD. The four ONNX files are stored uncompressed so they
+can be streamed out of the APK. On first launch, and again whenever an
 activity resumes until it succeeds, `SpeechModels` copies them in the background to
 `noBackupFilesDir/parakeet-ultra-v1-<digest>`:
 
@@ -172,7 +176,7 @@ Every paragraph and note row has exactly one search entry, updated in the same
 transaction as the text. Edits apply only to finished notes and check the
 paragraph's revision, so the transcription worker and the editor never race.
 Delete moves a note to the trash for Undo; trashed notes are purged at the next
-start.
+start. A note that is being recorded or transcribed cannot be deleted.
 
 **Migration from schemas 1–4** keeps every note. Old passages become paragraphs
 one to one with their ids, text and edits; their original text becomes
@@ -238,6 +242,8 @@ would change any word's letters or digits is dropped.
   probability 0.5 gets a dotted underline. Editing the word clears it. These
   thresholds are provisional ([evidence](speech-quality.md#doubtful-words)).
 - **Copy** joins the visible paragraphs with a blank line: no title, no marks.
+  Copy and Share refuse a note longer than 200,000 characters, which could
+  overflow Android's limit for passing data between apps.
 
 When a paragraph is edited, `Alignment` maps the new text to the recognizer's
 words, so unchanged words keep their times. A tap on a word plays from 0.5 s
