@@ -3,6 +3,7 @@ package app.focal.ui.settings
 import android.content.Context
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +19,11 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
@@ -31,6 +34,7 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -39,15 +43,13 @@ import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.ParagraphStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.unit.LayoutDirection
 import app.focal.R
 import app.focal.ui.components.PaperTopFade
 import app.focal.ui.components.PressPlate
 import app.focal.ui.components.focusRing
+import app.focal.ui.components.scrollEdgeFade
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
@@ -135,8 +137,29 @@ object LicenseText {
         return out.toString().replace(labelledUrl, "$1\n$2")
     }
 
-    /** Whether a reflowed line is a URL (it then breaks balanced at the URL's own break points). */
+    /** Whether a reflowed line is a URL (it then never wraps: see [blocks]). */
     internal fun isUrl(line: String): Boolean = urlStart.containsMatchIn(line)
+
+    /**
+     * A reflowed paragraph as the page sets it: its prose lines together, and each URL line on its own, which never
+     * wraps (a URL broken at its slashes no longer reads, or copies, as one).
+     */
+    internal fun blocks(paragraph: String): List<LicenseBlock> {
+        val out = ArrayList<LicenseBlock>()
+        val prose = ArrayList<String>()
+        fun flush() {
+            if (prose.isNotEmpty()) out += LicenseBlock.Prose(prose.joinToString("\n"))
+            prose.clear()
+        }
+        paragraph.split('\n').forEach { line ->
+            if (isUrl(line)) {
+                flush()
+                out += LicenseBlock.Url(line)
+            } else prose += line
+        }
+        flush()
+        return out
+    }
 
     private fun keepsBreak(previous: String, next: String): Boolean {
         if (urlLine.containsMatchIn(next) || urlEnd.containsMatchIn(previous)) return true
@@ -159,6 +182,13 @@ object LicenseText {
     suspend fun load(context: Context): Map<String, String> = withContext(Dispatchers.IO) {
         listOf(APP, ULTRA).associateWith { name -> runCatching { context.assets.open(name).bufferedReader().use { it.readText() } }.getOrDefault("") }
     }
+}
+
+/** A run of a licence paragraph's lines ([LicenseText.blocks]). */
+@Immutable
+sealed interface LicenseBlock {
+    data class Prose(val text: String) : LicenseBlock
+    data class Url(val url: String) : LicenseBlock
 }
 
 /**
@@ -227,10 +257,7 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
                         SelectionContainer(
                             Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()),
                         ) {
-                            Text(
-                                remember(paragraph) { licenseLines(paragraph) }, style = FocalType.secondary, color = colors.recede,
-                                modifier = Modifier.padding(horizontal = FocalLayout.gutter).padding(bottom = FocalGrid.x12),
-                            )
+                            LicenseParagraph(paragraph, Modifier.padding(horizontal = FocalLayout.gutter).padding(bottom = FocalGrid.x12))
                         }
                     }
                 }
@@ -247,17 +274,32 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
 private val EntryPlate = PressPlate(FocalShapes.block, insetX = SettingsMetrics.plateInset)
 
 /**
- * A reflowed notice paragraph, each of its lines broken as what it is: prose for the whole line at once
- * (`LineBreak.Paragraph`), a URL balanced (`LineBreak.Heading`) at the platform's URL break points, so a long one
- * that must wrap evens its lines instead of leaving a short piece ("/tree") alone between two full ones.
+ * A reflowed notice paragraph: its prose broken for the whole line at once (`LineBreak.Paragraph`), and each URL on a
+ * line of its own that never wraps. A URL wider than the column scrolls sideways, left to right in any layout, and
+ * fades out at the edge where it runs on (spec 2.6), so it reads, selects and copies as the one string it is. In one
+ * selection with the prose around it, the lines copy with their breaks.
  */
-private fun licenseLines(paragraph: String): AnnotatedString = buildAnnotatedString {
-    paragraph.split('\n').forEachIndexed { index, line ->
-        if (index > 0) append('\n')
-        val breaking = if (LicenseText.isUrl(line)) LineBreak.Heading else LineBreak.Paragraph
-        withStyle(ParagraphStyle(lineBreak = breaking)) { append(line) }
+@Composable
+private fun LicenseParagraph(paragraph: String, modifier: Modifier = Modifier) {
+    val colors = FocalTheme.colors
+    val blocks = remember(paragraph) { LicenseText.blocks(paragraph) }
+    Column(modifier) {
+        blocks.forEach { block ->
+            when (block) {
+                is LicenseBlock.Prose -> Text(block.text, style = ProseStyle, color = colors.recede)
+                is LicenseBlock.Url -> CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    val scroll = rememberScrollState()
+                    Text(
+                        block.url, style = FocalType.secondary, color = colors.recede, maxLines = 1, softWrap = false,
+                        modifier = Modifier.fillMaxWidth().scrollEdgeFade(scroll).horizontalScroll(scroll),
+                    )
+                }
+            }
+        }
     }
 }
+
+private val ProseStyle = FocalType.secondary.copy(lineBreak = LineBreak.Paragraph)
 
 /** Test tag prefix of the entries ("license-entry:0" is the speech model), for the screenshot gallery. */
 const val LICENSE_ENTRY_TAG = "license-entry"

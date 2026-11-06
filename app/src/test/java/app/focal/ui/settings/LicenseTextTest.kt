@@ -15,6 +15,21 @@ class LicenseTextTest {
         assertEquals(listOf("Focal", "MIT License line two"), LicenseText.paragraphs(LicenseText.section(file, null, "Apache")))
     }
 
+    /** A URL line never wraps: it is a block of its own between the prose around it (spec 5.10). */
+    @Test fun urlLinesAreBlocksOfTheirOwn() {
+        val paragraph = "You may obtain a copy of the License at\nhttp://www.apache.org/licenses/LICENSE-2.0\nUnless required\nby law."
+        assertEquals(
+            listOf(
+                LicenseBlock.Prose("You may obtain a copy of the License at"),
+                LicenseBlock.Url("http://www.apache.org/licenses/LICENSE-2.0"),
+                LicenseBlock.Prose("Unless required\nby law."),
+            ),
+            LicenseText.blocks(paragraph),
+        )
+        assertEquals(listOf(LicenseBlock.Url("https://github.com/k2-fsa/sherpa-onnx")), LicenseText.blocks("https://github.com/k2-fsa/sherpa-onnx"))
+        assertEquals(listOf(LicenseBlock.Prose("Plain text only.")), LicenseText.blocks("Plain text only."))
+    }
+
     /** Column wraps of prose join; headings, labelled URLs, lists and rules keep their own lines (spec 5.10). */
     @Test fun reflowJoinsOnlyWrappedProse() {
         val attribution = "Parakeet Ultra, INT8 ONNX (Marmalade release v1)\n" +
