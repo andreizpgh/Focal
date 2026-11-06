@@ -2,12 +2,15 @@ package app.focal.ui.shell
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.snapshotFlow
 import app.focal.ui.components.Mark
 import app.focal.ui.components.WaveEntry
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTiming
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -17,6 +20,9 @@ import kotlinx.coroutines.launch
  * leaves on `fadeFast` (T1′); the chrome fades in (the shortcut). A plain expand (T6′, T28) has none of it. Read in
  * the draw phase.
  */
+/** The leaving note counts as gone below this alpha (T1′: "0:00" arrives then). */
+private const val NOTE_GONE = 0.15f
+
 @Stable
 class SceneChoreography internal constructor(val kind: SceneEntry, private val reduced: Boolean) {
     private val lights = kind != SceneEntry.Stage && !reduced
@@ -42,7 +48,8 @@ class SceneChoreography internal constructor(val kind: SceneEntry, private val r
             wake.snapTo(0f)
             launch { wake.animateTo(1f, FocalMotion.fadeFast()) }
         } else wake.snapTo(1f)
-        launch { note.animateTo(0f, FocalMotion.fadeFast()) }
+        // The stage's note leaves from the trigger frame itself (spec 2.8.2 `noteExit`), not a dispatch later.
+        launch(start = CoroutineStart.UNDISPATCHED) { note.animateTo(0f, FocalMotion.fadeFast()) }
         launch { chrome.animateTo(1f, FocalMotion.fade()) }
         if (!lights) return@coroutineScope
         pairs.forEachIndexed { distance, pair ->
@@ -56,6 +63,9 @@ class SceneChoreography internal constructor(val kind: SceneEntry, private val r
             glow.animateTo(1f, FocalMotion.fadeSlow())
         }
         delay(if (kind == SceneEntry.RecordEmpty) FocalTiming.EMPTY_TIMER_DELAY_MS else FocalTiming.LIGHT_UP_TIMER_DELAY_MS)
+        // "0:00" fades through the leaving note: it waits until the note's footer has nearly gone (T1′), so the two
+        // typesettings are never superimposed.
+        if (kind == SceneEntry.Record) snapshotFlow { note.value }.first { it <= NOTE_GONE }
         timer.animateTo(1f, FocalMotion.fade())
     }
 }

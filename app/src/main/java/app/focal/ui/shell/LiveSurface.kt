@@ -27,6 +27,7 @@ import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FullMotion
 import app.focal.ui.design.LocalReducedMotion
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
@@ -162,7 +163,7 @@ class LiveSurfaceState internal constructor(open: Boolean) {
     suspend fun record(fromEmpty: Boolean, reducedMotion: Boolean = false) = coroutineScope {
         begin(if (fromEmpty) SceneEntry.RecordEmpty else SceneEntry.Record, reducedMotion)
         val motion = choreography
-        launch { motion.play(wake) }
+        launch(start = CoroutineStart.UNDISPATCHED) { motion.play(wake) }
         revealStage?.let { reveal -> launch { reveal(true) } }
         settle(1f, reducedMotion)
     }
