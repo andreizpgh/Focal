@@ -68,6 +68,13 @@ enum class EndReason {
     }
 }
 
+/**
+ * Why a waiting note is not being transcribed: the store's error, except on an interrupted recording, whose message
+ * only says its saved audio is still waiting (it is not a failure to show).
+ */
+fun waitingReason(note: Note, phase: NotePhase): String? =
+    note.error.takeIf { phase == NotePhase.WAITING && note.state != NoteState.INTERRUPTED && it.isNotBlank() }
+
 object NotePhases {
     fun of(note: Note, live: LiveSession, speech: SpeechAvailability): NotePhase = when {
         live.noteId == note.id && live.capturing -> if (live.paused) NotePhase.PAUSED else NotePhase.RECORDING
@@ -100,6 +107,8 @@ data class NoteRow(
     val audioPresent: Boolean,
     val failedParts: Int,
     val canRemoveAudio: Boolean = false,
+    /** Why a waiting note is not being transcribed (the speech model could not load), or null. */
+    val waitingReason: String? = null,
 )
 
 /** Rows of one local calendar day ([epochDay] in the device time zone), newest first. */

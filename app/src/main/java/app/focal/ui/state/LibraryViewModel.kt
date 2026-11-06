@@ -175,6 +175,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 progress = live.progress.takeIf { live.noteId == note.id && phase == NotePhase.TRANSCRIBING },
                 audioPresent = audio, failedParts = note.failedWindows,
                 canRemoveAudio = audio && note.state == NoteState.READY && phase == NotePhase.READY,
+                waitingReason = waitingReason(note, phase),
             )
         }
 

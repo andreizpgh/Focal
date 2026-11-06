@@ -563,7 +563,8 @@ private fun NoteStage(
 
 /**
  * The stage's text: the note's preview in whole lines (a derived title is not repeated), or "No speech was
- * recognized."; a partial failure replaces the last line with "Part of this note couldn't be transcribed."
+ * recognized."; a partial failure replaces the last line with "Part of this note couldn't be transcribed.", a model
+ * that could not load with "Not enough free memory to transcribe right now."
  */
 @Composable
 private fun StageText(row: NoteRow, noSpeech: Boolean) {
@@ -576,8 +577,17 @@ private fun StageText(row: NoteRow, noSpeech: Boolean) {
     Column {
         // Balanced breaks, as the stage's reading text: no orphan word on its last line.
         CutText(preview, StageTextStyle, colors.stageRecede, StageMetrics.TEXT_LINES_MAX, Modifier.weight(1f, fill = false))
-        if (row.phase == NotePhase.PARTIAL_FAILURE) {
-            Text(stringResource(R.string.partial_failure), style = FocalType.stageText, color = colors.stageRecede, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // A partial failure or a speech model that could not load takes the text's last line (spec 4.22.4).
+        val lastLine = when {
+            row.phase == NotePhase.PARTIAL_FAILURE -> R.string.partial_failure
+            row.phase == NotePhase.WAITING && row.waitingReason != null -> R.string.model_failed
+            else -> null
+        }
+        if (lastLine != null) {
+            Text(
+                stringResource(lastLine), style = StageTextStyle, color = colors.stageRecede,
+                maxLines = StageMetrics.TEXT_LINES_MIN, overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
