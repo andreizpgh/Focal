@@ -133,6 +133,8 @@ class RecordingService : Service() {
     @Volatile private var transcriber: RecordingDecoder? = null
     @Volatile private var processingNote: String? = null
     @Volatile private var processingTitle = ""
+    /** When the note being transcribed was made: its notification says "Note at 14:32" until it has a title. */
+    @Volatile private var processingCreated = 0L
     @Volatile private var engineRetry = false
     private val skipped = HashSet<String>()
 
@@ -179,7 +181,7 @@ class RecordingService : Service() {
                 if (error is SecurityException) "Allow microphone access and start recording while Focal is open."
                 else "Recording could not start. Open Focal and try again."))
             // Processing promotion opens no microphone and disarms the foreground-start deadline.
-            runCatching { promote(processingType(), notifications.transcribing(processingNote, "", null, false)) }
+            runCatching { promote(processingType(), notifications.transcribing(processingNote, "", 0, null, false)) }
             SessionOperations.releasePending(token)
             stopIfIdle(startId); return
         }
@@ -301,7 +303,7 @@ class RecordingService : Service() {
     private fun transcribingNotification(): Notification {
         val live = RecordingState.live.value
         val id = processingNote ?: live.noteId
-        return notifications.transcribing(id, processingTitle, live.progress, live.speech == SpeechAvailability.PREPARING)
+        return notifications.transcribing(id, processingTitle, processingCreated, live.progress, live.speech == SpeechAvailability.PREPARING)
     }
 
 
@@ -947,6 +949,7 @@ class RecordingService : Service() {
         val progress = progressOf(id)
         val note = store.note(id)
         processingTitle = note?.title.orEmpty()
+        processingCreated = note?.created ?: 0L
         val session = LiveSession(id, processing = true, duration = note?.duration ?: 0,
             progress = progress, speech = engine.availabilityOrPreparing(),
             pending = runCatching { store.pendingCount(id) }.getOrDefault(0))
