@@ -6,7 +6,9 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.TextRange
@@ -48,12 +50,16 @@ class NoteActions(
     val find: suspend (String) -> List<TextMatch> = { emptyList() },
     val replaceAll: suspend (query: String, replacement: String) -> EditOutcome = { _, _ -> EditOutcome.NotEditable },
     val undoReplace: suspend () -> EditOutcome = { EditOutcome.Stale },
+    /** Runs a write that must finish even if the page goes away (the note's view model's scope): a draft's last save. */
+    val persist: (suspend () -> Unit) -> Unit = {},
 )
 
 /** The paragraph holding the caret in Edit: its field's text and focus. */
 @Stable
-class FieldFocus(val id: Long, text: String, caret: Int) {
-    val text = TextFieldState(text, TextRange(caret.coerceIn(0, text.length)))
+class FieldFocus(val id: Long, text: String, selection: TextRange) {
+    constructor(id: Long, text: String, caret: Int) : this(id, text, TextRange(caret))
+
+    val text = TextFieldState(text, TextRange(selection.start.coerceIn(0, text.length), selection.end.coerceIn(0, text.length)))
     val requester = FocusRequester()
 }
 
@@ -91,12 +97,56 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
 
     /** The content title's bottom in the window, for the collapsed title in the bar. */
     var titleBottom by mutableFloatStateOf(Float.POSITIVE_INFINITY)
+
+    /** The search hit was scrolled to and marked: a recreated page keeps its reading position instead. */
+    var hitShown by mutableStateOf(false)
+
+    internal companion object {
+        /**
+         * Keeps what the user was doing across recreation (rotation, a font or locale change, process death): Edit
+         * with the focused paragraph's draft and selection, Find with its two fields, a rename, the hit having been
+         * shown. The undo log and the menus are not kept.
+         */
+        fun saver(takesFocus: Boolean): Saver<NotePageState, Any> = listSaver(
+            save = { page ->
+                val field = page.field
+                listOf(
+                    page.editing, field?.id, field?.text?.text?.toString(), field?.text?.selection?.start, field?.text?.selection?.end,
+                    page.find.open, page.find.fromEdit, page.find.query.text.toString(), page.find.replacement.text.toString(),
+                    page.renaming, page.hitShown,
+                )
+            },
+            restore = { saved ->
+                val id = saved[FIELD_ID] as Long?
+                val field = id?.let {
+                    FieldFocus(it, saved[FIELD_TEXT] as String, TextRange(saved[SELECTION_START] as Int, saved[SELECTION_END] as Int))
+                }
+                NotePageState(saved[EDITING] as Boolean, field, takesFocus).apply {
+                    find.restore(saved[FIND_OPEN] as Boolean, saved[FIND_FROM_EDIT] as Boolean, saved[QUERY] as String, saved[REPLACEMENT] as String)
+                    renaming = saved[RENAMING] as Boolean
+                    hitShown = saved[HIT_SHOWN] as Boolean
+                }
+            },
+        )
+
+        private const val EDITING = 0
+        private const val FIELD_ID = 1
+        private const val FIELD_TEXT = 2
+        private const val SELECTION_START = 3
+        private const val SELECTION_END = 4
+        private const val FIND_OPEN = 5
+        private const val FIND_FROM_EDIT = 6
+        private const val QUERY = 7
+        private const val REPLACEMENT = 8
+        private const val RENAMING = 9
+        private const val HIT_SHOWN = 10
+    }
 }
 
 /**
- * The page's state. The gallery starts it in Edit with [field] holding the caret; [takesFocus] false keeps the
- * keyboard down there, so a render is the same on every run.
+ * The page's state, kept across recreation. The gallery starts it in Edit with [field] holding the caret;
+ * [takesFocus] false keeps the keyboard down there, so a render is the same on every run.
  */
 @Composable
 fun rememberNotePageState(editing: Boolean = false, field: FieldFocus? = null, takesFocus: Boolean = true): NotePageState =
-    remember { NotePageState(editing || field != null, field, takesFocus) }
+    rememberSaveable(saver = NotePageState.saver(takesFocus)) { NotePageState(editing || field != null, field, takesFocus) }

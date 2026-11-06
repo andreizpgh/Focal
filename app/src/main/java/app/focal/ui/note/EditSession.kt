@@ -69,8 +69,13 @@ class EditSession(private val backend: EditBackend) {
     var failures by mutableIntStateOf(0)
         private set
 
+    /** A session is running: [begin] was called and [end] was not. */
+    var started by mutableStateOf(false)
+        private set
+
     /** Starts a session on the note's current paragraphs: their order becomes the session's. */
     fun begin(paragraphs: List<ParagraphUi>) {
+        started = true
         state = paragraphs
         order = paragraphs.map { it.id }
         undoSteps.clear()
@@ -81,6 +86,7 @@ class EditSession(private val backend: EditBackend) {
 
     /** Edit ended: the log goes; saved paragraphs stay laid over the state until it catches up ([sync]). */
     fun end() {
+        started = false
         undoSteps.clear()
         redoSteps.clear()
         failed = false

@@ -18,6 +18,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.focal.R
 import app.focal.ui.components.FeedbackAction
@@ -145,10 +146,13 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
             find = note::find,
             replaceAll = note::replaceAll,
             undoReplace = note::undoReplace,
+            persist = { write -> note.viewModelScope.launch { write() } },
         )
     }
     val edits = remember(note) { ViewModelEdits(note) }
-    val listState = rememberNoteListState(id, hit = destination.hit != null)
+    val page = rememberNotePageState()
+    // A hit the page has already shown no longer overrides where the reader was.
+    val listState = rememberNoteListState(id, hit = destination.hit != null && !page.hitShown)
     NotePage(
         note = state,
         playback = playback,
@@ -160,6 +164,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
         captureElsewhere = captureElsewhere,
         landing = landing,
         listState = listState,
+        page = page,
     )
 }
 

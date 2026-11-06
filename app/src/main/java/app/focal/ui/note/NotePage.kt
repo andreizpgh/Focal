@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.selection.rememberSelectionState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -60,6 +61,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import app.focal.R
@@ -349,6 +351,27 @@ fun NotePage(
         }
     }
     val restore: () -> Unit = { withDraft { field -> field?.let { session.restore(it.id, it.text.text.toString()) } } }
+    // A page recreated in Edit (rotation, process death) starts its session once the note is there; the undo log is
+    // not kept across recreation.
+    LaunchedEffect(note.loaded) {
+        if (note.loaded && page.editing && !session.started) session.begin(paragraphs)
+    }
+    // The draft's last save outlives the page: when the activity stops (recreation included) and when the page goes,
+    // it is written in the note's own scope, so nothing typed in the last 600 ms is lost.
+    val currentActions by rememberUpdatedState(actions)
+    DisposableEffect(lifecycle, session) {
+        fun persistDraft() {
+            val current = page.field?.takeIf { page.editing } ?: return
+            val draft = current.text.text.toString()
+            currentActions.persist { session.save(current.id, draft) }
+        }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) persistDraft() }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            persistDraft()
+        }
+    }
     // Autosave 600 ms after typing stops (spec 5.7).
     val field = page.field
     LaunchedEffect(field) {
@@ -554,14 +577,16 @@ fun NotePage(
         wasWorking.working = note.phase == NotePhase.TRANSCRIBING || note.phase == NotePhase.PREPARING_MODEL || note.phase == NotePhase.WAITING
     }
 
-    // The search hit (spec 5.2): scrolled to the reading band's centre and marked for 1.5 s.
+    // The search hit (spec 5.2): scrolled to the reading band's centre and marked for 1.5 s, once: a recreated page
+    // keeps the place the reader had reached.
     LaunchedEffect(destination.hit, items.size > 1) {
-        val hit = destination.hit ?: return@LaunchedEffect
+        val hit = destination.hit?.takeUnless { page.hitShown } ?: return@LaunchedEffect
         val index = indexOf[hit.paragraphId] ?: return@LaunchedEffect
         withFrameMillis { }
         val line = lineBox(page.layouts[hit.paragraphId], hit.start)
         val target = bandTop() + (bandBottom() - bandTop()) * HALF - (line.second - line.first) * HALF
         scroller.bring(index, { lineBox(page.layouts[hit.paragraphId], hit.start).first }, target)
+        page.hitShown = true
         focus.hit = hit
         focus.hitAlpha.snapTo(1f)
         delay(FocalTiming.ARRIVAL_HIGHLIGHT_MS)

@@ -2,6 +2,7 @@ package app.focal.ui.note
 
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -55,6 +56,14 @@ class FindState {
     fun open(fromEdit: Boolean) {
         this.fromEdit = fromEdit
         open = true
+    }
+
+    /** A recreated page: Find as it was, with both fields; the matches run again. */
+    internal fun restore(open: Boolean, fromEdit: Boolean, query: String, replacement: String) {
+        this.open = open
+        this.fromEdit = fromEdit
+        this.query.setTextAndPlaceCursorAtEnd(query)
+        this.replacement.setTextAndPlaceCursorAtEnd(replacement)
     }
 
     fun close() {
