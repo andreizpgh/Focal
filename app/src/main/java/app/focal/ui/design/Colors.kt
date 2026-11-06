@@ -42,7 +42,6 @@ data class FocalColors(
     val receding: Boolean = true,
     // The recording scene (2.2): theme-independent.
     val sceneInk: Color = Scene.ink,
-    val sceneHi: Color = Scene.hi,
     val sceneMuted: Color = Scene.muted,
     // The stage (2.2.1): theme-independent.
     val stageInk: Color = Scene.ink,
