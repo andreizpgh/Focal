@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
@@ -270,16 +271,18 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         val lead = FocalTiming.TRIGGER_LEAD_MS * NANOS_PER_MS
         // Undispatched, so it waits for the very next frame: the one the trigger is drawn in.
         clock = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            // The system's animator duration scale, as every Compose animation follows it (0 is reduced motion).
+            val scale = coroutineContext[MotionDurationScale]?.scaleFactor?.takeIf { it > 0f } ?: 1f
             var trigger = Long.MIN_VALUE
             do {
                 withFrameNanos { now ->
-                    if (trigger == Long.MIN_VALUE) trigger = now - lead
-                    elapsed = (now - trigger).toFloat() / NANOS_PER_MS
+                    if (trigger == Long.MIN_VALUE) trigger = now - (lead * scale).toLong()
+                    elapsed = (now - trigger).toFloat() / NANOS_PER_MS / scale
                     // A transform that had to wait for its pages runs from the frame that can draw it, so it never
                     // jumps ahead of what was on screen.
                     if (decide(c)) {
-                        trigger = now - lead
-                        elapsed = (now - trigger).toFloat() / NANOS_PER_MS
+                        trigger = now - (lead * scale).toLong()
+                        elapsed = (now - trigger).toFloat() / NANOS_PER_MS / scale
                     }
                 }
             } while (elapsed < end)
