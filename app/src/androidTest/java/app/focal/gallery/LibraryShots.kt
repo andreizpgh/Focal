@@ -62,6 +62,7 @@ object LibraryShots {
         add(Shot("waiting-light", dark = false) { Library(workingModel(NotePhase.WAITING)) })
         addAll(themed("ready") { Library(readyModel(fresh = true)) })
         add(Shot("ready-moment-light", dark = false, settleMs = after(READY_AT_MS, MOMENT_AT_MS)) { ReadyMoment() })
+        add(Shot("ready-moment-dark", dark = true, settleMs = after(READY_AT_MS, MOMENT_AT_MS)) { ReadyMoment() })
         add(Shot("copied-light", dark = false, settleMs = COPIED_AT_MS, click = STAGE_PILL_TAG) { Library(readyModel(fresh = true)) })
         add(Shot("no-speech-light", dark = false) { Library(noSpeechModel()) })
         addAll(themed("scrolled") { Library(idleModel(), scroll = true) })
@@ -246,14 +247,17 @@ private fun Settings() {
 
 /** The strip at [s]: the library and the settings page beside it. */
 @Composable
-internal fun Strip(s: Float, model: LibraryModel = idleModel()) {
+internal fun Strip(s: Float, model: LibraryModel = idleModel(), edgePeek: Float = 0f) {
     val shell = rememberShellState()
     LaunchedEffect(shell) { shell.settings.track(s) }
     val actions = remember { LibraryActions() }
+    // The reduced-motion peek at its hold: the seam and the page's edge faded in at the window's edge (spec 4.23.5).
+    val layer = remember { SettingsLayerState() }
+    if (edgePeek > 0f) LaunchedEffect(layer) { layer.edgePeek.snapTo(edgePeek) }
     FocalShell(shell, destination = {
         LibraryHost(
             strip = shell.settings, preferences = null, armed = { true }, hasNotes = true, capturing = false, blocked = false,
-            layer = remember { SettingsLayerState() },
+            layer = layer,
             library = { LibraryPage(model, SearchUiState(), meter, dates, today, actions) },
             settings = { Settings() },
         )

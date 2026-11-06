@@ -13,7 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.focal.R
 import app.focal.data.TextMatch
 import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FocalIcon
@@ -169,6 +171,14 @@ private object NoEdits : EditBackend {
     override suspend fun restore(id: Long, revision: Long) = EditOutcome.NotEditable
 }
 
+/** A store that cannot write: every save fails as full storage does. */
+private class FailingEdits(private val message: String) : EditBackend {
+    override suspend fun edit(id: Long, revision: Long, text: String) = EditOutcome.Failed(message)
+    override suspend fun split(id: Long, revision: Long, offset: Int) = EditOutcome.Failed(message)
+    override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long) = EditOutcome.Failed(message)
+    override suspend fun restore(id: Long, revision: Long) = EditOutcome.Failed(message)
+}
+
 /** Find over the fake paragraphs, folded by case like the store. */
 private fun findIn(note: NoteUiState, query: String): List<TextMatch> = note.paragraphs.flatMap { paragraph ->
     buildList {
@@ -206,11 +216,12 @@ internal fun Note(
     })
 }
 
-/** Page states the gallery sets up: an inline rename, Edit with no focused paragraph, follow off. */
+/** Page states the gallery sets up: an inline rename, Edit with no focused paragraph, follow off, a failed save. */
 internal data class PageStates(
     val rename: Boolean = false,
     val editField: Boolean = true,
     val followOff: Boolean = false,
+    val unsaved: Boolean = false,
 )
 
 @Composable
@@ -241,6 +252,11 @@ internal fun NoteDestination(
         page.followSuspended = true
         list.scrollToItem(note.paragraphs.size)
     }
+    // Typing in the focused paragraph: its autosave fails ("Not saved", Done reads "Retry", spec 4.1.3).
+    if (states.unsaved && field != null) LaunchedEffect(field) {
+        waitFrames(FIND_SETTLE_MS)
+        field.text.edit { append(UNSAVED_TYPING) }
+    }
     val word = note.paragraphs.getOrNull(1)?.let { p -> p.words.firstOrNull { p.text.substring(it.start, it.end) == "permission" } }
     val playback = remember(playing) {
         StillPlayback(
@@ -259,8 +275,10 @@ internal fun NoteDestination(
     }
     if (replaced) LaunchedEffect(shell) { shell.bottom.feedback.show("Replaced 4", FeedbackAction("Undo", FocalIcon.Undo)) }
     val actions = remember(note) { NoteActions(find = { query -> findIn(note, query) }, copy = { true }) }
+    val saveFailed = stringResource(R.string.error_save)
+    val edits = remember(states.unsaved, saveFailed) { if (states.unsaved) FailingEdits(saveFailed) else NoEdits }
     NotePage(
-        note = note, playback = playback, actions = actions, edits = NoEdits, destination = destination,
+        note = note, playback = playback, actions = actions, edits = edits, destination = destination,
         dates = dates, today = today, captureElsewhere = captureElsewhere, landing = landing, listState = list, page = page,
     )
 }
@@ -293,3 +311,4 @@ private fun NoteMenuInline() {
 private val MENU_END = 400.dp
 private const val WORD_INTO_MS = 50L
 private const val FIND_SETTLE_MS = 400L
+private const val UNSAVED_TYPING = " Twice."
