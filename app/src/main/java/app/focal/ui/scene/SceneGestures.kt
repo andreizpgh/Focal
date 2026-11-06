@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.hypot
 
 /**
  * The drags that move p (spec 6.5, T28). Every drag tracks p = clamp(p0 + dy / D, 0, 1), D being the travel from the
@@ -73,15 +74,30 @@ abstract class SurfaceDrag(protected val live: LiveSurfaceState, protected val s
  * Drag the live stage down (T28), as the library list's nested-scroll parent: it takes the list's downward leftovers
  * at its top (where an overscroll would stretch) into p, and upward deltas while p > 0, before the list scrolls; a
  * fling settles. It is armed per stream by [arm]: only while a capture runs, the scene is folded, the touch-down is
- * on the stage and the list is at its very top (spec 6.5). No capture, no drag: only Record starts a recording.
+ * on the stage and the list is at its very top (spec 6.5); and it keeps its arming only if, at the first move past the
+ * touch slop, the finger heads down more than sideways from its touch-down ([track]). No capture, no drag: only
+ * Record starts a recording.
  */
 @Stable
 class ExpandDrag(live: LiveSurfaceState, scope: CoroutineScope) : SurfaceDrag(live, scope), NestedScrollConnection {
     private var armed = false
+    private var decided = false
 
     /** At every touch-down on the list: whether this stream may expand the scene. */
     fun arm(enabled: Boolean) {
         armed = enabled && !tracking
+        decided = false
+    }
+
+    /** An armed stream whose direction is not decided yet: the stage feeds it the finger's moves ([track]). */
+    val deciding: Boolean get() = armed && !decided
+
+    /** The finger's travel from its touch-down, in pixels, until the stream's direction is decided. */
+    fun track(dx: Float, dy: Float, slop: Float) {
+        if (!deciding) return
+        val claims = claims(dx, dy, slop) ?: return
+        decided = true
+        if (!claims) armed = false
     }
 
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -90,7 +106,8 @@ class ExpandDrag(live: LiveSurfaceState, scope: CoroutineScope) : SurfaceDrag(li
     }
 
     override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-        if (!armed || source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
+        // Only a stream decided as a downward drag: the list's vertical slop alone lets a diagonal one through.
+        if (!armed || !decided || source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
         if (!tracking) {
             live.beginDrag()
             start()
@@ -105,6 +122,18 @@ class ExpandDrag(live: LiveSurfaceState, scope: CoroutineScope) : SurfaceDrag(li
         if (!tracking) return Velocity.Zero
         release(available.y)
         return available
+    }
+
+    companion object {
+        /**
+         * Whether a stream that moved ([dx], [dy]) from its touch-down expands the scene: null until it has travelled
+         * past [slop] (straight-line, as the settings swipe measures it); then only if it heads down and more down
+         * than sideways.
+         */
+        fun claims(dx: Float, dy: Float, slop: Float): Boolean? {
+            if (hypot(dx, dy) <= slop) return null
+            return dy > 0f && abs(dy) > abs(dx)
+        }
     }
 }
 

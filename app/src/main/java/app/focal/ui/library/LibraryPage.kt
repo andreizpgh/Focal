@@ -456,9 +456,17 @@ private fun LibraryList(
                             .then(
                                 if (!isLive) Modifier else Modifier.pointerInput(expandDrag) {
                                     awaitEachGesture {
-                                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                                         val atTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
                                         expandDrag.arm(atTop && live.expansion.value <= 0f)
+                                        // The stream's direction, from its touch-down, at its first move past the slop
+                                        // (seen on the Initial pass, before the list starts to scroll).
+                                        while (expandDrag.deciding) {
+                                            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                                            if (!change.pressed) break
+                                            val travel = change.position - down.position
+                                            expandDrag.track(travel.x, travel.y, viewConfiguration.touchSlop)
+                                        }
                                     }
                                 },
                             ),

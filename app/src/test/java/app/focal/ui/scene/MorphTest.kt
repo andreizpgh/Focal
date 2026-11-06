@@ -13,6 +13,20 @@ import org.junit.Test
 
 /** The scene and the morph on the spec's 412 x 915 reference frame (1 px = 1 dp here): every ref value of 4.21.7 and 6.4. */
 class MorphTest {
+
+    @Test fun onlyADownwardDragPastTheSlopExpandsTheLiveStage() {
+        val slop = 18f
+        // Undecided inside the slop, whichever way it leans.
+        assertNull(ExpandDrag.claims(10f, 12f, slop))
+        // Straight or mostly down: it expands.
+        assertEquals(true, ExpandDrag.claims(0f, 19f, slop))
+        assertEquals(true, ExpandDrag.claims(12f, 16f, slop))
+        // Diagonal at 45° or flatter, sideways, or up: the list keeps it (spec 6.5).
+        assertEquals(false, ExpandDrag.claims(14f, 14f, slop))
+        assertEquals(false, ExpandDrag.claims(17f, 9f, slop))
+        assertEquals(false, ExpandDrag.claims(-20f, 0f, slop))
+        assertEquals(false, ExpandDrag.claims(2f, -19f, slop))
+    }
     private val density = Density(1f)
     private val slots = SceneSlots.of(width = 412f, height = 915f, statusTop = 40f, navigationBottom = 24f, timerLine = 84f, compact = false, density = density)
     /** The stage at rest (24, 56, 364 x 240); "0:00" is 99.4 dp wide at 48 sp. */
