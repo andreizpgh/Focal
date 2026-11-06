@@ -169,19 +169,10 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
     suspend fun split(paragraphId: Long, revision: Long, charOffset: Int): EditOutcome =
         edit { store.splitParagraph(paragraphId, revision, charOffset) }
 
-    /** Backspace at the start of [paragraphId]: it joins the visible paragraph before it. */
-    suspend fun mergeWithPrevious(paragraphId: Long, revision: Long): EditOutcome {
-        val paragraphs = state.value.paragraphs
-        val index = paragraphs.indexOfFirst { it.id == paragraphId }
-        if (index <= 0) return EditOutcome.Stale
-        val previous = paragraphs[index - 1]
-        return edit { store.mergeParagraphs(previous.id, previous.revision, paragraphId, revision) }
-    }
-
     /**
-     * Joins [secondId] into [firstId], the paragraph the editor shows before it. Unlike [mergeWithPrevious] the
-     * editor names both, so a new paragraph that is still empty (and therefore not in [NoteUiState.paragraphs]) can
-     * be joined, and a split can be undone by id.
+     * Backspace at the start of [secondId]: it joins [firstId], the paragraph the editor shows before it. The editor
+     * names both, so a new paragraph that is still empty (and therefore not in [NoteUiState.paragraphs]) can be
+     * joined, and a split can be undone by id.
      */
     suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditOutcome =
         edit { store.mergeParagraphs(firstId, firstRevision, secondId, secondRevision) }
