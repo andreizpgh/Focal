@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -20,13 +21,17 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -77,15 +82,19 @@ class ShellState internal constructor(
 
     /** What each destination asked the bottom column to show; only the current destination's is drawn. */
     internal val bottomContent = mutableStateMapOf<Destination, BottomContent>()
+
+    /** The scene's dock (Pause | Finish in the scene's dress), shown over any page while the scene is up. */
+    internal var sceneBottom by mutableStateOf<BottomContent?>(null)
 }
 
 val LocalShell = staticCompositionLocalOf<ShellState> { error("No ShellState: wrap the screen in FocalShell.") }
 
+/** [capturing] says whether a recording is live, so an open scene survives recreation only while one runs. */
 @Composable
-fun rememberShellState(): ShellState {
+fun rememberShellState(capturing: () -> Boolean = { false }): ShellState {
     val backStack = rememberSaveable(saver = Destination.BackStackSaver) { SnapshotStateList<Destination>().apply { add(Destination.Library) } }
     val settings = rememberSettingsStripState()
-    val live = rememberLiveSurfaceState()
+    val live = rememberLiveSurfaceState(capturing)
     val bottom = rememberBottomColumnState()
     return remember(backStack, settings, live, bottom) { ShellState(backStack, settings, live, bottom, SystemBarsState()) }
 }
@@ -121,9 +130,22 @@ fun DestinationBottom(
 }
 
 /**
+ * While the scene is up, the root dock carries its controls (spec 4.3: Pause | Finish, dressed by the material's
+ * edge), whatever page is under it. The scene registers them here while it is composed.
+ */
+@Composable
+fun SceneBottom(dock: DockState, actions: DockActions) {
+    val shell = LocalShell.current
+    val content = BottomContent(dock, actions, strip = null, rows = null, dockHidden = false)
+    SideEffect { shell.sceneBottom = content }
+    DisposableEffect(shell) { onDispose { shell.sceneBottom = null } }
+}
+
+/**
  * The root: Navigation 3's [NavDisplay] for the pages, the recording overlay above them, and the bottom column above
  * both, so the dock never moves while the scene grows behind it. [destination] draws a page; [scene] draws the
- * recording overlay while the expansion is above 0.
+ * recording overlay while the expansion is above 0. Behind the morph the pages recede (scale 1 - 0.06 p about the
+ * window's centre, a black dim of 0.30 p, spec 6.4); behind the open scene they are inert.
  */
 @Composable
 fun FocalShell(
@@ -135,15 +157,35 @@ fun FocalShell(
     val colors = FocalTheme.colors
     val backInset = with(LocalDensity.current) { PREDICTIVE_SHIFT_INSET.roundToPx() }
     CompositionLocalProvider(LocalShell provides shell) {
+        val live = shell.live
+        val behindScene by remember(live) { derivedStateOf { live.open } }
         Box(modifier.fillMaxSize().background(colors.paper)) {
-            NavDisplay(
-                backStack = shell.backStack,
-                onBack = { shell.back() },
-                transitionSpec = { pageSwap() },
-                popTransitionSpec = { pageSwap() },
-                predictivePopTransitionSpec = { edge -> predictivePagePop(edge, backInset) },
-                entryProvider = { key -> NavEntry(key) { destination(key) } },
-            )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (behindScene) Modifier.clearAndSetSemantics { }.focusProperties { canFocus = false } else Modifier)
+                    // The dim covers the whole window, the paper the scaled pages leave at its edges included.
+                    .drawWithContent {
+                        drawContent()
+                        val p = live.expansion.value
+                        if (live.spatial && live.landingNote == null && p > 0f) drawRect(Color.Black, alpha = PAGES_DIM * p)
+                    }
+                    .background(colors.paper)
+                    .graphicsLayer {
+                        val scale = live.pagesScale()
+                        scaleX = scale
+                        scaleY = scale
+                    },
+            ) {
+                NavDisplay(
+                    backStack = shell.backStack,
+                    onBack = { shell.back() },
+                    transitionSpec = { pageSwap() },
+                    popTransitionSpec = { pageSwap() },
+                    predictivePopTransitionSpec = { edge -> predictivePagePop(edge, backInset) },
+                    entryProvider = { key -> NavEntry(key) { destination(key) } },
+                )
+            }
             LiveSurfaceHost(shell.live, scene)
             ShellBottom(shell)
         }
@@ -159,7 +201,9 @@ private class ShownBottom { var content: BottomContent? = null }
 private fun ShellBottom(shell: ShellState) {
     val current = shell.current
     val shown = remember { ShownBottom() }
-    val content = shell.bottomContent[current]?.also { shown.content = it } ?: shown.content ?: return
+    // The scene's controls while it is up and not settling into the note's page (T7).
+    val scene = shell.sceneBottom?.takeIf { shell.live.visible && shell.live.landingNote == null }
+    val content = scene ?: shell.bottomContent[current]?.also { shown.content = it } ?: shown.content ?: return
     val onLibrary = current == Destination.Library
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val reduced = LocalReducedMotion.current
@@ -204,6 +248,8 @@ private fun predictivePagePop(edge: Int, insetPx: Int): ContentTransform {
 }
 
 private const val HALF = 0.5f
+/** The pages behind the morph darken (spec 2.8.2 `libraryDim`). */
+private const val PAGES_DIM = 0.30f
 private const val PREDICTIVE_SCALE = 0.9f
 /** The seekable transition's length; the gesture's progress drives it, so this only shapes the commit. */
 private const val PREDICTIVE_DURATION_MS = 300

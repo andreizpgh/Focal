@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
@@ -36,12 +37,21 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -65,6 +75,8 @@ import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.Grid
+import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.scene.ExpandDrag
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.DestinationBottom
 import app.focal.ui.shell.LocalShell
@@ -314,7 +326,26 @@ private fun LibraryList(
     stageFocus: FocusRequester?,
 ) {
     val shell = LocalShell.current
+    val live = shell.live
     val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val reduced = LocalReducedMotion.current
+    val windowHeight = LocalWindowInfo.current.containerSize.height
+    // Dragging the live stage down grows it into the scene (T28): the list's nested-scroll parent takes the
+    // downward overscroll at its top while a stream that started on the stage is armed.
+    val expandDrag = remember(live) { ExpandDrag(live, scope) }
+    expandDrag.travel = { windowHeight - (live.stageBounds?.bottom ?: 0f) }
+    expandDrag.density = density.density
+    expandDrag.reduced = reduced || !live.spatial
+    // Record and a fold bring the stage into view; focus returns to it after a fold (spec 5.3.1, T5′, 8.6).
+    DisposableEffect(live, listState, stageFocus) {
+        live.revealStage = { animated -> if (animated) listState.animateScrollToItem(0) else listState.scrollToItem(0) }
+        live.stageFocus = stageFocus
+        onDispose {
+            live.revealStage = null
+            live.stageFocus = null
+        }
+    }
     val sections = remember(model.days) {
         buildMap<Any, Any> {
             for (day in model.days) {
@@ -332,22 +363,48 @@ private fun LibraryList(
     }
     val status = WindowInsets.statusBars
     val top = with(density) { status.getTop(this).toDp() } + FocalLayout.topFade
-    val live = model.stage is StageUi.Live
+    val isLive = model.stage is StageUi.Live
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().then(if (imePadded) Modifier.imePadding() else Modifier),
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (imePadded) Modifier.imePadding() else Modifier)
+                .nestedScroll(expandDrag)
+                .pointerInput(expandDrag) {
+                    // Every stream starts disarmed; the stage arms the ones that start on it (it sees them after).
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        expandDrag.arm(false)
+                    }
+                },
             contentPadding = PaddingValues(top = top, bottom = reserve),
         ) {
             model.stage?.let { stage ->
                 item(key = STAGE_KEY, contentType = STAGE_KEY) {
                     val row = (stage as? StageUi.Note)?.row
+                    DisposableEffect(live) { onDispose { live.stageBounds = null } }
                     StageCard(
                         stage, dates, today, meter, stageActions,
                         modifier = Modifier
                             .padding(horizontal = FocalLayout.gutter)
                             .then(if (stageFocus != null) Modifier.focusRequester(stageFocus) else Modifier)
-                            .then(if (live) Modifier.onGloballyPositioned { shell.live.stageBounds = it.boundsInWindow() } else Modifier),
+                            .onGloballyPositioned { coordinates ->
+                                val root = coordinates.findRootCoordinates().size
+                                val laidOut = Rect(coordinates.positionInWindow(), coordinates.size.toSize())
+                                live.stageBounds = live.unscaled(laidOut, Offset(root.width / 2f, root.height / 2f))
+                            }
+                            // The morph draws the stage while it is up (spec 6.4); under the crossfade it stays.
+                            .graphicsLayer { alpha = if (live.spatial && live.expansion.value > 0f) 0f else 1f }
+                            .then(
+                                if (!isLive) Modifier else Modifier.pointerInput(expandDrag) {
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                        val atTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+                                        expandDrag.arm(atTop && live.expansion.value <= 0f)
+                                    }
+                                },
+                            ),
                         menu = { if (row != null) noteMenu(row) },
                         title = if (row != null && renaming == row.id) { { renameField(row, true) } } else null,
                     )

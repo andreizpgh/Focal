@@ -60,8 +60,8 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptics = rememberFocalHaptics()
-    val reduced = LocalReducedMotion.current
     val feedback = shell.bottom.feedback
+    val reduced by rememberUpdatedState(LocalReducedMotion.current)
     val onRecord by rememberUpdatedState(record)
     // Read in composition, so a configuration change (a new locale) reaches messages shown later.
     val words by rememberUpdatedState(
@@ -171,9 +171,9 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
                 is EntryRequest.OpenNote -> shell.open(Destination.Note(request.noteId))
                 EntryRequest.Record -> onRecord()
                 is EntryRequest.ShowRecording -> {
-                    // Settings snaps closed under the covering scene (4.23.7).
+                    // Settings snaps closed under the covering scene (4.23.7); the scene is simply open (5.13).
                     shell.settings.snapClosed()
-                    shell.live.expand(reduced)
+                    shell.live.show(reduced)
                 }
             }
             EntryRequests.consume(request)

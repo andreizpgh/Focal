@@ -25,8 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.focal.FocalApplication
 import app.focal.R
-import app.focal.recording.AudioLevel
-import app.focal.ui.components.LiveMeter
+import app.focal.ui.components.WaveMeter
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.rememberFocalHaptics
 import app.focal.ui.settings.SettingsRoute
@@ -35,6 +34,7 @@ import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.NoteHit
 import app.focal.ui.state.LibraryViewModel
 import app.focal.ui.state.NoteRow
+import app.focal.ui.state.RecordingUiState
 import app.focal.ui.state.RecordingViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -44,7 +44,7 @@ import kotlinx.coroutines.launch
  * [record] runs Record's permission flow; [sheetOpen] (the rationale sheet) keeps the peek away.
  */
 @Composable
-fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean) {
+fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
     val shell = LocalShell.current
     val context = LocalContext.current
     val application = context.applicationContext as FocalApplication
@@ -54,8 +54,9 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean) {
     val recordingState by recording.state.collectAsStateWithLifecycle()
     val search by library.search.collectAsStateWithLifecycle()
     val fresh = FreshNotes.current
-    val model = remember(libraryState, recordingState, fresh) { LibraryModels.of(libraryState, recordingState, fresh) }
-    val meter = remember { LiveMeter { AudioLevel.current } }
+    // After Record the library keeps its layout until the scene covers it (spec 2.8.2 `liveLayoutSwitch`).
+    val shown = if (shell.live.covered) recordingState else RecordingUiState()
+    val model = remember(libraryState, shown, fresh) { LibraryModels.of(libraryState, shown, fresh) }
     val dates = rememberLibraryDates()
     val today = rememberToday()
     val reduced = LocalReducedMotion.current

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -39,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
@@ -93,6 +96,7 @@ import app.focal.ui.scene.StageTranscript
 import app.focal.ui.scene.TimerText
 import app.focal.ui.scene.TranscriptInks
 import app.focal.ui.scene.rememberTimerStyles
+import app.focal.ui.shell.LocalShell
 import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.PauseReason
@@ -226,7 +230,7 @@ fun StageCard(
         if (shimmering) Spacer(Modifier.matchParentSize().shimmer { shimmer.value })
         when (stage) {
             is StageUi.Live -> LiveStage(stage, meter)
-            is StageUi.Note -> NoteStage(
+            is StageUi.Note -> RecordedForRecord { NoteStage(
                 stage, dates, today, actions, title,
                 onReadyMoment = {
                     if (!reduced) scope.launch {
@@ -240,10 +244,30 @@ fun StageCard(
                         }
                     }
                 },
-            )
+            ) }
         }
         menu()
     }
+}
+
+/**
+ * The note on the stage, drawn through a graphics layer the recording surface can draw too: Record grows the scene
+ * out of this card, and the note leaves with the clip's top-left (T1′).
+ */
+@Composable
+private fun RecordedForRecord(content: @Composable () -> Unit) {
+    val live = LocalShell.current.live
+    val layer = rememberGraphicsLayer()
+    DisposableEffect(live, layer) {
+        live.stageNote = layer
+        onDispose { if (live.stageNote === layer) live.stageNote = null }
+    }
+    Box(
+        Modifier.drawWithContent {
+            layer.record { this@drawWithContent.drawContent() }
+            drawLayer(layer)
+        },
+    ) { content() }
 }
 
 /** TalkBack's reading of the stage (spec 7.8, 8.2). */

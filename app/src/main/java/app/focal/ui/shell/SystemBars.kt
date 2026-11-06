@@ -43,6 +43,16 @@ class SystemBarsState {
         navigationOnMaterial = clip.bottom >= navigationTop + (if (navigationOnMaterial) NAVIGATION_RELEASE else NAVIGATION_FLIP).toPx()
     }
 
+    /**
+     * T7: as the scene settles into the dock's pill, each bar returns to the theme's appearance in the first frame the
+     * clip's edge leaves it: the top below the status bar's bottom ([statusBottom]), the bottom above the navigation
+     * inset's top.
+     */
+    fun followLanding(clip: Rect, statusBottom: Float, navigationTop: Float) {
+        statusOnMaterial = clip.top < statusBottom
+        navigationOnMaterial = clip.bottom > navigationTop
+    }
+
     /** Under reduced motion the scene crossfades in place: both bars flip when its alpha passes one half. */
     fun followCrossfade(alpha: Float) {
         val on = alpha >= HALF

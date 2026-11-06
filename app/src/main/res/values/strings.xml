@@ -87,6 +87,11 @@
     <string name="no_speech">No speech was recognized.</string>
     <string name="partial_failure">Part of this note couldn’t be transcribed.</string>
 
+    <!-- The recording scene (design 7.4). -->
+    <string name="cd_collapse">Collapse. Recording continues</string>
+    <string name="notice_notifications_off">Notifications are off, so Pause and Finish are only in Focal.</string>
+    <string name="jump_latest">Latest</string>
+
     <!-- Menus (design 7.2). -->
     <string name="menu_copy_text">Copy text</string>
     <string name="menu_share">Share</string>
@@ -176,6 +181,16 @@
     <string name="a11y_copy_note">Copy note</string>
     <string name="a11y_copy_note_new">Copy note, new</string>
     <string name="a11y_expand_recording">Expand recording</string>
+    <string name="a11y_collapse">Collapse</string>
+    <string name="a11y_scene_state">Recording, %s</string>
+    <string name="a11y_scene_state_paused">Paused, %s</string>
+    <string name="a11y_scene_state_paused_reason">Paused, %1$s, %2$s</string>
+    <string name="a11y_read_latest">Read latest paragraph</string>
+    <string name="a11y_announce_paused">Paused.</string>
+    <string name="a11y_announce_paused_call">Paused for a call.</string>
+    <string name="a11y_announce_paused_other_app">Paused for another app.</string>
+    <string name="a11y_announce_paused_storage">Paused, storage is full.</string>
+    <string name="a11y_announce_resumed">Resumed.</string>
     <string name="a11y_open_note">Open note</string>
     <string name="a11y_note_ready">Note ready</string>
     <string name="a11y_source_code">Source code, opens in browser</string>
