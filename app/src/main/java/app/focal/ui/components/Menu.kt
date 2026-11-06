@@ -182,7 +182,7 @@ fun FocalMenuItem(text: String, onClick: () -> Unit, trailing: String? = null, e
 fun FocalMenuDivider() {
     Box(
         Modifier.padding(vertical = MenuMetrics.dividerMargin).fillMaxWidth().height(MenuMetrics.ring)
-            .background(FocalTheme.colors.line),
+            .background(FocalTheme.colors.raisedLine),
     )
 }
 

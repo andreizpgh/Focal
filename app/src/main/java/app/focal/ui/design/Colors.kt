@@ -29,6 +29,11 @@ data class FocalColors(
     val raised: Color,
     /** A 1 dp ring around menus in Dark; [Color.Transparent] in Light, where menus cast a shadow instead. */
     val raisedRing: Color,
+    /**
+     * The menu's divider on [raised]: [line] in Light (1.19:1 on white); in Dark `line` is the menu's own colour, so
+     * the hairline takes the same small step up from it (1.21:1 on `#222222`).
+     */
+    val raisedLine: Color,
     val scrim: Color,
     val press: Color,
     val centreBarTop: Color,
@@ -74,7 +79,7 @@ data class FocalColors(
             paper = Color(0xFFFFFFFF), ink = Color(0xFF111111), muted = Color(0xFF6B6B6B), faint = Color(0xFF949494),
             line = Color(0xFFEBEBEB), s1 = Color(0xFFF3F3F3), s2 = Color(0xFFE8E8E8), lens = Color(0xFFE0E0E0),
             select = Color(0xFFD6D6D6), inv = Color(0xFF111111), onInv = Color(0xFFFFFFFF), raised = Color(0xFFFFFFFF),
-            raisedRing = Color.Transparent, scrim = Color.Black.copy(alpha = 0.32f), press = Color(0xFF111111).copy(alpha = 0.08f),
+            raisedRing = Color.Transparent, raisedLine = Color(0xFFEBEBEB), scrim = Color.Black.copy(alpha = 0.32f), press = Color(0xFF111111).copy(alpha = 0.08f),
             centreBarTop = Color(0xFF111111), centreBarBottom = Color(0xFF3D3D3D),
         )
         val Dark = FocalColors(
@@ -82,7 +87,7 @@ data class FocalColors(
             paper = Color(0xFF0F0F0F), ink = Color(0xFFEDEDED), muted = Color(0xFF8F8F8F), faint = Color(0xFF6E6E6E),
             line = Color(0xFF222222), s1 = Color(0xFF1C1C1C), s2 = Color(0xFF282828), lens = Color(0xFF333333),
             select = Color(0xFF3D3D3D), inv = Color(0xFFEDEDED), onInv = Color(0xFF0F0F0F), raised = Color(0xFF222222),
-            raisedRing = Color(0xFF2C2C2C), scrim = Color.Black.copy(alpha = 0.60f), press = Color(0xFFEDEDED).copy(alpha = 0.10f),
+            raisedRing = Color(0xFF2C2C2C), raisedLine = Color(0xFF303030), scrim = Color.Black.copy(alpha = 0.60f), press = Color(0xFFEDEDED).copy(alpha = 0.10f),
             centreBarTop = Color(0xFFFFFFFF), centreBarBottom = Color(0xFFCFCFCF),
             stageRing = Color.White.copy(alpha = 0.07f),
         )
@@ -108,7 +113,8 @@ data class FocalColors(
             faint = lerp(from.faint, to.faint, t), line = lerp(from.line, to.line, t), s1 = lerp(from.s1, to.s1, t),
             s2 = lerp(from.s2, to.s2, t), lens = lerp(from.lens, to.lens, t), select = lerp(from.select, to.select, t),
             inv = lerp(from.inv, to.inv, t), onInv = lerp(from.onInv, to.onInv, t), raised = lerp(from.raised, to.raised, t),
-            raisedRing = lerp(from.raisedRing, to.raisedRing, t), scrim = lerp(from.scrim, to.scrim, t),
+            raisedRing = lerp(from.raisedRing, to.raisedRing, t), raisedLine = lerp(from.raisedLine, to.raisedLine, t),
+            scrim = lerp(from.scrim, to.scrim, t),
             press = lerp(from.press, to.press, t), centreBarTop = lerp(from.centreBarTop, to.centreBarTop, t),
             centreBarBottom = lerp(from.centreBarBottom, to.centreBarBottom, t), stageRing = lerp(from.stageRing, to.stageRing, t),
         )
