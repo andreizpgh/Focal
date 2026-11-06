@@ -7,13 +7,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -24,7 +20,6 @@ import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toSize
 import app.focal.R
 import app.focal.ui.components.DockMetrics
 import app.focal.ui.components.Mark
@@ -90,11 +85,7 @@ fun EmptyLibrary(openSettings: () -> Unit, modifier: Modifier = Modifier) {
                     WaveMode.Rest, WaveDress.paper(colors),
                     Modifier
                         .markBox(instrument)
-                        .onGloballyPositioned { coordinates ->
-                            val root = coordinates.findRootCoordinates().size
-                            val box = Rect(coordinates.positionInWindow(), coordinates.size.toSize())
-                            live.restBounds = live.unscaled(box, Offset(root.width / 2f, root.height / 2f))
-                        }
+                        .onGloballyPositioned { coordinates -> live.restBounds = live.unscaled(coordinates) }
                         .graphicsLayer { alpha = if (waking()) 0f else 1f },
                 )
                 DisposableEffect(live) { onDispose { live.restBounds = null } }

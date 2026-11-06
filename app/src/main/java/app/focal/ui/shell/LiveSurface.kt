@@ -19,8 +19,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.zIndex
 import app.focal.ui.design.FocalFullMotion
 import app.focal.ui.design.FocalMotion
@@ -140,10 +143,15 @@ class LiveSurfaceState internal constructor(open: Boolean) {
     fun pagesScale(p: Float = expansion.value): Float = if (spatial && landingNote == null && p > 0f) 1 - PAGES_SCALE * p else 1f
 
     /**
-     * Reports a box laid out in the pages (the stage, the resting instrument) by its [laidOut] window rect, undoing
-     * the pages' scale behind the morph about the window's centre [centre]: the morph grows out of the box itself.
+     * Reports a box laid out in the pages (the stage, the resting instrument) by its window rect, undoing the pages'
+     * scale behind the morph about the window's centre: the morph grows out of the box itself. Both corners are read
+     * through the pages' transform (a scaled position with the unscaled layout size would grow the box by 1 / k).
      */
-    fun unscaled(laidOut: Rect, centre: androidx.compose.ui.geometry.Offset): Rect {
+    fun unscaled(coordinates: LayoutCoordinates): Rect {
+        val root = coordinates.findRootCoordinates().size
+        val centre = Offset(root.width / 2f, root.height / 2f)
+        val size = coordinates.size
+        val laidOut = Rect(coordinates.localToWindow(Offset.Zero), coordinates.localToWindow(Offset(size.width.toFloat(), size.height.toFloat())))
         val k = pagesScale()
         if (k == 1f) return laidOut
         fun x(v: Float) = centre.x + (v - centre.x) / k

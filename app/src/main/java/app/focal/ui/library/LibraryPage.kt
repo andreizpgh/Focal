@@ -44,17 +44,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -62,7 +58,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toSize
 import app.focal.R
 import app.focal.ui.components.BottomFade
 import app.focal.ui.components.DayLabel
@@ -455,11 +450,7 @@ private fun LibraryList(
                         modifier = Modifier
                             .padding(horizontal = FocalLayout.gutter)
                             .then(if (stageFocus != null) Modifier.focusRequester(stageFocus) else Modifier)
-                            .onGloballyPositioned { coordinates ->
-                                val root = coordinates.findRootCoordinates().size
-                                val laidOut = Rect(coordinates.positionInWindow(), coordinates.size.toSize())
-                                live.stageBounds = live.unscaled(laidOut, Offset(root.width / 2f, root.height / 2f))
-                            }
+                            .onGloballyPositioned { coordinates -> live.stageBounds = live.unscaled(coordinates) }
                             // The morph draws the stage while it is up (spec 6.4); under the crossfade it stays.
                             .graphicsLayer { alpha = if (live.spatial && live.expansion.value > 0f) 0f else 1f }
                             .then(
