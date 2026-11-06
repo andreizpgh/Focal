@@ -38,11 +38,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -401,6 +403,16 @@ private fun LibraryList(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                // Nothing of the list is drawn under the solid paper of its fades (the status edge above, the bottom
+                // fade below), where it is covered anyway: behind the recording scene the pages are scaled down, so
+                // the window's edges land inside a pixel that the paper covers only partly, and the glyphs under it
+                // would show there as a dotted line.
+                .drawWithContent {
+                    val solidBottom = shell.bottom.top.value - FocalLayout.bottomGap.toPx()
+                    clipRect(top = status.getTop(this).toFloat(), bottom = if (solidBottom.isNaN()) size.height else solidBottom) {
+                        this@drawWithContent.drawContent()
+                    }
+                }
                 .then(if (imePadded) Modifier.imePadding() else Modifier)
                 .nestedScroll(expandDrag)
                 .pointerInput(expandDrag) {
