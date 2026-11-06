@@ -68,8 +68,13 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
         audioRemoved = stringResource(R.string.feedback_audio_removed), tooLate = stringResource(R.string.feedback_too_late),
         textCopied = stringResource(R.string.feedback_text_copied),
     )
+    // Playback belongs to its page (spec 5.6): leaving it stops the note's audio, whichever way it leaves.
     val leave = {
+        player.stopNote(id)
         if (shell.current == destination) shell.back()
+    }
+    DisposableEffect(player, id) {
+        onDispose { if (!activity.isChangingConfigurations) player.stopNote(id) }
     }
     LaunchedEffect(note) {
         note.events.collect { event ->
@@ -99,16 +104,13 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
     LaunchedEffect(player) { player.errors.collect { message -> appScope.launch { feedback.show(message) } } }
     // A note deleted elsewhere (or from here) leaves the screen; a read failure offers a reload.
     LaunchedEffect(state.missing) { if (state.missing) leave() }
-    // "Note ready" is not posted for the note on screen; playback stops with the activity (spec 5.6, 5.12).
+    // "Note ready" is not posted for the note on screen (spec 5.12); playback pauses app-wide on stop (AppEffects).
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle, note) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> note.setShown(true)
-                Lifecycle.Event.ON_STOP -> {
-                    note.setShown(false)
-                    if (player.session.value.noteId == id) player.pause()
-                }
+                Lifecycle.Event.ON_STOP -> note.setShown(false)
                 else -> Unit
             }
         }

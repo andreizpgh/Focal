@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import app.focal.FocalApplication
 import app.focal.R
 import app.focal.recording.ServiceEvent
@@ -38,6 +39,7 @@ import app.focal.ui.state.EntryRequest
 import app.focal.ui.state.EntryRequests
 import app.focal.ui.state.LibraryEvent
 import app.focal.ui.state.LibraryViewModel
+import app.focal.ui.state.PlaybackViewModel
 import app.focal.ui.state.RecordingPhase
 import app.focal.ui.state.RecordingViewModel
 import kotlinx.coroutines.delay
@@ -152,10 +154,16 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
             }
         }
     }
-    // The fresh mark lasts until the app stops.
+    // The fresh mark lasts until the app stops; playback pauses with the activity, whatever page is shown (5.6).
+    val player: PlaybackViewModel = viewModel()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) FreshNotes.clear() }
+    DisposableEffect(lifecycle, player) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                FreshNotes.clear()
+                player.pause()
+            }
+        }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
