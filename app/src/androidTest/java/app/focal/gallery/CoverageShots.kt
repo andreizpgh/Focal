@@ -69,6 +69,11 @@ object CoverageShots {
         add(Shot("settings-swipe-50-rtl-light", dark = false) { Rtl { Strip(HALF) } })
         add(Shot("note-rtl-light", dark = false) { Rtl { Note(design()) } })
         add(Shot("playing-rtl-light", dark = false) { Rtl { Note(design(), playing = true) } })
+        // A title renamed in a right-to-left script on a left-to-right interface follows its own direction, as the
+        // transcript does; the interface around it (day labels, the top bar) keeps the layout's (8.5).
+        add(Shot("home-rtl-title-light", dark = false) { Library(rtlTitleModel()) })
+        add(Shot("note-rtl-title-light", dark = false) { Note(design().copy(title = RTL_TITLE, titleIsCustom = true)) })
+        add(Shot("note-rtl-title-rtl-light", dark = false) { Rtl { Note(design().copy(title = RTL_TITLE, titleIsCustom = true)) } })
         // The system's contrast setting (medium or high: muted text lifted, spec 8.1) and high-contrast text (no
         // receding: every text in its ink).
         addAll(contrasted("home-contrast", contrast = 1f) { Library(idleModel()) })
@@ -134,6 +139,17 @@ private fun rowsModel(): LibraryModel {
     all[1] = all[1].copy(phase = NotePhase.TRANSCRIBING, progress = 0.64f)
     all[2] = all[2].copy(phase = NotePhase.WAITING)
     all[3] = all[3].copy(title = "", titleIsCustom = false)
+    return LibraryModel(loaded = true, stage = StageUi.Note(all.first(), fresh = false), days = days(all.drop(1)))
+}
+
+/** A synthetic title in Hebrew ("Summary of Thursday's meeting"), as a person might rename a note. */
+private const val RTL_TITLE = "סיכום הפגישה של יום חמישי"
+
+/** The stage's note and a row renamed in a right-to-left script. */
+private fun rtlTitleModel(): LibraryModel {
+    val all = rows().toMutableList()
+    all[0] = all[0].copy(title = RTL_TITLE)
+    all[2] = all[2].copy(title = RTL_TITLE)
     return LibraryModel(loaded = true, stage = StageUi.Note(all.first(), fresh = false), days = days(all.drop(1)))
 }
 
