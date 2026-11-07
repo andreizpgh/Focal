@@ -100,6 +100,8 @@ import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.PlayingWord
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
@@ -137,6 +139,28 @@ private val FindFade = FocalGrid.x48
 private class CentredMatch {
     var match: Any? = null
     var keyboardUp = false
+}
+
+/**
+ * Edit's steps in the order they were asked for (main thread): an undo, redo, restore, split or join, and Done. Each
+ * starts once the one before it has finished, so it reads the field that step reseeded, never the text it replaced.
+ */
+private class EditQueue {
+    private var last: Job? = null
+
+    /** Launches [block] in [scope] once the step asked for before it has finished. */
+    fun launch(scope: CoroutineScope, block: suspend () -> Unit): Job {
+        val previous = last
+        return scope.launch {
+            previous?.join()
+            block()
+        }.also { last = it }
+    }
+
+    /** Waits for every step asked for so far. */
+    suspend fun settle() {
+        last?.join()
+    }
 }
 
 /** Above the text: the fades and the jump pill, then the bars. */
@@ -181,6 +205,7 @@ fun NotePage(
     val focusManager = LocalFocusManager.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val session = remember(edits) { EditSession(edits) }
+    val editQueue = remember(session) { EditQueue() }
     val focus = page.focus
     val find = page.find
     val listFade = remember { Animatable(1f) }
@@ -344,11 +369,13 @@ fun NotePage(
         focusManager.clearFocus()
     }
     val saveFailed = stringResource(R.string.feedback_save_failed)
+    // Done, Esc and Back save the field as the steps before them left it: an undo or redo still writing (a busy
+    // database holds it) reseeds the field first, so its text is never saved back over the undo as a new step.
     fun done() {
-        scope.launch {
+        editQueue.launch(scope) {
             val field = page.field
             if (field == null || session.save(field.id, field.text.text.toString())) exitEdit()
-            else if (session.failures >= 2) bottom.feedback.show(saveFailed)
+            else if (session.failures >= 2) scope.launch { bottom.feedback.show(saveFailed) }
         }
     }
     // Writes that changed the stored text under the field (Replace all, its Undo): the field takes the stored text
@@ -364,17 +391,19 @@ fun NotePage(
         focusField(CaretAt(stored.id, current.text.selection.start.coerceAtMost(stored.text.length)))
     }
     // The note stopped being editable under Edit (it started transcribing again): Edit ends after one last save of
-    // the draft, which the store may refuse; then the pill says so.
+    // the draft (once the steps on their way have reseeded it). The store may refuse it; then the pill says so.
     val notSaved = stringResource(R.string.error_save)
     LaunchedEffect(note.loaded, note.editable) {
         if (!note.loaded || note.editable || !page.editing) return@LaunchedEffect
+        editQueue.settle()
+        if (!page.editing) return@LaunchedEffect
         val current = page.field
         val saved = current == null || session.save(current.id, current.text.text.toString())
         exitEdit()
         if (!saved) bottom.feedback.show(notSaved)
     }
     fun withDraft(block: suspend (FieldFocus?) -> CaretAt?) {
-        scope.launch { block(page.field)?.takeIf { it.id >= 0 }?.let { focusField(it) } }
+        editQueue.launch(scope) { block(page.field)?.takeIf { it.id >= 0 }?.let { focusField(it) } }
     }
     val undo: () -> Unit = {
         withDraft { field ->
@@ -391,12 +420,12 @@ fun NotePage(
     // whose original is known) keeps both and the caret, and says so in the pill (spec 4.8: no haptic, 2.9).
     val cannotJoin = stringResource(R.string.error_join)
     val join: () -> Unit = {
-        page.field?.let { current ->
-            val draft = current.text.text.toString()
-            scope.launch {
-                when (val joined = session.mergeIntoPrevious(current.id, draft)) {
+        page.field?.id?.let { id ->
+            editQueue.launch(scope) {
+                val current = page.field?.takeIf { it.id == id } ?: return@launch
+                when (val joined = session.mergeIntoPrevious(id, current.text.text.toString())) {
                     is JoinResult.Joined -> joined.caret.takeIf { it.id >= 0 }?.let { focusField(it) }
-                    JoinResult.Refused -> bottom.feedback.show(cannotJoin)
+                    JoinResult.Refused -> scope.launch { bottom.feedback.show(cannotJoin) }
                     JoinResult.Skipped -> Unit
                 }
             }
@@ -848,9 +877,8 @@ fun NotePage(
                                         enterEdit = { enterEdit(it) }, copy = actions.copyParagraph, restore = restoreOutside,
                                     ),
                                     onEnter = { offset ->
-                                        val current = page.field ?: return@ParagraphItem
-                                        val draft = current.text.text.toString()
-                                        withDraft { session.split(current.id, draft, offset) }
+                                        val id = page.field?.id ?: return@ParagraphItem
+                                        withDraft { field -> field?.takeIf { it.id == id }?.let { session.split(id, it.text.text.toString(), offset) } }
                                     },
                                     onJoin = join,
                                     onRestore = restore,

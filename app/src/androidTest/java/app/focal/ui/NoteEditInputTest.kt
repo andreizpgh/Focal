@@ -16,6 +16,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -45,6 +46,7 @@ import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteUiState
 import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.PlaybackSession
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -68,10 +70,14 @@ class NoteEditInputTest {
         @Volatile var refuseJoin = false
         val joins = AtomicInteger()
         val writes = AtomicInteger()
+        /** While set, each text write waits for it, as a busy database holds the store's writes. */
+        @Volatile var hold: CompletableDeferred<Unit>? = null
+        val held = AtomicInteger()
 
         fun text(id: Long): String? = paragraphs.firstOrNull { it.id == id }?.text
 
         override suspend fun edit(id: Long, revision: Long, text: String): EditOutcome {
+            hold?.let { gate -> held.incrementAndGet(); gate.await() }
             val current = paragraphs.firstOrNull { it.id == id } ?: return EditOutcome.Stale
             if (current.revision != revision) return EditOutcome.Stale
             writes.incrementAndGet()
@@ -220,6 +226,33 @@ class NoteEditInputTest {
         rule.waitUntil(TIMEOUT_MS) { store.text(1) == FIRST }
         rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasSetTextAction() and hasText(FIRST)).fetchSemanticsNodes().isNotEmpty() }
         rule.onNode(hasContentDescription("Redo")).assertIsEnabled()
+    }
+
+    /**
+     * Done pressed while an undo is still writing (the database is busy): Edit ends with the undo kept. Done saves the
+     * field the undo reseeds, never the text it replaced, which would have written the edit back as a new step.
+     */
+    @Test fun doneWhileAnUndoIsWritingKeepsTheUndo() {
+        val store = MemoryNote(listOf(FIRST, SECOND))
+        rule.setContent { FocalTheme(dark = false) { EditingNote(store, fieldId = 1, caret = FIRST.length) } }
+        rule.onNode(hasSetTextAction() and hasText(FIRST)).performTextReplacement(REVISED)
+        rule.waitUntil(TIMEOUT_MS) { store.writes.get() == 1 }
+        rule.waitUntil(TIMEOUT_MS) { rule.onNode(hasContentDescription("Undo")).fetchSemanticsNode().config.contains(SemanticsProperties.Disabled).not() }
+        val gate = CompletableDeferred<Unit>()
+        store.hold = gate
+        rule.onNode(hasContentDescription("Undo")).performClick()
+        rule.waitUntil(TIMEOUT_MS) { store.held.get() == 1 }
+        rule.onNode(hasContentDescription("Done") and hasClickAction()).performClick()
+        rule.runOnIdle {
+            store.hold = null
+            gate.complete(Unit)
+        }
+        // Edit ends: no field is left.
+        rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
+        rule.runOnIdle {
+            assertEquals(FIRST, store.text(1))
+            assertEquals("The typing and its undo, nothing after", 2, store.writes.get())
+        }
     }
 
     private companion object {
