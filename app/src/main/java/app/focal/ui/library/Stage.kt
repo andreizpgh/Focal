@@ -242,7 +242,9 @@ fun StageCard(
             .pageOrigin(origin)
             .semantics(mergeDescendants = true) {
                 contentDescription = description ?: spoken.text
-                customActions = note?.let(actions.menuActions).orEmpty() + CustomAccessibilityAction(settingsLabel) { actions.openSettings(); true }
+                // While its title is renamed the note's menu is out of reach for touch, and so for TalkBack.
+                val menu = if (title == null) note?.let(actions.menuActions).orEmpty() else emptyList()
+                customActions = menu + CustomAccessibilityAction(settingsLabel) { actions.openSettings(); true }
                 if (note == null) expand(clickLabel) { actions.expand(); true }
             }
             .pressScale(source)

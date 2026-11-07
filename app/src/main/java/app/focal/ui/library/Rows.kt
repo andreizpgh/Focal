@@ -157,7 +157,8 @@ fun NoteRowItem(
                     }
                 }
             }
-            .semantics { customActions = menuActions }
+            // While the title is renamed the row's menu is out of reach for touch, and so for TalkBack.
+            .semantics { customActions = if (title == null) menuActions else emptyList() }
             .focusRing(FocalShapes.block)
             .combinedClickable(
                 interactionSource = source, indication = RowPlate, enabled = title == null,
