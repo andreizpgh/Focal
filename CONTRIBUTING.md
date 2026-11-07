@@ -117,10 +117,10 @@ them, because it has no speech model, so `scripts/release.py` builds, signs and
 verifies them on a machine that has it.
 
 They are signed with the Android SDK debug key that signed Alpha 2 to Alpha 9, so
-they install over those alphas in place and keep their notes. Its certificate
-SHA-256, the `--expected-cert` below, is the one recorded in
-`releases/stt-alpha-9.json`. The key marks a testing build, not a store release;
-it never enters Git.
+they install over those alphas as updates (tested over Alpha 9; migration tests
+cover the older alphas' databases). Its certificate SHA-256, the
+`--expected-cert` below, is the one recorded in `releases/stt-alpha-9.json`. The
+key marks a testing build, not a store release; it never enters Git.
 
 1. Check out the release commit with a clean tree and the verified model
    (`python3 scripts/fetch-model.py`), and give the version a section in
@@ -148,9 +148,12 @@ it never enters Git.
    command line. `--skip-build` signs an APK already built from the same commit;
    `--signed-apk FILE --source-commit SHA` describes an APK that was signed and
    tested earlier, without re-signing it.
-3. On an emulator, run the instrumented suite on the same commit and install the
-   release APK over the previous release: it must start and keep the notes
-   ([testing](docs/testing.md#release-checks)).
+3. Check it on emulators ([release checks](docs/testing.md#release-checks)):
+   run the instrumented suite on the same commit, which tests that commit's
+   debug build, not the release APK; run an emulator QA build of the commit
+   (`-Pfocal.emulatorRelease=true`, never published) end to end; and install the
+   signed APK over the previous release: it must start and keep the notes, but it
+   cannot record on an emulator.
 4. Create a draft pre-release at the provenance's `tag_commit`, with notes from the
    changelog and the checks you ran:
 
