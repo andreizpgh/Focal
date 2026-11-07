@@ -47,6 +47,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -755,17 +756,24 @@ fun NotePage(
             .fillMaxSize()
             // Beside the landscape rail and inside the side insets (spec 5.14).
             .windowInsetsPadding(pageInsets(PageArea.Note))
-            // A focused field or control inside the page (Edit's field, Find's query) hears them first, here.
+            // With a field or control focused inside the page (Edit's field, Find's query) the Ctrl shortcuts come
+            // here before it.
             .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                val key = when {
-                    event.isCtrlPressed && event.key == Key.Z -> if (event.isShiftPressed) PageKey.Redo else PageKey.Undo
-                    event.isCtrlPressed && event.key == Key.F -> PageKey.Find
-                    event.isCtrlPressed && event.key == Key.C -> PageKey.Copy
-                    event.key == Key.Spacebar -> PageKey.PlayPause
+                if (event.type != KeyEventType.KeyDown || !event.isCtrlPressed) return@onPreviewKeyEvent false
+                val key = when (event.key) {
+                    Key.Z -> if (event.isShiftPressed) PageKey.Redo else PageKey.Undo
+                    Key.F -> PageKey.Find
+                    Key.C -> PageKey.Copy
                     else -> null
                 }
                 key != null && onKey(key)
+            }
+            // Space only after the focused control had its chance (a button's Space is its click), pressed once and
+            // alone, as the activity takes it when nothing is focused (spec 8.5).
+            .onKeyEvent { event ->
+                val native = event.nativeKeyEvent
+                event.type == KeyEventType.KeyDown && event.key == Key.Spacebar && native.repeatCount == 0 && native.hasNoModifiers() &&
+                    onKey(PageKey.PlayPause)
             }
             .then(
                 // While the title is renamed, a tap anywhere else commits it and does nothing else (spec 5.5).
