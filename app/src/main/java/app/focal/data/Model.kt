@@ -46,6 +46,43 @@ object CaptureReason {
 }
 
 /**
+ * Why a waiting note's saved audio is not being transcribed, stored as its error while it is
+ * [NoteState.INTERRUPTED] ([encode]). Anything else stored there, such as the sentences older builds wrote, is a plain
+ * interruption: the note resumes at the next foreground start.
+ */
+sealed interface WaitCause {
+    /** Too little free storage to copy the speech model out of the APK: [shortBytes] more are needed. */
+    data class ModelStorage(val shortBytes: Long) : WaitCause
+
+    /** The model copy failed otherwise (a damaged or missing copy in the APK, a failed write). */
+    data object ModelInstall : WaitCause
+
+    /** The engine guard stopped the speech work after it killed the process or failed to load repeatedly. */
+    data object EngineStopped : WaitCause
+
+    companion object {
+        private const val STORAGE = "wait:model-storage:"
+        private const val INSTALL = "wait:model-install"
+        private const val ENGINE = "wait:engine-stopped"
+
+        fun encode(cause: WaitCause): String = when (cause) {
+            is ModelStorage -> STORAGE + cause.shortBytes.coerceAtLeast(0)
+            ModelInstall -> INSTALL
+            EngineStopped -> ENGINE
+        }
+
+        /** The cause [error] names, or null for a plain interruption (or any other text). */
+        fun decode(error: String?): WaitCause? = when {
+            error == null -> null
+            error.startsWith(STORAGE) -> error.removePrefix(STORAGE).toLongOrNull()?.takeIf { it >= 0 }?.let(::ModelStorage)
+            error == INSTALL -> ModelInstall
+            error == ENGINE -> EngineStopped
+            else -> null
+        }
+    }
+}
+
+/**
  * [title] is empty until the transcript has words (show the date instead) unless [titleIsCustom].
  * [legacy] notes were transcribed before schema 5: their paragraphs have no word times.
  */

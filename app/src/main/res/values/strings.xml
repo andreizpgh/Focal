@@ -160,6 +160,11 @@
     <!-- The engine guard stopped the speech work after repeated crashes or failed loads, cause unknown (5.4). -->
     <string name="engine_stopped">Transcription stopped after repeated failures. Your audio is saved.</string>
     <string name="stage_engine_stopped">Transcription stopped after repeated failures.</string>
+    <!-- The speech model could not be copied out of the APK: too little free storage (%s: "850 MB"), or anything else. -->
+    <string name="model_storage">Free up about %s to prepare the speech model. Your audio is saved.</string>
+    <string name="stage_model_storage">Free up about %s to prepare the speech model.</string>
+    <string name="model_install_failed">The speech model couldn’t be prepared. Your audio is saved.</string>
+    <string name="stage_model_install_failed">The speech model couldn’t be prepared.</string>
     <string name="provenance_edited">Edited</string>
     <string name="not_saved">Not saved</string>
     <string name="find_hint">Find in note</string>

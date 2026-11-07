@@ -20,7 +20,7 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.util.Properties
 import java.util.UUID
 
-/** Why transcription waits while the guard is blocked (a note's stored reason; the interface says spec 5.4's words). */
+/** Why transcription waits while the guard is blocked, for logs; notes store [app.focal.data.WaitCause.EngineStopped]. */
 internal const val ENGINE_STOPPED = "The speech model could not load. Saved audio waits for Try again."
 
 /** Where the speech work can take the whole process down with it: a native crash or an out-of-memory kill. */

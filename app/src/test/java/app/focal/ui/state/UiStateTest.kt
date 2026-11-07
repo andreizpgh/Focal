@@ -6,6 +6,7 @@ import app.focal.data.Note
 import app.focal.data.NoteState
 import app.focal.data.Paragraph
 import app.focal.data.TranscriptJson
+import app.focal.data.WaitCause
 import app.focal.recording.LiveSession
 import app.focal.recording.SpeechAvailability
 import app.focal.speech.EngineFault
@@ -110,6 +111,39 @@ class NotePhasesTest {
         assertNull(waitingReason(interrupted.copy(audioPresent = false), NotePhase.WAITING, failures))
         assertNull(waitingReason(note(NoteState.READY), NotePhase.READY, failures))
         assertNull(waitingReason(note(NoteState.PROCESSING), NotePhase.TRANSCRIBING, memory))
+    }
+
+    @Test fun aWaitingNoteSaysWhyTheModelCouldNotBePrepared() {
+        val interrupted = note(NoteState.INTERRUPTED)
+        val short = WaitCause.ModelStorage(850_000_000)
+        val failedStorage = ModelState(SpeechAvailability.UNAVAILABLE, failure = short)
+        val failedInstall = ModelState(SpeechAvailability.UNAVAILABLE, failure = WaitCause.ModelInstall)
+        // The install that fails now names the reason for every waiting note, even one stored as a plain interruption.
+        assertEquals(WaitingReason.Storage(850_000_000), waitingReason(interrupted, NotePhase.WAITING, failedStorage))
+        assertEquals(WaitingReason.Install, waitingReason(interrupted, NotePhase.WAITING, failedInstall))
+        // A stopped engine comes first: nothing is installed while it is stopped.
+        assertEquals(WaitingReason.Failures, waitingReason(interrupted, NotePhase.WAITING,
+            ModelState(SpeechAvailability.UNAVAILABLE, stop = EngineFault.OTHER, failure = WaitCause.EngineStopped)))
+        // The stored cause when nothing in this process has said otherwise.
+        val stored = interrupted.copy(error = WaitCause.encode(short))
+        assertEquals(WaitingReason.Storage(850_000_000), waitingReason(stored, NotePhase.WAITING, ModelState(SpeechAvailability.UNAVAILABLE)))
+        assertEquals(WaitingReason.Install, waitingReason(interrupted.copy(error = WaitCause.encode(WaitCause.ModelInstall)),
+            NotePhase.WAITING, ModelState(SpeechAvailability.UNAVAILABLE)))
+        // Once the model is ready, or the guard no longer stops the work, the note resumes like any interrupted one.
+        assertNull(waitingReason(stored, NotePhase.WAITING, ModelState(SpeechAvailability.READY)))
+        assertNull(waitingReason(interrupted.copy(error = WaitCause.encode(WaitCause.EngineStopped)), NotePhase.WAITING,
+            ModelState(SpeechAvailability.UNAVAILABLE)))
+        // A note without audio has nothing to transcribe again.
+        assertNull(waitingReason(interrupted.copy(audioPresent = false), NotePhase.WAITING, failedStorage))
+    }
+
+    @Test fun waitCausesRoundTripThroughTheStore() {
+        for (cause in listOf(WaitCause.ModelStorage(0), WaitCause.ModelStorage(1_234_567_890_123), WaitCause.ModelInstall, WaitCause.EngineStopped))
+            assertEquals(cause, WaitCause.decode(WaitCause.encode(cause)))
+        // What older builds stored, and damaged values, are plain interruptions.
+        for (text in listOf(null, "", "Saved audio needs transcription. Open the note to continue.", "wait:model-storage:",
+            "wait:model-storage:-5", "wait:model-storage:many", "wait:unknown"))
+            assertNull(text, WaitCause.decode(text))
     }
 
     @Test fun reasonsMapFromTheStore() {

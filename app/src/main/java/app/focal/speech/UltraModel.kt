@@ -117,7 +117,7 @@ internal object UltraModel {
         removeOwnedDirectory(active, expected)
         // Leave room to start a recording after the copy (recording may already run while it copies).
         val required = expected.sumOf { it.bytes } + StorageReserve.START_BYTES
-        check(usableSpace(parent) >= required) { "Free up space to prepare the speech model." }
+        StorageReserve.shortfall(usableSpace(parent), required).let { short -> if (short > 0) throw InsufficientStorageException(short) }
 
         checkCancelled()
         check(partial.mkdir()) { "Could not prepare private storage for the speech model." }
@@ -145,8 +145,19 @@ internal object UltraModel {
             } catch (cleanup: Exception) {
                 failure.addSuppressed(cleanup)
             }
+            // Storage filled up during the copy (a recording runs meanwhile): what is missing, now the partial copy is gone.
+            if (outOfSpace(failure)) {
+                throw InsufficientStorageException(
+                    maxOf(StorageReserve.shortfall(usableSpace(parent), required), StorageReserve.STEP_BYTES),
+                ).apply { initCause(failure) }
+            }
             throw failure
         }
+    }
+
+    /** A write that failed because the storage is full (ENOSPC, as Android's I/O reports it). */
+    internal fun outOfSpace(error: Throwable): Boolean = generateSequence(error) { it.cause }.take(8).any { cause ->
+        cause.message?.let { "ENOSPC" in it || "No space left" in it } == true
     }
 
     private fun verified(

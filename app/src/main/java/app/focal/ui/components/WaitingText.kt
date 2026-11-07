@@ -1,8 +1,11 @@
 package app.focal.ui.components
 
+import android.text.format.Formatter
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import app.focal.R
+import app.focal.recording.StorageReserve
 import app.focal.ui.state.WaitingReason
 
 /**
@@ -14,4 +17,9 @@ import app.focal.ui.state.WaitingReason
 internal fun waitingText(reason: WaitingReason, page: Boolean): String = when (reason) {
     WaitingReason.Memory -> stringResource(R.string.model_failed)
     WaitingReason.Failures -> stringResource(if (page) R.string.engine_stopped else R.string.stage_engine_stopped)
+    is WaitingReason.Storage -> {
+        val amount = Formatter.formatShortFileSize(LocalContext.current, reason.shortBytes.coerceAtLeast(StorageReserve.STEP_BYTES))
+        stringResource(if (page) R.string.model_storage else R.string.stage_model_storage, amount)
+    }
+    WaitingReason.Install -> stringResource(if (page) R.string.model_install_failed else R.string.stage_model_install_failed)
 }

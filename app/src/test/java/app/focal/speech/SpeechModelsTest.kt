@@ -110,6 +110,33 @@ class SpeechModelsTest {
         assertEquals(2, attempts.get())
     }
 
+    @Test fun aFailureSaysWhetherStorageRanShort() {
+        // Too little free storage: what is missing, and a foreground start tries again once space may have returned.
+        outcome = { throw InsufficientStorageException(850_000_000) }
+        models.ensureStarted()
+        val short = settle()
+        assertTrue(short is ModelStatus.Failed && short.failure == ModelFailure.STORAGE && short.shortBytes == 850_000_000L && !short.permanent)
+        models.retry(automatic = true)
+        settle()
+        assertEquals(2, attempts.get())
+        // Any other failure is the install's; a damaged APK copy too, which only the person retries.
+        outcome = { error("Could not prepare private storage for the speech model.") }
+        models.retry(automatic = true)
+        val other = settle()
+        assertTrue(other is ModelStatus.Failed && other.failure == ModelFailure.INSTALL && !other.permanent)
+        outcome = { throw BundledModelException("The bundled speech model is damaged. Reinstall Focal.") }
+        models.retry(automatic = true)
+        val damaged = settle()
+        assertTrue(damaged is ModelStatus.Failed && damaged.failure == ModelFailure.INSTALL && damaged.permanent)
+    }
+
+    @Test fun storageThatFillsDuringTheCopyIsAStorageFailure() {
+        val write = java.io.IOException("write failed: ENOSPC (No space left on device)")
+        assertTrue(UltraModel.outOfSpace(write))
+        assertTrue(UltraModel.outOfSpace(IllegalStateException("Copy failed", write)))
+        assertFalse(UltraModel.outOfSpace(java.io.IOException("write failed: EIO (I/O error)")))
+    }
+
     @Test fun aDamagedApkCopyIsRetriedOnlyByTheUser() {
         outcome = { throw BundledModelException("The bundled speech model is damaged. Reinstall Focal.") }
         models.ensureStarted()

@@ -29,16 +29,20 @@ class UltraModelTest {
     }
 
     @Test fun insufficientStorageOpensNoAssetAndLeavesNoPartial() = isolated { fixture ->
-        assertThrows(IllegalStateException::class.java) {
+        val model = fixture.payloads.values.sumOf { it.size.toLong() }
+        assertThrows(InsufficientStorageException::class.java) {
             fixture.install(space = 0) { error("Insufficient storage should be detected before copying.") }
-        }.also { assertTrue(it.message.orEmpty().contains("Free up space")) }
+        }.also {
+            assertTrue(it.message.orEmpty().contains("Free up space"))
+            // What to free, rounded up as the interface says it ("Free up about 250 MB").
+            assertEquals(StorageReserve.shortfall(0, model + StorageReserve.START_BYTES), it.shortBytes)
+        }
         assertFalse(fixture.active.exists())
         assertFalse(fixture.partial.exists())
         // The copy leaves room to start a recording: the model's size alone is not enough.
-        val model = fixture.payloads.values.sumOf { it.size.toLong() }
-        assertThrows(IllegalStateException::class.java) {
+        assertThrows(InsufficientStorageException::class.java) {
             fixture.install(space = model + StorageReserve.START_BYTES - 1) { error("Too little space for a recording after the copy.") }
-        }
+        }.also { assertEquals(StorageReserve.STEP_BYTES, it.shortBytes) }
         fixture.assertInstalled(fixture.install(space = model + StorageReserve.START_BYTES))
     }
 

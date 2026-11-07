@@ -32,6 +32,7 @@ import app.focal.data.CaptureReason
 import app.focal.data.NoteState
 import app.focal.data.NoteStore
 import app.focal.data.StoredWindow
+import app.focal.data.WaitCause
 import app.focal.speech.DeviceSpeechPolicy
 import app.focal.speech.ENGINE_STOPPED
 import app.focal.speech.EngineFault
@@ -42,6 +43,7 @@ import app.focal.speech.SileroVad
 import app.focal.speech.UltraEngine
 import app.focal.speech.UltraModel
 import app.focal.speech.UltraTranscriber
+import app.focal.speech.waitCause
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -225,6 +227,7 @@ class RecordingService : Service() {
             // The user's Retry forgets the speech work's deaths and failed loads, then tries a failed model install
             // again, before the worker looks at either.
             val unblocked = app.engineGuard.reset()
+            val reinstall = app.models.status.value is ModelStatus.Failed
             app.models.retry()
             engineRetry = true
             notifications.cancelTimedOut()
@@ -237,10 +240,10 @@ class RecordingService : Service() {
                     // Queued only now, so the worker never sees the note before its failed windows are pending.
                     synchronized(workLock) {
                         requested += noteId; pendingRequests--
-                        // Try again lifted the guard's block, which had kept every waiting note from resuming (the
-                        // foreground start sent no DRAIN): they follow this one, also those it set aside meanwhile.
-                        // RECOVER comes only from the visible app, as DRAIN must.
-                        if (unblocked) { skipped.clear(); drainWaiting = true; drainRequested = true }
+                        // Try again lifted the guard's block or tried a failed model install again, either of which had
+                        // kept every waiting note from resuming (the foreground start sent no DRAIN): they follow this
+                        // one, also those it set aside meanwhile. RECOVER comes only from the visible app, as DRAIN must.
+                        if (unblocked || reinstall) { skipped.clear(); drainWaiting = true; drainRequested = true }
                     }
                 }
                 ensureWorker()
@@ -844,7 +847,9 @@ class RecordingService : Service() {
                     Outcome.Done -> { feedNote = null; feed = null; dequeue(target.noteId) }
                     is Outcome.Blocked -> {
                         feedNote = null; feed = null
-                        runCatching { store.state(target.noteId, NoteState.INTERRUPTED, outcome.message) }
+                        // A typed cause, so the note can say why it waits and offer Try again; otherwise it simply waits.
+                        val stored = outcome.cause?.let(WaitCause::encode) ?: outcome.message
+                        runCatching { store.state(target.noteId, NoteState.INTERRUPTED, stored) }
                         synchronized(workLock) { skipped += target.noteId }
                         dequeue(target.noteId)
                     }
@@ -867,7 +872,11 @@ class RecordingService : Service() {
         /** A recording started: the note waits and is resumed after it. */
         data object Yielded : Outcome
         data object Done : Outcome
-        data class Blocked(val message: String) : Outcome
+        /**
+         * The note waits: for the person ([cause]: a model that could not be prepared, or the engine guard's stop) or,
+         * without a cause, for the next foreground start. [message] is kept for a plain interruption.
+         */
+        data class Blocked(val message: String, val cause: WaitCause? = null) : Outcome
     }
 
     private suspend fun process(target: Target, feed: WindowFeed, engine: Engine): Outcome {
@@ -909,7 +918,7 @@ class RecordingService : Service() {
                     // planned until the person's Try again. Capture goes on; a finished note waits.
                     publishSpeech(id, SpeechAvailability.UNAVAILABLE)
                     if (live) { delay(LIVE_POLL_MS); continue }
-                    return Outcome.Blocked(engine.failure ?: ENGINE_STOPPED)
+                    return Outcome.Blocked(engine.failure ?: ENGINE_STOPPED, WaitCause.EngineStopped)
                 }
                 // The recognizer loads once the microphone delivers audio (never before capture starts).
                 if (!live || session?.started == true) engine.load()
@@ -959,7 +968,7 @@ class RecordingService : Service() {
                 val planned = try { feed.advance(note.duration, finished = !live, legacy = note.legacy) } finally { engine.segmented() }
                 if (planned) continue
                 if (!live && feed.complete) {
-                    if (pending != null) return Outcome.Blocked(engine.failure ?: "Saved audio can be transcribed later.")
+                    if (pending != null) return Outcome.Blocked(engine.failure ?: "Saved audio can be transcribed later.", engine.cause)
                     return complete(id)
                 }
                 delay(if (live) LIVE_POLL_MS else 50)
@@ -1036,6 +1045,9 @@ class RecordingService : Service() {
             private set
         var failure: String? = null
             private set
+        /** Why the notes wait for the person, when they do: the model install's failure or the guard's stop. */
+        var cause: WaitCause? = null
+            private set
         var threads = 1
             private set
         private var vad: SileroVad? = null
@@ -1076,7 +1088,7 @@ class RecordingService : Service() {
                 engineRetry = false
                 reset()
             }
-            if (stopped) { failure = ENGINE_STOPPED; resolved = true; return true }
+            if (stopped) { failure = ENGINE_STOPPED; cause = WaitCause.EngineStopped; resolved = true; return true }
             if (testDecoder != null) { resolved = true; return true }
             val status = app.models.status.value
             if (resolved && modelUnavailable && status !is ModelStatus.Failed && status != ModelStatus.NotBundled) reset()
@@ -1096,7 +1108,7 @@ class RecordingService : Service() {
                         null
                     }
                 }
-                is ModelStatus.Failed -> { failure = status.message; modelUnavailable = true }
+                is ModelStatus.Failed -> { failure = status.message; cause = status.waitCause(); modelUnavailable = true }
                 ModelStatus.NotBundled -> { failure = MODEL_MISSING; modelUnavailable = true }
             }
             resolved = true
@@ -1104,7 +1116,7 @@ class RecordingService : Service() {
         }
 
         private fun reset() {
-            resolved = false; modelUnavailable = false; loadTried = false; failure = null
+            resolved = false; modelUnavailable = false; loadTried = false; failure = null; cause = null
             consecutiveFailures = 0; lastFailedWindow = null
         }
 
@@ -1136,7 +1148,7 @@ class RecordingService : Service() {
             if (loadTried || decoder != null) return
             loadTried = true
             // Loads that kept failing or killed the process wait for the user's Retry, also during capture.
-            if (!guard.allows()) { failure = ENGINE_STOPPED; return }
+            if (!guard.allows()) { failure = ENGINE_STOPPED; cause = WaitCause.EngineStopped; return }
             val installed = files
             if (testDecoder == null && installed == null) { failure = failure ?: MODEL_MISSING; return }
             threads = DeviceSpeechPolicy.recognizerThreads(this@RecordingService)

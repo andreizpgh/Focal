@@ -9,10 +9,12 @@ import app.focal.data.CaptureReason
 import app.focal.data.Note
 import app.focal.data.NoteState
 import app.focal.data.Paragraph
+import app.focal.data.WaitCause
 import app.focal.recording.LiveSession
 import app.focal.recording.SpeechAvailability
 import app.focal.speech.EngineFault
 import app.focal.speech.ModelStatus
+import app.focal.speech.waitCause
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -85,25 +87,47 @@ sealed interface WaitingReason {
 
     /** The engine guard stopped it after repeated crashes or failed loads, causes unknown: a neutral sentence. */
     data object Failures : WaitingReason
+
+    /**
+     * Too little free storage to prepare the speech model: "Free up about 850 MB…". Try again checks again, as does the
+     * next foreground start.
+     */
+    data class Storage(val shortBytes: Long) : WaitingReason
+
+    /** The speech model could not be prepared otherwise: Try again copies it out of the APK again. */
+    data object Install : WaitingReason
 }
 
 /**
- * Why a waiting note is not being transcribed: the speech work stopped after killing the process or failing to load
- * twice ([ModelState.stop], until Try again), named as memory only when that was confirmed. Null when the note simply
- * waits (an interrupted recording resumes at the next foreground start) and when it has no audio left to transcribe.
+ * Why a waiting note is not being transcribed. The speech work that stopped after killing the process or failing to load
+ * twice comes first ([ModelState.stop], until Try again), named as memory only when that was confirmed; then a model
+ * install that fails now ([ModelState.failure]); then the cause the speech worker stored on the note, unless the model
+ * is ready again or the guard no longer stops the work. Null when the note simply waits (an interrupted recording
+ * resumes at the next foreground start) and when it has no audio left to transcribe.
  */
-fun waitingReason(note: Note, phase: NotePhase, model: ModelState = ModelState(SpeechAvailability.READY)): WaitingReason? = when {
-    phase != NotePhase.WAITING || !note.audioPresent -> null
-    model.stop == EngineFault.MEMORY -> WaitingReason.Memory
-    model.stop != null -> WaitingReason.Failures
-    else -> null
+fun waitingReason(note: Note, phase: NotePhase, model: ModelState = ModelState(SpeechAvailability.READY)): WaitingReason? {
+    if (phase != NotePhase.WAITING || !note.audioPresent) return null
+    when (model.stop) {
+        EngineFault.MEMORY -> return WaitingReason.Memory
+        EngineFault.OTHER -> return WaitingReason.Failures
+        null -> Unit
+    }
+    if (model.availability == SpeechAvailability.READY) return null
+    val stored = WaitCause.decode(note.error).takeIf { note.state == NoteState.INTERRUPTED }
+    return when (val cause = model.failure ?: stored) {
+        is WaitCause.ModelStorage -> WaitingReason.Storage(cause.shortBytes)
+        WaitCause.ModelInstall -> WaitingReason.Install
+        // The guard no longer stops the work (model.stop is null): the note resumes.
+        WaitCause.EngineStopped, null -> null
+    }
 }
 
 /**
- * The speech model as notes see it: whether it can transcribe ([availability]), and why the speech work stopped
- * ([stop]: the app's engine guard, after it killed the process or failed to load twice in a row, until Try again).
+ * The speech model as notes see it: whether it can transcribe ([availability]), why the speech work stopped ([stop]: the
+ * app's engine guard, after it killed the process or failed to load twice in a row, until Try again) and why the model
+ * install failed ([failure], while it does).
  */
-data class ModelState(val availability: SpeechAvailability, val stop: EngineFault? = null) {
+data class ModelState(val availability: SpeechAvailability, val stop: EngineFault? = null, val failure: WaitCause? = null) {
     val stopped: Boolean get() = stop != null
 }
 
@@ -114,7 +138,7 @@ fun FocalApplication.modelStates(): Flow<ModelState> = combine(models.status, en
         is ModelStatus.Ready -> SpeechAvailability.READY
         else -> SpeechAvailability.UNAVAILABLE
     }
-    ModelState(availability, stop)
+    ModelState(availability, stop, (status as? ModelStatus.Failed)?.waitCause())
 }.distinctUntilChanged()
 
 object NotePhases {

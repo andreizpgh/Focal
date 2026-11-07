@@ -17,6 +17,7 @@ import app.focal.data.NoteStore
 import app.focal.data.RawAsr
 import app.focal.data.StoredWindow
 import app.focal.data.ULTRA_ENGINE
+import app.focal.data.WaitCause
 import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingInput
 import app.focal.recording.RecordingService
@@ -24,6 +25,7 @@ import app.focal.recording.RecordingState
 import app.focal.recording.SessionOperations
 import app.focal.recording.SpeechAvailability
 import app.focal.speech.EngineStage
+import app.focal.speech.ModelFailure
 import app.focal.speech.ModelStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
@@ -32,6 +34,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -164,6 +167,49 @@ class EngineGuardServiceTest {
             store.note(recording)?.state == NoteState.READY && !SessionOperations.matchesSession(false, recording)
         }
         assertTrue(store.paragraphs(recording).isNotEmpty())
+    }
+
+    /**
+     * A model that could not be prepared leaves the notes waiting with the typed cause, so they can say why: storage
+     * that ran short (what to free), or a copy that failed otherwise. The next foreground start checks storage again by
+     * itself and resumes them; the person's Try again copies a failed model again and transcribes every waiting note.
+     */
+    @Test fun aModelThatCouldNotBePreparedLeavesItsCauseOnTheWaitingNotes() {
+        assumeTrue("The model is bundled", runBlocking { app.models.awaitFiles() } != null)
+        dying = false
+        val storage = ModelStatus.Failed("Free up space to prepare the speech model.", failure = ModelFailure.STORAGE, shortBytes = 850_000_000)
+        val damaged = ModelStatus.Failed("The bundled speech model is damaged. Reinstall Focal.", permanent = true, failure = ModelFailure.INSTALL)
+        for ((failure, cause) in listOf(storage to WaitCause.ModelStorage(850_000_000), damaged to WaitCause.ModelInstall)) {
+            val waiting = waitingNote(SAVED_MS)
+            val other = waitingNote(SAVED_MS)
+            // The real speech path, which looks at the model: it cannot run, so nothing is decoded.
+            RecordingService.decoderFactoryForTests = null
+            app.models.settleForTests(failure)
+            send(RecordingService.DRAIN)
+            await("Both notes wait with the cause", 30_000) {
+                !serviceRunning() && listOf(waiting, other).all {
+                    store.note(it)?.let { note -> note.state == NoteState.INTERRUPTED && WaitCause.decode(note.error) == cause } == true
+                }
+            }
+            assertTrue("Its audio is kept", store.audioFile(waiting).length() > 0)
+            RecordingService.decoderFactoryForTests = { opened.incrementAndGet(); decoder() }
+            if (failure.failure == ModelFailure.STORAGE) {
+                // Space came back: the next foreground start checks again by itself and resumes every waiting note.
+                app.autoResumeTranscription = true
+                activity.onActivity { app.resumeWaitingTranscription(it) }
+            } else {
+                // A damaged copy is not retried by a foreground start; the person's Try again copies it again.
+                activity.onActivity { app.resumeWaitingTranscription(it) }
+                SystemClock.sleep(QUIET_MS)
+                assertEquals(damaged, app.models.status.value)
+                send(RecordingService.RECOVER, waiting)
+            }
+            await("Both notes ready", 60_000) {
+                listOf(waiting, other).all { store.note(it)?.state == NoteState.READY && !SessionOperations.matchesSession(false, it) }
+            }
+            assertTrue(app.models.status.value is ModelStatus.Ready)
+            app.autoResumeTranscription = false
+        }
     }
 
     /**

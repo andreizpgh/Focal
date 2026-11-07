@@ -36,6 +36,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.NoteState
 import app.focal.data.NoteStore
 import app.focal.data.StoredWindow
+import app.focal.data.WaitCause
 import app.focal.recording.LiveSession
 import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingService
@@ -44,6 +45,9 @@ import app.focal.recording.ServiceNotifications
 import app.focal.recording.SessionOperations
 import app.focal.speech.EngineGuard
 import app.focal.speech.EngineStage
+import app.focal.speech.ModelFailure
+import app.focal.speech.ModelStatus
+import app.focal.speech.waitCause
 import app.focal.ui.state.PlaybackViewModel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -815,6 +819,58 @@ class InterfaceTest {
             app.engineGuard.clearForTests()
             RecordingService.decoderFactoryForTests = null
             ServiceNotifications.cancelReady(app, id)
+        }
+    }
+
+    /**
+     * A model that could not be prepared leaves a waiting note that says why and offers Try again: what to free when
+     * storage ran short, a neutral sentence when the copy failed otherwise. Try again prepares the model again (copied
+     * from the APK unless it is installed already) and transcribes the note, which keeps its audio throughout.
+     */
+    @Test fun aModelThatCouldNotBePreparedSaysWhyAndTryAgainTranscribes() {
+        assumeTrue("The model is bundled", runBlocking { app.models.awaitFiles() } != null)
+        RecordingService.decoderFactoryForTests = {
+            object : RecordingDecoder {
+                override suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int) = error("Silence is never decoded")
+                override fun cancel() = Unit
+                override fun close() = Unit
+            }
+        }
+        val cases = listOf(
+            ModelStatus.Failed("Free up space to prepare the speech model.", failure = ModelFailure.STORAGE, shortBytes = 850_000_000) to
+                "Free up about 850 MB to prepare the speech model. Your audio is saved.",
+            ModelStatus.Failed("The bundled speech model is damaged. Reinstall Focal.", permanent = true, failure = ModelFailure.INSTALL) to
+                "The speech model couldn’t be prepared. Your audio is saved.",
+        )
+        try {
+            for ((failure, sentence) in cases) {
+                val id = app.store.create().also { created += it }
+                app.store.audioFile(id).writeBytes(ByteArray(2 * BYTES_PER_SECOND) { if (it % 4 == 2) 1 else 0 })
+                app.store.duration(id, 2_000)
+                app.store.state(id, NoteState.INTERRUPTED, WaitCause.encode(failure.waitCause()))
+                launch(Intent(app, MainActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra(RecordingService.NOTE, id))
+                // The foreground start checks a failed install again by itself; this one fails after that check.
+                runBlocking { app.models.awaitFiles() }
+                app.models.settleForTests(failure)
+                val reason = hasText(sentence)
+                await("the reason", reason)
+                val tryAgain = hasContentDescription("Try again") and hasClickAction()
+                compose.onNode(tryAgain).assertIsDisplayed()
+                compose.onNode(tryAgain).performClick()
+                await("the transcribed note", hasText("No speech was recognized."))
+                awaitGone("the reason", reason)
+                compose.waitUntil(TIMEOUT_MS) {
+                    app.store.note(id)?.state == NoteState.READY && app.store.audioFile(id).length() == 2L * BYTES_PER_SECOND &&
+                        !SessionOperations.matchesSession(false, id) && RecordingState.live.value.noteId == null
+                }
+                assertTrue(app.models.status.value is ModelStatus.Ready)
+                scenario?.close()
+                scenario = null
+                ServiceNotifications.cancelReady(app, id)
+            }
+        } finally {
+            RecordingService.decoderFactoryForTests = null
+            if (app.models.status.value is ModelStatus.Failed) app.models.retry()
         }
     }
 
