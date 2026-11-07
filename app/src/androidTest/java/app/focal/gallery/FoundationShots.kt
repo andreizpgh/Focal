@@ -30,17 +30,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,7 +50,6 @@ import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.FocalIconButton
 import app.focal.ui.components.FocalPrimaryPill
 import app.focal.ui.components.FocalTextButton
-import app.focal.ui.components.Glyph
 import app.focal.ui.components.Mark
 import app.focal.ui.components.MaterialBounds
 import app.focal.ui.components.NineBars
@@ -88,12 +82,12 @@ object FoundationShots {
         addAll(themed("controls-note") { NoteControls() })
         add(Shot("controls-material", dark = false) { MaterialControls() })
         addAll(themed("waves") { WaveSheet() })
-        add(Shot("scene-live", dark = false) { SceneMock(paused = false) })
-        add(Shot("scene-paused", dark = false) { SceneMock(paused = true) })
         add(Shot("ready-morph-light", dark = false, settleMs = after(READY_AT_MS, 80)) { ReadyMorph() })
         add(Shot("copied-light", dark = false, settleMs = 300, click = COPY_TAG) { CopiedDock() })
         add(Shot("controls-library-light-200", dark = false, fontScale = 2f) { LibraryControls() })
-        add(Shot("controls-note-light-200", dark = false, fontScale = 2f) { NoteControls() })
+        // At 2.0x the nine note docks do not fit one frame: two frames, every dock whole.
+        add(Shot("controls-note-light-200", dark = false, fontScale = 2f) { NoteControls(NoteDocks.take(NOTE_DOCKS_FIRST)) })
+        add(Shot("controls-note-more-light-200", dark = false, fontScale = 2f) { NoteControls(NoteDocks.drop(NOTE_DOCKS_FIRST)) })
     }
 }
 
@@ -214,18 +208,26 @@ private fun LibraryControls() {
     }
 }
 
+/** Every note dock state, captioned. */
+private val NoteDocks: List<Pair<String, DockState>> = listOf(
+    "Transcribing, 64 %" to DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Transcribing, 0.64f)),
+    "Transcribing, 18 %" to DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Transcribing, 0.18f)),
+    "Waiting" to DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Waiting, 0.4f)),
+    "Preparing" to DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Preparing, 0f)),
+    "Ready" to DockState.Note(PlayCircle.Play, NotePill.Copy()),
+    "Playing" to DockState.Note(PlayCircle.PausePlayback, NotePill.Copy()),
+    "Text only" to DockState.Note(PlayCircle.None, NotePill.Copy()),
+    "No speech" to DockState.Note(PlayCircle.Play, NotePill.Copy(enabled = false)),
+    "Recording elsewhere" to DockState.Note(PlayCircle.Unavailable, NotePill.Copy()),
+)
+
+/** How many of [NoteDocks] the first 2.0x frame holds. */
+private const val NOTE_DOCKS_FIRST = 5
+
 @Composable
-private fun NoteControls() {
+private fun NoteControls(docks: List<Pair<String, DockState>> = NoteDocks) {
     Page {
-        DockDemo("Transcribing, 64 %", DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Transcribing, 0.64f)))
-        DockDemo("Transcribing, 18 %", DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Transcribing, 0.18f)))
-        DockDemo("Waiting", DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Waiting, 0.4f)))
-        DockDemo("Preparing", DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Preparing, 0f)))
-        DockDemo("Ready", DockState.Note(PlayCircle.Play, NotePill.Copy()))
-        DockDemo("Playing", DockState.Note(PlayCircle.PausePlayback, NotePill.Copy()))
-        DockDemo("Text only", DockState.Note(PlayCircle.None, NotePill.Copy()))
-        DockDemo("No speech", DockState.Note(PlayCircle.Play, NotePill.Copy(enabled = false)))
-        DockDemo("Recording elsewhere", DockState.Note(PlayCircle.Unavailable, NotePill.Copy()))
+        docks.forEach { (caption, state) -> DockDemo(caption, state) }
     }
 }
 
@@ -315,42 +317,6 @@ private fun WithBadge(height: Dp, diameter: Dp, wave: @Composable () -> Unit) {
                 .align(AbsoluteAlignment.TopLeft)
                 .absoluteOffset((Mark.BADGE_X * k).dp - PauseBadgeMetrics.scene / 2, (Mark.BADGE_Y * k).dp - PauseBadgeMetrics.scene / 2),
         )
-    }
-}
-
-/** The scene's layout at rest with text (spec 4.21.7), drawn from the components (the scene stage builds it). */
-@Composable
-private fun SceneMock(paused: Boolean) {
-    val meter = remember { FixedMeter(previewLevels) }
-    val bottom = rememberBottomColumnState()
-    Box(Modifier.fillMaxSize().sceneMaterial()) {
-        Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
-            Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.TopCenter) {
-                Glyph(FocalIcon.Up, Scene.chevron, Modifier.padding(FocalGrid.x12), size = 22.dp)
-            }
-            Box(Modifier.fillMaxWidth().padding(top = 76.dp), contentAlignment = Alignment.TopCenter) {
-                if (paused) WithBadge(136.dp, PauseBadgeMetrics.scene) { NineBars(WaveMode.Live(meter, paused = true), WaveDress.Material, Modifier.markBox(136.dp)) }
-                else NineBars(WaveMode.Live(meter), WaveDress.Material, Modifier.markBox(136.dp))
-            }
-            Text(
-                if (paused) "12:48" else "4:16", style = FocalType.sceneTimer, color = if (paused) Scene.muted else Scene.hi,
-                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 228.dp),
-            )
-            Column(
-                Modifier.fillMaxWidth().padding(top = 358.dp, start = FocalGrid.x24, end = FocalGrid.x24).height(397.dp)
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, endY = 128.dp.toPx()), blendMode = BlendMode.DstIn)
-                    },
-                verticalArrangement = Arrangement.spacedBy(FocalGrid.x16, Alignment.Bottom),
-            ) {
-                FakeScene.forEachIndexed { index, text ->
-                    Text(text, style = FocalType.sceneText, color = if (index == FakeScene.lastIndex) Scene.ink else Scene.muted)
-                }
-            }
-        }
-        BottomColumn(bottom, dock = { Dock(DockState.Live(paused), noActions, material = { MaterialBounds.Everywhere }) }, modifier = Modifier.fillMaxSize())
     }
 }
 
