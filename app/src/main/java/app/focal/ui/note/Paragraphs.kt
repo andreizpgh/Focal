@@ -399,8 +399,8 @@ internal fun ParagraphField(
 /**
  * Backspace from a soft keyboard at the very start of a paragraph (spec 5.7). Most keyboards send it as
  * `deleteSurroundingText`, which at offset 0 deletes nothing, so neither the field nor its InputTransformation ever
- * hears of it. The field's input connection is wrapped: a delete before a caret at 0 (no selection, no composition)
- * joins instead, and is consumed. A keyboard that sends a DEL key event reaches the field's key handler instead.
+ * hears of it. The field's input connection is wrapped: a delete before a caret at 0 (no selection) joins instead,
+ * and is consumed. A keyboard that sends a DEL key event reaches the field's key handler instead.
  * Called on the main thread, like every input connection of a Compose view.
  */
 internal class JoinAtStart(private val state: TextFieldState, private val onJoin: () -> Unit) : PlatformTextInputInterceptor {
@@ -429,8 +429,12 @@ internal class JoinAtStart(private val state: TextFieldState, private val onJoin
     }
 
     companion object {
-        /** The caret sits before the first character, with nothing selected or being composed. */
-        fun atStart(state: TextFieldState): Boolean = state.selection == TextRange.Zero && state.composition == null
+        /**
+         * The caret sits before the first character with nothing selected. A composition does not stop the join: at a
+         * caret at 0 it can only cover text after the caret (Gboard marks the word the caret touches as composing),
+         * and Backspace deletes before the caret.
+         */
+        fun atStart(state: TextFieldState): Boolean = state.selection == TextRange.Zero
     }
 }
 

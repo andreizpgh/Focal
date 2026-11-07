@@ -54,8 +54,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Edit's input paths (spec 5.7): Backspace at a paragraph's start joins it to the one before, whether a soft keyboard
- * sends it through the input connection (`deleteSurroundingText`, which at offset 0 changes no text) or a hardware
- * key sends Backspace; a join the store refuses keeps both paragraphs and says so; and the session's undo log
+ * sends it through the input connection (`deleteSurroundingText`, which at offset 0 changes no text, also while the
+ * keyboard composes the word after the caret) or a hardware key sends Backspace; a join the store refuses keeps both paragraphs and says so; and the session's undo log
  * survives the page being recreated. The note page in the real shell, over an in-memory note.
  */
 @RunWith(AndroidJUnit4::class)
@@ -157,6 +157,18 @@ class NoteEditInputTest {
         // The caret lands where the joined text begins.
         rule.waitUntil(TIMEOUT_MS) { fieldSelection() == TextRange(FIRST.length + 1) }
         assertEquals(listOf("$FIRST $SECOND"), store.paragraphs.map { it.text })
+    }
+
+    @Test fun aBackspaceJoinsWhileTheKeyboardComposesTheWordAfterTheCaret() {
+        val store = MemoryNote(listOf(FIRST, SECOND))
+        rule.setContent { FocalTheme(dark = false) { EditingNote(store, fieldId = 2, caret = 0) } }
+        val input = connection()
+        // Gboard marks the word the caret touches as composing (seen on API 33); the caret stays at 0.
+        assertTrue(rule.runOnUiThread { input.setComposingRegion(0, SECOND.indexOf(' ')) })
+        rule.waitUntil(TIMEOUT_MS) { fieldSelection() == TextRange.Zero }
+        assertTrue(rule.runOnUiThread { input.deleteSurroundingText(1, 0) })
+        rule.waitUntil(TIMEOUT_MS) { store.joins.get() == 1 }
+        rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasSetTextAction() and hasText("$FIRST $SECOND")).fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test fun aSoftKeyboardDeleteInsideTheTextStillDeletes() {
