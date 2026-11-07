@@ -655,6 +655,20 @@ class EditSessionTest {
         assertEquals("cou" to "ntry ", EditSession.splitTexts(" cou  ntry ", 5))
     }
 
+    /** Undo within the autosave's 600 ms: the typing is stored first, as its own step, and that is what is undone. */
+    @Test fun undoRightAfterTypingUndoesTheTyping() = runBlocking {
+        val store = FakeStore("Alpha.")
+        val page = Page(store)
+        page.type(1, "Alpha, one.")
+        assertTrue(page.edit.save())
+        page.type(1, "Alpha, two.")
+        assertEquals(CaretAt(1, "Alpha, one".length), page.undo())
+        assertEquals("Alpha, one.", store.text[1])
+        assertEquals(FieldText(1, "Alpha, one."), page.field)
+        page.redo()
+        assertEquals("Alpha, two.", store.text[1])
+    }
+
     /** P1: a split the store did not take survives process death in the saved state; the next write makes it. */
     @Test fun aSplitThatFailedSurvivesProcessDeath() = runBlocking {
         val store = FakeStore("Alpha beta.")

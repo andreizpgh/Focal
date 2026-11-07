@@ -223,6 +223,20 @@ class NoteEditSessionTest {
         awaitField(FIRST)
     }
 
+    /** Undo pressed right after typing, before the autosave: the typing is stored as its own step and that is undone. */
+    @Test fun undoRightAfterTypingUndoesTheTyping() {
+        val store = EditStore(listOf(FIRST, SECOND))
+        rule.setContent { FocalTheme(dark = false) { Note(store, fieldId = 1, caret = FIRST.length) } }
+        field().performTextReplacement(REVISED)
+        rule.waitUntil(TIMEOUT_MS) { store.writes.get() == 1 }
+        field().performTextReplacement(ADDED)
+        press("Undo")
+        awaitStore(store, listOf(REVISED, SECOND))
+        awaitField(REVISED)
+        press("Redo")
+        awaitStore(store, listOf(ADDED, SECOND))
+    }
+
     /**
      * P1, rotation: Enter's split did not store (a full disk) and the page is recreated with it still shown. The note's
      * view model's session goes on with it, and Retry stores the split and the words typed after it.
