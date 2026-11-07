@@ -507,7 +507,9 @@ private fun TextRegion(
     var announced by remember { mutableStateOf("") }
     val stageInks = TranscriptInks(colors.stageInk, colors.stageRecede, Scene.faint)
     val sceneInks = TranscriptInks(colors.sceneInk, colors.sceneRecede, Scene.faint)
-    val focus = !scene.storageFull
+    // On the stage a storage-full pause recedes the transcript under its "Storage is full" line (4.22.3); the scene
+    // keeps its latest stretch bright and says it in the state line alone (4.21.4).
+    val stageFocus = !scene.storageFull
     Box(
         Modifier
             .fillMaxSize()
@@ -556,7 +558,7 @@ private fun TextRegion(
                     .clearAndSetSemantics { },
             ) {
                 StageTranscript(
-                    scene.paragraphs, FocalType.stageWords, stageInks, focus,
+                    scene.paragraphs, FocalType.stageWords, stageInks, stageFocus,
                     Modifier.fillMaxWidth().wrapContentHeight(Alignment.Bottom, unbounded = true),
                     hint = if (scene.hint && !scene.storageFull) { { Text(stringResource(R.string.hint_first_text), style = FocalType.stageText, color = colors.stageRecede) } } else null,
                     footer = stageFooter(scene),
@@ -564,7 +566,7 @@ private fun TextRegion(
             }
         }
         SceneTranscript(
-            scene.paragraphs, listState, FocalType.sceneWords, sceneInks, focus,
+            scene.paragraphs, listState, FocalType.sceneWords, sceneInks,
             contentPadding = with(density) {
                 val left = slots.textLeft.toDp()
                 val right = (slots.width - slots.textRight).toDp()

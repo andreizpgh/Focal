@@ -166,7 +166,8 @@ data class TranscriptInks(val ink: Color, val muted: Color, val faint: Color)
 /**
  * One arrival's colour motion, shared by the paragraphs of a typesetting: the latest stretch develops faint to ink
  * 60 ms after it arrives (`develop`), the stretch before it recedes ink to muted 140 ms after that (spec 2.8.1).
- * [focus] off (a storage-full pause) recedes the current stretch too. Values are read where they are drawn.
+ * [focus] off (a storage-full pause on the stage, where "Storage is full" takes the bright line) recedes the current
+ * stretch too. Values are read where they are drawn.
  */
 @Stable
 class TranscriptMotion(arrival: Int, focus: Boolean) {
@@ -318,7 +319,8 @@ private const val STAGE_PARAGRAPHS = 6
  * latest line rides the bottom edge and older text scrolls up under the mask. The morph lays out the same list in its
  * moving region, so a short transcript sits under the timer at every p and the scene's frame at p = 1 is the morph's. While [follow] is on (the list shows the latest paragraph), a new paragraph is brought into view and opens
  * from zero height, so the text above slides up on `move`; scrolled back by more than a paragraph, the list holds
- * still and the caller shows "Latest".
+ * still and the caller shows "Latest". The latest stretch stays bright through every pause: a storage-full one only
+ * writes "Storage is full" in the state line (spec 4.21.4, T4).
  */
 @Composable
 fun SceneTranscript(
@@ -326,12 +328,11 @@ fun SceneTranscript(
     state: LazyListState,
     style: TextStyle,
     inks: TranscriptInks,
-    focus: Boolean,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
     val view = rememberTranscript(paragraphs)
-    val motion = rememberTranscriptMotion(view, focus)
+    val motion = rememberTranscriptMotion(view, focus = true)
     val now = remember(view) { SystemClock.uptimeMillis() }
     val newest = view.paragraphs.lastOrNull()?.id
     // The data changes in composition, so the list keeps the latest paragraph in view in the same frame.
