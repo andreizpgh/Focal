@@ -2,9 +2,13 @@ package app.focal.ui.scene
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.unit.Density
 import app.focal.ui.shell.BackEase
+import app.focal.ui.shell.LiveSurfaceState
 import app.focal.ui.state.LiveParagraph
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -26,6 +30,39 @@ class MorphTest {
         assertEquals(false, ExpandDrag.claims(17f, 9f, slop))
         assertEquals(false, ExpandDrag.claims(-20f, 0f, slop))
         assertEquals(false, ExpandDrag.claims(2f, -19f, slop))
+    }
+
+    /** The drag itself (the list's nested-scroll parent): it takes the list's leftovers only once [ExpandDrag.track] has decided. */
+    @Test fun theLiveStageTakesTheListsDragOnlyOnceItHeadsDown() {
+        val slop = 18f
+        val live = LiveSurfaceState(false)
+        val drag = ExpandDrag(live, CoroutineScope(Dispatchers.Unconfined)).apply { travel = { 400f } }
+        val down = Offset(0f, 40f)
+        fun scroll() = drag.onPostScroll(Offset.Zero, down, NestedScrollSource.UserInput)
+        // Armed but undecided: the list's slop has passed on its own axis, nothing moves yet.
+        drag.arm(true)
+        assertEquals(Offset.Zero, scroll())
+        drag.track(10f, 12f, slop)
+        assertEquals(Offset.Zero, scroll())
+        assertFalse(drag.tracking)
+        // Mostly sideways: the stream is the list's to the end.
+        drag.track(30f, 20f, slop)
+        assertEquals(Offset.Zero, scroll())
+        drag.track(5f, 30f, slop)
+        assertEquals(Offset.Zero, scroll())
+        assertFalse(drag.tracking)
+        assertEquals(0f, live.expansion.value, 0f)
+        // A new stream that heads down takes the leftovers into p.
+        drag.arm(true)
+        drag.track(5f, 30f, slop)
+        assertEquals(down, scroll())
+        assertTrue(drag.tracking)
+        assertEquals(0.1f, live.expansion.value, 1e-4f)
+        // A stream that does not start on the stage is never armed.
+        val idle = ExpandDrag(LiveSurfaceState(false), CoroutineScope(Dispatchers.Unconfined))
+        idle.arm(false)
+        idle.track(0f, 30f, slop)
+        assertEquals(Offset.Zero, idle.onPostScroll(Offset.Zero, down, NestedScrollSource.UserInput))
     }
     private val density = Density(1f)
     private val slots = SceneSlots.of(width = 412f, height = 915f, statusTop = 40f, navigationBottom = 24f, timerLine = 84f, compact = false, density = density)

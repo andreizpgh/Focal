@@ -2,6 +2,7 @@ package app.focal.gallery
 
 import androidx.activity.BackEventCompat
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.performTouchInput
@@ -56,6 +57,25 @@ class SceneGestureTest {
         assertEquals(0f, p, 0f)
     }
 
+    /**
+     * A drag on the live stage about 30° below the horizontal (rightward: the settings swipe takes only leftward ones)
+     * passes the list's vertical slop on its way, but heads more sideways than down: the scene stays folded while the
+     * finger moves and after it lifts (spec 6.5).
+     */
+    @Test fun aMostlySidewaysDragOnTheStageLeavesTheSceneFolded() {
+        showLiveLibrary()
+        val stage = rule.onNode(hasContentDescription("Recording", substring = true))
+        stage.performTouchInput {
+            down(Offset(left + width * 0.1f, top + height * 0.2f))
+            repeat(DIAGONAL_STEPS) { moveBy(Offset(width * 0.08f, width * 0.08f * TAN_30)) }
+        }
+        rule.waitForIdle()
+        assertEquals(0f, p, 0f)
+        stage.performTouchInput { up() }
+        rule.waitForIdle()
+        assertEquals(0f, p, 0f)
+    }
+
     @Test fun aShortDragSpringsBack() {
         showLiveLibrary()
         rule.onNode(hasContentDescription("Recording", substring = true)).performTouchInput { swipeDown(startY = top + height * 0.2f, endY = top + height * 0.6f, durationMillis = 600) }
@@ -93,5 +113,7 @@ class SceneGestureTest {
         const val PROGRESS_X = 300f
         const val HALF = 0.5f
         const val TOLERANCE = 0.01f
+        const val DIAGONAL_STEPS = 10
+        const val TAN_30 = 0.577f
     }
 }
