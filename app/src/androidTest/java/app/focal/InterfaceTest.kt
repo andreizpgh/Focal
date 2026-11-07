@@ -36,6 +36,7 @@ import app.focal.recording.RecordingState
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -47,7 +48,8 @@ import java.util.UUID
 
 /**
  * The rebuilt interface end to end, through MainActivity and the real view models and store: a note opens from the
- * library and Back returns, Copy fills the clipboard, the note's keyboard shortcuts reach it with nothing focused, Edit saves
+ * library and Back returns, Copy fills the clipboard, the note's keyboard shortcuts reach it with nothing focused (Space
+ * plays and pauses, Ctrl+Z and Ctrl+Shift+Z undo and redo in Edit, Space in Find's query is text), Edit saves
  * through the store, search opens a note at its paragraph, Delete offers
  * Undo, Settings opens by its accessibility action and applies the theme at once, a recording shows its controls in
  * the dock, a notification's intent opens its note, and Edit, Find, an open scene and an open note (between one pane
@@ -177,6 +179,90 @@ class InterfaceTest {
         await("Copied", hasContentDescription("Copied"))
         press(KeyEvent.KEYCODE_F, ctrl)
         await("Find", hasSetTextAction() and hasContentDescription("Find in note"))
+    }
+
+    private fun ctrlKey(keyCode: Int, meta: Int = 0) =
+        KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON or meta)
+
+    @Test fun spacePlaysAndPausesTheNoteBeingRead() {
+        val title = "Space fixture $tag"
+        val words = listOf("Space plays this synthetic paragraph.", "And this one, after a blank line.")
+        val id = note(title, words)
+        // Silence long enough to be still playing at the second Space.
+        app.store.audioFile(id).writeBytes(ByteArray(LONG_AUDIO_SECONDS * BYTES_PER_SECOND))
+        launch()
+        openFromLibrary(title, words[0])
+        val play = hasContentDescription("Play") and hasClickAction()
+        await("Play", play)
+        // Nothing on the page has focus after the tap: Space reaches the page as a hardware keyboard sends it.
+        press(KeyEvent.KEYCODE_SPACE)
+        await("Pause playback", hasContentDescription("Pause playback"))
+        compose.onNode(hasText(title) and isHeading()).assertIsDisplayed()
+        // The activity's route (onKeyDown) hands it to the page too; a held Space's repeats are not taken.
+        var handled = false
+        val repeat = KeyEvent(0, 0, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 1)
+        scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, repeat) }
+        assertFalse("A repeat is not taken", handled)
+        scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE)) }
+        assertTrue("The activity hands Space to the page", handled)
+        await("Play again", play)
+    }
+
+    @Test fun spaceTypedIntoFindStaysInTheQuery() {
+        val title = "Space find fixture $tag"
+        val words = listOf("The harbour opens at six.", "Boats leave the harbour late.")
+        val id = note(title, words)
+        app.store.audioFile(id).writeBytes(ByteArray(LONG_AUDIO_SECONDS * BYTES_PER_SECOND))
+        launch()
+        openFromLibrary(title, words[0])
+        press(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val field = hasSetTextAction() and hasContentDescription("Find in note")
+        await("Find", field)
+        compose.onNode(field).performTextInput("harbour")
+        await("the count", hasText("1 of 2"))
+        // The focused query takes Space as text; playback does not start.
+        press(KeyEvent.KEYCODE_SPACE)
+        await("the space in the query", field and hasText("harbour "))
+        back()
+        awaitGone("Find", field)
+        await("Play", hasContentDescription("Play") and hasClickAction())
+        assertTrue("Not playing", compose.onAllNodes(hasContentDescription("Pause playback")).fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test fun undoAndRedoKeysReachEditFromTheFieldAndFromTheActivity() {
+        val title = "Undo keys fixture $tag"
+        val words = listOf("The paragraph before an edit.", "A paragraph that stays.")
+        val id = note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        compose.onNodeWithContentDescription("Edit").performClick()
+        await("the edit bar", hasContentDescription("Done"))
+        compose.onNodeWithText(words[0]).performClick()
+        await("the paragraph's field", hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
+        fun stored() = app.store.paragraphs(id).firstOrNull()?.text
+        val ctrl = KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        val shift = KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
+        // The field has focus: the page hears Ctrl+Z before the field's own undo, and undoes the session's step.
+        press(KeyEvent.KEYCODE_Z, ctrl)
+        compose.waitUntil(TIMEOUT_MS) { stored() == words[0] }
+        press(KeyEvent.KEYCODE_Z, ctrl or shift)
+        compose.waitUntil(TIMEOUT_MS) { stored() == REVISED }
+        // With no focused node to hear them the activity does (onKeyShortcut), and hands them to the page.
+        var handled = false
+        scenario!!.onActivity { handled = it.onKeyShortcut(KeyEvent.KEYCODE_Z, ctrlKey(KeyEvent.KEYCODE_Z)) }
+        assertTrue("Ctrl+Z through the activity", handled)
+        compose.waitUntil(TIMEOUT_MS) { stored() == words[0] }
+        scenario!!.onActivity { handled = it.onKeyShortcut(KeyEvent.KEYCODE_Z, ctrlKey(KeyEvent.KEYCODE_Z, shift)) }
+        assertTrue("Ctrl+Shift+Z through the activity", handled)
+        compose.waitUntil(TIMEOUT_MS) { stored() == REVISED }
+        // Out of Edit the page declines them, and the activity leaves them to the system.
+        compose.onNode(hasContentDescription("Done")).performClick()
+        awaitGone("the field", hasSetTextAction())
+        scenario!!.onActivity { handled = it.onKeyShortcut(KeyEvent.KEYCODE_Z, ctrlKey(KeyEvent.KEYCODE_Z)) }
+        assertFalse("Ctrl+Z while reading", handled)
+        assertEquals(REVISED, stored())
     }
 
     @Test fun editSavesTheParagraphThroughTheStore() {
@@ -547,6 +633,7 @@ class InterfaceTest {
         const val TIMEOUT_MS = 10_000L
         const val SETTLE_MS = 1_000L
         const val BYTES_PER_SECOND = 32_000
+        const val LONG_AUDIO_SECONDS = 30
         const val REVISED = "The paragraph after a synthetic edit."
         const val DRAFT = "The paragraph after a synthetic edit, typed on."
         const val PARENT_STEPS = 3
