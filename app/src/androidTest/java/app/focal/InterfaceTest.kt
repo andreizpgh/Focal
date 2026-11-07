@@ -18,6 +18,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -93,6 +94,13 @@ class InterfaceTest {
         app.store.insertNoteForTests(paragraphs, title = title).also {
             created += it
             app.store.audioFile(it).writeBytes(ByteArray(paragraphs.size * BYTES_PER_SECOND))
+        }
+
+    /** A note whose silence lasts long enough to be still playing at the next Space. */
+    private fun longNote(title: String, paragraphs: List<String>): String =
+        app.store.insertNoteForTests(paragraphs, durationMs = LONG_AUDIO_SECONDS * 1_000L, title = title).also {
+            created += it
+            app.store.audioFile(it).writeBytes(ByteArray(LONG_AUDIO_SECONDS * BYTES_PER_SECOND))
         }
 
     private fun launch(intent: Intent = Intent(app, MainActivity::class.java)) {
@@ -207,28 +215,13 @@ class InterfaceTest {
     @Test fun spacePlaysAndPausesTheNoteBeingRead() {
         val title = "Space fixture $tag"
         val words = listOf("Space plays this synthetic paragraph.", "And this one, after a blank line.")
-        val id = note(title, words)
-        // Silence long enough to be still playing at the next Space.
-        app.store.audioFile(id).writeBytes(ByteArray(LONG_AUDIO_SECONDS * BYTES_PER_SECOND))
+        longNote(title, words)
         launch()
         openFromLibrary(title, words[0])
         val play = hasContentDescription("Play") and hasClickAction()
         await("Play", play)
-        // Nothing has focus after the tap; the first key leaves touch mode and puts focus on the top bar's back button
-        // by itself. Space stays the page's: held down it plays once (its repeat goes with it), and it never goes Back.
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val now = SystemClock.uptimeMillis()
-        instrumentation.sendKeySync(KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 0))
-        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 1))
-        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_SPACE, 0))
-        poll("playback") { playing() }
-        Thread.sleep(SETTLE_MS)
-        assertTrue("Still playing on the note", playing())
-        press(KeyEvent.KEYCODE_SPACE)
-        poll("the pause") { !playing() }
-        await("Play again", play)
-        compose.onNode(hasText(title) and isHeading()).assertIsDisplayed()
-        // The activity's route (onKeyDown, nothing focused) hands it to the page too, and takes no repeat.
+        // Nothing has focus after the tap: the activity hears Space (onKeyDown) and hands it to the page; a held
+        // Space's repeats are not taken.
         var handled = false
         val repeat = KeyEvent(0, 0, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 1)
         scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, repeat) }
@@ -236,17 +229,52 @@ class InterfaceTest {
         val space = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE)
         scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, space) }
         assertTrue("The activity hands Space to the page", handled)
-        poll("playback again") { playing() }
+        poll("playback") { playing() }
+        frames()
         scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, space) }
-        poll("the pause again") { !playing() }
-        await("Play at the end", play)
+        assertTrue("The activity hands the next Space to the page", handled)
+        poll("the pause") { !playing() }
+        frames()
+        // Android spends the first key after a touch leaving touch mode, which puts focus on the top bar's back
+        // button by itself; leave it here directly. Space is still the page's: held down it plays once (its repeat
+        // goes with it), and it never presses the focused button (Back).
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.setInTouchMode(false)
+        frames { compose.onNode(hasContentDescription("Back") and isFocused()).assertExists() }
+        val now = SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 0))
+        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 1))
+        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_SPACE, 0))
+        poll("playback from the keyboard") { playing() }
+        frames()
+        assertTrue("Still playing on the note", playing())
+        press(KeyEvent.KEYCODE_SPACE)
+        poll("the pause from the keyboard") { !playing() }
+        frames {
+            compose.onNode(play).assertIsDisplayed()
+            compose.onNode(hasText(title) and isHeading()).assertIsDisplayed()
+        }
+    }
+
+    /**
+     * Lets the page catch up with the player, as a person's pace would: the test drives Compose's clock, which moves
+     * only while the test waits on Compose, and the player strip draws every frame, so Compose never idles. [block]
+     * reads the page after the frames.
+     */
+    private fun frames(block: () -> Unit = {}) {
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.mainClock.advanceTimeBy(SETTLE_MS)
+            block()
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
     }
 
     @Test fun spaceTypedIntoFindStaysInTheQuery() {
         val title = "Space find fixture $tag"
         val words = listOf("The harbour opens at six.", "Boats leave the harbour late.")
-        val id = note(title, words)
-        app.store.audioFile(id).writeBytes(ByteArray(LONG_AUDIO_SECONDS * BYTES_PER_SECOND))
+        longNote(title, words)
         launch()
         openFromLibrary(title, words[0])
         press(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
