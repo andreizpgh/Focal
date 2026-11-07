@@ -138,11 +138,28 @@ class EngineGuardTest {
         assertEquals(emptyMap<EngineStage, Int>(), process().deaths())
     }
 
+    @Test fun deathsAtInstallAreCountedButNeverBlock() {
+        // Two first-launch copies ended with no exit record (a swipe-away or a reboot before API 30).
+        process().dieInside(EngineStage.INSTALL)
+        process().dieInside(EngineStage.INSTALL)
+        val installing = process()
+        assertEquals(mapOf(EngineStage.INSTALL to 2), installing.deaths())
+        assertEquals(EngineStage.INSTALL, installing.lastDeath)
+        assertTrue("Deaths at install never block", installing.allows())
+        // They do not bring a block nearer either, nor arm Try again's single attempt.
+        installing.dieInside(EngineStage.DECODE)
+        val guard = process()
+        assertTrue(guard.allows())
+        guard.reset()
+        guard.dieInside(EngineStage.INSTALL)
+        assertTrue(process().allows())
+    }
+
     @Test fun aCompletedInstallClearsOnlyTheDeathsAtInstall() {
         process().dieInside(EngineStage.INSTALL)
         process().dieInside(EngineStage.DECODE)
         val guard = process()
-        assertFalse(guard.allows())
+        assertEquals(mapOf(EngineStage.INSTALL to 1, EngineStage.DECODE to 1), guard.deaths())
         guard.completed(EngineStage.INSTALL)
         assertEquals(mapOf(EngineStage.DECODE to 1), guard.deaths())
         assertTrue(guard.allows())

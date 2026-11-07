@@ -48,8 +48,9 @@ internal class BundledModelException(message: String, cause: Throwable? = null) 
  *
  * A failed install stays failed until something asks for a retry ([retry]): [ensureStarted], which the
  * speech worker may call as often as it likes, never repeats it. Each attempt runs inside [guard]'s install
- * stage; while the guard is blocked (the speech work kept killing the process) no attempt starts by itself, and the
- * status is a failure only the person's Retry, after the guard's reset, tries again.
+ * stage, whose deaths are logged but never block; while the guard is blocked (a later stage kept killing the
+ * process) no attempt starts by itself, and the status is a failure only the person's Retry, after the guard's reset,
+ * tries again.
  */
 class SpeechModels internal constructor(
     private val scope: CoroutineScope,

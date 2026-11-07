@@ -38,8 +38,8 @@ class SpeechModelsTest {
     private fun guard() = EngineGuard(File(folder.root, "speech-guard"), ProcessIdentity("process-$pid", pid++), { _, _ -> null })
 
     @Test fun noInstallStartsWhileTheEngineGuardIsBlockedAndRetryStartsIt() {
-        // Two processes died while the model was being installed.
-        repeat(EngineGuard.MAX_DEATHS) { guard().enter(EngineStage.INSTALL) }
+        // Two processes died while Silero VAD was created.
+        repeat(EngineGuard.MAX_DEATHS) { guard().enter(EngineStage.VAD_OPEN) }
         val guard = guard()
         assertFalse(guard.allows())
         val files = mapOf("tokens.txt" to File("tokens.txt"))
@@ -62,6 +62,18 @@ class SpeechModelsTest {
         assertEquals(ModelStatus.Ready(files), settle(guarded))
         assertEquals(1, attempts.get())
         assertNull(guard.markedOnDisk())
+    }
+
+    @Test fun deathsAtInstallNeverStopTheInstall() {
+        // Two first-launch copies were ended from outside (a swipe-away or a reboot, with no exit record).
+        repeat(EngineGuard.MAX_DEATHS) { guard().enter(EngineStage.INSTALL) }
+        val guard = guard()
+        assertTrue(guard.allows())
+        val files = mapOf("tokens.txt" to File("tokens.txt"))
+        val guarded = SpeechModels(scope, guard) { ModelStatus.Ready(files) }
+        guarded.ensureStarted()
+        assertEquals(ModelStatus.Ready(files), settle(guarded))
+        assertEquals(emptyMap<EngineStage, Int>(), guard.deaths())
     }
 
     @Test fun aCompletedInstallForgetsTheDeathsCountedAtInstall() {

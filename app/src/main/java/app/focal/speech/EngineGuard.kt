@@ -25,7 +25,10 @@ internal const val ENGINE_STOPPED = "The speech model could not load. Saved audi
 
 /** Where the speech work can take the whole process down with it: a native crash or an out-of-memory kill. */
 enum class EngineStage {
-    /** Copying the model out of the APK (first launch, or after an update that changed the model). */
+    /**
+     * Copying the model out of the APK (first launch, or after an update that changed the model). Its deaths are
+     * logged but never block ([EngineGuard.blocked]).
+     */
     INSTALL,
     /** Creating Silero VAD, the first call into the native speech runtime when a note is segmented. */
     VAD_OPEN,
@@ -82,6 +85,11 @@ data class ProcessExit(val reason: Int, val importance: Int) {
  * and clears every count; a completed install clears the deaths counted at install. Nothing else clears them, so
  * stages that each succeed once cannot hide a later stage that keeps dying.
  *
+ * Deaths at [EngineStage.INSTALL] are counted and logged, but they never block. The install is Java I/O with little
+ * memory and no native speech code, so a death there is almost always the person or the system: a swipe-away, Force
+ * stop or reboot during the first launch's copy, which Android before API 30 keeps no exit record of. Blocking on them
+ * would leave a fresh install without its model, and with no note yet to offer Try again.
+ *
  * The file is replaced by a rename and never synced: it must survive the process, not the device. Thread-safe.
  */
 class EngineGuard @VisibleForTesting internal constructor(
@@ -102,7 +110,7 @@ class EngineGuard @VisibleForTesting internal constructor(
 
     /**
      * True once the speech work died or failed [MAX_DEATHS] times without a decode completing in between, or once
-     * after the person's Try again.
+     * after the person's Try again. Deaths at install do not count here.
      */
     val blocked: StateFlow<Boolean> = blockedState.asStateFlow()
 
@@ -192,8 +200,8 @@ class EngineGuard @VisibleForTesting internal constructor(
      */
     fun reset() = synchronized(lock) {
         if (deaths.isEmpty()) return@synchronized
+        if (blocking() > 0) retried = true
         deaths.clear()
-        retried = true
         write()
         publish()
     }
@@ -229,8 +237,11 @@ class EngineGuard @VisibleForTesting internal constructor(
         start()
     }
 
+    /** The deaths and failures that can block: every stage's but the install's. */
+    private fun blocking(): Int = deaths.entries.sumOf { (stage, count) -> if (stage == EngineStage.INSTALL) 0 else count }
+
     private fun publish() {
-        val counted = deaths.values.sum()
+        val counted = blocking()
         blockedState.value = counted >= MAX_DEATHS || retried && counted > 0
     }
 
