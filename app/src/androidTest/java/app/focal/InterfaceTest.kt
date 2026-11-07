@@ -331,6 +331,8 @@ class InterfaceTest {
         scenario!!.onActivity { handled = it.onKeyShortcut(KeyEvent.KEYCODE_Z, ctrlKey(KeyEvent.KEYCODE_Z, shift)) }
         assertTrue("Ctrl+Shift+Z through the activity", handled)
         compose.waitUntil(TIMEOUT_MS) { stored() == REVISED }
+        // The field shows the redone text before Done reads it (a person cannot tap within that frame).
+        await("the redone field", hasSetTextAction() and hasText(REVISED))
         // Out of Edit the page declines them, and the activity leaves them to the system.
         compose.onNode(hasContentDescription("Done")).performClick()
         awaitGone("the field", hasSetTextAction())
