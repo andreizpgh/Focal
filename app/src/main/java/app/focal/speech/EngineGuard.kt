@@ -161,6 +161,11 @@ class EngineGuard @VisibleForTesting internal constructor(
 ) {
     private val crashRecord = File(file.path + ".crash")
     private val lock = Any()
+    /**
+     * Arms the crash record: apart from [lock], since the first arming loads the native runtime (tens to hundreds of
+     * milliseconds on a slow phone), which the main thread's calls ([resumedAutomatically], [reset]) must not wait for.
+     */
+    private val armLock = Any()
     /** The stages running in this process, in the order they began (a stage may run on two threads at once). */
     private val active = ArrayList<EngineStage>()
     private var since = 0L
@@ -269,19 +274,19 @@ class EngineGuard @VisibleForTesting internal constructor(
      * Starts this process's crash record (its token, so the next process knows whose it is) at the first stage, and arms
      * the native handlers on it at the first stage that may run native code. Nothing here may keep the stage from running.
      */
-    private fun armCrashRecord(stage: EngineStage) {
+    private fun armCrashRecord(stage: EngineStage) = synchronized(armLock) {
         if (crashOut == null) {
             try {
                 FileOutputStream(crashRecord).use { it.write("${process.token}\n".toByteArray()) }
                 crashOut = FileOutputStream(crashRecord, true)
             } catch (error: IOException) {
                 log("Could not start the crash record", error)
-                return
+                return@synchronized
             }
         }
-        if (nativeArmed || stage == EngineStage.INSTALL) return
+        if (nativeArmed || stage == EngineStage.INSTALL) return@synchronized
         nativeArmed = true
-        val arm = nativeCrashes ?: return
+        val arm = nativeCrashes ?: return@synchronized
         try {
             arm(crashRecord)
         } catch (error: LinkageError) {
@@ -329,13 +334,18 @@ class EngineGuard @VisibleForTesting internal constructor(
         }
     }
 
-    /** Marks [stage] as running in this process, on disk, before the call that may kill the process. */
-    fun enter(stage: EngineStage) = synchronized(lock) {
+    /**
+     * Marks [stage] as running in this process, on disk, before the call that may kill the process. The crash record is
+     * armed first, outside the guard's lock ([armLock]), so it is ready before the stage is marked.
+     */
+    fun enter(stage: EngineStage) {
         armCrashRecord(stage)
-        if (active.isEmpty()) since = clock()
-        active += stage
-        marked = true
-        write()
+        synchronized(lock) {
+            if (active.isEmpty()) since = clock()
+            active += stage
+            marked = true
+            write()
+        }
     }
 
     /** [stage] returned or threw: it no longer runs here. */
@@ -427,11 +437,13 @@ class EngineGuard @VisibleForTesting internal constructor(
     @VisibleForTesting
     fun restartForTests(identity: ProcessIdentity = ProcessIdentity(UUID.randomUUID().toString(), -1), crash: Crash? = Crash.NATIVE) {
         synchronized(lock) {
-            closeCrashRecord()
-            crashRecord.writeText(process.token + "\n" + (crash?.let { it.line + "\n" } ?: ""))
+            synchronized(armLock) {
+                closeCrashRecord()
+                crashRecord.writeText(process.token + "\n" + (crash?.let { it.line + "\n" } ?: ""))
+                nativeArmed = false
+            }
             active.clear()
             marked = false
-            nativeArmed = false
             automaticWork = false
             resumedAt = 0
             process = identity
