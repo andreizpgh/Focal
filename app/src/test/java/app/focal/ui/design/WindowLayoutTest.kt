@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.focal.ui.components.railDock
+import app.focal.ui.shell.hingeOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -60,6 +61,12 @@ class WindowLayoutTest {
         assertEquals(Hinge(500.dp, 524.dp), Hinge.of(500.dp, 524.dp, 1104.dp, rtl = false))
         // Mirrored, the list pane is on the right: its hinge edge is the hinge's right edge.
         assertEquals(Hinge(580.dp, 604.dp), Hinge.of(500.dp, 524.dp, 1104.dp, rtl = true))
+        // From the fold's bounds in the window's pixels, at the device's density.
+        val density = Density(2.625f)
+        assertEquals(Hinge(400.dp, 424.dp), hingeOf(1050, 1113, 1000.dp, density, rtl = false))
+        assertEquals(Hinge(576.dp, 600.dp), hingeOf(1050, 1113, 1000.dp, density, rtl = true))
+        // A seamless fold in book posture: no width, both panes meet at it.
+        assertEquals(Hinge(450.dp, 450.dp), hingeOf(1181, 1181, 900.dp, density, rtl = false).let { Hinge(it.start.roundTo(), it.end.roundTo()) })
     }
 
     /** What takes the whole window keeps to the detail pane's side of a hinge that splits the panes (spec 5.14). */
@@ -112,3 +119,6 @@ class WindowLayoutTest {
         assertEquals(Rect(20f, 144f, 76f, 268f), railDock(96f, 915f, statusTop = 24f, navigationTop = 388f, rtl = true, density = density))
     }
 }
+
+/** To the nearest whole dp: a fold's pixel edge seldom falls on one exactly. */
+private fun androidx.compose.ui.unit.Dp.roundTo(): androidx.compose.ui.unit.Dp = kotlin.math.round(value).dp
