@@ -52,6 +52,9 @@ object CoverageShots {
         addAll(themed("peek-rm") { Reduced { Strip(0f, edgePeek = 1f) } })
         add(Shot("rename-stage-light-200", dark = false, fontScale = LARGE) { Library(idleModel(), rename = "note-0") })
         add(Shot("now-playing-light-200", dark = false, fontScale = LARGE) { Note(longDesign(), playing = true, states = PageStates(followOff = true)) })
+        // "Now playing" tapped: the playing line back in the band's middle third, a line edge on the top band (2.6).
+        add(Shot("now-playing-back-light", dark = false, settleMs = FOLLOW_BACK_MS) { Note(longDesign(), playing = true, states = PageStates(followOff = true, followBack = true)) })
+        add(Shot("now-playing-back-light-200", dark = false, fontScale = LARGE, settleMs = FOLLOW_BACK_MS) { Note(longDesign(), playing = true, states = PageStates(followOff = true, followBack = true)) })
         // Edit's failed save: "Not saved" in the bar, Done reads "Retry" (spec 4.1.3).
         addAll(themed("edit-unsaved", settleMs = UNSAVED_MS) { Note(design(), edit = true, states = PageStates(unsaved = true)) })
         // Right to left (spec 8.5): the dock's circle at the start edge, the stage's time at the title's left, fills
@@ -78,6 +81,8 @@ object CoverageShots {
     private const val COPIED_AT_MS = 300L
     /** Typing at 400 ms, the autosave 600 ms later, then its failure on screen. */
     private const val UNSAVED_MS = 1_400L
+    /** Follow off at 400 ms, "Now playing" 400 ms later, then the bring (`move`) and the edge settle. */
+    private const val FOLLOW_BACK_MS = 2_000L
     private const val REDUCED_OUT = 0.3f
     private const val REDUCED_IN = 0.7f
     private const val PEEK = 32f / 420f

@@ -105,6 +105,9 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
     /** The content title's top in the window, for its lines at the band's edge (read in effects, not observed). */
     internal var titleTop = Float.NaN
 
+    /** The head's lines under the title (the meta's, the notices) in the window, likewise. */
+    internal var headLines: List<Span> = emptyList()
+
     /** The search hit was scrolled to and marked: a recreated page keeps its reading position instead. */
     var hitShown by mutableStateOf(false)
 

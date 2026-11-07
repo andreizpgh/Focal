@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +38,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
@@ -125,6 +127,7 @@ internal fun NoteHead(
     onTitleBounds: (top: Float, bottom: Float) -> Unit,
     entrance: Boolean,
     modifier: Modifier = Modifier,
+    onHeadLines: (List<Span>) -> Unit = {},
 ) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
@@ -141,6 +144,8 @@ internal fun NoteHead(
     val flight = rememberPageTitle(
         noteId, head.title, head.titleFallback, if (large) NoteBlockMetrics.TITLE_LINES_LARGE else NoteBlockMetrics.TITLE_LINES,
     )
+    val lines = remember { HeadLines() }
+    SideEffect { lines.keep(head.notices.size) }
     Column(modifier.fillMaxWidth().padding(horizontal = FocalLayout.gutter).padding(bottom = NoteBlockMetrics.bodyGap - ParagraphMetrics.gap)) {
         // While the page opens out of the stage or a row (or folds back), a copy of the title flies in its place.
         val titleModifier = Modifier
@@ -182,13 +187,51 @@ internal fun NoteHead(
         // note's own edge (spec 8.5), and the meta keeps it too rather than parting to the other side.
         Text(
             head.meta, style = FocalType.meta, color = colors.recede, maxLines = 2, textAlign = alignWith(head.title),
-            modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = metaShown() },
+            onTextLayout = { lines.metaLayout = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer { alpha = metaShown() }
+                .onGloballyPositioned { lines.placeMeta(it.positionInWindow().y); onHeadLines(lines.all()) },
         )
-        head.notices.forEach { notice ->
+        head.notices.forEachIndexed { index, notice ->
             Spacer(Modifier.height(NoteBlockMetrics.headGap))
-            NoticeLine(notice)
+            NoticeLine(
+                notice,
+                Modifier.onGloballyPositioned {
+                    val top = it.positionInWindow().y
+                    lines.placeNotice(index, Span(top, top + it.size.height))
+                    onHeadLines(lines.all())
+                },
+            )
         }
     }
+}
+
+/**
+ * The head's lines under its title as window spans, for landing a line edge on the top band after a bring ([TopEdge]):
+ * each of the meta's lines, and each notice whole (its sentence and its pill are one unit).
+ */
+private class HeadLines {
+    var metaLayout: TextLayoutResult? = null
+    private var meta: List<Span> = emptyList()
+    private val notices = ArrayList<Span?>()
+
+    fun placeMeta(top: Float) {
+        val layout = metaLayout
+        meta = if (layout == null) emptyList() else List(layout.lineCount) { Span(top + layout.getLineTop(it), top + layout.getLineBottom(it)) }
+    }
+
+    fun placeNotice(index: Int, span: Span) {
+        while (notices.size <= index) notices += null
+        notices[index] = span
+    }
+
+    /** Forgets the notices past [count] (a notice that has gone). */
+    fun keep(count: Int) {
+        while (notices.size > count) notices.removeAt(notices.lastIndex)
+    }
+
+    fun all(): List<Span> = meta + notices.filterNotNull()
 }
 
 /** The note title wraps in balanced lines, as a heading (the renders' "Notes for Thursday’s / design review"). */
@@ -196,7 +239,7 @@ private val TitleStyle = FocalType.title.copy(lineBreak = LineBreak.Heading)
 
 /** A notice line (spec 4.16) and its small pill ("Retry", "Try again"). */
 @Composable
-private fun NoticeLine(notice: Notice) {
+private fun NoticeLine(notice: Notice, modifier: Modifier = Modifier) {
     val colors = FocalTheme.colors
     val text = remember(notice.text, notice.quiet, colors.ink, colors.recede) {
         buildAnnotatedString {
@@ -205,7 +248,7 @@ private fun NoticeLine(notice: Notice) {
             withStyle(SpanStyle(color = colors.recede)) { append(notice.text.substring(split)) }
         }
     }
-    Column(Modifier.fillMaxWidth()) {
+    Column(modifier.fillMaxWidth()) {
         Text(text, style = FocalType.secondary, maxLines = NoteBlockMetrics.NOTICE_LINES, overflow = TextOverflow.Ellipsis)
         val action = notice.action
         val onAction = notice.onAction

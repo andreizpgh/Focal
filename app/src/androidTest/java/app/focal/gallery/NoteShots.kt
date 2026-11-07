@@ -216,11 +216,16 @@ internal fun Note(
     })
 }
 
-/** Page states the gallery sets up: an inline rename, Edit with no focused paragraph, follow off, a failed save. */
+/**
+ * Page states the gallery sets up: an inline rename, Edit with no focused paragraph, follow off (and back on, as
+ * "Now playing" turns it), a failed save.
+ */
 internal data class PageStates(
     val rename: Boolean = false,
     val editField: Boolean = true,
     val followOff: Boolean = false,
+    /** After [followOff], "Now playing": follow resumes and brings the playing line back into the band. */
+    val followBack: Boolean = false,
     val unsaved: Boolean = false,
     /** The focused paragraph takes focus, so the keyboard opens (the gallery waits for it). */
     val focus: Boolean = false,
@@ -253,6 +258,12 @@ internal fun NoteDestination(
         waitFrames(FIND_SETTLE_MS)
         page.followSuspended = true
         list.scrollToItem(note.paragraphs.size)
+        if (states.followBack) {
+            waitFrames(FIND_SETTLE_MS)
+            // What the "Now playing" pill does.
+            page.followSuspended = false
+            page.playingOutside = null
+        }
     }
     // Typing in the focused paragraph: its autosave fails ("Not saved", Done reads "Retry", spec 4.1.3).
     if (states.unsaved && field != null) LaunchedEffect(field) {

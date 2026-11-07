@@ -102,8 +102,9 @@ internal fun lineBox(layout: TextLayoutResult?, offset: Int?): Pair<Float, Float
 }
 
 /**
- * The text lines laid out on screen, as window spans: every visible paragraph's lines from its layout, and the title's
- * lines from its window bounds ([titleTop]..[titleBottom], [titleLine] each). What [TopEdge] keeps out of the fade.
+ * The text lines laid out on screen, as window spans: every visible paragraph's lines from its layout, the title's
+ * lines from its window bounds ([titleTop]..[titleBottom], [titleLine] each) and the head's lines under it ([head]:
+ * the meta's, the notices). What [TopEdge] keeps out of the fade.
  */
 internal fun windowLines(
     list: LazyListState,
@@ -112,6 +113,7 @@ internal fun windowLines(
     titleTop: Float,
     titleBottom: Float,
     titleLine: Float,
+    head: List<Span> = emptyList(),
 ): List<Span> {
     val info = list.layoutInfo
     val out = ArrayList<Span>()
@@ -125,6 +127,7 @@ internal fun windowLines(
                 val count = ((titleBottom - titleTop) / titleLine).roundToInt().coerceAtLeast(1)
                 val line = (titleBottom - titleTop) / count
                 for (k in 0 until count) out += Span(titleTop + k * line, titleTop + (k + 1) * line)
+                out += head
             }
             else -> Unit
         }

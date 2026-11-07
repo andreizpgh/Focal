@@ -236,7 +236,9 @@ fun NotePage(
     val fadePx = with(density) { FocalLayout.topFade.toPx() }
     val titleLinePx = with(density) { FocalType.title.lineHeight.toPx() }
     val itemsNow = rememberUpdatedState(items)
-    val topLines: () -> List<Span> = { windowLines(listState, itemsNow.value, page.layouts, page.titleTop, page.titleBottom, titleLinePx) }
+    val topLines: () -> List<Span> = {
+        windowLines(listState, itemsNow.value, page.layouts, page.titleTop, page.titleBottom, titleLinePx, page.headLines)
+    }
     fun lineHeight(id: Long, offset: Int?): () -> Float = { lineBox(page.layouts[id], offset).let { it.second - it.first } }
     val follow = remember { FollowJob() }
     val scrubbing by remember { derivedStateOf { position.scrubMs != null } }
@@ -834,6 +836,7 @@ fun NotePage(
                                     },
                                     entrance = landing,
                                     modifier = Modifier.animateItem(fadeInSpec = null, placementSpec = placement, fadeOutSpec = null),
+                                    onHeadLines = { page.headLines = it },
                                 )
                                 is NoteItem.Text -> ParagraphItem(
                                     item, page, placement,
