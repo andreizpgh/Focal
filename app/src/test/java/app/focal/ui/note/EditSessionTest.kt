@@ -108,15 +108,57 @@ private class FakeStore(vararg texts: String) : EditBackend {
 
 /**
  * The note page as the session sees it: a field it reads when a write runs, changed the way the page changes it (Enter
- * leaves it on the text after the caret, Backspace puts the paragraph before in front, an undo reseeds it).
+ * leaves it on the text after the caret, Backspace puts the paragraph before in front, an undo reseeds it, a kept
+ * field whose paragraph moved takes its text).
  */
-private class Page(val store: FakeStore, log: EditLog? = null, var field: FieldText? = null, restored: Boolean = log != null || field != null) {
-    val edit = EditSession(store).also { session ->
-        session.field = { field }
-        session.joinRefused = { id, prefix ->
+private class Page private constructor(val store: FakeStore, val edit: EditSession, var field: FieldText?) {
+    /** Steps dropped because their paragraphs had changed since ("Too late to undo"). */
+    var tooLate = 0
+
+    init {
+        edit.field = { field }
+        edit.joinRefused = { id, prefix ->
             field = field?.let { if (it.id == id && it.text.startsWith(prefix)) it.copy(text = it.text.removePrefix(prefix)) else it }
         }
-        if (restored) session.begin(store.visible(), log, store.blank(), field?.id) else session.begin(store.visible())
+        edit.fieldMoved = { from, to ->
+            val current = field
+            if (current != null && edit.resolve(current.id) == edit.resolve(from.id) && current.text == from.text) field = to?.let { FieldText(it.id, it.text) }
+        }
+        edit.tooLate = { tooLate++ }
+    }
+
+    constructor(store: FakeStore, log: EditLog? = null, field: FieldText? = null, restored: Boolean = log != null || field != null) :
+        this(store, EditSession(store), field) {
+        if (restored) edit.begin(store.visible(), log, store.blank(), field?.id) else edit.begin(store.visible())
+    }
+
+    /** What the page's saved state keeps: the session's log (changes included, through a Bundle's flat list) and the field. */
+    fun saved(): Pair<EditLog, KeptField?> =
+        EditLog.decode(ArrayList<Any?>(edit.log()!!.encode()))!! to field?.let { edit.keep(it.id, it.text, it.text.length, it.text.length) }
+
+    /** The page goes while Edit runs (rotation, or another note replaces it beside the library): it parks its field. */
+    fun go() {
+        edit.park(field?.let { edit.keep(it.id, it.text, it.text.length, it.text.length) })
+        field = null
+    }
+
+    companion object {
+        /** The page after [previous] went, on the same session (the note's view model's): it takes the parked field. */
+        fun after(previous: Page): Page = Page(previous.store, previous.edit, null).also { page ->
+            page.edit.unpark()?.let { kept ->
+                page.field = FieldText(page.edit.resolve(kept.id), kept.text)
+                page.edit.adopt(kept)
+            }
+        }
+
+        /** The page after process death: a new session from what the saved state held. */
+        fun restored(store: FakeStore, saved: Pair<EditLog, KeptField?>): Page {
+            val (log, kept) = saved
+            return Page(store, EditSession(store), kept?.let { FieldText(it.id, it.text) }).also { page ->
+                page.edit.begin(store.visible(), log, store.blank(), kept?.id)
+                kept?.let(page.edit::adopt)
+            }
+        }
     }
 
     fun type(id: Long, text: String) {
@@ -585,6 +627,15 @@ class EditSessionTest {
             alias = mapOf(5L to 7L, -1L to 12L),
         )
         assertEquals(log, EditLog.decode(log.encode()))
+        val pending = log.copy(
+            undo = log.undo + EditStep.Merge(3, 4, 2, "ab cd"),
+            changes = listOf(EditChange.Text(1, " typed "), EditChange.Split(2, "Two parts.", 4, -2), EditChange.Join(-2, 2, "parts.", "Two ")),
+            revisions = mapOf(1L to 3L, 2L to 5L),
+        )
+        assertEquals(pending, EditLog.decode(pending.encode()))
+        // The changes are kept whole whatever the budget; the steps give way to them.
+        assertEquals(pending.changes, EditLog.decode(pending.encode(budget = 0))!!.changes)
+        assertEquals(emptyList<EditStep>(), EditLog.decode(pending.encode(budget = 0))!!.undo)
         // Within 36 characters only the newest steps fit: the typing and the split before them are dropped.
         val small = EditLog.decode(log.encode(budget = 36))!!
         assertEquals(log.undo.drop(2), small.undo)
@@ -602,6 +653,284 @@ class EditSessionTest {
         assertEquals("ab".length, EditSession.joinPoint("ab", ""))
         assertEquals("cou" to "ntry", EditSession.splitTexts("cou ntry", 3))
         assertEquals("cou" to "ntry ", EditSession.splitTexts(" cou  ntry ", 5))
+    }
+
+    /** P1: a split the store did not take survives process death in the saved state; the next write makes it. */
+    @Test fun aSplitThatFailedSurvivesProcessDeath() = runBlocking {
+        val store = FakeStore("Alpha beta.")
+        val page = Page(store)
+        page.type(1, "Alpha beta.")
+        page.enter("Alpha ".length)
+        store.failNext = true
+        assertFalse(page.edit.save())
+        page.type(1, "beta gamma.")
+        val again = Page.restored(store, page.saved())
+        assertEquals(listOf("Alpha", "beta."), again.shown())
+        assertTrue(again.edit.save())
+        assertEquals(listOf("Alpha", "beta gamma."), store.texts())
+        // The session that stored them logged them: the typing, then the split.
+        again.undo()
+        again.undo()
+        assertEquals(listOf("Alpha beta."), store.texts())
+    }
+
+    /** P1 on rotation: the view model's session goes on with the split it still shows, and the field the page parked. */
+    @Test fun aSplitThatFailedSurvivesRotation() = runBlocking {
+        val store = FakeStore("Alpha beta.")
+        val page = Page(store)
+        page.type(1, "Alpha beta.")
+        page.enter("Alpha ".length)
+        store.failNext = true
+        assertFalse(page.edit.save())
+        page.type(1, "beta gamma.")
+        page.go()
+        val again = Page.after(page)
+        assertEquals(FieldText(1, "beta gamma."), again.field)
+        assertEquals(listOf("Alpha", "beta."), again.shown())
+        assertTrue(again.edit.save())
+        assertEquals(listOf("Alpha", "beta gamma."), store.texts())
+    }
+
+    /** P2: a join the store did not take survives process death, and is stored once. */
+    @Test fun aJoinThatFailedSurvivesProcessDeath() = runBlocking {
+        val store = FakeStore("Alpha.", "Beta.")
+        val page = Page(store)
+        page.type(2, "Beta.")
+        assertTrue(page.backspace() is JoinResult.Joined)
+        store.failNext = true
+        assertFalse(page.edit.save())
+        val again = Page.restored(store, page.saved())
+        assertEquals(listOf("Alpha. Beta."), again.shown())
+        assertTrue(again.edit.save())
+        assertEquals(listOf("Alpha. Beta."), store.texts())
+    }
+
+    /** P3: the draft a tap left that the store did not take survives process death. */
+    @Test fun aLeftDraftThatFailedSurvivesProcessDeath() = runBlocking {
+        val store = FakeStore("Alpha.", "Beta.")
+        val page = Page(store)
+        page.type(1, "Alpha, typed.")
+        page.tap(2)
+        store.failNext = true
+        assertFalse(page.edit.save())
+        val again = Page.restored(store, page.saved())
+        assertTrue(again.edit.save())
+        assertEquals(listOf("Alpha, typed.", "Beta."), store.texts())
+    }
+
+    /** P4: a field typing in the text before a split the store has not made yet keeps its stand-in after process death. */
+    @Test fun aFieldOnARowTheStoreHasNotMadeYetSurvivesProcessDeath() = runBlocking {
+        val store = FakeStore("Alpha beta.")
+        val page = Page(store)
+        page.type(1, "Alpha beta.")
+        page.enter("Alpha ".length)
+        store.failNext = true
+        assertFalse(page.edit.save())
+        page.tap(-1)
+        page.type(-1, "Alpha, typed.")
+        val again = Page.restored(store, page.saved())
+        assertTrue(again.edit.save())
+        assertEquals(listOf("Alpha, typed.", "beta."), store.texts())
+        // Later writes go through: nothing is left that can never be stored.
+        again.tap(1)
+        again.type(1, "beta, typed.")
+        assertTrue(again.edit.save())
+        assertEquals(listOf("Alpha, typed.", "beta, typed."), store.texts())
+        // A new split's stand-in is not the restored one's.
+        again.enter("beta,".length)
+        assertEquals(listOf("Alpha, typed.", "beta,", "typed."), again.shown())
+    }
+
+    /**
+     * The state is saved while the split is still writing; the old process stores it and the typing after it before it
+     * dies. The restored session finds the paragraph moved past what the saved state knew and stores nothing twice.
+     */
+    @Test fun changesStoredAfterTheStateWasSavedAreNotStoredAgain() = runBlocking {
+        val store = FakeStore("Alpha beta.")
+        val page = Page(store)
+        val writes = WriteQueue(this)
+        page.type(1, "Alpha beta.")
+        val gate = CompletableDeferred<Unit>()
+        store.gate = gate
+        page.enter("Alpha ".length)
+        writes.launch { page.edit.save() }
+        yield()
+        page.type(1, "beta, typed.")
+        val saved = page.saved()
+        writes.launch { page.edit.save() }
+        store.gate = null
+        gate.complete(Unit)
+        writes.settle()
+        assertEquals(listOf("Alpha", "beta, typed."), store.texts())
+        val again = Page.restored(store, saved)
+        assertTrue(again.edit.save())
+        assertEquals(listOf("Alpha", "beta, typed."), store.texts())
+        assertEquals(FieldText(1, "beta, typed."), again.field)
+    }
+
+    /** P6: the state is saved while an undo of Enter writes (Home on a busy database), then the process dies. */
+    @Test fun aFieldKeptWhileAnUndoWroteTakesTheUndonePartBackAfterProcessDeath() = runBlocking {
+        val store = FakeStore("Alpha beta.")
+        val page = Page(store)
+        val writes = WriteQueue(this)
+        page.type(1, "Alpha beta.")
+        page.enter("Alpha ".length)
+        assertTrue(page.edit.save())
+        val gate = CompletableDeferred<Unit>()
+        store.gate = gate
+        writes.launch { page.undo() }
+        yield()
+        writes.launch { page.edit.save() }
+        val saved = page.saved()
+        store.gate = null
+        gate.complete(Unit)
+        writes.settle()
+        assertEquals(listOf("Alpha beta."), store.texts())
+        val again = Page.restored(store, saved)
+        assertTrue(again.edit.save())
+        assertEquals(listOf("Alpha beta."), store.texts())
+        assertEquals(FieldText(1, "Alpha beta."), again.field)
+        // The undo the saved log still lists has happened: it is dropped, not run again.
+        assertNull(again.undo())
+        assertEquals(1, again.tooLate)
+        assertEquals(listOf("Alpha beta."), store.texts())
+    }
+
+    /** P6 on rotation: the parked field takes the undone text back, and the page after it gets that. */
+    @Test fun aFieldParkedWhileAnUndoWroteTakesTheUndonePartBack() = runBlocking {
+        val store = FakeStore("Alpha beta.")
+        val page = Page(store)
+        val writes = WriteQueue(this)
+        page.type(1, "Alpha beta.")
+        page.enter("Alpha ".length)
+        assertTrue(page.edit.save())
+        val gate = CompletableDeferred<Unit>()
+        store.gate = gate
+        writes.launch { page.undo() }
+        yield()
+        // The activity stops and is recreated: the stop's save, the page's last save, the new page's check.
+        writes.launch { page.edit.save() }
+        page.go()
+        writes.launch { page.edit.save() }
+        val again = Page.after(page)
+        writes.launch { again.edit.check() }
+        store.gate = null
+        gate.complete(Unit)
+        writes.settle()
+        assertEquals(listOf("Alpha beta."), store.texts())
+        assertEquals(FieldText(1, "Alpha beta."), again.field)
+        assertTrue(again.edit.canRedo)
+        assertEquals(0, again.tooLate)
+    }
+
+    /** P7: the same while a redo of Enter writes: nothing is duplicated, and the redo is not run twice. */
+    @Test fun aFieldKeptWhileARedoWroteTakesTheSplitAfterProcessDeath() = runBlocking {
+        val store = FakeStore("Alpha beta gamma.")
+        val page = Page(store)
+        val writes = WriteQueue(this)
+        page.type(1, "Alpha beta gamma.")
+        page.enter("Alpha ".length)
+        assertTrue(page.edit.save())
+        page.undo()
+        val gate = CompletableDeferred<Unit>()
+        store.gate = gate
+        writes.launch { page.redo() }
+        yield()
+        writes.launch { page.edit.save() }
+        val saved = page.saved()
+        store.gate = null
+        gate.complete(Unit)
+        writes.settle()
+        val again = Page.restored(store, saved)
+        assertTrue(again.edit.save())
+        assertEquals(listOf("Alpha", "beta gamma."), store.texts())
+        assertNull(again.redo())
+        assertEquals(1, again.tooLate)
+        assertEquals(listOf("Alpha", "beta gamma."), store.texts())
+    }
+
+    /** P8: a restored redo of a split that already happened does not split the paragraph again. */
+    @Test fun aRestoredRedoOfASplitThatAlreadyHappenedIsDropped() = runBlocking {
+        val store = FakeStore("Alpha beta gamma.", "Other.")
+        val page = Page(store)
+        val writes = WriteQueue(this)
+        page.type(1, "Alpha beta gamma.")
+        page.enter("Alpha ".length)
+        assertTrue(page.edit.save())
+        page.undo()
+        page.tap(2)
+        val gate = CompletableDeferred<Unit>()
+        store.gate = gate
+        writes.launch { page.redo() }
+        yield()
+        val saved = page.saved()
+        store.gate = null
+        gate.complete(Unit)
+        writes.settle()
+        val again = Page.restored(store, saved)
+        assertNull(again.redo())
+        assertEquals(listOf("Alpha", "beta gamma.", "Other."), store.texts())
+        assertEquals(1, again.tooLate)
+    }
+
+    /** A restored undo of a join that already happened does not split the second paragraph where the first ended. */
+    @Test fun aRestoredUndoOfAJoinThatAlreadyHappenedIsDropped() = runBlocking {
+        val store = FakeStore("Alpha.", "Beta.")
+        val page = Page(store)
+        val writes = WriteQueue(this)
+        page.type(2, "Beta.")
+        page.backspace()
+        assertTrue(page.edit.save())
+        val gate = CompletableDeferred<Unit>()
+        store.gate = gate
+        writes.launch { page.undo() }
+        yield()
+        val saved = page.saved()
+        store.gate = null
+        gate.complete(Unit)
+        writes.settle()
+        assertEquals(listOf("Alpha.", "Beta."), store.texts())
+        val again = Page.restored(store, saved)
+        assertNull(again.undo())
+        assertEquals(1, again.tooLate)
+        assertEquals(listOf("Alpha.", "Beta."), store.texts())
+        assertEquals(FieldText(2, "Beta."), again.field)
+    }
+
+    /**
+     * Two panes: another note replaces this one while its last save cannot be stored. The session keeps the field and
+     * the change, and the note opened again goes on with them.
+     */
+    @Test fun aNoteReplacedWhileItsLastSaveFailsKeepsItsFieldForWhenItOpensAgain() = runBlocking {
+        val store = FakeStore("Alpha beta.", "Other.")
+        val page = Page(store)
+        page.type(1, "Alpha beta.")
+        page.enter("Alpha ".length)
+        page.type(1, "beta, typed.")
+        page.go()
+        store.failNext = true
+        assertFalse(page.edit.save())
+        assertTrue(page.edit.started)
+        val again = Page.after(page)
+        assertEquals(FieldText(1, "beta, typed."), again.field)
+        assertTrue(again.edit.save())
+        assertEquals(listOf("Alpha", "beta, typed.", "Other."), store.texts())
+    }
+
+    /** A parked field is stored by the session while no page holds it, and checked against its paragraph first. */
+    @Test fun aParkedFieldIsStoredWhileNoPageHoldsIt() = runBlocking {
+        val store = FakeStore("Alpha.")
+        val page = Page(store)
+        page.type(1, "Alpha, typed.")
+        page.go()
+        assertTrue(page.edit.save())
+        assertEquals("Alpha, typed.", store.text[1])
+        val again = Page.after(page)
+        assertEquals(FieldText(1, "Alpha, typed."), again.field)
+        assertTrue(again.edit.save())
+        assertFalse(again.edit.canRedo)
+        again.undo()
+        assertEquals("Alpha.", store.text[1])
     }
 
     /** A3: in Edit a paragraph offers Edit, which puts the caret in it without a pointer, and nothing that plays. */

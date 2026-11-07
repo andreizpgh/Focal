@@ -19,6 +19,8 @@ import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
 import app.focal.recording.SessionOperations
 import app.focal.recording.SpeechAvailability
+import app.focal.ui.note.EditBackend
+import app.focal.ui.note.EditSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -90,6 +92,23 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
      * from a text field's input handling starts after it.
      */
     val writes = WriteQueue(CoroutineScope(viewModelScope.coroutineContext + Dispatchers.Main))
+
+    /** The note's paragraphs as Edit writes them. */
+    val editBackend: EditBackend = object : EditBackend {
+        override suspend fun edit(id: Long, revision: Long, text: String): EditOutcome = editParagraph(id, revision, text)
+        override suspend fun split(id: Long, revision: Long, offset: Int): EditOutcome = this@NoteViewModel.split(id, revision, offset)
+        override suspend fun unsplit(keepId: Long, keepRevision: Long, removeId: Long, removeRevision: Long, offset: Int, origin: SplitOrigin): EditOutcome =
+            this@NoteViewModel.unsplit(keepId, keepRevision, removeId, removeRevision, offset, origin)
+        override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditOutcome =
+            this@NoteViewModel.merge(firstId, firstRevision, secondId, secondRevision)
+        override suspend fun restore(id: Long, revision: Long): EditOutcome = restoreOriginal(id, revision)
+    }
+
+    /**
+     * The note page's Edit session (spec 5.7), here so it outlives the page: a page recreated by rotation, or the note
+     * opened again beside the library, goes on with what was shown and not stored yet, its undo log and its field.
+     */
+    val editSession = EditSession(editBackend)
     /** Paragraph conversions by id and revision: a commit re-aligns only the paragraphs it changed. */
     private val converted = HashMap<Long, ParagraphUi>()
 

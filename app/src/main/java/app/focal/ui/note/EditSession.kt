@@ -44,25 +44,55 @@ sealed interface EditStep {
      */
     data class Split(val id: Long, val offset: Int, val newId: Long, val origin: SplitOrigin) : EditStep
 
-    /** Backspace at the start of [secondId] joined [firstId], whose text was [offset] long, into it. */
-    data class Merge(val firstId: Long, val secondId: Long, val offset: Int) : EditStep
+    /**
+     * Backspace at the start of [secondId] joined [firstId], whose text was [offset] long, into it, which then held
+     * [text] (empty: not known).
+     */
+    data class Merge(val firstId: Long, val secondId: Long, val offset: Int, val text: String = "") : EditStep
 
     /** Replace all, inside Edit: every paragraph it changed. */
     data class Replace(val changes: List<Text>) : EditStep
 }
 
 /**
- * A session's undo and redo log and the ids its paragraphs moved to, kept across recreation (rotation, process death)
- * so Undo goes on where it was ([EditSession.log], [EditSession.begin]).
+ * A change the page shows ahead of the store ([EditSession.split], [EditSession.join], [EditSession.leave]). Ids are
+ * the page's, resolved when the change is stored.
  */
-data class EditLog(val undo: List<EditStep>, val redo: List<EditStep>, val alias: Map<Long, Long>) {
+sealed interface EditChange {
+    /** The paragraph whose text the change sets. */
+    val id: Long
+
+    /** The caret left paragraph [id]; its field held [text]. */
+    data class Text(override val id: Long, val text: String) : EditChange
+
+    /** Enter at [at] of [full], [id]'s field text: the text before it is shown as [temp] until the store splits. */
+    data class Split(override val id: Long, val full: String, val at: Int, val temp: Long) : EditChange
+
+    /** Backspace at the start of [id], whose field held [text]: [first] went in front of it as [prefix]. */
+    data class Join(val first: Long, override val id: Long, val text: String, val prefix: String) : EditChange
+}
+
+/**
+ * A session's undo and redo log, the ids its paragraphs moved to and the changes the store did not have yet, kept for a
+ * page recreated after process death so Undo goes on where it was and nothing shown is lost ([EditSession.log],
+ * [EditSession.begin]). [revisions] are those of the stored paragraphs the [changes] name, as the session knew them:
+ * a write that was still running as the state was saved may have stored the changes since.
+ */
+data class EditLog(
+    val undo: List<EditStep>,
+    val redo: List<EditStep>,
+    val alias: Map<Long, Long>,
+    val changes: List<EditChange> = emptyList(),
+    val revisions: Map<Long, Long> = emptyMap(),
+) {
     /**
-     * As a flat list of strings and numbers, which a saved-state Bundle holds. The newest steps that fit in [budget]
-     * characters of paragraph text are kept, so a log of many large Replace alls cannot overrun the Bundle's
-     * transaction limit; Undo then reaches back as far as what was kept.
+     * As a flat list of strings and numbers, which a saved-state Bundle holds. The changes are kept whole (they hold
+     * text the store does not have); then the newest steps that fit in what is left of [budget] characters of
+     * paragraph text, so a log of many large Replace alls cannot overrun the Bundle's transaction limit; Undo then
+     * reaches back as far as what was kept.
      */
     fun encode(budget: Int = SAVED_TEXT_BUDGET): ArrayList<Any> {
-        var left = budget
+        var left = budget - changes.sumOf { it.textLength() }
         fun keep(steps: List<EditStep>): List<EditStep> {
             val kept = ArrayList<EditStep>()
             for (step in steps.asReversed()) {
@@ -79,8 +109,12 @@ data class EditLog(val undo: List<EditStep>, val redo: List<EditStep>, val alias
         out += undoKept.size
         out += redoKept.size
         out += alias.size
+        out += changes.size
+        out += revisions.size
         (undoKept + redoKept).forEach { it.encodeInto(out) }
         alias.forEach { (from, to) -> out += from; out += to }
+        changes.forEach { it.encodeInto(out) }
+        revisions.forEach { (id, revision) -> out += id; out += revision }
         return out
     }
 
@@ -95,11 +129,16 @@ data class EditLog(val undo: List<EditStep>, val redo: List<EditStep>, val alias
             val undoCount = read.next() as Int
             val redoCount = read.next() as Int
             val aliasCount = read.next() as Int
+            val changeCount = read.next() as Int
+            val revisionCount = read.next() as Int
             val undo = List(undoCount) { decodeStep(read) }
             val redo = List(redoCount) { decodeStep(read) }
             val alias = HashMap<Long, Long>()
             repeat(aliasCount) { alias[read.next() as Long] = read.next() as Long }
-            if (read.hasNext()) null else EditLog(undo, redo, alias)
+            val changes = List(changeCount) { decodeChange(read) }
+            val revisions = HashMap<Long, Long>()
+            repeat(revisionCount) { revisions[read.next() as Long] = read.next() as Long }
+            if (read.hasNext()) null else EditLog(undo, redo, alias, changes, revisions)
         }.getOrNull()
     }
 }
@@ -107,8 +146,36 @@ data class EditLog(val undo: List<EditStep>, val redo: List<EditStep>, val alias
 private fun EditStep.textLength(): Int = when (this) {
     is EditStep.Text -> before.length + after.length
     is EditStep.Split -> origin.text.length + origin.sourceText.orEmpty().length + origin.wordsJson.orEmpty().length
-    is EditStep.Merge -> 0
+    is EditStep.Merge -> text.length
     is EditStep.Replace -> changes.sumOf { it.before.length + it.after.length }
+}
+
+private fun EditChange.textLength(): Int = when (this) {
+    is EditChange.Text -> text.length
+    is EditChange.Split -> full.length
+    is EditChange.Join -> text.length + prefix.length
+}
+
+/** The paragraphs a change names. */
+private fun EditChange.ids(): List<Long> = when (this) {
+    is EditChange.Text -> listOf(id)
+    is EditChange.Split -> listOf(id, temp)
+    is EditChange.Join -> listOf(first, id)
+}
+
+private fun EditChange.encodeInto(out: ArrayList<Any>) {
+    when (this) {
+        is EditChange.Text -> { out += "t"; out += id; out += text }
+        is EditChange.Split -> { out += "s"; out += id; out += full; out += at; out += temp }
+        is EditChange.Join -> { out += "j"; out += first; out += id; out += text; out += prefix }
+    }
+}
+
+private fun decodeChange(read: Iterator<Any?>): EditChange = when (read.next()) {
+    "t" -> EditChange.Text(read.next() as Long, read.next() as String)
+    "s" -> EditChange.Split(read.next() as Long, read.next() as String, read.next() as Int, read.next() as Long)
+    "j" -> EditChange.Join(read.next() as Long, read.next() as Long, read.next() as String, read.next() as String)
+    else -> error("Not a change.")
 }
 
 /** The paragraphs a step names. */
@@ -129,7 +196,7 @@ private fun EditStep.encodeInto(out: ArrayList<Any>) {
             out += (origin.wordsJson != null); out += origin.wordsJson.orEmpty()
             out += origin.startMs; out += origin.endMs; out += origin.edited
         }
-        is EditStep.Merge -> { out += "M"; out += firstId; out += secondId; out += offset }
+        is EditStep.Merge -> { out += "M"; out += firstId; out += secondId; out += offset; out += text }
         is EditStep.Replace -> {
             out += "R"
             out += changes.size
@@ -150,7 +217,7 @@ private fun decodeStep(read: Iterator<Any?>): EditStep = when (read.next()) {
         val words = nullable()
         EditStep.Split(id, offset, newId, SplitOrigin(text, source, words, read.next() as Long, read.next() as Long, read.next() as Boolean))
     }
-    "M" -> EditStep.Merge(read.next() as Long, read.next() as Long, read.next() as Int)
+    "M" -> EditStep.Merge(read.next() as Long, read.next() as Long, read.next() as Int, read.next() as String)
     "R" -> EditStep.Replace(List(read.next() as Int) { EditStep.Text(read.next() as Long, read.next() as String, read.next() as String) })
     else -> error("Not an edit step.")
 }
@@ -160,6 +227,14 @@ data class CaretAt(val id: Long, val caret: Int)
 
 /** The focused field as a write reads it: its paragraph and the text it holds now. */
 data class FieldText(val id: Long, val text: String)
+
+/**
+ * The focused field as a page that went (recreated, or replaced beside the library) left it: its paragraph, its text
+ * and selection, and [shown], the text the session showed for that paragraph then (null: not known). A write that was
+ * still running as the page went may change that paragraph after; the field then takes the paragraph's text back
+ * instead of storing its own over it ([EditSession.adopt]).
+ */
+data class KeptField(val id: Long, val text: String, val start: Int, val end: Int, val shown: String?)
 
 /** What Backspace at the start of a paragraph does ([EditSession.join]), decided at once. */
 sealed interface JoinResult {
@@ -193,6 +268,14 @@ sealed interface JoinResult {
  * showed reaches the store (the page's stand-in id becomes the stored one). Every id that led to a paragraph is
  * redirected along with it ([resolve]), so every step of the log, however often it was undone and redone, still
  * finds its paragraph.
+ *
+ * The note's view model keeps the session, so a page recreated by rotation, or the note opened again beside the
+ * library, goes on with it: its changes, log and ids as they are. A page that goes [park]s its field here, and the
+ * session stores it until the next page takes it ([unpark]). After process death the page's saved state brings back
+ * the [log] (changes included) and the field ([begin], [adopt]). Either way the field may have been kept while a
+ * write still ran; the first write after checks that the field's paragraph still shows what it showed then, and gives
+ * the field that paragraph's text back otherwise ([fieldMoved]). A step of a log kept from before runs only while
+ * its paragraphs hold what it left them with; otherwise it is dropped ([tooLate]).
  */
 @Stable
 class EditSession(private val backend: EditBackend) {
@@ -205,6 +288,16 @@ class EditSession(private val backend: EditBackend) {
      */
     var joinRefused: (id: Long, prefix: String) -> Unit = { _, _ -> }
 
+    /**
+     * The paragraph of a field kept from a page that went ([from]) changed since (a write that was still running then
+     * finished): the page's field takes [to], that paragraph's text now (null: the paragraph went), if it still holds
+     * what [from] held (set by the page).
+     */
+    var fieldMoved: (from: KeptField, to: KeptField?) -> Unit = { _, _ -> }
+
+    /** An undo or redo found its paragraphs changed since it was logged (a log kept from before): it was dropped. */
+    var tooLate: () -> Unit = {}
+
     private val mutex = Mutex()
     private var state: List<ParagraphUi> = emptyList()
     private val overrides = mutableStateMapOf<Long, ParagraphUi>()
@@ -214,7 +307,13 @@ class EditSession(private val backend: EditBackend) {
     private var order by mutableStateOf<List<Long>?>(null)
 
     /** What the page shows that the store does not have yet, oldest first. */
-    private val changes = mutableStateListOf<Change>()
+    private val changes = mutableStateListOf<EditChange>()
+
+    /** The field of a page that went while Edit ran: stored by the next write until a page takes it ([unpark]). */
+    private var parked: KeptField? = null
+
+    /** A kept field whose paragraph the next write checks first ([adopt], [park]). */
+    private var unchecked: KeptField? = null
 
     /** The next stand-in id for the text before a split the store has not made yet (stored ids are positive). */
     private var nextTemp = -1L
@@ -241,25 +340,12 @@ class EditSession(private val backend: EditBackend) {
     var started by mutableStateOf(false)
         private set
 
-    /** A change the page shows ahead of the store. Ids are the page's, resolved when the change is stored. */
-    private sealed interface Change {
-        /** The paragraph whose text the change sets. */
-        val id: Long
-
-        /** The caret left paragraph [id]; its field held [text]. */
-        data class Text(override val id: Long, val text: String) : Change
-
-        /** Enter at [at] of [full], [id]'s field text: the text before it is shown as [temp] until the store splits. */
-        data class Split(override val id: Long, val full: String, val at: Int, val temp: Long) : Change
-
-        /** Backspace at the start of [id], whose field held [text]: [first] went in front of it as [prefix]. */
-        data class Join(val first: Long, override val id: Long, val text: String, val prefix: String) : Change
-    }
-
     /**
      * Starts a session on the note's current paragraphs: their order becomes the session's. A session that the page
-     * had before it was recreated goes on with its [log], and gets back the empty paragraphs it had made from [blank]
-     * (the state lists text only): the ones its log names and the one the field [fieldId] is typing in.
+     * had before process death goes on with its [log], and gets back the empty paragraphs it had made from [blank]
+     * (the state lists text only): the ones its log names and the one the field [fieldId] is typing in. The log's
+     * changes are shown and stored again only while the paragraphs they name are at the revisions the log knew: if
+     * they moved, the write that was still running as the state was saved stored them already.
      */
     fun begin(paragraphs: List<ParagraphUi>, log: EditLog? = null, blank: List<BlankParagraph> = emptyList(), fieldId: Long? = null) {
         started = true
@@ -267,14 +353,19 @@ class EditSession(private val backend: EditBackend) {
         undoSteps.clear()
         redoSteps.clear()
         changes.clear()
+        parked = null
+        unchecked = null
         if (log != null) {
             alias.putAll(log.alias)
             undoSteps.addAll(log.undo)
             redoSteps.addAll(log.redo)
+            val known = paragraphs.associate { it.id to it.revision } + blank.associate { it.paragraph.id to it.paragraph.revision }
+            if (log.revisions.all { (id, revision) -> known[id] == revision }) changes.addAll(log.changes)
         }
         val ids = paragraphs.mapTo(ArrayList()) { it.id }
         val own = HashSet<Long>()
         (undoSteps + redoSteps).forEach { step -> step.ids().forEach { own += resolve(it) } }
+        changes.forEach { change -> change.ids().forEach { own += resolve(it) } }
         fieldId?.let { own += resolve(it) }
         val after = blank.associate { it.paragraph.id to it.after }
         for (empty in blank) {
@@ -287,7 +378,9 @@ class EditSession(private val backend: EditBackend) {
             ids.add(if (anchor == null) 0 else ids.indexOf(anchor) + 1, id)
         }
         order = ids
-        nextTemp = minOf(-1L, (alias.keys.minOrNull() ?: 0L) - 1)
+        // Below every stand-in the log, its changes or the field may name.
+        val named = alias.keys + changes.filterIsInstance<EditChange.Split>().map { it.temp } + listOfNotNull(fieldId)
+        nextTemp = minOf(-1L, (named.minOrNull() ?: 0L) - 1)
         failed = false
         failures = 0
     }
@@ -307,9 +400,12 @@ class EditSession(private val backend: EditBackend) {
         val pending = if (changes.isEmpty() && stored != null && text != null && text != stored.text) {
             EditStep.Text(stored.id, stored.text, text)
         } else null
+        val shown = changes.toList()
+        val revisions = HashMap<Long, Long>()
+        shown.forEach { change -> change.ids().map(::resolve).filter { it > 0 }.forEach { revisions[it] = revision(it) } }
         // A new step clears redo, as the save will.
-        return if (pending == null) EditLog(undoSteps.toList(), redoSteps.toList(), HashMap(alias))
-        else EditLog(undoSteps.toList() + pending, emptyList(), HashMap(alias))
+        return if (pending == null) EditLog(undoSteps.toList(), redoSteps.toList(), HashMap(alias), shown, revisions)
+        else EditLog(undoSteps.toList() + pending, emptyList(), HashMap(alias), shown, revisions)
     }
 
     /** Edit ended: the log goes; saved paragraphs stay laid over the state until it catches up ([sync]). */
@@ -318,9 +414,38 @@ class EditSession(private val backend: EditBackend) {
         undoSteps.clear()
         redoSteps.clear()
         changes.clear()
+        parked = null
+        unchecked = null
         failed = false
         failures = 0
     }
+
+    /** The field [id] holding [text] with that selection, as a page that goes keeps it: with the text its paragraph shows. */
+    fun keep(id: Long, text: String, start: Int, end: Int): KeptField = KeptField(resolve(id), text, start, end, paragraph(id)?.text)
+
+    /**
+     * The page goes while Edit runs (recreated, or replaced beside the library): the session stores [field] from here,
+     * checked first against its paragraph, until a page takes it ([unpark]).
+     */
+    fun park(field: KeptField?) {
+        this.field = { null }
+        parked = field
+        unchecked = field
+    }
+
+    /** The parked field, for the page that goes on with the session; null when there is none. It is the page's now. */
+    fun unpark(): KeptField? = parked?.also { parked = null }
+
+    /**
+     * The page's field [kept] comes from a page that went (or from its saved state): the next write checks its
+     * paragraph first ([check]).
+     */
+    fun adopt(kept: KeptField) {
+        unchecked = kept
+    }
+
+    /** Checks an adopted or parked field against its paragraph now ([fieldMoved]), once the writes before it ran. */
+    suspend fun check() = mutex.withLock { checkKept() }
 
     /**
      * The note's state reloaded. Saved paragraphs it now holds at their revision stop overriding it; the session's
@@ -356,7 +481,7 @@ class EditSession(private val backend: EditBackend) {
      * caret as a new paragraph above, the field keeping the rest ([splitTexts]). The next write splits the store.
      */
     fun split(id: Long, full: String, at: Int) {
-        changes += Change.Split(id, full, at.coerceIn(0, full.length), nextTemp--)
+        changes += EditChange.Split(id, full, at.coerceIn(0, full.length), nextTemp--)
         changesMade++
     }
 
@@ -372,7 +497,7 @@ class EditSession(private val backend: EditBackend) {
         if (keptApart(previous, previous.text, shown[index], text)) return JoinResult.Refused
         val first = previous.text.trim()
         val prefix = if (first.isEmpty() || text.isBlank() || text.first().isWhitespace()) first else "$first "
-        changes += Change.Join(previous.id, id, text, prefix)
+        changes += EditChange.Join(previous.id, id, text, prefix)
         changesMade++
         return JoinResult.Joined(prefix, prefix.length + (text.length - text.trimStart().length))
     }
@@ -380,7 +505,7 @@ class EditSession(private val backend: EditBackend) {
     /** The caret left paragraph [id] for another one: [text], what its field held, is shown and stored in turn. */
     fun leave(id: Long, text: String) {
         if (paragraph(id)?.text == text) return
-        changes += Change.Text(id, text)
+        changes += EditChange.Text(id, text)
         changesMade++
     }
 
@@ -428,6 +553,11 @@ class EditSession(private val backend: EditBackend) {
     suspend fun redo(): CaretAt? = mutex.withLock {
         if (!saveLocked()) return@withLock null
         val step = redoSteps.lastOrNull() ?: return@withLock null
+        if (!holds(step, forward = true)) {
+            redoSteps.removeAt(redoSteps.lastIndex)
+            tooLate()
+            return@withLock null
+        }
         val caret = run(step, forward = true) ?: return@withLock null
         redoSteps.removeAt(redoSteps.lastIndex)
         undoSteps.add(step)
@@ -442,13 +572,60 @@ class EditSession(private val backend: EditBackend) {
     }
 
     private suspend fun saveLocked(): Boolean {
-        if (!started || !flushLocked()) return false
-        val draft = field() ?: return true
+        if (!started) return false
+        checkKept()
+        if (!flushLocked()) return false
+        val draft = field() ?: parked?.let { FieldText(it.id, it.text) } ?: return true
         return saveTextLocked(draft.id, draft.text)
+    }
+
+    /**
+     * A kept field's paragraph shows what it showed when the field was kept, or the field takes what it shows now: the
+     * write that changed it was still running then, so its text is the newer one. Before the changes are stored, so
+     * both sides are read the same way (the changes drawn in).
+     */
+    private fun checkKept() {
+        val kept = unchecked ?: return
+        unchecked = null
+        val now = paragraph(kept.id)
+        if (now != null && (kept.shown == null || now.text.trim() == kept.shown.trim())) {
+            parked = parked?.copy(shown = null)
+            return
+        }
+        val moved = now?.let { paragraph ->
+            val caret = kept.start.coerceIn(0, paragraph.text.length)
+            KeptField(paragraph.id, paragraph.text, caret, caret, null)
+        }
+        if (parked != null) parked = moved else fieldMoved(kept, moved)
+    }
+
+    /**
+     * Whether [step] can run [forward] (redo) or back: its paragraphs hold what it left them with. Always so within one
+     * session (every write goes through it); a log kept from before process death may name paragraphs a write that was
+     * still running then changed.
+     */
+    private fun holds(step: EditStep, forward: Boolean): Boolean {
+        fun text(id: Long) = paragraphLocked(id)?.text
+        return when (step) {
+            is EditStep.Text -> text(step.id) == if (forward) step.before else step.after
+            is EditStep.Split -> {
+                // As the store splits a stored (trimmed) text: the part before loses trailing spaces, the rest leading ones.
+                val (before, after) = splitTexts(step.origin.text, step.offset)
+                if (forward) text(step.id) == step.origin.text else text(step.id) == after && text(step.newId) == before
+            }
+            is EditStep.Merge -> if (forward) text(step.firstId)?.length == step.offset && text(step.secondId) != null
+                else text(step.secondId)?.let { joined -> step.text.isEmpty() || joined == step.text } == true
+            is EditStep.Replace -> step.changes.all { text(it.id) == if (forward) it.before else it.after }
+        }
     }
 
     private suspend fun undoLocked(): CaretAt? {
         val step = undoSteps.lastOrNull() ?: return null
+        if (!holds(step, forward = false)) {
+            undoSteps.removeAt(undoSteps.lastIndex)
+            tooLate()
+            return null
+        }
         val caret = run(step, forward = false) ?: return null
         undoSteps.removeAt(undoSteps.lastIndex)
         redoSteps.add(step)
@@ -460,9 +637,9 @@ class EditSession(private val backend: EditBackend) {
         while (true) {
             val change = changes.firstOrNull() ?: return true
             val stored = when (change) {
-                is Change.Text -> saveTextLocked(change.id, change.text)
-                is Change.Split -> splitLocked(change)
-                is Change.Join -> joinLocked(change)
+                is EditChange.Text -> saveTextLocked(change.id, change.text)
+                is EditChange.Split -> splitLocked(change)
+                is EditChange.Join -> joinLocked(change)
             }
             if (!stored) return false
             // Applied with the write's result in one go: no frame draws the change twice or not at all.
@@ -488,7 +665,7 @@ class EditSession(private val backend: EditBackend) {
         return true
     }
 
-    private suspend fun splitLocked(change: Change.Split): Boolean {
+    private suspend fun splitLocked(change: EditChange.Split): Boolean {
         val target = resolve(change.id)
         // The draft before Enter is its own step, as an autosave would have made it.
         if (!saveTextLocked(target, change.full)) return false
@@ -501,7 +678,7 @@ class EditSession(private val backend: EditBackend) {
         return true
     }
 
-    private suspend fun joinLocked(change: Change.Join): Boolean {
+    private suspend fun joinLocked(change: EditChange.Join): Boolean {
         val first = resolve(change.first)
         val second = resolve(change.id)
         if (!saveTextLocked(second, change.text)) return false
@@ -512,14 +689,14 @@ class EditSession(private val backend: EditBackend) {
             Merge.Refused -> {
                 for (index in 1 until changes.size) {
                     val later = changes[index]
-                    if (later is Change.Text && resolve(later.id) == second && later.text.startsWith(change.prefix)) {
+                    if (later is EditChange.Text && resolve(later.id) == second && later.text.startsWith(change.prefix)) {
                         changes[index] = later.copy(text = later.text.removePrefix(change.prefix))
                     }
                 }
                 joinRefused(change.id, change.prefix)
             }
             Merge.Failed -> return false
-            Merge.Done -> push(EditStep.Merge(first, second, firstText.length))
+            Merge.Done -> push(EditStep.Merge(first, second, firstText.length, paragraphLocked(second)?.text.orEmpty()))
         }
         return true
     }
@@ -633,18 +810,18 @@ class EditSession(private val backend: EditBackend) {
     }
 
     /** Draws [change] over the paragraphs before it. */
-    private fun MutableList<ParagraphUi>.show(change: Change) {
+    private fun MutableList<ParagraphUi>.show(change: EditChange) {
         val at = indexOfFirst { it.id == resolve(change.id) }
         if (at < 0) return
         val row = this[at]
         when (change) {
-            is Change.Text -> this[at] = row.drafted(change.text)
-            is Change.Split -> {
+            is EditChange.Text -> this[at] = row.drafted(change.text)
+            is EditChange.Split -> {
                 val (before, after) = splitTexts(change.full, change.at)
                 this[at] = row.drafted(after)
                 add(at, row.drafted(before).copy(id = change.temp, revision = 0, edited = true, canRestore = false, open = false))
             }
-            is Change.Join -> {
+            is EditChange.Join -> {
                 this[at] = row.drafted(change.prefix + change.text)
                 val first = indexOfFirst { it.id == resolve(change.first) }
                 if (first >= 0) removeAt(first)

@@ -20,13 +20,15 @@ import java.util.concurrent.atomic.AtomicInteger
  * A note's paragraphs in memory with the store's edit rules (NoteStore + ParagraphEdits): revisions, trimming, Enter
  * putting the text before the caret in a new paragraph before the split one (which keeps its id), Backspace joining
  * into the second paragraph, an undone split written back exactly. The page reloads from it ([state]). While [hold] is
- * set every write waits for it, as a busy database holds the store's writes. Paragraph texts are synthetic.
+ * set every write waits for it, as a busy database holds the store's writes; [failNext] fails the next write, as a full
+ * disk does. Paragraph texts are synthetic.
  */
 internal class EditStore(texts: List<String>) : EditBackend {
     /** Every paragraph in order, empty ones included (the state lists those apart). */
     var paragraphs by mutableStateOf(timedParagraphs(texts, 60_000))
     private var nextId = texts.size + 1L
     @Volatile var hold: CompletableDeferred<Unit>? = null
+    @Volatile var failNext = false
     val held = AtomicInteger()
     /** Writes that changed a paragraph. */
     val writes = AtomicInteger()
@@ -43,15 +45,19 @@ internal class EditStore(texts: List<String>) : EditBackend {
             .map { (index, paragraph) -> BlankParagraph(paragraph, paragraphs.getOrNull(index - 1)?.id) },
     )
 
-    private suspend fun busy() {
+    /** Waits while the store is held; then a failed write's outcome, or null to go on. */
+    private suspend fun busy(): EditOutcome? {
         hold?.let { gate ->
             held.incrementAndGet()
             gate.await()
         }
+        if (!failNext) return null
+        failNext = false
+        return EditOutcome.Failed("Synthetic full disk.")
     }
 
     override suspend fun edit(id: Long, revision: Long, text: String): EditOutcome {
-        busy()
+        busy()?.let { return it }
         val current = paragraphs.firstOrNull { it.id == id } ?: return EditOutcome.Stale
         if (current.revision != revision) return EditOutcome.Stale
         writes.incrementAndGet()
@@ -61,7 +67,7 @@ internal class EditStore(texts: List<String>) : EditBackend {
     }
 
     override suspend fun split(id: Long, revision: Long, offset: Int): EditOutcome {
-        busy()
+        busy()?.let { return it }
         val current = paragraphs.firstOrNull { it.id == id } ?: return EditOutcome.Stale
         if (current.revision != revision) return EditOutcome.Stale
         writes.incrementAndGet()
@@ -73,7 +79,7 @@ internal class EditStore(texts: List<String>) : EditBackend {
     }
 
     override suspend fun unsplit(keepId: Long, keepRevision: Long, removeId: Long, removeRevision: Long, offset: Int, origin: SplitOrigin): EditOutcome {
-        busy()
+        busy()?.let { return it }
         val keep = paragraphs.firstOrNull { it.id == keepId } ?: return EditOutcome.Stale
         val remove = paragraphs.firstOrNull { it.id == removeId } ?: return EditOutcome.Stale
         if (keep.revision != keepRevision || remove.revision != removeRevision) return EditOutcome.Stale
@@ -85,7 +91,7 @@ internal class EditStore(texts: List<String>) : EditBackend {
     }
 
     override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditOutcome {
-        busy()
+        busy()?.let { return it }
         val first = paragraphs.firstOrNull { it.id == firstId } ?: return EditOutcome.Stale
         val second = paragraphs.firstOrNull { it.id == secondId } ?: return EditOutcome.Stale
         if (first.revision != firstRevision || second.revision != secondRevision) return EditOutcome.Stale

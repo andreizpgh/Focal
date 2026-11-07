@@ -57,6 +57,12 @@ class NoteActions(
      * the draft's last save) still finishes. Null: the page's own queue, which ends with it (the gallery, tests).
      */
     val writes: WriteQueue? = null,
+    /**
+     * Edit's session, kept by the note's view model: a page recreated by rotation, or the note opened again beside the
+     * library, goes on with what it showed and had not stored, its log and its field. Null: the page's own session,
+     * which ends with it (the gallery, tests).
+     */
+    val session: EditSession? = null,
 )
 
 /** The paragraph holding the caret in Edit: its field's text and focus. */
@@ -121,23 +127,36 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
     /** The id the focused field's paragraph is stored under, for the saved state (set by the page). */
     internal var storedId: (Long) -> Long = { it }
 
+    /** The text the session shows for a paragraph, kept with the field in the saved state (set by the page). */
+    internal var fieldShown: (Long) -> String? = { null }
+
+    /**
+     * The field is the Edit session's: false for a field restored with the page until the page has taken up the session
+     * ([NotePage]), so no write stores it before it was checked against its paragraph.
+     */
+    internal var fieldBound = true
+
+    /** What the restored field's paragraph showed when the state was saved ([KeptField.shown]). */
+    internal var restoredShown: String? = null
+
     /** The log a recreated page's Edit session goes on with, once the note has loaded (then null). */
     internal var restoredLog: EditLog? = null
 
     internal companion object {
         /**
          * Keeps what the user was doing across recreation (rotation, a font or locale change, process death): Edit
-         * with the focused paragraph's draft and selection and the session's undo and redo log ([EditLog.encode]
-         * keeps its newest steps within a text budget), Find with its two fields, a rename, the hit having been
-         * shown. The menus are not kept.
+         * with the focused paragraph's draft, its selection and what its paragraph showed, and the session's changes
+         * and undo and redo log ([EditLog.encode] keeps its newest steps within a text budget), Find with its two
+         * fields, a rename, the hit having been shown. The menus are not kept.
          */
         fun saver(takesFocus: Boolean): Saver<NotePageState, Any> = listSaver(
             save = { page ->
                 val field = page.field
+                val shown = if (page.fieldBound) field?.id?.let(page.fieldShown) else page.restoredShown
                 listOf(
                     page.editing, field?.id?.let(page.storedId), field?.text?.text?.toString(), field?.text?.selection?.start, field?.text?.selection?.end,
                     page.find.open, page.find.fromEdit, page.find.query.text.toString(), page.find.replacement.text.toString(),
-                    page.renaming, page.hitShown, page.editLog()?.encode(),
+                    page.renaming, page.hitShown, page.editLog()?.encode(), shown,
                 )
             },
             restore = { saved ->
@@ -150,6 +169,8 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
                     renaming = saved[RENAMING] as Boolean
                     hitShown = saved[HIT_SHOWN] as Boolean
                     restoredLog = EditLog.decode(saved.getOrNull(EDIT_LOG) as List<*>?)
+                    restoredShown = saved.getOrNull(FIELD_SHOWN) as String?
+                    fieldBound = field == null
                 }
             },
         )
@@ -166,6 +187,7 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
         private const val RENAMING = 9
         private const val HIT_SHOWN = 10
         private const val EDIT_LOG = 11
+        private const val FIELD_SHOWN = 12
     }
 }
 

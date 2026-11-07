@@ -32,6 +32,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.focal.gallery.dates
 import app.focal.gallery.today
 import app.focal.ui.design.FocalTheme
+import app.focal.ui.note.EditSession
 import app.focal.ui.note.FieldFocus
 import app.focal.ui.note.NoteActions
 import app.focal.ui.note.NotePage
@@ -42,6 +43,7 @@ import app.focal.ui.shell.FocalShell
 import app.focal.ui.shell.rememberShellState
 import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.PlaybackSession
+import app.focal.ui.state.WriteQueue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -219,6 +221,41 @@ class NoteEditSessionTest {
         assertEquals(FIRST, store.text(1))
         assertEquals("The typing and its undo, nothing after", 2, store.writes.get())
         awaitField(FIRST)
+    }
+
+    /**
+     * P1, rotation: Enter's split did not store (a full disk) and the page is recreated with it still shown. The note's
+     * view model's session goes on with it, and Retry stores the split and the words typed after it.
+     */
+    @Test fun aSplitThatFailedSurvivesRecreationWithTheViewModelsSession() = aSplitThatFailedSurvivesRecreation(viewModel = true)
+
+    /** P1, process death: the page's own session ends with it; the saved state brings the split back. */
+    @Test fun aSplitThatFailedSurvivesRecreationInTheSavedState() = aSplitThatFailedSurvivesRecreation(viewModel = false)
+
+    @OptIn(ExperimentalTestApi::class)
+    private fun aSplitThatFailedSurvivesRecreation(viewModel: Boolean) {
+        val store = EditStore(listOf(ALPHA))
+        // The view model's queue and session outlive the page; without them the page's own end with it.
+        val actions = if (viewModel) NoteActions(writes = WriteQueue(lasting), session = EditSession(store)) else NoteActions()
+        val restoration = StateRestorationTester(rule)
+        restoration.setContent { FocalTheme(dark = false) { Note(store, fieldId = 1, caret = "Alpha ".length, actions = actions) } }
+        connection()
+        store.failNext = true
+        field().performKeyInput { pressKey(Key.Enter) }
+        rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasContentDescription("Retry")).fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(listOf(ALPHA), store.texts())
+        // Held from here: the retry an autosave would make waits until the page has been recreated.
+        val gate = CompletableDeferred<Unit>()
+        store.hold = gate
+        field().performTextInput("Typed ")
+        restoration.emulateSavedInstanceStateRestore()
+        release(store, gate)
+        awaitField("Typed beta gamma.")
+        rule.onNode(hasText("Alpha") and !hasSetTextAction()).assertExists()
+        rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasClickAction() and (hasContentDescription("Done") or hasContentDescription("Retry"))).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNode(hasClickAction() and (hasContentDescription("Done") or hasContentDescription("Retry"))).performClick()
+        awaitStore(store, listOf("Alpha", "Typed beta gamma."))
+        rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
     }
 
     /** S4: Undo of Enter pressed inside a word gives the word back, not its two parts joined with a space. */

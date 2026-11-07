@@ -20,7 +20,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.focal.R
-import app.focal.data.SplitOrigin
 import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FeedbackResult
 import app.focal.ui.components.FocalIcon
@@ -33,7 +32,6 @@ import app.focal.ui.library.rememberTransferWords
 import app.focal.ui.library.shareNoteText
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.LocalShell
-import app.focal.ui.state.EditOutcome
 import app.focal.ui.state.LibraryViewModel
 import app.focal.ui.state.NoteEvent
 import app.focal.ui.state.NoteViewModel
@@ -160,9 +158,10 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
             replaceAll = note::replaceAll,
             undoReplace = note::undoReplace,
             writes = note.writes,
+            session = note.editSession,
         )
     }
-    val edits = remember(note) { ViewModelEdits(note) }
+    val edits = note.editBackend
     val page = rememberNotePageState()
     // A hit the page has already shown no longer overrides where the reader was.
     val listState = rememberNoteListState(id, hit = destination.hit != null && !page.hitShown)
@@ -196,17 +195,6 @@ private class RoutePlayback(private val player: PlaybackViewModel, private val n
     override fun toggle() = player.toggle(noteId)
     override fun pause() = player.pause()
     override fun stop() = player.stopNote(noteId)
-}
-
-/** The edit session's store: the note's view model. */
-private class ViewModelEdits(private val note: NoteViewModel) : EditBackend {
-    override suspend fun edit(id: Long, revision: Long, text: String): EditOutcome = note.editParagraph(id, revision, text)
-    override suspend fun split(id: Long, revision: Long, offset: Int): EditOutcome = note.split(id, revision, offset)
-    override suspend fun unsplit(keepId: Long, keepRevision: Long, removeId: Long, removeRevision: Long, offset: Int, origin: SplitOrigin): EditOutcome =
-        note.unsplit(keepId, keepRevision, removeId, removeRevision, offset, origin)
-    override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditOutcome =
-        note.merge(firstId, firstRevision, secondId, secondRevision)
-    override suspend fun restore(id: Long, revision: Long): EditOutcome = note.restoreOriginal(id, revision)
 }
 
 /**

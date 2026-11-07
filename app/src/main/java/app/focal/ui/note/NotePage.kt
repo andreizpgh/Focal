@@ -153,6 +153,11 @@ private class ShownKeys {
 /** The field and the page's changes as a write that reseeds the field found them ([NotePage]). */
 private class FieldMark(val field: FieldFocus?, val text: String?, val changes: Int)
 
+/** Whether the page is still composed: what a page that went had asked for is left to the page after it. */
+private class PageLife {
+    var gone = false
+}
+
 /** Above the text: the fades and the jump pill, then the bars. */
 private const val FADES_Z = 1f
 private const val BARS_Z = 2f
@@ -194,10 +199,14 @@ fun NotePage(
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val session = remember(edits) { EditSession(edits) }
+    // The note's view model's session on a real page, which outlives the page; the page's own in the gallery and tests.
+    val ownSession = remember(edits) { EditSession(edits) }
+    val session = actions.session ?: ownSession
     // Every write of Edit, one at a time in the order asked for (the note's view model's queue on a real page).
     val ownWrites = remember(scope) { WriteQueue(scope) }
     val writes = actions.writes ?: ownWrites
+    val life = remember { PageLife() }
+    DisposableEffect(life) { onDispose { life.gone = true } }
     val focus = page.focus
     val find = page.find
     val listFade = remember { Animatable(1f) }
@@ -321,9 +330,23 @@ fun NotePage(
     // session reads the field from here.
     val cannotJoin = stringResource(R.string.error_join)
     val currentCannotJoin by rememberUpdatedState(cannotJoin)
+    val tooLate = stringResource(R.string.feedback_too_late)
+    val currentTooLate by rememberUpdatedState(tooLate)
     SideEffect {
-        session.field = { page.field?.takeIf { page.editing }?.let { FieldText(it.id, it.text.text.toString()) } }
+        // A field restored with the page is the session's once the page has taken up the session (below).
+        session.field = { page.field?.takeIf { page.editing && page.fieldBound }?.let { FieldText(it.id, it.text.text.toString()) } }
         page.storedId = session::resolve
+        page.fieldShown = { id -> session.paragraph(id)?.text }
+        session.tooLate = { scope.launch { bottom.feedback.show(currentTooLate) } }
+        // A write that was still running when the field was kept changed its paragraph: the field takes the new text,
+        // unless something was typed in it since.
+        session.fieldMoved = { from, to ->
+            val current = page.field
+            if (current != null && session.resolve(current.id) == session.resolve(from.id) && current.text.text.toString() == from.text) {
+                page.field = to?.let { FieldFocus(it.id, it.text, TextRange(it.start, it.end)) }
+                focus.editingId = to?.id
+            }
+        }
         // A join the store refused after the page showed it: the paragraph comes back, and leaves the field's text.
         session.joinRefused = { id, prefix ->
             val current = page.field
@@ -346,10 +369,14 @@ fun NotePage(
         page.field = FieldFocus(id, current.text.text.toString(), current.text.selection)
         focus.editingId = id
     }
+    // A page that went (recreated, or replaced beside the library) leaves what it still had asked for to the page
+    // after it, which goes on with the session: a caret or a reseed would land on a field no one sees. Its last save
+    // (below) runs all the same.
     fun write(block: suspend () -> Unit) {
         writes.launch {
+            if (life.gone) return@launch
             block()
-            followField()
+            if (!life.gone) followField()
         }
     }
     // [commit]: a tap moved the caret, so the paragraph it left keeps its draft on screen and is saved in turn; a
@@ -443,7 +470,7 @@ fun NotePage(
         write {
             val since = mark()
             val caret = run() ?: return@write
-            if (untouched(since)) focusField(caret)
+            if (!life.gone && untouched(since)) focusField(caret)
         }
     }
     val undo: () -> Unit = { step { session.undo() } }
@@ -478,14 +505,35 @@ fun NotePage(
             }
         }
     }
-    // A page recreated in Edit (rotation, process death) goes on with its session once the note is there: its undo
-    // and redo log, and the empty paragraphs it had made (the field may be typing in one). The saved state reads the
-    // log from here.
+    // A page recreated in Edit (rotation, process death), or a note opened again beside the library while its Edit
+    // session runs, goes on with the session once the note is there. The view model's session goes on as it is, with
+    // the field the page before it parked (fresher than the saved state's). After process death the session starts
+    // again from the saved state: its log and changes, and the empty paragraphs it had made (the field may be typing
+    // in one). Either way the first write checks the field against its paragraph (a write may have been running as
+    // the field was kept). The saved state reads the log from here.
     LaunchedEffect(note.loaded) {
-        if (note.loaded && page.editing && !session.started) {
-            session.begin(paragraphs, page.restoredLog, note.blankParagraphs, page.field?.id)
+        if (!note.loaded) return@LaunchedEffect
+        val restored = page.field?.takeIf { !page.fieldBound }
+            ?.let { KeptField(it.id, it.text.text.toString(), it.text.selection.start, it.text.selection.end, page.restoredShown) }
+        page.restoredShown = null
+        if (!session.started) {
+            if (!page.editing) return@LaunchedEffect
+            session.begin(paragraphs, page.restoredLog, note.blankParagraphs, (restored?.id ?: page.field?.id))
             page.restoredLog = null
         }
+        page.editing = true
+        val kept = session.unpark() ?: restored
+        if (kept != null) {
+            val id = session.resolve(kept.id)
+            val current = page.field
+            if (current == null || current.id != id || current.text.text.toString() != kept.text) {
+                page.field = FieldFocus(id, kept.text, TextRange(kept.start, kept.end))
+            }
+            focus.editingId = id
+            session.adopt(kept)
+            write { session.check() }
+        }
+        page.fieldBound = true
     }
     DisposableEffect(page, session) {
         // With the focused field's draft: its last save (below) is still on its way when the state is saved.
@@ -494,16 +542,20 @@ fun NotePage(
     }
     // Everything not stored yet is written when the activity stops (recreation included) and when the page goes, after
     // the writes already asked for, in the note's own scope: nothing typed in the last 600 ms is lost, and an undo still
-    // writing is never overwritten by the text it replaces.
+    // writing is never overwritten by the text it replaces. A page that goes leaves its field with the session, which
+    // stores it and hands it to the next page (a save that fails then is not lost with the page).
     DisposableEffect(lifecycle, session) {
-        fun persist() {
-            if (page.editing) write { session.save() }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && page.editing && page.fieldBound) write { session.save() }
         }
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) persist() }
         lifecycle.addObserver(observer)
         onDispose {
             lifecycle.removeObserver(observer)
-            persist()
+            if (page.editing && page.fieldBound && session.started) {
+                session.park(page.field?.let { session.keep(it.id, it.text.text.toString(), it.text.selection.start, it.text.selection.end) })
+                // Not left to the page after it: this one is the page's own last save.
+                writes.launch { session.save() }
+            }
         }
     }
     // Autosave 600 ms after typing stops (spec 5.7).
