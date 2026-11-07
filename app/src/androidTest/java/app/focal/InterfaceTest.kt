@@ -24,6 +24,7 @@ import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.lifecycle.ViewModelProvider
@@ -235,12 +236,15 @@ class InterfaceTest {
         assertTrue("The activity hands the next Space to the page", handled)
         poll("the pause") { !playing() }
         frames()
-        // Android spends the first key after a touch leaving touch mode, which puts focus on the top bar's back
-        // button by itself; leave it here directly. Space is still the page's: held down it plays once (its repeat
-        // goes with it), and it never presses the focused button (Back).
+        // Android spends the first key after a touch leaving touch mode, which in one pane puts focus on the top
+        // bar's back button by itself; leave touch mode and focus it here directly (in two panes the list pane's first
+        // control takes that focus). Space is still the page's: held down it plays once (its repeat goes with it), and
+        // it never presses the focused button (Back).
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.setInTouchMode(false)
-        frames { compose.onNode(hasContentDescription("Back") and isFocused()).assertExists() }
+        val back = hasContentDescription("Back") and hasClickAction()
+        frames { compose.onNode(back).performSemanticsAction(SemanticsActions.RequestFocus) }
+        frames { compose.onNode(back and isFocused()).assertExists() }
         val now = SystemClock.uptimeMillis()
         instrumentation.sendKeySync(KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 0))
         instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 1))
