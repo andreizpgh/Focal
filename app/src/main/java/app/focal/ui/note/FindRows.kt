@@ -179,6 +179,8 @@ internal fun ColumnScope.FindRows(find: FindState, actions: FindActions) {
             replaceRow(Modifier.weight(1f))
         }
         // Narrower: one row, the count moved out of the find field to stand before ∧ ∨, as wide as its widest form.
+        // "No matches" decides the arrangement, so it never flips while typing; a count wider than it ("100 of 1000")
+        // widens its box, and the fields give way.
         is FindArrangement.Single -> Row(
             Modifier.requiredWidth(arrangement.width).height(IntrinsicSize.Min),
             horizontalArrangement = Arrangement.spacedBy(KeyboardRowMetrics.columnGap),
@@ -186,7 +188,7 @@ internal fun ColumnScope.FindRows(find: FindState, actions: FindActions) {
         ) {
             FindField(find, actions, withCount = false)
             ReplaceField(find.replacement)
-            Box(Modifier.width(countReserve).fillMaxHeight(), contentAlignment = Alignment.Center) { FindCount(find) }
+            Box(Modifier.width(countWidth(countReserve, count)).fillMaxHeight(), contentAlignment = Alignment.Center) { FindCount(find) }
             Row(Modifier.width(KeyboardRowMetrics.controls).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
                 NavPill(enabled = count > 0, actions)
             }
@@ -228,12 +230,27 @@ private fun countReserve(): Dp {
     }
 }
 
+/**
+ * The one row's count box: [reserve] ("No matches"), or wider when "[total] of [total]" is, the count's widest form for
+ * these matches (tabular figures), so the box keeps its width while ∧ ∨ step through them.
+ */
+@Composable
+private fun countWidth(reserve: Dp, total: Int): Dp {
+    val measurer = rememberTextMeasurer()
+    val widest = stringResource(R.string.find_count, total, total)
+    val style = FocalType.meta.tabular()
+    val density = LocalDensity.current
+    return remember(reserve, widest, style, measurer, density) {
+        maxOf(reserve, with(density) { measurer.measure(widest, style, maxLines = 1, softWrap = false).size.width.toDp() })
+    }
+}
+
 /** "2 of 4" or "No matches" once the query has been matched; nothing before. Announced politely as it changes. */
 @Composable
 private fun FindCount(find: FindState) {
     val count = countText(find) ?: return
     Text(
-        count, style = FocalType.meta.tabular(), color = FocalTheme.colors.recede, maxLines = 1,
+        count, style = FocalType.meta.tabular(), color = FocalTheme.colors.recede, maxLines = 1, softWrap = false,
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
     )
 }
