@@ -84,7 +84,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val session = RecordingState.live.value
         val liveId = liveRows.noteId?.takeIf { liveRows.capturing }
         val zone = ZoneId.systemDefault()
-        val days = list.asSequence().filter { it.id != liveId }.map { row(it, session, model.availability, removals, model.stopped) }
+        val days = list.asSequence().filter { it.id != liveId }.map { row(it, session, model, removals) }
             .groupBy { Instant.ofEpochMilli(it.created).atZone(zone).toLocalDate().toEpochDay() }
             .map { (day, rows) -> LibraryDay(day, rows) }
         LibraryUiState(loaded = true, error = error, days = days, liveNoteId = liveId, empty = list.isEmpty() && liveId == null)
@@ -161,9 +161,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         private const val MAX_QUERY_CHARS = 200
 
         internal fun row(
-            note: Note, live: LiveSession, speech: SpeechAvailability, removals: Set<String> = emptySet(), engineStopped: Boolean = false,
+            note: Note, live: LiveSession, model: ModelState, removals: Set<String> = emptySet(),
         ): NoteRow {
-            val phase = NotePhases.of(note, live, speech)
+            val phase = NotePhases.of(note, live, model.availability)
             // A removal waiting for its Undo snackbar already shows the note as text only.
             val audio = note.audioPresent && note.id !in removals
             return NoteRow(
@@ -172,13 +172,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 progress = live.progress.takeIf { live.noteId == note.id && phase == NotePhase.TRANSCRIBING },
                 audioPresent = audio, failedParts = note.failedWindows,
                 canRemoveAudio = audio && note.state == NoteState.READY && phase == NotePhase.READY,
-                waitingReason = waitingReason(note, phase, engineStopped),
+                waitingReason = waitingReason(note, phase, model),
             )
         }
 
         /** A result's row; every word of its snippet that the query's [terms] match is a hit (spec 5.2). */
         private fun searchRow(result: SearchResult, terms: List<String>, live: LiveSession, model: ModelState, removals: Set<String>) = SearchRow(
-            row = row(result.note, live, model.availability, removals, model.stopped), paragraphId = result.paragraphId,
+            row = row(result.note, live, model, removals), paragraphId = result.paragraphId,
             hitStart = result.hitStart, hitEnd = result.hitEnd, snippet = result.snippet,
             snippetHits = if (result.snippetHitStart < 0) emptyList() else SearchText.hits(result.snippet, terms),
         )

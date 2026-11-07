@@ -157,6 +157,9 @@
     <string name="ended_permission">Recording stopped at %s because microphone access was turned off. Everything before that was saved.</string>
     <string name="waiting_after_recording">Transcription continues after the current recording.</string>
     <string name="model_failed">Not enough free memory to transcribe right now.</string>
+    <!-- The engine guard stopped the speech work after repeated crashes or failed loads, cause unknown (5.4). -->
+    <string name="engine_stopped">Transcription stopped after repeated failures. Your audio is saved.</string>
+    <string name="stage_engine_stopped">Transcription stopped after repeated failures.</string>
     <string name="provenance_edited">Edited</string>
     <string name="not_saved">Not saved</string>
     <string name="find_hint">Find in note</string>
@@ -242,6 +245,7 @@
     <string name="a11y_reason_other_app">paused for another app</string>
     <string name="a11y_reason_storage">paused, storage is full</string>
     <string name="a11y_stage_note">Latest note. %1$s. %2$s, %3$s.</string>
+    <string name="a11y_stage_note_reason">%1$s %2$s</string>
     <string name="a11y_stage_empty">Speak, and it’s written down. Tap Record and talk. Text appears after each pause.</string>
     <string name="a11y_copy_note">Copy note</string>
     <string name="a11y_copy_note_new">Copy note, new</string>

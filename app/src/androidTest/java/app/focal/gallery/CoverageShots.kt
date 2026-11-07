@@ -16,6 +16,7 @@ import app.focal.ui.shell.RecordFlow
 import app.focal.ui.shell.RecordFlowSheet
 import app.focal.ui.state.NotePhase
 import app.focal.ui.state.PauseReason
+import app.focal.ui.state.WaitingReason
 
 /**
  * Spec 8.4's font-scale pass over the frames the stages rendered at 1.0 only (every frame at 1.0, 1.3 and 2.0, Light
@@ -154,7 +155,7 @@ private fun rtlTitleModel(): LibraryModel {
 }
 
 private fun modelFailedModel(): LibraryModel {
-    val note = saturday.copy(phase = NotePhase.WAITING, waitingReason = "memory")
+    val note = saturday.copy(phase = NotePhase.WAITING, waitingReason = WaitingReason.Memory)
     return LibraryModel(loaded = true, stage = StageUi.Note(note, fresh = false), days = days(rows()))
 }
 

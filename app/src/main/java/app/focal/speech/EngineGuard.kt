@@ -40,6 +40,17 @@ enum class EngineStage {
     DECODE,
 }
 
+/**
+ * What the guard's last counted death or failure was, as far as Android or the runtime said: the person is told
+ * "Not enough free memory" only when it is known ([MEMORY]), never as a guess.
+ */
+enum class EngineFault {
+    /** A confirmed OutOfMemoryError, or Android's record of a low-memory kill of the working process (API 30+). */
+    MEMORY,
+    /** Anything else: a native or Java crash, a recognizer that failed to load, a death Android did not explain. */
+    OTHER,
+}
+
 /** This process, as the guard's marker names it: [token] tells it from any earlier process with the same [pid]. */
 data class ProcessIdentity(val token: String, val pid: Int) {
     companion object {
@@ -66,6 +77,9 @@ data class ProcessExit(val reason: Int, val importance: Int) {
         ApplicationExitInfo.REASON_UNKNOWN -> importance < ActivityManager.RunningAppProcessInfo.IMPORTANCE_CACHED
         else -> true
     }
+
+    /** Android ended the process to reclaim memory. */
+    val lowMemory: Boolean get() = reason == ApplicationExitInfo.REASON_LOW_MEMORY
 }
 
 /**
@@ -90,6 +104,9 @@ data class ProcessExit(val reason: Int, val importance: Int) {
  * stop or reboot during the first launch's copy, which Android before API 30 keeps no exit record of. Blocking on them
  * would leave a fresh install without its model, and with no note yet to offer Try again.
  *
+ * The guard keeps what the last counted death or failure was ([EngineFault], with its stage) while the counts last, so
+ * the interface can say "Not enough free memory" for a confirmed out-of-memory and a neutral sentence otherwise.
+ *
  * The file is replaced by a rename and never synced: it must survive the process, not the device. Thread-safe.
  */
 class EngineGuard @VisibleForTesting internal constructor(
@@ -106,13 +123,20 @@ class EngineGuard @VisibleForTesting internal constructor(
     private val deaths = sortedMapOf<EngineStage, Int>()
     /** The person's Try again cleared the counts and no decode has completed since: one death blocks again. */
     private var retried = false
+    /** The last counted death or failure, kept while the counts last. */
+    private var fault: EngineFault? = null
+    private var faultStage: EngineStage? = null
     private val blockedState = MutableStateFlow(false)
+    private val stopState = MutableStateFlow<EngineFault?>(null)
 
     /**
      * True once the speech work died or failed [MAX_DEATHS] times without a decode completing in between, or once
      * after the person's Try again. Deaths at install do not count here.
      */
     val blocked: StateFlow<Boolean> = blockedState.asStateFlow()
+
+    /** Why the guard is [blocked]: the last death or failure it counted; null while it allows the work. */
+    val stop: StateFlow<EngineFault?> = stopState.asStateFlow()
 
     /** The stage the previous process died in, when that death was counted at this start; null otherwise. */
     @Volatile var lastDeath: EngineStage? = null
@@ -128,6 +152,8 @@ class EngineGuard @VisibleForTesting internal constructor(
         deaths.clear()
         for (stage in EngineStage.entries) saved.getProperty(DEATHS + stage.name)?.toIntOrNull()?.takeIf { it > 0 }?.let { deaths[stage] = it }
         retried = saved.getProperty(RETRIED) == "true"
+        fault = saved.getProperty(FAULT)?.let { name -> EngineFault.entries.firstOrNull { it.name == name } }
+        faultStage = saved.getProperty(FAULT_STAGE)?.let { name -> EngineStage.entries.firstOrNull { it.name == name } }
         val inside = saved.getProperty(INSIDE)?.let { name -> EngineStage.entries.firstOrNull { it.name == name } }
         lastDeath = null
         if (inside != null && saved.getProperty(PROCESS) != process.token) {
@@ -135,7 +161,7 @@ class EngineGuard @VisibleForTesting internal constructor(
             val at = saved.getProperty(SINCE)?.toLongOrNull() ?: 0L
             val exit = pid?.let { runCatching { exitOf(it, at) }.getOrNull() }
             if (exit?.counts() != false) {
-                deaths[inside] = (deaths[inside] ?: 0) + 1
+                count(inside, if (exit?.lowMemory == true) EngineFault.MEMORY else EngineFault.OTHER)
                 lastDeath = inside
             }
             log("The previous process ended inside $inside (${exit?.let { "reason ${it.reason}, importance ${it.importance}" } ?: "no exit record"})")
@@ -179,18 +205,33 @@ class EngineGuard @VisibleForTesting internal constructor(
      */
     fun completed(stage: EngineStage) = synchronized(lock) {
         val changed = when (stage) {
-            EngineStage.DECODE -> (deaths.isNotEmpty() || retried).also { deaths.clear(); retried = false }
+            EngineStage.DECODE -> (deaths.isNotEmpty() || retried).also { deaths.clear(); retried = false; forgetFault() }
             EngineStage.INSTALL -> deaths.remove(EngineStage.INSTALL) != null
             else -> false
         }
         if (changed) { write(); publish() }
     }
 
-    /** [stage] failed without killing the process, in a way that counts like a death (a recognizer that cannot load). */
-    fun failed(stage: EngineStage) = synchronized(lock) {
-        deaths[stage] = (deaths[stage] ?: 0) + 1
+    /**
+     * [stage] failed without killing the process, in a way that counts like a death: a recognizer that cannot load, or
+     * an OutOfMemoryError in the native work ([EngineFault.MEMORY]).
+     */
+    fun failed(stage: EngineStage, fault: EngineFault = EngineFault.OTHER) = synchronized(lock) {
+        count(stage, fault)
         write()
         publish()
+    }
+
+    /** The last death or failure that counts, at [stage]: install's are counted but never named. */
+    private fun count(stage: EngineStage, fault: EngineFault) {
+        deaths[stage] = (deaths[stage] ?: 0) + 1
+        if (stage != EngineStage.INSTALL) { this.fault = fault; faultStage = stage }
+    }
+
+    /** The last death or failure that blocks or brings a block nearer, and its stage; null once the counts are gone. */
+    fun lastFault(): Pair<EngineStage, EngineFault>? = synchronized(lock) {
+        val stage = faultStage ?: return@synchronized null
+        fault?.let { stage to it }
     }
 
     /**
@@ -204,6 +245,7 @@ class EngineGuard @VisibleForTesting internal constructor(
         if (deaths.isEmpty()) return@synchronized wasBlocked
         if (blocking() > 0) retried = true
         deaths.clear()
+        forgetFault()
         write()
         publish()
         wasBlocked
@@ -214,6 +256,7 @@ class EngineGuard @VisibleForTesting internal constructor(
     fun clearForTests() = synchronized(lock) {
         deaths.clear()
         retried = false
+        forgetFault()
         write()
         publish()
     }
@@ -243,9 +286,16 @@ class EngineGuard @VisibleForTesting internal constructor(
     /** The deaths and failures that can block: every stage's but the install's. */
     private fun blocking(): Int = deaths.entries.sumOf { (stage, count) -> if (stage == EngineStage.INSTALL) 0 else count }
 
+    private fun forgetFault() {
+        fault = null
+        faultStage = null
+    }
+
     private fun publish() {
         val counted = blocking()
-        blockedState.value = counted >= MAX_DEATHS || retried && counted > 0
+        val blocked = counted >= MAX_DEATHS || retried && counted > 0
+        stopState.value = if (blocked) fault ?: EngineFault.OTHER else null
+        blockedState.value = blocked
     }
 
     private fun read(): Properties = Properties().also { saved ->
@@ -263,6 +313,8 @@ class EngineGuard @VisibleForTesting internal constructor(
         val state = Properties()
         deaths.forEach { (stage, count) -> state.setProperty(DEATHS + stage.name, count.toString()) }
         if (retried) state.setProperty(RETRIED, "true")
+        fault?.let { state.setProperty(FAULT, it.name) }
+        faultStage?.let { state.setProperty(FAULT_STAGE, it.name) }
         active.lastOrNull()?.let { stage ->
             state.setProperty(INSIDE, stage.name)
             state.setProperty(PROCESS, process.token)
@@ -289,6 +341,8 @@ class EngineGuard @VisibleForTesting internal constructor(
         private const val TAG = "FocalEngineGuard"
         private const val DEATHS = "deaths."
         private const val RETRIED = "retried"
+        private const val FAULT = "fault"
+        private const val FAULT_STAGE = "fault.stage"
         private const val INSIDE = "inside"
         private const val PROCESS = "process"
         private const val PID = "pid"

@@ -147,7 +147,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         NoteUiState(
             noteId = noteId, loaded = true, title = note.title, titleIsCustom = note.titleIsCustom, created = note.created,
             durationMs = note.duration, phase = phase, progress = progress, speech = if (liveKey.noteId == noteId) liveKey.speech else model.availability,
-            waitingReason = waitingReason(note, phase, model.stopped),
+            waitingReason = waitingReason(note, phase, model),
             audioPresent = audio,
             canPlay = audio && !liveKey.capturing,
             editable = note.state == NoteState.READY && (phase == NotePhase.READY || phase == NotePhase.PARTIAL_FAILURE),

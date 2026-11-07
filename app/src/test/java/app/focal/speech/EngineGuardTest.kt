@@ -175,6 +175,47 @@ class EngineGuardTest {
         assertFalse(process().allows())
     }
 
+    @Test fun theLastCountedFaultSaysWhetherMemoryRanOut() {
+        // A native crash: Android's record names it, but not as memory.
+        process().dieInside(EngineStage.RECOGNIZER, ProcessExit(ApplicationExitInfo.REASON_CRASH_NATIVE, RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE))
+        val crashed = process()
+        assertEquals(EngineStage.RECOGNIZER to EngineFault.OTHER, crashed.lastFault())
+        assertNull("One death does not block", crashed.stop.value)
+        // A low-memory kill of the working process: confirmed memory, kept on disk with its stage.
+        crashed.dieInside(EngineStage.DECODE, ProcessExit(ApplicationExitInfo.REASON_LOW_MEMORY, RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE))
+        val blocked = process()
+        assertEquals(EngineStage.DECODE to EngineFault.MEMORY, blocked.lastFault())
+        assertEquals(EngineFault.MEMORY, blocked.stop.value)
+        assertEquals(EngineFault.MEMORY, process().stop.value)
+        // Try again forgets it with the counts.
+        blocked.reset()
+        assertNull(blocked.lastFault())
+        assertNull(blocked.stop.value)
+        // A death with no record and a recognizer that failed to load are not memory.
+        blocked.dieInside(EngineStage.VAD_OPEN)
+        val unexplained = process()
+        assertEquals(EngineFault.OTHER, unexplained.stop.value)
+        unexplained.reset()
+        unexplained.failed(EngineStage.RECOGNIZER)
+        assertEquals(EngineFault.OTHER, unexplained.stop.value)
+        // A confirmed OutOfMemoryError is.
+        val oom = process().also { it.reset() }
+        oom.failed(EngineStage.DECODE, EngineFault.MEMORY)
+        assertEquals(EngineFault.MEMORY, oom.stop.value)
+        // A completed decode forgets it.
+        oom.reset()
+        oom.inside(EngineStage.DECODE) { }
+        oom.completed(EngineStage.DECODE)
+        assertNull(oom.lastFault())
+        assertNull(process().lastFault())
+    }
+
+    @Test fun deathsAtInstallAreNeverNamed() {
+        process().dieInside(EngineStage.DECODE)
+        process().dieInside(EngineStage.INSTALL, ProcessExit(ApplicationExitInfo.REASON_LOW_MEMORY, RunningAppProcessInfo.IMPORTANCE_FOREGROUND))
+        assertEquals(EngineStage.DECODE to EngineFault.OTHER, process().lastFault())
+    }
+
     @Test fun theMarkerIsOnDiskOnlyWhileTheStageRuns() {
         val guard = process()
         assertNull(guard.markedOnDisk())

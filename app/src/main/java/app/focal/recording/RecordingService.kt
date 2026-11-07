@@ -34,6 +34,7 @@ import app.focal.data.NoteStore
 import app.focal.data.StoredWindow
 import app.focal.speech.DeviceSpeechPolicy
 import app.focal.speech.ENGINE_STOPPED
+import app.focal.speech.EngineFault
 import app.focal.speech.EngineStage
 import app.focal.speech.MODEL_MISSING
 import app.focal.speech.ModelStatus
@@ -928,6 +929,13 @@ class RecordingService : Service() {
                         transcriber = decoder
                         app.engineGuard.inside(EngineStage.DECODE) { decoder.transcribe(store, window, engine.threads) }
                         engine.succeeded()
+                    } catch (error: OutOfMemoryError) {
+                        // Not this window's fault: it keeps its attempt. The recognizer goes, to give the memory back,
+                        // and the guard counts a confirmed out-of-memory, as a load that failed.
+                        Log.w(TAG, "Window ${window.index} ran out of memory", error)
+                        runCatching { store.cancelDecode(window.id) }
+                        engine.outOfMemory()
+                        continue
                     } catch (error: Exception) {
                         if (error is CancellationException) { runCatching { store.cancelDecode(window.id) }; throw error }
                         Log.w(TAG, "Window ${window.index} failed (attempt ${window.attempts})", error)
@@ -1147,7 +1155,7 @@ class RecordingService : Service() {
                 if (error is CancellationException) throw error
                 Log.w(TAG, "The recognizer could not load", error)
                 // A recognizer that cannot load counts as a death would (test decoders fail on purpose).
-                if (testDecoder == null) guard.failed(EngineStage.RECOGNIZER)
+                if (testDecoder == null) guard.failed(EngineStage.RECOGNIZER, if (error is OutOfMemoryError) EngineFault.MEMORY else EngineFault.OTHER)
                 failure = when (error) {
                     is OutOfMemoryError -> "Not enough free memory to transcribe right now."
                     else -> error.message ?: "The speech model could not load."
@@ -1161,6 +1169,14 @@ class RecordingService : Service() {
         fun succeeded() {
             consecutiveFailures = 0; lastFailedWindow = null
             guard.completed(EngineStage.DECODE)
+        }
+
+        /** A decode ran out of memory: the recognizer is released and the guard counts it (until Try again or a restart). */
+        fun outOfMemory() {
+            guard.failed(EngineStage.DECODE, EngineFault.MEMORY)
+            failure = "Not enough free memory to transcribe right now."
+            runCatching { decoder?.close() }
+            decoder = null
         }
 
         /**

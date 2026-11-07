@@ -42,6 +42,7 @@ import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteUiState
 import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.PlaybackSession
+import app.focal.ui.state.WaitingReason
 import app.focal.ui.state.WordUi
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -64,7 +65,7 @@ object NoteShots {
         addAll(themed("find-replaced") { Note(design(replaced = true), find = "screen" to "page", replaced = true) })
         addAll(themed("transcribing") { Note(saturdayNote(NotePhase.TRANSCRIBING)) })
         add(Shot("waiting-light", dark = false) { Note(saturdayNote(NotePhase.WAITING), captureElsewhere = true) })
-        add(Shot("model-failed-light", dark = false) { Note(saturdayNote(NotePhase.WAITING).copy(waitingReason = "memory", canRetry = true)) })
+        add(Shot("model-failed-light", dark = false) { Note(saturdayNote(NotePhase.WAITING).copy(waitingReason = WaitingReason.Memory, canRetry = true)) })
         addAll(themed("partial") { Note(partial()) })
         add(Shot("no-speech-light", dark = false) { Note(noSpeech()) })
         add(Shot("text-only-light", dark = false) { Note(design().copy(audioPresent = false, canPlay = false, canRemoveAudio = false)) })

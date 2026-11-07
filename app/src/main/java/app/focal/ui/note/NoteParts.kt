@@ -43,6 +43,7 @@ import app.focal.core.SpeechTuning
 import app.focal.core.TextWords
 import app.focal.core.Title
 import app.focal.ui.components.inert
+import app.focal.ui.components.waitingText
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTiming
@@ -455,7 +456,7 @@ internal fun headUi(
         if (note.phase == NotePhase.WAITING) when {
             captureElsewhere -> add(Notice(stringResource(R.string.waiting_after_recording)))
             note.waitingReason != null -> add(
-                Notice(stringResource(R.string.model_failed), action = tryAgain.takeIf { note.canRetry && interactive }, onAction = actions.retry),
+                Notice(waitingText(note.waitingReason, page = true), action = tryAgain.takeIf { note.canRetry && interactive }, onAction = actions.retry),
             )
         }
     }

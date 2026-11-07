@@ -8,6 +8,7 @@ import app.focal.data.Paragraph
 import app.focal.data.TranscriptJson
 import app.focal.recording.LiveSession
 import app.focal.recording.SpeechAvailability
+import app.focal.speech.EngineFault
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -96,17 +97,19 @@ class NotePhasesTest {
 
     @Test fun aStoppedEngineIsTheReasonEveryWaitingNoteWaits() {
         val interrupted = note(NoteState.INTERRUPTED).copy(error = "Recording was interrupted. Saved audio can still be transcribed.")
-        // An interrupted note's own message is not a failure to show.
+        val failures = ModelState(SpeechAvailability.READY, stop = EngineFault.OTHER)
+        val memory = ModelState(SpeechAvailability.READY, stop = EngineFault.MEMORY)
+        // An interrupted note's own message is not a failure to show: it resumes at the next foreground start.
         assertNull(waitingReason(interrupted, NotePhase.WAITING))
-        // Once the speech work killed the process twice, every waiting note says why and offers Try again (spec 5.4).
-        assertTrue(waitingReason(interrupted, NotePhase.WAITING, engineStopped = true) != null)
-        assertTrue(waitingReason(note(NoteState.PROCESSING), NotePhase.WAITING, engineStopped = true) != null)
+        // Once the speech work killed the process twice, every waiting note says why and offers Try again (spec 5.4),
+        // naming memory only when an out-of-memory was confirmed.
+        assertEquals(WaitingReason.Failures, waitingReason(interrupted, NotePhase.WAITING, failures))
+        assertEquals(WaitingReason.Failures, waitingReason(note(NoteState.PROCESSING), NotePhase.WAITING, failures))
+        assertEquals(WaitingReason.Memory, waitingReason(interrupted, NotePhase.WAITING, memory))
         // Without audio there is nothing to transcribe again; a note that is not waiting has no reason.
-        assertNull(waitingReason(interrupted.copy(audioPresent = false), NotePhase.WAITING, engineStopped = true))
-        assertNull(waitingReason(note(NoteState.READY), NotePhase.READY, engineStopped = true))
-        assertNull(waitingReason(note(NoteState.PROCESSING), NotePhase.TRANSCRIBING, engineStopped = true))
-        // A stored failure on a note that is not merely interrupted still shows.
-        assertEquals("Out of memory", waitingReason(note(NoteState.PROCESSING).copy(error = "Out of memory"), NotePhase.WAITING))
+        assertNull(waitingReason(interrupted.copy(audioPresent = false), NotePhase.WAITING, failures))
+        assertNull(waitingReason(note(NoteState.READY), NotePhase.READY, failures))
+        assertNull(waitingReason(note(NoteState.PROCESSING), NotePhase.TRANSCRIBING, memory))
     }
 
     @Test fun reasonsMapFromTheStore() {

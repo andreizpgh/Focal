@@ -87,6 +87,7 @@ import app.focal.ui.components.focusRing
 import app.focal.ui.components.markBox
 import app.focal.ui.components.pressScale
 import app.focal.ui.components.sceneMaterial
+import app.focal.ui.components.waitingText
 import app.focal.ui.design.FocalDisplay
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalMotion
@@ -350,12 +351,17 @@ private fun stageDescription(stage: StageUi, dates: LibraryDates, today: LocalDa
             else -> stringResource(R.string.a11y_stage_live_empty, elapsed)
         }
     }
-    is StageUi.Note -> stringResource(
-        R.string.a11y_stage_note,
-        noteTitle(stage.row, dates),
-        spokenWhen(stage.row.created, dates, today),
-        spokenDuration(stage.row.durationMs / MS_PER_S),
-    )
+    is StageUi.Note -> {
+        val note = stringResource(
+            R.string.a11y_stage_note,
+            noteTitle(stage.row, dates),
+            spokenWhen(stage.row.created, dates, today),
+            spokenDuration(stage.row.durationMs / MS_PER_S),
+        )
+        // The card's description replaces its texts for TalkBack: the reason drawn as the last line is spoken too.
+        val reason = stage.row.waitingReason?.takeIf { stage.row.phase == NotePhase.WAITING }
+        if (reason == null) note else stringResource(R.string.a11y_stage_note_reason, note, waitingText(reason, page = false))
+    }
 }
 
 private const val MS_PER_S = 1000L
@@ -661,8 +667,9 @@ private fun NoteStage(
 
 /**
  * The stage's text: the note's preview in whole lines (a derived title is not repeated), or "No speech was
- * recognized."; a partial failure replaces the last line with "Part of this note couldn't be transcribed.", a model
- * that could not load with "Not enough free memory to transcribe right now."
+ * recognized."; a partial failure replaces the last line with "Part of this note couldn't be transcribed.", a waiting
+ * note that is not being transcribed with why ([waitingText]: "Not enough free memory to transcribe right now." only for
+ * a confirmed out-of-memory).
  */
 @Composable
 private fun StageText(row: NoteRow, noSpeech: Boolean) {
@@ -675,15 +682,16 @@ private fun StageText(row: NoteRow, noSpeech: Boolean) {
     Column {
         // Balanced breaks, as the stage's reading text: no orphan word on its last line.
         CutText(preview, StageTextStyle, colors.stageRecede, StageMetrics.TEXT_LINES_MAX, Modifier.weight(1f, fill = false))
-        // A partial failure or a speech model that could not load takes the text's last line (spec 4.22.4).
+        // A partial failure or a waiting note's reason takes the text's last line (spec 4.22.4).
+        val reason = row.waitingReason?.takeIf { row.phase == NotePhase.WAITING }
         val lastLine = when {
-            row.phase == NotePhase.PARTIAL_FAILURE -> R.string.partial_failure
-            row.phase == NotePhase.WAITING && row.waitingReason != null -> R.string.model_failed
+            row.phase == NotePhase.PARTIAL_FAILURE -> stringResource(R.string.partial_failure)
+            reason != null -> waitingText(reason, page = false)
             else -> null
         }
         if (lastLine != null) {
             Text(
-                stringResource(lastLine), style = StageReasonStyle, color = colors.stageRecede,
+                lastLine, style = StageReasonStyle, color = colors.stageRecede,
                 maxLines = StageMetrics.TEXT_LINES_MIN, overflow = TextOverflow.Ellipsis,
             )
         }

@@ -777,7 +777,8 @@ class InterfaceTest {
 
     /**
      * Spec 5.4 "Model couldn't load": once the speech work killed the process or failed to load twice (the engine
-     * guard), a waiting note says why and offers Try again, which forgets the failures and transcribes it.
+     * guard), a waiting note says why (memory only when confirmed) and offers Try again, which forgets the failures and
+     * transcribes it.
      */
     @Test fun aStoppedSpeechEngineOffersTryAgainOnAWaitingNote() {
         val id = app.store.create().also { created += it }
@@ -796,7 +797,8 @@ class InterfaceTest {
         }
         try {
             launch(Intent(app, MainActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra(RecordingService.NOTE, id))
-            val reason = hasText("Not enough free memory to transcribe right now.")
+            // Failed loads are not a confirmed out-of-memory: the neutral sentence, with the audio kept.
+            val reason = hasText("Transcription stopped after repeated failures. Your audio is saved.")
             await("the reason", reason)
             val tryAgain = hasContentDescription("Try again") and hasClickAction()
             compose.onNode(tryAgain).assertIsDisplayed()

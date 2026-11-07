@@ -11,7 +11,7 @@ import app.focal.data.NoteState
 import app.focal.data.Paragraph
 import app.focal.recording.LiveSession
 import app.focal.recording.SpeechAvailability
-import app.focal.speech.ENGINE_STOPPED
+import app.focal.speech.EngineFault
 import app.focal.speech.ModelStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -75,30 +75,46 @@ enum class EndReason {
 }
 
 /**
- * Why a waiting note is not being transcribed: the speech work that stopped after killing the process or failing to
- * load twice ([engineStopped], spec 5.4 "Model couldn't load", until Try again), else the store's error, except on an
- * interrupted recording, whose message only says its saved audio is still waiting (it is not a failure to show).
+ * Why a waiting note is not being transcribed, as its notice and the stage's last line say it (spec 5.4 "Model
+ * couldn't load"), each with Try again on the note.
  */
-fun waitingReason(note: Note, phase: NotePhase, engineStopped: Boolean = false): String? = when {
-    phase != NotePhase.WAITING -> null
-    engineStopped && note.audioPresent -> ENGINE_STOPPED
-    else -> note.error.takeIf { note.state != NoteState.INTERRUPTED && it.isNotBlank() }
+@Immutable
+sealed interface WaitingReason {
+    /** The engine guard stopped the speech work after a confirmed out-of-memory: "Not enough free memory…". */
+    data object Memory : WaitingReason
+
+    /** The engine guard stopped it after repeated crashes or failed loads, causes unknown: a neutral sentence. */
+    data object Failures : WaitingReason
 }
 
 /**
- * The speech model as notes see it: whether it can transcribe ([availability]), and whether the speech work [stopped]
- * because it killed the process or failed to load twice in a row (the app's engine guard, until Try again).
+ * Why a waiting note is not being transcribed: the speech work stopped after killing the process or failing to load
+ * twice ([ModelState.stop], until Try again), named as memory only when that was confirmed. Null when the note simply
+ * waits (an interrupted recording resumes at the next foreground start) and when it has no audio left to transcribe.
  */
-data class ModelState(val availability: SpeechAvailability, val stopped: Boolean = false)
+fun waitingReason(note: Note, phase: NotePhase, model: ModelState = ModelState(SpeechAvailability.READY)): WaitingReason? = when {
+    phase != NotePhase.WAITING || !note.audioPresent -> null
+    model.stop == EngineFault.MEMORY -> WaitingReason.Memory
+    model.stop != null -> WaitingReason.Failures
+    else -> null
+}
+
+/**
+ * The speech model as notes see it: whether it can transcribe ([availability]), and why the speech work stopped
+ * ([stop]: the app's engine guard, after it killed the process or failed to load twice in a row, until Try again).
+ */
+data class ModelState(val availability: SpeechAvailability, val stop: EngineFault? = null) {
+    val stopped: Boolean get() = stop != null
+}
 
 /** [ModelState] from the model install and the engine guard, changing only when one of them does. */
-fun FocalApplication.modelStates(): Flow<ModelState> = combine(models.status, engineGuard.blocked) { status, blocked ->
+fun FocalApplication.modelStates(): Flow<ModelState> = combine(models.status, engineGuard.stop) { status, stop ->
     val availability = when (status) {
         ModelStatus.Checking, is ModelStatus.Installing -> SpeechAvailability.PREPARING
         is ModelStatus.Ready -> SpeechAvailability.READY
         else -> SpeechAvailability.UNAVAILABLE
     }
-    ModelState(availability, blocked)
+    ModelState(availability, stop)
 }.distinctUntilChanged()
 
 object NotePhases {
@@ -133,8 +149,8 @@ data class NoteRow(
     val audioPresent: Boolean,
     val failedParts: Int,
     val canRemoveAudio: Boolean = false,
-    /** Why a waiting note is not being transcribed (the speech model could not load), or null. */
-    val waitingReason: String? = null,
+    /** Why a waiting note is not being transcribed (the stage's last line), or null. */
+    val waitingReason: WaitingReason? = null,
 )
 
 /** Rows of one local calendar day ([epochDay] in the device time zone), newest first. */
@@ -318,7 +334,8 @@ data class NoteUiState(
     val phase: NotePhase = NotePhase.WAITING,
     val progress: Float? = null,
     val speech: SpeechAvailability = SpeechAvailability.READY,
-    val waitingReason: String? = null,
+    /** Why a waiting note is not being transcribed: its notice, with Try again. */
+    val waitingReason: WaitingReason? = null,
     val audioPresent: Boolean = false,
     val canPlay: Boolean = false,
     val editable: Boolean = false,
