@@ -67,6 +67,8 @@ class GalleryTest {
 
     @Before
     fun edgeToEdge() {
+        // Touch mode, whatever a test before left (a hardware key leaves it): focus rings show only in keyboard mode.
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(true)
         rule.runOnUiThread {
             rule.activity.enableEdgeToEdge()
             // As MainActivity: the keyboard resizes the window, it never pans it (a landscape keyboard would push

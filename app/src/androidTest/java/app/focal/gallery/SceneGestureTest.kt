@@ -59,20 +59,20 @@ class SceneGestureTest {
 
     /**
      * A drag on the live stage about 30° below the horizontal (rightward: the settings swipe takes only leftward ones)
-     * passes the list's vertical slop on its way, but heads more sideways than down: the scene stays folded while the
-     * finger moves and after it lifts (spec 6.5).
+     * passes the list's vertical slop on its way, but heads more sideways than down: no drag of the scene begins, and
+     * it stays folded (spec 6.5). (The finger is lifted before the test waits: a held pull keeps the list's overscroll
+     * stretch drawing, so Compose never idles under it.)
      */
     @Test fun aMostlySidewaysDragOnTheStageLeavesTheSceneFolded() {
         showLiveLibrary()
-        val stage = rule.onNode(hasContentDescription("Recording", substring = true))
-        stage.performTouchInput {
+        val openings = shell.live.entries
+        rule.onNode(hasContentDescription("Recording", substring = true)).performTouchInput {
             down(Offset(left + width * 0.1f, top + height * 0.2f))
             repeat(DIAGONAL_STEPS) { moveBy(Offset(width * 0.08f, width * 0.08f * TAN_30)) }
+            up()
         }
         rule.waitForIdle()
-        assertEquals(0f, p, 0f)
-        stage.performTouchInput { up() }
-        rule.waitForIdle()
+        assertEquals("no drag of the scene began", openings, shell.live.entries)
         assertEquals(0f, p, 0f)
     }
 

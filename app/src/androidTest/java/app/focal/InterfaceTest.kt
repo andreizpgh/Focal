@@ -80,6 +80,8 @@ class InterfaceTest {
 
     @After fun cleanup() {
         rotationBefore?.let { InstrumentationRegistry.getInstrumentation().uiAutomation.setRotation(it) }
+        // The key tests leave touch mode; the tests after them start in it.
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(true)
         scenario?.close()
         RecordingState.live.value = LiveSession()
         app.preferences.theme(theme)
@@ -376,18 +378,14 @@ class InterfaceTest {
 
     /**
      * Two panes (spec 5.14, 4.23.4): the licences cover the whole window with the library's pane composed beneath
-     * them, and Back returns to settings, the next Back to the library. Skipped on a display that is never 840 dp wide
-     * (run it with `adb shell wm size 1600x2560`).
+     * them, and Back returns to settings, the next Back to the library. Skipped on a display that does not change
+     * panes when turned (run it with `adb shell wm size 1600x2560`).
      */
     @Test fun theLicencesReturnToSettingsInTwoPanes() {
-        val config = app.resources.configuration
-        assumeTrue("Needs a display at least 840 dp wide turned", maxOf(config.screenWidthDp, config.screenHeightDp) >= 840)
+        assumeTurnChangesPanes()
         note("Two-pane settings fixture $tag", listOf("A note, so the library dock carries Record."))
         launch()
         turn(landscape = true)
-        var width = 0
-        scenario!!.onActivity { width = it.resources.configuration.screenWidthDp }
-        assumeTrue("Needs two panes turned", width >= 840)
         await("Record", hasContentDescription("Record"))
         press(KeyEvent.KEYCODE_COMMA, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
         val heading = hasText("Settings") and isHeading()
