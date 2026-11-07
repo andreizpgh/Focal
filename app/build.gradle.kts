@@ -1,7 +1,9 @@
+import com.android.build.api.artifact.SingleArtifact
 import groovy.json.JsonSlurper
 import java.io.File
 import java.nio.file.Files
 import java.security.MessageDigest
+import java.util.zip.ZipFile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 // AGP 9 compiles Kotlin itself (built-in Kotlin); only the Compose compiler plugin is applied.
@@ -85,15 +87,23 @@ if (!modelPresent) logger.lifecycle(
 // minified release, so R8, resource shrinking and the bridge's by-name JNI binding can be exercised end to
 // end on an x86_64 emulator. The arm64 release cannot record there: ONNX Runtime crashes under the
 // emulator's arm64 translation. Without the property every release, the published one included, is
-// arm64-only.
-val emulatorRelease = when (val value = providers.gradleProperty("focal.emulatorRelease").orNull) {
+// arm64-only. Only the command line's -P counts: a value left in a gradle.properties file, an
+// ORG_GRADLE_PROJECT_ variable or -Dorg.gradle.project. would otherwise turn every later release into
+// an emulator build. Such a build says so in its versionName, and verifyReleaseAbis checks every release APK.
+val emulatorRelease = when (val value = gradle.startParameter.projectProperties["focal.emulatorRelease"]) {
     null, "false" -> false
     "true" -> true
     else -> error("focal.emulatorRelease must be true or false, not $value")
 }
+if (!emulatorRelease && providers.gradleProperty("focal.emulatorRelease").orNull != null) logger.warn(
+    "focal.emulatorRelease is ignored outside the command line: this release is arm64-only. " +
+        "Pass -Pfocal.emulatorRelease=true for an emulator QA build."
+)
 if (emulatorRelease) logger.warn(
     "focal.emulatorRelease=true: this release APK also carries x86_64 libraries for emulator QA. Do not publish it."
 )
+// The native ABIs a release APK must carry, exactly.
+val releaseAbis = if (emulatorRelease) listOf("arm64-v8a", "x86_64") else listOf("arm64-v8a")
 
 android {
     namespace = "app.focal"
@@ -134,7 +144,9 @@ android {
         release {
             // Phones are arm64: a published release carries no x86_64 runtime libraries (emulatorRelease adds
             // them for local emulator QA only).
-            ndk { abiFilters += if (emulatorRelease) listOf("arm64-v8a", "x86_64") else listOf("arm64-v8a") }
+            ndk { abiFilters += releaseAbis }
+            // Badging and the app's own version show an emulator QA build for what it is.
+            if (emulatorRelease) versionNameSuffix = "-emulator-qa"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -222,6 +234,37 @@ val verifiedAssetMerges = buildSet {
 }
 tasks.matching { it.name in verifiedAssetMerges }.configureEach { dependsOn(verifyUltraModel) }
 tasks.matching { it.name in setOf("mergeDebugAssets", "mergeReleaseAssets") }.configureEach { dependsOn(verifyAppAssets) }
+
+// A release APK carries exactly the ABIs its build asked for (arm64-v8a; x86_64 too only for an emulator QA
+// build), checked in the packaged APK at every assembleRelease, so x86_64 libraries cannot ship unnoticed.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        val apks = variant.artifacts.get(SingleArtifact.APK)
+        val expected = releaseAbis.sorted()
+        tasks.register("verifyReleaseAbis") {
+            group = "verification"
+            description = "The release APK must carry exactly the native ABIs its build asked for."
+            inputs.files(apks).withPropertyName("apks")
+            inputs.property("abis", expected)
+            doLast {
+                val packaged = apks.get().asFile.listFiles { file -> file.extension == "apk" }.orEmpty()
+                check(packaged.isNotEmpty()) { "No release APK in ${apks.get().asFile.path}." }
+                packaged.forEach { apk ->
+                    val abis = ZipFile(apk).use { zip ->
+                        zip.entries().asSequence().map { it.name.split('/') }
+                            .filter { it.size >= 3 && it[0] == "lib" }.map { it[1] }.toSortedSet().toList()
+                    }
+                    check(abis == expected) {
+                        "${apk.name} carries native libraries for ${abis.ifEmpty { listOf("no ABI") }.joinToString()}, " +
+                            "not ${expected.joinToString()}. x86_64 belongs only in an emulator QA build " +
+                            "(-Pfocal.emulatorRelease=true on the command line), never in a published release."
+                    }
+                }
+            }
+        }
+    }
+}
+tasks.matching { it.name == "assembleRelease" }.configureEach { dependsOn("verifyReleaseAbis") }
 
 // CMake links the bridge against the extracted runtime, so it must exist before any native build.
 tasks.configureEach {
