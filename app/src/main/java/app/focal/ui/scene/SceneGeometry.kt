@@ -102,7 +102,7 @@ data class Instrument(val waveTop: Float, val waveHeight: Float, val timerTop: F
  *
  * In a short window ([twoColumn], spec 5.14) the instrument (wave, timer, state) is centred on the start half of the
  * page beside the rail and the text region runs down the end half; the instrument has no room to lift, so it keeps
- * its with-text layout from the start, and the hint waits level with it on the text's half.
+ * its with-text layout from the start, and the hint waits on the text's half where the first text will appear.
  */
 @Immutable
 data class SceneSlots(
@@ -131,7 +131,7 @@ data class SceneSlots(
     val sceneBadge: Float,
     /** The instrument's vertical axis: the window's middle, or the start half's in two columns. */
     val instrumentX: Float = width / 2,
-    /** The text region's column, and the hint's centre line over it. */
+    /** The text region's column, and the hint's centre line over it (in two columns the hint starts at [textLeft]). */
     val textLeft: Float = columnLeft,
     val textRight: Float = columnRight,
     val hintX: Float = instrumentX,
@@ -267,8 +267,9 @@ data class SceneSlots(
                 columnLeft = columnLeft, columnRight = columnRight,
                 start = instrument, live = instrument,
                 timerLine = timerLine, stateHeight = state,
-                // The hint's centre line: level with the instrument's middle, over the text's half.
-                hintTop = waveTop + block(wave) / 2,
+                // The hint's centre line: the first text line's, at the top of the text region where the first text
+                // will take its place (spec 5.14), level with the chevron.
+                hintTop = textTop + FocalType.sceneText.lineHeight.toPx() / 2,
                 textTop = textTop,
                 textBottom = baseline,
                 chevronTop = chevronTop,

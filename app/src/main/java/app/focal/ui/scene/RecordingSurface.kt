@@ -124,6 +124,7 @@ import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.LocalWindowLayout
 import app.focal.ui.design.Scene
+import app.focal.ui.design.chromeAlign
 import app.focal.ui.library.StageMetrics
 import app.focal.ui.library.spokenDuration
 import app.focal.ui.shell.LiveSurfaceState
@@ -629,10 +630,15 @@ private fun Hint(scene: SceneUi, frame: State<MorphFrame>, slots: SceneSlots, re
         val target = if (scene.hasText) 0f else 1f
         if (reduced) shown.snapTo(target) else shown.animateTo(target, FocalMotion.fadeFast())
     }
+    // In two columns it waits on the first text line, at the column's start edge, where the text will replace it
+    // (spec 5.14); otherwise centred under the instrument (4.21.5).
+    val twoColumn = slots.twoColumn
     Text(
-        text, style = FocalType.secondary.copy(lineBreak = LineBreak.Heading), color = colors.sceneRecede, textAlign = TextAlign.Center,
+        text, style = FocalType.secondary.copy(lineBreak = LineBreak.Heading), color = colors.sceneRecede,
+        textAlign = if (twoColumn) chromeAlign() else TextAlign.Center,
         modifier = Modifier
-            .placeCentred(slots.textRight - slots.textLeft, { slots.hintX }, middle = slots.twoColumn) { slots.hintTop }
+            .placeCentred(slots.textRight - slots.textLeft, { slots.hintX }, middle = twoColumn) { slots.hintTop }
+            .then(if (twoColumn) Modifier.fillMaxWidth() else Modifier)
             .graphicsLayer { alpha = frame.value.lateAlpha * shown.value },
     )
 }
