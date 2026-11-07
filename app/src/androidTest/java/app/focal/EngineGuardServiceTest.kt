@@ -47,7 +47,8 @@ import java.util.concurrent.atomic.AtomicInteger
  * The guard around the speech work that can kill the process (EngineGuard), driven through the service. A process
  * death inside a decode is simulated as the next process finds it: the guard's file as it was on disk while the
  * decoder ran, read by the guard started again as a new process ([app.focal.speech.EngineGuard.restartForTests]).
- * Two such deaths stop automatic transcription; capture keeps working; the person's Try again starts it again.
+ * Two such deaths stop automatic transcription; capture keeps working; the person's Try again starts it again, for one
+ * attempt until a decode completes.
  */
 @RunWith(AndroidJUnit4::class)
 class EngineGuardServiceTest {
@@ -73,7 +74,7 @@ class EngineGuardServiceTest {
         automation.grantRuntimePermission(app.packageName, Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) automation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
         app.autoResumeTranscription = false
-        guard.reset()
+        guard.clearForTests()
         RecordingService.inputFactoryForTests = null
         RecordingService.decoderFactoryForTests = { opened.incrementAndGet(); decoder() }
         activity = ActivityScenario.launch(ComponentActivity::class.java)
@@ -90,7 +91,7 @@ class EngineGuardServiceTest {
         } finally {
             // The notes made ready here leave no "Note ready" behind for the tests after this one.
             app.getSystemService(NotificationManager::class.java).cancelAll()
-            guard.reset()
+            guard.clearForTests()
             RecordingService.inputFactoryForTests = null
             RecordingService.decoderFactoryForTests = null
             app.autoResumeTranscription = true
@@ -142,6 +143,12 @@ class EngineGuardServiceTest {
         assertEquals(before, opened.get())
         assertEquals(0, decodes.get())
         assertFalse("Still stopped", guard.allows())
+
+        // Try again gives one attempt: a decode that dies again stops the work at once, so the next start neither
+        // resumes it nor dies a second time.
+        die { send(RecordingService.RECOVER, waiting, retryFailed = true) }
+        assertEquals(mapOf(EngineStage.DECODE to 1), guard.deaths())
+        assertFalse("One death after Try again stops the work again", guard.allows())
 
         // The person's Try again forgets the deaths and transcribes the note.
         dying = false

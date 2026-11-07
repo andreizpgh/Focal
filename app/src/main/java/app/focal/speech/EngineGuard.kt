@@ -77,9 +77,10 @@ data class ProcessExit(val reason: Int, val importance: Int) {
  *
  * At [MAX_DEATHS] counted deaths the guard is [blocked]: nothing starts the speech work by itself any more (no
  * automatic resume, no install, no VAD, no recognizer), and waiting notes show "Model couldn't load" with Try again
- * (spec 5.4). Capture never passes through the guard, so recording keeps working. The person's Try again [reset]s it.
- * A completed decode proves the whole chain and clears every count; a completed install clears the deaths counted
- * at install. Nothing else clears them, so stages that each succeed once cannot hide a later stage that keeps dying.
+ * (spec 5.4). Capture never passes through the guard, so recording keeps working. The person's Try again [reset]s it
+ * for one attempt: until a decode completes, a single death blocks it again. A completed decode proves the whole chain
+ * and clears every count; a completed install clears the deaths counted at install. Nothing else clears them, so
+ * stages that each succeed once cannot hide a later stage that keeps dying.
  *
  * The file is replaced by a rename and never synced: it must survive the process, not the device. Thread-safe.
  */
@@ -95,9 +96,14 @@ class EngineGuard @VisibleForTesting internal constructor(
     private val active = ArrayList<EngineStage>()
     private var since = 0L
     private val deaths = sortedMapOf<EngineStage, Int>()
+    /** The person's Try again cleared the counts and no decode has completed since: one death blocks again. */
+    private var retried = false
     private val blockedState = MutableStateFlow(false)
 
-    /** True once the speech work died or failed [MAX_DEATHS] times without a decode completing in between. */
+    /**
+     * True once the speech work died or failed [MAX_DEATHS] times without a decode completing in between, or once
+     * after the person's Try again.
+     */
     val blocked: StateFlow<Boolean> = blockedState.asStateFlow()
 
     /** The stage the previous process died in, when that death was counted at this start; null otherwise. */
@@ -113,6 +119,7 @@ class EngineGuard @VisibleForTesting internal constructor(
         val saved = read()
         deaths.clear()
         for (stage in EngineStage.entries) saved.getProperty(DEATHS + stage.name)?.toIntOrNull()?.takeIf { it > 0 }?.let { deaths[stage] = it }
+        retried = saved.getProperty(RETRIED) == "true"
         val inside = saved.getProperty(INSIDE)?.let { name -> EngineStage.entries.firstOrNull { it.name == name } }
         lastDeath = null
         if (inside != null && saved.getProperty(PROCESS) != process.token) {
@@ -159,12 +166,12 @@ class EngineGuard @VisibleForTesting internal constructor(
     }
 
     /**
-     * [stage] finished its work. A decode clears every count (each stage before it worked); an install clears the
-     * deaths counted at install.
+     * [stage] finished its work. A decode clears every count and ends a Try again's single attempt (each stage before
+     * it worked); an install clears the deaths counted at install.
      */
     fun completed(stage: EngineStage) = synchronized(lock) {
         val changed = when (stage) {
-            EngineStage.DECODE -> deaths.isNotEmpty().also { deaths.clear() }
+            EngineStage.DECODE -> (deaths.isNotEmpty() || retried).also { deaths.clear(); retried = false }
             EngineStage.INSTALL -> deaths.remove(EngineStage.INSTALL) != null
             else -> false
         }
@@ -178,10 +185,24 @@ class EngineGuard @VisibleForTesting internal constructor(
         publish()
     }
 
-    /** The person's Retry: every count is forgotten and the speech work may start again. */
+    /**
+     * The person's Try again: every count is forgotten and the speech work may start again, for one attempt. Until a
+     * decode completes, one death or failed load blocks the guard again at once. A crash that happens every time then
+     * costs one process per Try again: the next launch stays blocked instead of resuming the work and crashing again.
+     */
     fun reset() = synchronized(lock) {
         if (deaths.isEmpty()) return@synchronized
         deaths.clear()
+        retried = true
+        write()
+        publish()
+    }
+
+    /** Device tests: forgets every count and any Try again, as on a fresh install. */
+    @VisibleForTesting
+    fun clearForTests() = synchronized(lock) {
+        deaths.clear()
+        retried = false
         write()
         publish()
     }
@@ -209,7 +230,8 @@ class EngineGuard @VisibleForTesting internal constructor(
     }
 
     private fun publish() {
-        blockedState.value = deaths.values.sum() >= MAX_DEATHS
+        val counted = deaths.values.sum()
+        blockedState.value = counted >= MAX_DEATHS || retried && counted > 0
     }
 
     private fun read(): Properties = Properties().also { saved ->
@@ -226,6 +248,7 @@ class EngineGuard @VisibleForTesting internal constructor(
     private fun write() {
         val state = Properties()
         deaths.forEach { (stage, count) -> state.setProperty(DEATHS + stage.name, count.toString()) }
+        if (retried) state.setProperty(RETRIED, "true")
         active.lastOrNull()?.let { stage ->
             state.setProperty(INSIDE, stage.name)
             state.setProperty(PROCESS, process.token)
@@ -251,6 +274,7 @@ class EngineGuard @VisibleForTesting internal constructor(
         const val MAX_DEATHS = 2
         private const val TAG = "FocalEngineGuard"
         private const val DEATHS = "deaths."
+        private const val RETRIED = "retried"
         private const val INSIDE = "inside"
         private const val PROCESS = "process"
         private const val PID = "pid"

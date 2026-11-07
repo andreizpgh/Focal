@@ -781,7 +781,7 @@ class InterfaceTest {
                     RecordingState.live.value.noteId == null
             }
         } finally {
-            app.engineGuard.reset()
+            app.engineGuard.clearForTests()
             RecordingService.decoderFactoryForTests = null
             ServiceNotifications.cancelReady(app, id)
         }

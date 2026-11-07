@@ -67,6 +67,44 @@ class EngineGuardTest {
         assertTrue(process().allows())
     }
 
+    @Test fun tryAgainGivesOneAttemptUntilADecodeCompletes() {
+        process().dieInside(EngineStage.VAD_OPEN)
+        process().dieInside(EngineStage.VAD_OPEN)
+        val retried = process().also { it.reset() }
+        assertTrue(retried.allows())
+        // The crash happens every time: the process Try again started dies, and the next launch is blocked at once
+        // instead of resuming the work and dying a second time.
+        retried.dieInside(EngineStage.VAD_OPEN)
+        val next = process()
+        assertEquals(mapOf(EngineStage.VAD_OPEN to 1), next.deaths())
+        assertFalse(next.allows())
+        assertFalse("Still blocked at a later start", process().allows())
+        // A failed load right after Try again blocks at once too.
+        val loading = process().also { it.reset() }
+        loading.failed(EngineStage.RECOGNIZER)
+        assertFalse(loading.allows())
+        // Once a decode completes the chain is proven: one death leaves one more attempt again.
+        val recovered = process().also { it.reset() }
+        recovered.inside(EngineStage.DECODE) { }
+        recovered.completed(EngineStage.DECODE)
+        recovered.dieInside(EngineStage.DECODE)
+        val after = process()
+        assertEquals(mapOf(EngineStage.DECODE to 1), after.deaths())
+        assertTrue(after.allows())
+    }
+
+    @Test fun deathsThatDoNotCountLeaveTryAgainsAttempt() {
+        process().dieInside(EngineStage.RECOGNIZER)
+        process().dieInside(EngineStage.RECOGNIZER)
+        val retried = process().also { it.reset() }
+        // The person used Force stop while the model loaded: not a death, so the attempt is still there.
+        retried.dieInside(EngineStage.RECOGNIZER, ProcessExit(ApplicationExitInfo.REASON_USER_REQUESTED, RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE))
+        val next = process()
+        assertTrue(next.allows())
+        next.dieInside(EngineStage.RECOGNIZER)
+        assertFalse(process().allows())
+    }
+
     @Test fun deathsAtEveryStageAddUp() {
         // The native libraries load in VAD's creation; each stage that dies brings the block nearer.
         process().dieInside(EngineStage.VAD_OPEN)
@@ -88,13 +126,15 @@ class EngineGuardTest {
         guard.dieInside(EngineStage.DECODE)
         assertFalse("A stage that succeeds each time cannot keep a dying decode looping", process().allows())
 
-        // A decode that completes proves the whole chain: every count goes.
+        // A decode that completes proves the whole chain: every count goes, and so does Try again's single attempt.
         val retried = process().also { it.reset() }
         retried.dieInside(EngineStage.DECODE)
         val recovered = process()
+        assertFalse(recovered.allows())
         recovered.inside(EngineStage.DECODE) { }
         recovered.completed(EngineStage.DECODE)
         assertEquals(emptyMap<EngineStage, Int>(), recovered.deaths())
+        assertTrue(recovered.allows())
         assertEquals(emptyMap<EngineStage, Int>(), process().deaths())
     }
 
