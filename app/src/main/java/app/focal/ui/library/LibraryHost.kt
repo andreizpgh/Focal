@@ -313,8 +313,13 @@ private fun SettingsPeek(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val resumed by lifecycle.currentStateFlow.collectAsStateWithLifecycle()
     val focused = LocalWindowInfo.current.isWindowFocused
-    val atRest by remember(strip) {
-        derivedStateOf { strip.progress.value <= 0f && !strip.progress.isRunning && shell.live.expansion.value <= 0f }
+    // The peek's own motion is not the end of the calm it runs in: s leaving 0 for the peek would otherwise end idle
+    // and so cancel the peek in its first frame, which then springs back unseen (spec 4.23.5).
+    val atRest by remember(strip, layer) {
+        derivedStateOf {
+            val still = strip.progress.value <= 0f && !strip.progress.isRunning
+            (still || layer.peek != null) && shell.live.expansion.value <= 0f
+        }
     }
     val idle = resumed.isAtLeast(Lifecycle.State.RESUMED) && focused && atRest && !touched && !capturing && !blocked &&
         armed() && shell.bottom.feedback.current == null
