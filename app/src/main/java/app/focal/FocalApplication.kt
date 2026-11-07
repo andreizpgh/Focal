@@ -12,6 +12,7 @@ import app.focal.data.RetiredFiles
 import app.focal.recording.AppPresence
 import app.focal.recording.RecordingService
 import app.focal.recording.ServiceNotifications
+import app.focal.speech.EngineGuard
 import app.focal.speech.SpeechModels
 import kotlinx.coroutines.*
 
@@ -19,6 +20,12 @@ class FocalApplication : Application() {
     lateinit var store: NoteStore
         private set
     lateinit var preferences: Preferences
+        private set
+    /**
+     * Counts the processes that died inside the speech work (and recognizers that failed to load); once it blocks,
+     * nothing starts that work by itself until the person's Retry.
+     */
+    lateinit var engineGuard: EngineGuard
         private set
     /** The bundled speech model, installed in the background from the first launch. */
     lateinit var models: SpeechModels
@@ -32,7 +39,9 @@ class FocalApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         store = NoteStore(this); preferences = Preferences(this)
-        models = SpeechModels(this, scope)
+        // First, before anything can enter the speech work: a marker left by the previous process is its death.
+        engineGuard = EngineGuard.open(this)
+        models = SpeechModels(this, scope, engineGuard)
         AppPresence.install(this)
         ServiceNotifications(this).createChannels()
         storageReady = scope.async { store.recover() }
@@ -57,8 +66,8 @@ class FocalApplication : Application() {
     /**
      * Continues transcription of notes that wait for it (after process death, Android's background limit or
      * a preempting recording). Call when an activity resumes: the service may only start from the visible
-     * app. Skipped while nothing can transcribe (no model in this build, a failed install, or recognizer
-     * loads that kept failing until the user retries).
+     * app. Skipped while nothing can transcribe (no model in this build, a failed install, or speech work that
+     * killed the process or failed to load twice in a row, until the user retries: [engineGuard]).
      */
     fun resumeWaitingTranscription(activity: Activity) {
         // A failed model install (usually storage) is retried at every foreground start, unless the APK's
@@ -69,7 +78,8 @@ class FocalApplication : Application() {
             try {
                 storageReady.await()
                 if (store.waitingNotes().isEmpty()) return@launch
-                if (preferences.unfinishedEngineLoads >= RecordingService.MAX_UNFINISHED_LOADS) return@launch
+                // The speech work died or failed twice in a row: it waits for the person's Try again.
+                if (!engineGuard.allows()) return@launch
                 models.awaitFiles() ?: return@launch
                 withContext(Dispatchers.Main) {
                     val resumed = (activity as? LifecycleOwner)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true

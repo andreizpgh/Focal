@@ -33,6 +33,8 @@ import app.focal.data.NoteState
 import app.focal.data.NoteStore
 import app.focal.data.StoredWindow
 import app.focal.speech.DeviceSpeechPolicy
+import app.focal.speech.ENGINE_STOPPED
+import app.focal.speech.EngineStage
 import app.focal.speech.MODEL_MISSING
 import app.focal.speech.ModelStatus
 import app.focal.speech.SileroVad
@@ -219,13 +221,14 @@ class RecordingService : Service() {
                 // Counted now, so a worker that is just going idle does not stop the service under it.
                 pendingRequests++
             }
-            // The user's Retry also tries a failed model install again, before the worker looks at it.
+            // The user's Retry forgets the speech work's deaths and failed loads, then tries a failed model install
+            // again, before the worker looks at either.
+            app.engineGuard.reset()
             app.models.retry()
             engineRetry = true
             notifications.cancelTimedOut()
             scope.launch {
                 try {
-                    app.preferences.unfinishedEngineLoads = 0
                     // Only the user's explicit retry gives failed windows new attempts.
                     if (retryFailed) store.retryFailed(noteId)
                 } catch (error: Exception) { Log.w(TAG, "Could not reset failed windows", error) }
@@ -894,6 +897,13 @@ class RecordingService : Service() {
                     publishSpeech(id, SpeechAvailability.PREPARING)
                     delay(250); continue
                 }
+                if (engine.stopped) {
+                    // The speech work killed the process or failed to load twice: nothing native runs and nothing is
+                    // planned until the person's Try again. Capture goes on; a finished note waits.
+                    publishSpeech(id, SpeechAvailability.UNAVAILABLE)
+                    if (live) { delay(LIVE_POLL_MS); continue }
+                    return Outcome.Blocked(engine.failure ?: ENGINE_STOPPED)
+                }
                 // The recognizer loads once the microphone delivers audio (never before capture starts).
                 if (!live || session?.started == true) engine.load()
                 publishSpeech(id, engine.availability)
@@ -910,7 +920,7 @@ class RecordingService : Service() {
                     val started = SystemClock.elapsedRealtime()
                     try {
                         transcriber = decoder
-                        decoder.transcribe(store, window, engine.threads)
+                        app.engineGuard.inside(EngineStage.DECODE) { decoder.transcribe(store, window, engine.threads) }
                         engine.succeeded()
                     } catch (error: Exception) {
                         if (error is CancellationException) { runCatching { store.cancelDecode(window.id) }; throw error }
@@ -931,7 +941,9 @@ class RecordingService : Service() {
                     if (cooldown > 0 && !feed.complete) delay(cooldown)
                     continue
                 }
-                if (feed.advance(note.duration, finished = !live, legacy = note.legacy)) continue
+                // Silero VAD's calls are a guarded stage too, marked only when a pass reaches the detector.
+                val planned = try { feed.advance(note.duration, finished = !live, legacy = note.legacy) } finally { engine.segmented() }
+                if (planned) continue
                 if (!live && feed.complete) {
                     if (pending != null) return Outcome.Blocked(engine.failure ?: "Saved audio can be transcribed later.")
                     return complete(id)
@@ -1001,7 +1013,9 @@ class RecordingService : Service() {
     /**
      * The worker's speech resources: Silero VAD for segmentation (relative energy if it cannot load) and
      * one recognizer, created on the speech thread with the device's thread policy and released when the
-     * worker has nothing left to do.
+     * worker has nothing left to do. Every call that can kill the process (VAD's creation and decisions, the
+     * recognizer's creation, each decode) runs inside a stage of the app's [app.focal.speech.EngineGuard]; while
+     * the guard is blocked the engine is [stopped] and none of them starts.
      */
     private inner class Engine {
         var decoder: RecordingDecoder? = null
@@ -1018,7 +1032,16 @@ class RecordingService : Service() {
         private var loadTried = false
         private var consecutiveFailures = 0
         private var lastFailedWindow: Long? = null
+        /** A planning pass reached Silero VAD: its segmentation stage is marked until the pass returns. */
+        private var segmenting = false
         private val testDecoder = if (BuildConfig.DEBUG) decoderFactoryForTests else null
+        private val guard get() = app.engineGuard
+
+        /**
+         * The speech work killed the process or failed to load [app.focal.speech.EngineGuard.MAX_DEATHS] times in a
+         * row: until the person's Try again nothing native starts, and no window is planned.
+         */
+        val stopped: Boolean get() = decoder == null && !guard.allows()
 
         val availability: SpeechAvailability get() = when {
             decoder != null -> SpeechAvailability.READY
@@ -1039,6 +1062,7 @@ class RecordingService : Service() {
                 engineRetry = false
                 reset()
             }
+            if (stopped) { failure = ENGINE_STOPPED; resolved = true; return true }
             if (testDecoder != null) { resolved = true; return true }
             val status = app.models.status.value
             if (resolved && modelUnavailable && status !is ModelStatus.Failed && status != ModelStatus.NotBundled) reset()
@@ -1049,8 +1073,10 @@ class RecordingService : Service() {
                 is ModelStatus.Installing -> return false
                 is ModelStatus.Ready -> {
                     files = status.files
-                    if (vad == null) vad = try { SileroVad.open(status.files.getValue(UltraModel.VAD)) }
-                    catch (error: Throwable) {
+                    if (vad == null) vad = try {
+                        // Usually the first call into the native runtime: its libraries load here.
+                        guard.inside(EngineStage.VAD_OPEN) { SileroVad.open(status.files.getValue(UltraModel.VAD)) }
+                    } catch (error: Throwable) {
                         // The relative-energy detector segments instead.
                         Log.w(TAG, "Silero VAD unavailable; using the energy detector", error)
                         null
@@ -1068,36 +1094,54 @@ class RecordingService : Service() {
             consecutiveFailures = 0; lastFailedWindow = null
         }
 
-        /** A fresh detector state for each new segmenter; null selects the energy fallback. */
-        fun detector(): SpeechDetector? = vad?.also { it.reset() }
+        /**
+         * A fresh detector state for each new segmenter; null selects the energy fallback. Its native calls mark the
+         * segmentation stage on their first use in a planning pass, so a pass with nothing to plan writes nothing.
+         */
+        fun detector(): SpeechDetector? = vad?.let { opened ->
+            segmenting()
+            opened.reset()
+            SpeechDetector { window -> segmenting(); opened.isSpeech(window) }
+        }
+
+        private fun segmenting() {
+            if (segmenting) return
+            guard.enter(EngineStage.SEGMENT)
+            segmenting = true
+        }
+
+        /** The planning pass returned or threw: Silero VAD is no longer deciding. */
+        fun segmented() {
+            if (!segmenting) return
+            segmenting = false
+            guard.leave(EngineStage.SEGMENT)
+        }
 
         /** Loads the recognizer once (again after a user retry). Never throws. */
         fun load() {
             if (loadTried || decoder != null) return
             loadTried = true
-            val prefs = app.preferences
             // Loads that kept failing or killed the process wait for the user's Retry, also during capture.
-            if (testDecoder == null && prefs.unfinishedEngineLoads >= MAX_UNFINISHED_LOADS) {
-                failure = "Not enough free memory to transcribe right now."
-                return
-            }
+            if (!guard.allows()) { failure = ENGINE_STOPPED; return }
             val installed = files
             if (testDecoder == null && installed == null) { failure = failure ?: MODEL_MISSING; return }
             threads = DeviceSpeechPolicy.recognizerThreads(this@RecordingService)
             decoderAwake.set(true); reconcileWake()
             try {
-                if (testDecoder == null) prefs.unfinishedEngineLoads = prefs.unfinishedEngineLoads + 1
-                val opened = testDecoder?.invoke() ?: UltraTranscriber { count, _ ->
-                    UltraEngine.open(this@RecordingService, checkNotNull(installed), count)
+                decoder = guard.inside(EngineStage.RECOGNIZER) {
+                    val opened = testDecoder?.invoke() ?: UltraTranscriber { count, _ ->
+                        UltraEngine.open(this@RecordingService, checkNotNull(installed), count)
+                    }
+                    try { opened.prepare(threads) }
+                    catch (error: Throwable) { runCatching { opened.close() }; throw error }
+                    opened
                 }
-                try { opened.prepare(threads) }
-                catch (error: Throwable) { runCatching { opened.close() }; throw error }
-                decoder = opened
                 failure = null
-                if (testDecoder == null) prefs.unfinishedEngineLoads = 0
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
                 Log.w(TAG, "The recognizer could not load", error)
+                // A recognizer that cannot load counts as a death would (test decoders fail on purpose).
+                if (testDecoder == null) guard.failed(EngineStage.RECOGNIZER)
                 failure = when (error) {
                     is OutOfMemoryError -> "Not enough free memory to transcribe right now."
                     else -> error.message ?: "The speech model could not load."
@@ -1107,7 +1151,11 @@ class RecordingService : Service() {
             }
         }
 
-        fun succeeded() { consecutiveFailures = 0; lastFailedWindow = null }
+        /** A window was decoded and committed: the whole chain works, so the guard forgets every death. */
+        fun succeeded() {
+            consecutiveFailures = 0; lastFailedWindow = null
+            guard.completed(EngineStage.DECODE)
+        }
 
         /**
          * Different windows failing one after another mean the recognizer itself is broken: it is dropped and
@@ -1123,6 +1171,7 @@ class RecordingService : Service() {
         }
 
         fun close() {
+            segmented()
             runCatching { decoder?.close() }
             decoder = null
             runCatching { vad?.close() }
@@ -1206,8 +1255,6 @@ class RecordingService : Service() {
         private const val MAX_DECODE_ATTEMPTS = 2
         /** Consecutive failed windows after which the recognizer is treated as broken. */
         private const val BROKEN_AFTER_FAILURES = 2
-        /** Recognizer loads that did not finish (failure or process death) before automatic loads stop. */
-        const val MAX_UNFINISHED_LOADS = 2
         @Volatile internal var inputFactoryForTests: (() -> RecordingInput)? = null
         @Volatile internal var decoderFactoryForTests: (() -> RecordingDecoder)? = null
         @Volatile internal var metadataCapacityForTests: Int? = null

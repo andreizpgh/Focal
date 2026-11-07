@@ -47,14 +47,17 @@ internal class BundledModelException(message: String, cause: Throwable? = null) 
  * only check the marker and file sizes. Transcription waits for [awaitFiles]; recording never does.
  *
  * A failed install stays failed until something asks for a retry ([retry]): [ensureStarted], which the
- * speech worker may call as often as it likes, never repeats it.
+ * speech worker may call as often as it likes, never repeats it. Each attempt runs inside [guard]'s install
+ * stage; while the guard is blocked (the speech work kept killing the process) no attempt starts by itself, and the
+ * status is a failure only the person's Retry, after the guard's reset, tries again.
  */
 class SpeechModels internal constructor(
     private val scope: CoroutineScope,
+    private val guard: EngineGuard? = null,
     /** Runs one install attempt, publishing progress through its argument, and returns how it ended. */
     private val installer: (publish: (ModelStatus) -> Unit) -> ModelStatus,
 ) {
-    constructor(context: Context, scope: CoroutineScope) : this(scope, { publish -> install(context, publish) })
+    constructor(context: Context, scope: CoroutineScope, guard: EngineGuard) : this(scope, guard, { publish -> install(context, publish) })
 
     private val state = MutableStateFlow<ModelStatus>(ModelStatus.Checking)
     val status: StateFlow<ModelStatus> = state.asStateFlow()
@@ -92,8 +95,15 @@ class SpeechModels internal constructor(
 
     private fun launch() {
         job = scope.launch(Dispatchers.IO) {
-            state.value = try { installer { state.value = it } }
-            catch (error: Exception) {
+            if (guard?.allows() == false) {
+                state.value = ModelStatus.Failed(ENGINE_STOPPED, permanent = true)
+                return@launch
+            }
+            state.value = try {
+                val installed = guard?.inside(EngineStage.INSTALL) { installer { state.value = it } } ?: installer { state.value = it }
+                if (installed is ModelStatus.Ready) guard?.completed(EngineStage.INSTALL)
+                installed
+            } catch (error: Exception) {
                 runCatching { Log.w(TAG, "Speech model install failed", error) } // never decides the outcome
                 ModelStatus.Failed(error.message ?: "The speech model could not be prepared.", error is BundledModelException)
             }

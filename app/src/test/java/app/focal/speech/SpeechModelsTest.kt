@@ -8,13 +8,17 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
 class SpeechModelsTest {
+    @get:Rule val folder = TemporaryFolder()
     private val scope = CoroutineScope(SupervisorJob())
     private val attempts = AtomicInteger()
     @Volatile private var outcome: () -> ModelStatus = { error("Not enough free storage") }
@@ -26,8 +30,49 @@ class SpeechModelsTest {
 
     @After fun cleanup() = scope.cancel()
 
-    private fun settle(): ModelStatus = runBlocking {
+    private fun settle(models: SpeechModels = this.models): ModelStatus = runBlocking {
         withTimeout(10_000) { models.status.first { it !is ModelStatus.Checking && it !is ModelStatus.Installing } }
+    }
+
+    private var pid = 1
+    private fun guard() = EngineGuard(File(folder.root, "speech-guard"), ProcessIdentity("process-$pid", pid++), { _, _ -> null })
+
+    @Test fun noInstallStartsWhileTheEngineGuardIsBlockedAndRetryStartsIt() {
+        // Two processes died while the model was being installed.
+        repeat(EngineGuard.MAX_DEATHS) { guard().enter(EngineStage.INSTALL) }
+        val guard = guard()
+        assertFalse(guard.allows())
+        val files = mapOf("tokens.txt" to File("tokens.txt"))
+        outcome = { ModelStatus.Ready(files) }
+        val guarded = SpeechModels(scope, guard) { publish ->
+            attempts.incrementAndGet()
+            // The install runs inside its stage: a death here would be counted at the next start.
+            assertEquals(EngineStage.INSTALL, guard.markedOnDisk())
+            publish(ModelStatus.Installing(1, 2))
+            outcome()
+        }
+        guarded.ensureStarted()
+        val stopped = settle(guarded)
+        assertTrue(stopped is ModelStatus.Failed && stopped.permanent)
+        // A foreground start does not try again; only the person's Retry does, after the guard's reset.
+        guarded.retry(automatic = true)
+        assertEquals(0, attempts.get())
+        guard.reset()
+        guarded.retry()
+        assertEquals(ModelStatus.Ready(files), settle(guarded))
+        assertEquals(1, attempts.get())
+        assertNull(guard.markedOnDisk())
+    }
+
+    @Test fun aCompletedInstallForgetsTheDeathsCountedAtInstall() {
+        guard().enter(EngineStage.INSTALL)
+        val guard = guard()
+        assertEquals(mapOf(EngineStage.INSTALL to 1), guard.deaths())
+        val files = mapOf("tokens.txt" to File("tokens.txt"))
+        val guarded = SpeechModels(scope, guard) { ModelStatus.Ready(files) }
+        guarded.ensureStarted()
+        assertEquals(ModelStatus.Ready(files), settle(guarded))
+        assertEquals(emptyMap<EngineStage, Int>(), guard.deaths())
     }
 
     @Test fun aFailedInstallIsNotRepeatedByPolling() {
