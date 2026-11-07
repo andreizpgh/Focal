@@ -3,6 +3,7 @@ package app.focal.ui.note
 import app.focal.data.SplitOrigin
 import app.focal.ui.state.BlankParagraph
 import app.focal.ui.state.EditOutcome
+import app.focal.ui.state.NoteUiState
 import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.WriteQueue
 import kotlinx.coroutines.CompletableDeferred
@@ -601,5 +602,24 @@ class EditSessionTest {
         assertEquals("ab".length, EditSession.joinPoint("ab", ""))
         assertEquals("cou" to "ntry", EditSession.splitTexts("cou ntry", 3))
         assertEquals("cou" to "ntry ", EditSession.splitTexts(" cou  ntry ", 5))
+    }
+
+    /** A3: in Edit a paragraph offers Edit, which puts the caret in it without a pointer, and nothing that plays. */
+    @Test fun inEditAParagraphOffersEditAndNothingThatPlays() {
+        val note = NoteUiState("note", loaded = true, editable = true, audioPresent = true, canPlay = true)
+        val labels = ParagraphLabels("Play from here", "Edit", "Copy paragraph", "Restore original", "Play unclear word")
+        val edited = paragraph(4, "Some edited words.").copy(edited = true, canRestore = true)
+        var caret: CaretAt? = null
+        fun actions(editing: Boolean, finding: Boolean = false) = paragraphActions(
+            edited, labels, note, canPlay = true, editing = editing, finding = finding, play = { _, _ -> },
+            edit = { caret = it }, copy = {}, restore = {},
+        )
+        assertEquals(listOf("Play from here", "Edit", "Copy paragraph", "Restore original"), actions(editing = false).map { it.label })
+        val inEdit = actions(editing = true)
+        assertEquals(listOf("Edit", "Copy paragraph"), inEdit.map { it.label })
+        assertTrue(inEdit.first { it.label == "Edit" }.action())
+        assertEquals(CaretAt(4, 0), caret)
+        // Find open over Edit has no field to put the caret in.
+        assertEquals(listOf("Copy paragraph"), actions(editing = true, finding = true).map { it.label })
     }
 }

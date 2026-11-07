@@ -10,7 +10,10 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -19,6 +22,7 @@ import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -46,6 +50,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.job
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -56,7 +61,7 @@ import org.junit.runner.RunWith
  * writes can be held, as a busy database holds them: words typed right after Enter land in the second paragraph; a
  * new paragraph's draft survives the page being recreated and Done stores it; the save as the activity stops never
  * writes back over an undo still writing; Undo of Enter inside a word gives the word back; a long undo and redo chain
- * keeps finding its paragraphs.
+ * keeps finding its paragraphs; and TalkBack can put the caret in any paragraph in Edit, where nothing plays.
  */
 @RunWith(AndroidJUnit4::class)
 class NoteEditSessionTest {
@@ -272,6 +277,33 @@ class NoteEditSessionTest {
         rule.onNode(hasText("Not saved")).assertDoesNotExist()
     }
 
+    /**
+     * A3: Edit from the pencil has no field yet. TalkBack's Edit action puts the caret in a paragraph (none plays in
+     * Edit), and on another paragraph moves it there, the draft it leaves stored in turn.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun talkBackPutsTheCaretInAParagraphInEdit() {
+        val store = EditStore(listOf(FIRST, SECOND))
+        rule.setContent { FocalTheme(dark = false) { Note(store) } }
+        fun labels(text: String): List<String> =
+            rule.onNode(hasText(text) and !hasSetTextAction()).fetchSemanticsNode().config.getOrElse(SemanticsActions.CustomActions) { emptyList() }.map { it.label }
+        assertTrue(PLAY in labels(SECOND))
+        press("Edit")
+        rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasContentDescription("Done")).fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty())
+        assertEquals(listOf(EDIT, COPY), labels(SECOND).filter { it == EDIT || it == COPY || it == PLAY })
+        assertFalse(PLAY in labels(FIRST))
+        rule.onNode(hasText(SECOND) and !hasSetTextAction()).performCustomAccessibilityActionWithLabel(EDIT)
+        awaitField(SECOND)
+        rule.waitUntil(TIMEOUT_MS) {
+            rule.onAllNodes(hasSetTextAction() and SemanticsMatcher.expectValue(SemanticsProperties.Focused, true)).fetchSemanticsNodes().isNotEmpty()
+        }
+        field().performTextReplacement(REVISED)
+        rule.onNode(hasText(FIRST) and !hasSetTextAction()).performCustomAccessibilityActionWithLabel(EDIT)
+        awaitField(FIRST)
+        awaitStore(store, listOf(FIRST, REVISED))
+    }
+
     private companion object {
         const val NOTE_ID = "edit-session"
         const val FIRST = "The first synthetic paragraph ends here."
@@ -280,6 +312,9 @@ class NoteEditSessionTest {
         const val ALPHA = "Alpha beta gamma."
         const val ADDED = "Added synthetic words."
         const val REVISED = "Revised synthetic words."
+        const val PLAY = "Play from here"
+        const val EDIT = "Edit"
+        const val COPY = "Copy paragraph"
         const val TIMEOUT_MS = 5_000L
     }
 }

@@ -279,7 +279,9 @@ internal data class ParagraphLabels(val play: String, val edit: String, val copy
 /**
  * TalkBack's paragraph actions (spec 8.2): "Play from here", "Edit", "Copy paragraph", "Restore original" when edited,
  * and "Play unclear word" when a word is doubtful. No word-level nodes, so a long note never becomes thousands of
- * targets.
+ * targets. In Edit nothing plays: "Edit" puts the caret in the paragraph, as a tap does (the field it leaves keeps its
+ * draft, saved in turn), so a paragraph can be edited without a pointer; the focused one is a field with its own
+ * actions. While Find is open over Edit there is no field to put the caret in.
  */
 internal fun paragraphActions(
     paragraph: ParagraphUi,
@@ -287,17 +289,18 @@ internal fun paragraphActions(
     note: NoteUiState,
     canPlay: Boolean,
     editing: Boolean,
+    finding: Boolean,
     play: (ParagraphUi, Int) -> Unit,
-    enterEdit: (CaretAt) -> Unit,
+    edit: (CaretAt) -> Unit,
     copy: (ParagraphUi) -> Unit,
     restore: (ParagraphUi) -> Unit,
 ): List<CustomAccessibilityAction> = buildList {
-    if (canPlay) add(CustomAccessibilityAction(labels.play) { play(paragraph, 0); true })
-    if (note.editable && !editing) add(CustomAccessibilityAction(labels.edit) { enterEdit(CaretAt(paragraph.id, 0)); true })
+    if (canPlay && !editing) add(CustomAccessibilityAction(labels.play) { play(paragraph, 0); true })
+    if (note.editable && !(editing && finding)) add(CustomAccessibilityAction(labels.edit) { edit(CaretAt(paragraph.id, 0)); true })
     add(CustomAccessibilityAction(labels.copy) { copy(paragraph); true })
     if (paragraph.edited && paragraph.canRestore && !editing) add(CustomAccessibilityAction(labels.restore) { restore(paragraph); true })
     val doubtful = paragraph.words.firstOrNull { it.doubtful }
-    if (SpeechTuning.DOUBT_ENABLED && doubtful != null && canPlay) {
+    if (SpeechTuning.DOUBT_ENABLED && doubtful != null && canPlay && !editing) {
         add(CustomAccessibilityAction(labels.playUnclear) { play(paragraph, doubtful.start); true })
     }
 }

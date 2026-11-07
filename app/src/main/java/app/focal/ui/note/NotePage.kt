@@ -946,8 +946,10 @@ fun NotePage(
                                     entrance = entranceDelay(landing, item.index, paragraphs.size),
                                     onTap = onTap, tapBlocked = { selection.selectedTexts.any { it.isNotEmpty() } },
                                     actions = paragraphActions(
-                                        item.paragraph, labels, note, canPlay, page.editing, play = playFromWord,
-                                        enterEdit = { enterEdit(it) }, copy = actions.copyParagraph, restore = restoreOutside,
+                                        item.paragraph, labels, note, canPlay, page.editing, finding = find.open, play = playFromWord,
+                                        // In Edit, TalkBack's Edit puts the caret in this paragraph, as a tap does.
+                                        edit = { at -> if (page.editing) focusField(at, refresh = false, commit = true) else enterEdit(at) },
+                                        copy = actions.copyParagraph, restore = restoreOutside,
                                     ),
                                     onEnter = enter,
                                     onJoin = join,
