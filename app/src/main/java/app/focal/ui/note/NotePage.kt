@@ -42,13 +42,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isShiftPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -97,6 +90,8 @@ import app.focal.ui.shell.LocalPageReveal
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.PageKey
 import app.focal.ui.shell.PageKeysEffect
+import app.focal.ui.shell.rememberShortcutKeys
+import app.focal.ui.shell.shortcutKeys
 import app.focal.ui.state.EditOutcome
 import app.focal.ui.state.GapUi
 import app.focal.ui.state.NotePhase
@@ -746,8 +741,8 @@ fun NotePage(
             }
         }
     }
-    // Whether the page took the Space being held (its repeats follow the first press).
-    val space = remember { SpacePress() }
+    // Space and the Ctrl shortcuts heard before a focused control inside the page; a held Space acts once.
+    val shortcuts = rememberShortcutKeys(onKey)
     // Heard by the activity when nothing on the page has focus; only the page on top answers, and only while it shows:
     // the activity hears keys past the inert modifiers, and the scene covers the page in both layouts, settings in two
     // panes (the whole window slides; in one pane the page covers settings).
@@ -766,22 +761,7 @@ fun NotePage(
             // control): the first key after a touch leaves touch mode and puts focus on the top bar's back button by
             // itself, so a Space left to the focused control would do nothing and the next one would go Back. A held
             // Space acts once; its repeats go with it, so no focused control sees half of the press.
-            .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                val native = event.nativeKeyEvent
-                if (event.key == Key.Spacebar && native.hasNoModifiers()) {
-                    if (native.repeatCount == 0) space.taken = onKey(PageKey.PlayPause)
-                    return@onPreviewKeyEvent space.taken
-                }
-                if (!event.isCtrlPressed) return@onPreviewKeyEvent false
-                val key = when (event.key) {
-                    Key.Z -> if (event.isShiftPressed) PageKey.Redo else PageKey.Undo
-                    Key.F -> PageKey.Find
-                    Key.C -> PageKey.Copy
-                    else -> null
-                }
-                key != null && onKey(key)
-            }
+            .shortcutKeys(shortcuts)
             .then(
                 // While the title is renamed, a tap anywhere else commits it and does nothing else (spec 5.5).
                 if (!page.renaming) Modifier else Modifier.pointerInput(Unit) {
@@ -917,9 +897,4 @@ fun NotePage(
         )
         Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite; contentDescription = announcement })
     }
-}
-
-/** A Space held on the note page: whether the page took its first press (and so takes its repeats). */
-private class SpacePress {
-    var taken = false
 }

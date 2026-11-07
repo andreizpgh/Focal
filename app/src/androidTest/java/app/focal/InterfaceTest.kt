@@ -11,6 +11,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasClickAction
@@ -600,6 +601,59 @@ class InterfaceTest {
         back()
         awaitGone("the detail pane's note", hasText(words[1]))
         await("Record in the list pane", hasContentDescription("Record") and hasClickAction())
+    }
+
+    /**
+     * Two panes and a hardware keyboard (spec 5.14, 8.5): with focus in the library's pane, where the first key after a
+     * touch puts it by itself, Space plays and pauses the open note (a held Space once) and Ctrl+F opens its Find; a
+     * rename in the library's pane still takes Space as text. Skipped on a display that does not change panes when
+     * turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun theOpenNoteTakesItsShortcutsFromTheLibraryPane() {
+        assumeTurnChangesPanes()
+        val title = "Two-pane keys fixture $tag"
+        val words = listOf("Space plays this synthetic paragraph beside the library.", "And this one, after a blank line.")
+        longNote(title, words)
+        launch()
+        turn(landscape = true)
+        // The library's stage or row, never the page's own title (which also takes a tap, to rename).
+        val listed = hasContentDescription("Latest note. $title.", substring = true) or (hasText(title) and hasClickAction() and !isHeading())
+        await("the note in the library", listed)
+        compose.onAllNodes(listed)[0].performClick()
+        await("the note beside the library", hasText(words[0]))
+        val play = hasContentDescription("Play") and hasClickAction()
+        await("Play", play)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.setInTouchMode(false)
+        frames { compose.onAllNodes(listed)[0].performSemanticsAction(SemanticsActions.RequestFocus) }
+        frames { compose.onAllNodes(listed and isFocused()).assertCountEquals(1) }
+        val now = SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 0))
+        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 1))
+        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_SPACE, 0))
+        poll("playback from the library's pane") { playing() }
+        frames()
+        assertTrue("Still playing", playing())
+        press(KeyEvent.KEYCODE_SPACE)
+        poll("the pause from the library's pane") { !playing() }
+        frames { compose.onAllNodes(listed and isFocused()).assertCountEquals(1) }
+        press(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val find = hasSetTextAction() and hasContentDescription("Find in note")
+        await("Find in the note's pane", find)
+        back()
+        awaitGone("Find", find)
+        // A rename in the library's pane types its Space.
+        frames {
+            val menu = compose.onAllNodes(listed)[0].fetchSemanticsNode().config[SemanticsActions.CustomActions]
+            compose.runOnIdle { menu.first { it.label == "Rename" }.action() }
+        }
+        val rename = hasSetTextAction() and !hasContentDescription("Find in note")
+        await("the rename field", rename and isFocused())
+        press(KeyEvent.KEYCODE_SPACE)
+        await("the space in the title", rename and hasText(" "))
+        assertFalse("Not playing", playing())
+        back()
+        awaitGone("the rename field", rename)
     }
 
     /** A tablet turned with library search open (spec 5.2, 5.14): search stays open, its query and results with it. */

@@ -1,11 +1,17 @@
 package app.focal.ui.shell
 
+import android.view.KeyEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 
 /** The note page's keyboard shortcuts (spec 8.5). */
 enum class PageKey { Find, Copy, Undo, Redo, PlayPause }
@@ -45,4 +51,69 @@ internal fun PageKeysEffect(handler: (PageKey) -> Boolean) {
         keys.register(registered)
         onDispose { keys.unregister(registered) }
     }
+}
+
+/**
+ * The note page's shortcut keys (spec 8.5) as one focus area hears them before its focused control: Space alone, and
+ * Ctrl+F, Ctrl+C, Ctrl+Z, Ctrl+Shift+Z. [take] says whether the page took the key; a key it declines goes on to the
+ * focused control. A held Space acts once: its repeats go with the first press, so no control sees half of it.
+ */
+internal class ShortcutKeys(private val take: (PageKey) -> Boolean) {
+    private var spaceTaken = false
+
+    /** A key going down; true when the page took it (a repeat goes where its first press went). */
+    fun down(keyCode: Int, repeatCount: Int, noModifiers: Boolean, ctrl: Boolean, shift: Boolean): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_SPACE && noModifiers) {
+            if (repeatCount == 0) spaceTaken = take(PageKey.PlayPause)
+            return spaceTaken
+        }
+        if (!ctrl) return false
+        val key = when (keyCode) {
+            KeyEvent.KEYCODE_Z -> if (shift) PageKey.Redo else PageKey.Undo
+            KeyEvent.KEYCODE_F -> PageKey.Find
+            KeyEvent.KEYCODE_C -> PageKey.Copy
+            else -> return false
+        }
+        return take(key)
+    }
+}
+
+/** Hears [keys] before the focused control inside this area, while [enabled]. */
+internal fun Modifier.shortcutKeys(keys: ShortcutKeys, enabled: () -> Boolean = { true }): Modifier = onPreviewKeyEvent { event ->
+    if (event.type != KeyEventType.KeyDown || !enabled()) return@onPreviewKeyEvent false
+    val native = event.nativeKeyEvent
+    keys.down(native.keyCode, native.repeatCount, native.hasNoModifiers(), native.isCtrlPressed, native.isShiftPressed)
+}
+
+/** [ShortcutKeys] that always ask the latest [take]. */
+@Composable
+internal fun rememberShortcutKeys(take: (PageKey) -> Boolean): ShortcutKeys {
+    val current by rememberUpdatedState(take)
+    return remember { ShortcutKeys { current(it) } }
+}
+
+/**
+ * The text fields of one area that have focus. While one does, the area's keys are typing (a space in the query,
+ * Ctrl+C on its selection), never the page's shortcuts. Main thread only.
+ */
+class TypingFocus {
+    private val focused = HashSet<Any>()
+
+    val active: Boolean get() = focused.isNotEmpty()
+
+    internal fun update(field: Any, hasFocus: Boolean) {
+        if (hasFocus) focused += field else focused -= field
+    }
+}
+
+/** The [TypingFocus] of the area a text field sits in; null where no area asks. */
+val LocalTypingFocus = staticCompositionLocalOf<TypingFocus?> { null }
+
+/** Reports a text field's focus to its area's [TypingFocus]; the field counts as unfocused once it leaves. */
+@Composable
+fun rememberTypingReport(): (Boolean) -> Unit {
+    val typing = LocalTypingFocus.current
+    val field = remember { Any() }
+    DisposableEffect(typing) { onDispose { typing?.update(field, false) } }
+    return remember(typing) { { focused -> typing?.update(field, focused) } }
 }

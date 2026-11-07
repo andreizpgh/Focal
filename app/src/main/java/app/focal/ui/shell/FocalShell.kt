@@ -354,16 +354,28 @@ private fun PageEntry(key: Destination, shell: ShellState, twoPane: Boolean, pap
  * The library's pane (two panes): the Library destination at the window's size, so the settings strip slides the
  * whole window (spec 4.23.7); its page keeps to the list pane. While the licences fade through over the window, the
  * settings page under them leaves as the page below a fade-through does (two typesettings never overlap).
+ *
+ * With a note open beside it, the note's shortcuts (spec 8.5: Space, Ctrl+F, Ctrl+C, Ctrl+Z) go to the note even while
+ * focus is in this pane: after a touch the first hardware key leaves touch mode and puts focus on this pane's first
+ * control by itself, so Space would otherwise press a library control instead of playing the note. A key the note
+ * declines (nothing to play, no Edit to undo) stays with the focused control; while a text field here has focus (a
+ * rename), every key is typing. Search's field sits in the bottom column, outside this pane, so its keys never pass here.
  */
 @Composable
 private fun ListPane(shell: ShellState, destination: @Composable (Destination) -> Unit) {
     val pages = shell.pages
+    val pageKeys = LocalPageKeys.current
+    val shortcuts = remember(pageKeys) { ShortcutKeys(pageKeys::dispatch) }
+    val typing = remember { TypingFocus() }
     Box(
-        Modifier.fillMaxSize().graphicsLayer {
-            val change = pages.change
-            if (change != null && change.document == Destination.Licenses) alpha = pages.look(Destination.Library).alpha
-        },
-    ) { destination(Destination.Library) }
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                val change = pages.change
+                if (change != null && change.document == Destination.Licenses) alpha = pages.look(Destination.Library).alpha
+            }
+            .shortcutKeys(shortcuts) { shell.current is Destination.Note && !typing.active },
+    ) { CompositionLocalProvider(LocalTypingFocus provides typing) { destination(Destination.Library) } }
 }
 
 /**

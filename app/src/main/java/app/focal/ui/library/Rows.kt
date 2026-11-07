@@ -75,6 +75,7 @@ import app.focal.ui.design.alignWith
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.pageOrigin
 import app.focal.ui.shell.rememberRowOrigin
+import app.focal.ui.shell.rememberTypingReport
 import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.SearchRow
@@ -346,6 +347,8 @@ fun RenameField(
     val focus = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
     var committed by remember { mutableStateOf(false) }
+    // Keys typed here stay text: the two-pane library hands Space and the Ctrl shortcuts to an open note otherwise.
+    val typing = rememberTypingReport()
     fun commit() {
         if (committed) return
         committed = true
@@ -368,6 +371,7 @@ fun RenameField(
             .onFocusChanged { state ->
                 if (focused && !state.isFocused) commit()
                 focused = state.isFocused
+                typing(state.isFocused)
             }
             .onPreviewKeyEvent { event -> if (event.key == Key.Enter) { commit(); true } else false },
         decorationBox = { field ->
