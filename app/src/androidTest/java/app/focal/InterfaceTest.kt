@@ -25,6 +25,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -33,6 +34,7 @@ import app.focal.data.NoteState
 import app.focal.recording.LiveSession
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
+import app.focal.ui.state.PlaybackViewModel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -184,28 +186,58 @@ class InterfaceTest {
     private fun ctrlKey(keyCode: Int, meta: Int = 0) =
         KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON or meta)
 
+    /** Whether the note's audio plays: the activity's player, read without waiting for Compose to be idle. */
+    private fun playing(): Boolean {
+        var playing = false
+        scenario!!.onActivity { playing = ViewModelProvider(it)[PlaybackViewModel::class.java].session.value.playing }
+        return playing
+    }
+
+    /** Waits for [condition] without syncing with Compose, which is never idle while the player strip moves. */
+    private fun poll(what: String, condition: () -> Boolean) {
+        val end = SystemClock.uptimeMillis() + TIMEOUT_MS
+        while (!condition()) {
+            if (SystemClock.uptimeMillis() > end) throw AssertionError("Not reached: $what")
+            Thread.sleep(POLL_MS)
+        }
+    }
+
     @Test fun spacePlaysAndPausesTheNoteBeingRead() {
         val title = "Space fixture $tag"
         val words = listOf("Space plays this synthetic paragraph.", "And this one, after a blank line.")
         val id = note(title, words)
-        // Silence long enough to be still playing at the second Space.
+        // Silence long enough to be still playing at the next Space.
         app.store.audioFile(id).writeBytes(ByteArray(LONG_AUDIO_SECONDS * BYTES_PER_SECOND))
         launch()
         openFromLibrary(title, words[0])
         val play = hasContentDescription("Play") and hasClickAction()
         await("Play", play)
-        // Nothing on the page has focus after the tap: Space reaches the page as a hardware keyboard sends it.
+        // Nothing has focus after the tap; the first key leaves touch mode and puts focus on the top bar's back button
+        // by itself. Space stays the page's: held down it plays once (its repeat goes with it), and it never goes Back.
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val now = SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 0))
+        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 1))
+        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_SPACE, 0))
+        poll("playback") { playing() }
+        Thread.sleep(SETTLE_MS)
+        assertTrue("Still playing on the note", playing())
         press(KeyEvent.KEYCODE_SPACE)
-        await("Pause playback", hasContentDescription("Pause playback"))
+        poll("the pause") { !playing() }
+        await("Play again", play)
         compose.onNode(hasText(title) and isHeading()).assertIsDisplayed()
-        // The activity's route (onKeyDown) hands it to the page too; a held Space's repeats are not taken.
+        // The activity's route (onKeyDown, nothing focused) hands it to the page too, and takes no repeat.
         var handled = false
         val repeat = KeyEvent(0, 0, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 1)
         scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, repeat) }
         assertFalse("A repeat is not taken", handled)
-        scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE)) }
+        val space = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE)
+        scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, space) }
         assertTrue("The activity hands Space to the page", handled)
-        await("Play again", play)
+        poll("playback again") { playing() }
+        scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, space) }
+        poll("the pause again") { !playing() }
+        await("Play at the end", play)
     }
 
     @Test fun spaceTypedIntoFindStaysInTheQuery() {
@@ -634,6 +666,8 @@ class InterfaceTest {
         const val SETTLE_MS = 1_000L
         const val BYTES_PER_SECOND = 32_000
         const val LONG_AUDIO_SECONDS = 30
+        const val POLL_MS = 50L
+        const val HELD_MS = 500L
         const val REVISED = "The paragraph after a synthetic edit."
         const val DRAFT = "The paragraph after a synthetic edit, typed on."
         const val PARENT_STEPS = 3
