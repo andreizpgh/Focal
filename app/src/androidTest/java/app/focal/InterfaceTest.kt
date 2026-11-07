@@ -17,6 +17,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -374,37 +375,100 @@ class InterfaceTest {
         compose.onNode(hasContentDescription("Next match") and hasClickAction()).assertIsDisplayed()
     }
 
-    /**
-     * A tablet (one pane upright, two turned, spec 5.14): the open note moves into the detail pane beside the library
-     * and back, and Back from the detail pane leaves the library with Record. Skipped on a display that does not
-     * change panes when turned (run it with `adb shell wm size 1600x2560`).
-     */
-    @Test fun aNoteMovesBetweenOneAndTwoPanesOnATurn() {
+    /** A display that is one pane upright and two panes turned (a tablet, spec 5.14). */
+    private fun assumeTurnChangesPanes() {
         val config = app.resources.configuration
         val short = minOf(config.screenWidthDp, config.screenHeightDp)
         val long = maxOf(config.screenWidthDp, config.screenHeightDp)
         assumeTrue("Needs a display that is one pane upright and two panes turned", short in 480 until 840 && long >= 840)
+    }
+
+    /**
+     * A tablet (one pane upright, two turned, spec 5.14): the open note moves into the detail pane beside the library
+     * and back, keeping what was being done on it (Edit with its draft and its undo log, Find with its query), and
+     * Back from the detail pane leaves the library with Record. Skipped on a display that does not change panes when
+     * turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun aNoteMovesBetweenOneAndTwoPanesOnATurn() {
+        assumeTurnChangesPanes()
         val title = "Panes fixture $tag"
-        val words = listOf("A synthetic paragraph that moves between panes.")
+        val words = listOf("A synthetic paragraph that moves between panes.", "The harbour opens at six, and the harbour master waits.")
         // The library's stage or row, never the page's own title (which also takes a tap, to rename).
         val listed = hasContentDescription("Latest note. $title.", substring = true) or (hasText(title) and hasClickAction() and !isHeading())
-        note(title, words)
+        val undo = hasContentDescription("Undo") and hasClickAction() and isEnabled()
+        val id = note(title, words)
         launch()
         turn(landscape = false)
         openFromLibrary(title, words[0])
+        // Edit: one saved step (Undo on), then a draft typed just before the turn.
+        compose.onNodeWithContentDescription("Edit").performClick()
+        await("the edit bar", hasContentDescription("Done"))
+        compose.onNodeWithText(words[0]).performClick()
+        await("the paragraph's field", hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
+        await("Undo", undo)
+        compose.onNode(hasSetTextAction()).performTextReplacement(DRAFT)
         turn(landscape = true)
-        // Side by side: the note's page and the library's stage or row at once.
-        await("the note in the detail pane", hasText(words[0]))
-        await("the library beside it", listed)
-        compose.onNode(hasText(title) and isHeading()).assertIsDisplayed()
+        // Side by side: the library's stage or row beside the note, still in Edit with the draft and its log.
+        await("the library beside the note", listed)
+        await("the edit bar in two panes", hasContentDescription("Done"))
+        await("the draft in two panes", hasSetTextAction() and hasText(DRAFT))
+        await("Undo in two panes", undo)
         turn(landscape = false)
-        await("the note alone", hasText(words[0]))
         awaitGone("the library under the page", listed)
+        await("the draft in one pane", hasSetTextAction() and hasText(DRAFT))
+        // The log came through both turns whole: the draft, then the saved step, then the recognised text.
+        compose.onNode(undo).performClick()
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
+        compose.onNode(undo).performClick()
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == words[0] }
+        compose.onNode(hasContentDescription("Done")).performClick()
+        awaitGone("the field", hasSetTextAction())
+        // Find: its query and count across both turns.
+        press(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val field = hasSetTextAction() and hasContentDescription("Find in note")
+        await("Find", field)
+        compose.onNode(field).performTextInput("harbour")
+        await("the count", hasText("1 of 2"))
         turn(landscape = true)
-        await("the note beside the library again", hasText(words[0]))
+        await("the note beside the library again", listed)
+        await("the query in two panes", field and hasText("harbour"))
+        await("the count in two panes", hasText("of 2", substring = true))
+        turn(landscape = false)
+        await("the query in one pane", field and hasText("harbour"))
+        turn(landscape = true)
+        await("the query turned again", field and hasText("harbour"))
         back()
-        awaitGone("the detail pane's note", hasText(words[0]))
+        awaitGone("Find after Back", field)
+        compose.onNode(hasText(title) and isHeading()).assertIsDisplayed()
+        back()
+        awaitGone("the detail pane's note", hasText(words[1]))
         await("Record in the list pane", hasContentDescription("Record") and hasClickAction())
+    }
+
+    /** A tablet turned with library search open (spec 5.2, 5.14): search stays open, its query and results with it. */
+    @Test fun librarySearchStaysOpenAcrossATurnBetweenPanes() {
+        assumeTurnChangesPanes()
+        val title = "Panes search fixture $tag"
+        val needle = "kingfisher$tag"
+        note(title, listOf("The $needle waits on the reed."))
+        launch()
+        turn(landscape = false)
+        await("Search", hasContentDescription("Search notes") and hasClickAction())
+        compose.onNode(hasContentDescription("Search notes") and hasClickAction()).performClick()
+        await("the search field", hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextInput(needle)
+        val result = hasText(title, substring = true) and hasClickAction()
+        await("the result", result)
+        turn(landscape = true)
+        await("the query in two panes", hasSetTextAction() and hasText(needle))
+        await("the result in two panes", result)
+        turn(landscape = false)
+        await("the query in one pane", hasSetTextAction() and hasText(needle))
+        await("the result in one pane", result)
+        back()
+        awaitGone("the search field after Back", hasSetTextAction())
     }
 
     @Test fun anOpenSceneStaysOpenAcrossARotation() {
@@ -484,6 +548,7 @@ class InterfaceTest {
         const val SETTLE_MS = 1_000L
         const val BYTES_PER_SECOND = 32_000
         const val REVISED = "The paragraph after a synthetic edit."
+        const val DRAFT = "The paragraph after a synthetic edit, typed on."
         const val PARENT_STEPS = 3
     }
 }
