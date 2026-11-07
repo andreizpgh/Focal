@@ -742,8 +742,13 @@ fun NotePage(
             }
         }
     }
-    // Heard by the activity when nothing on the page has focus; only the page on top answers.
-    PageKeysEffect { key -> shell.current == destination && onKey(key) }
+    // Heard by the activity when nothing on the page has focus; only the page on top answers, and only while it shows:
+    // the activity hears keys past the inert modifiers, and the scene covers the page in both layouts, settings in two
+    // panes (the whole window slides; in one pane the page covers settings).
+    PageKeysEffect { key ->
+        val covered = shell.live.visible || shell.twoPane && shell.settings.isOpen
+        shell.current == destination && !covered && onKey(key)
+    }
 
     Box(
         Modifier
