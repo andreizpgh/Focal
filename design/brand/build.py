@@ -198,7 +198,7 @@ def build(check):
     preview.extend(deepcopy(list(background)))
     preview.extend(deepcopy(list(foreground)))
 
-    font_path = ROOT / "design/explorations/assets/Inter.woff2"
+    font_path = BRAND / "Inter.woff2"
     font = instantiateVariableFont(TTFont(font_path), {"wght": 600}, inplace=False)
     outputs = {
         "design/brand/generated/launcher-foreground.svg": xml_bytes(foreground),
@@ -210,7 +210,6 @@ def build(check):
         "app/src/main/res/drawable/ic_notification.xml": vector_xml(bars, True),
         "docs/mark.svg": canonical.read_bytes(),
         "docs/mark-preview.png": (SOURCE / "focal-icon-render.png").read_bytes(),
-        "design/brand/Inter-LICENSE.txt": (ROOT / "design/explorations/assets/Inter-LICENSE.txt").read_bytes(),
     }
     for variant in ("dark", "light"):
         outputs[f"design/brand/generated/focal-lockup-{variant}-outlined.svg"] = outline_lockup(

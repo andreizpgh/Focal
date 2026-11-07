@@ -1,46 +1,36 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(focal LANGUAGES C CXX)
+project(focal_speech LANGUAGES CXX)
+
+# Focal's JNI bridge over the sherpa-onnx C API. The prebuilt runtime libraries come from the
+# pinned, SHA-256-verified sherpa-onnx AAR: Gradle's extractSpeechRuntime task unpacks them into
+# FOCAL_SPEECH_RUNTIME_DIR/<abi>/ before CMake runs. The C API header is vendored unchanged from
+# the same sherpa-onnx commit (third_party/sherpa-onnx, Apache-2.0).
+
 set(CMAKE_CXX_STANDARD 17)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
-set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
-set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
-set(WHISPER_CURL OFF CACHE BOOL "" FORCE)
-option(FOCAL_NATIVE_FAULT_TESTS "Build isolated native fault instrumentation" OFF)
-option(FOCAL_ANDROID_DEBUG_BUILD "Android debug build type" OFF)
-set(FOCAL_NATIVE_FAULT_VARIANT "" CACHE STRING "Fault test engine: baseline or patched")
-if(FOCAL_NATIVE_FAULT_TESTS)
-    if(NOT FOCAL_ANDROID_DEBUG_BUILD)
-        message(FATAL_ERROR "Native fault instrumentation is only allowed in an Android debug build")
-    endif()
-    if(NOT FOCAL_NATIVE_FAULT_VARIANT MATCHES "^(baseline|patched)$")
-        message(FATAL_ERROR "Native fault instrumentation requires baseline or patched variant")
-    endif()
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(NOT FOCAL_SPEECH_RUNTIME_DIR)
+  message(FATAL_ERROR "FOCAL_SPEECH_RUNTIME_DIR is not set. Build through Gradle, which extracts the runtime.")
 endif()
-add_subdirectory(../../../../third_party/whisper.cpp whisper)
-# Normal builds use the verified ownership fix; only the explicit regression
-# baseline retains the original engine. Speech policy and submodule stay pinned.
-if(NOT FOCAL_NATIVE_FAULT_TESTS OR FOCAL_NATIVE_FAULT_VARIANT STREQUAL "patched")
-    include(../../../../cmake/focal-whisper-lifetime.cmake)
-    focal_whisper_lifetime_overlay()
+set(focal_runtime "${FOCAL_SPEECH_RUNTIME_DIR}/${ANDROID_ABI}")
+
+# Importing both libraries makes the Android Gradle plugin package them with the bridge.
+foreach(library sherpa-onnx-c-api onnxruntime)
+  if(NOT EXISTS "${focal_runtime}/lib${library}.so")
+    message(FATAL_ERROR "Missing ${focal_runtime}/lib${library}.so. Run python3 scripts/fetch-model.py --runtime-only")
+  endif()
+  add_library(${library} SHARED IMPORTED)
+  set_target_properties(${library} PROPERTIES IMPORTED_LOCATION "${focal_runtime}/lib${library}.so")
+endforeach()
+
+add_library(focal_speech SHARED focal_speech.cpp)
+target_include_directories(focal_speech PRIVATE third_party)
+target_compile_options(focal_speech PRIVATE -Wall -Wextra -Werror -fvisibility=hidden)
+# Device tests' native crash (NativeCrashHook): debug builds only, never in a release library.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  target_compile_definitions(focal_speech PRIVATE FOCAL_TEST_HOOKS=1)
 endif()
-set(FOCAL_NATIVE_SOURCES whisper_jni.cpp)
-# Keep both ownership fault-test variants byte-for-byte on their existing overlays.
-if(NOT FOCAL_NATIVE_FAULT_TESTS)
-    include(../../../../cmake/focal-whisper-noise.cmake)
-    focal_whisper_noise_overlay()
-    list(APPEND FOCAL_NATIVE_SOURCES noise_detector_jni.cpp)
-endif()
-add_library(focal SHARED ${FOCAL_NATIVE_SOURCES})
-if(FOCAL_ANDROID_DEBUG_BUILD AND NOT FOCAL_NATIVE_FAULT_TESTS)
-    target_compile_definitions(focal PRIVATE FOCAL_NOISE_DIAGNOSTIC=1)
-endif()
-target_link_libraries(focal PRIVATE whisper android log)
-target_link_options(focal PRIVATE "-Wl,-z,max-page-size=16384")
-if(FOCAL_NATIVE_FAULT_TESTS)
-    include(native_fault.cmake)
-    focal_native_fault_overlay()
-endif()
+target_link_libraries(focal_speech PRIVATE sherpa-onnx-c-api onnxruntime)
+# 16 KB pages (Android 15+ devices); every undefined symbol must resolve against the runtime.
+target_link_options(focal_speech PRIVATE "-Wl,-z,max-page-size=16384" "-Wl,--no-undefined")

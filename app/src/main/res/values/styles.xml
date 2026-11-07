@@ -1,10 +1,26 @@
-<resources>
-    <style name="Theme.Focal" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:colorAccent">#111111</item>
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+        The window is paper in each night mode (values-night swaps the colours), so a cold start shows no flash
+        before the first Compose frame. The app's own Light/Dark setting reaches these resources through the
+        system's app night mode (API 31+) or the activity's configuration (API 26-30); see NightMode.
+    -->
+    <style name="Theme.Focal" parent="Theme.Focal.Base">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:colorBackground">@color/paper</item>
+        <item name="android:colorAccent">@color/ink</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">@bool/light_system_bars</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">@bool/light_system_bars</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowBackground">#FAFAFA</item>
     </style>
-    <color name="icon_background">#111111</color>
+    <style name="Theme.Focal.Base" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- The splash (spec 5.13): paper, the static mark in ink, no icon background; Theme.Focal after it. -->
+    <style name="Theme.Focal.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/paper</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_mark</item>
+        <item name="postSplashScreenTheme">@style/Theme.Focal</item>
+    </style>
 </resources>

@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English is the default (design spec 7): sentence case, typographic punctuation, "note" is the one noun. -->
+<resources>
+    <string name="app_name" translatable="false">Focal</string>
+
+    <string name="ch_recording">Recording</string>
+    <string name="ch_paused">Recording paused</string>
+    <string name="ch_transcription">Transcription</string>
+    <string name="ch_ready">Finished notes</string>
+    <string name="ch_recording_desc">Recording controls while the microphone is in use.</string>
+    <string name="ch_paused_desc">Alerts when a recording pauses on its own.</string>
+    <string name="ch_transcription_desc">Progress while recorded speech becomes text.</string>
+    <string name="ch_ready_desc">A note finished transcribing.</string>
+
+    <!-- Notifications (design 5.12, 7.7): titles and the state's words only, never transcript text. -->
+    <string name="n_recording">Recording</string>
+    <string name="n_paused">Paused · %s</string>
+    <string name="n_paused_call">A call is using the microphone.</string>
+    <string name="n_paused_other_app">Another app is using the microphone.</string>
+    <string name="n_paused_storage">Storage is full.</string>
+    <string name="n_transcribing">Transcribing</string>
+    <string name="n_timeout_title">Transcription paused</string>
+    <string name="n_timeout_text">Open Focal to continue.</string>
+    <string name="n_ready">Note ready</string>
+    <string name="n_partial">Part of a note couldn’t be transcribed</string>
+    <string name="n_public_recording">Recording</string>
+    <string name="n_public_paused">Paused</string>
+    <string name="n_public_ready">Note ready</string>
+
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="action_finish">Finish</string>
+    <string name="action_record">Record</string>
+    <string name="action_play">Play</string>
+    <string name="action_pause_playback">Pause playback</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_copied">Copied</string>
+    <string name="action_transcribing">Transcribing</string>
+
+    <string name="action_try_again">Try again</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_storage">Storage</string>
+    <string name="action_done">Done</string>
+    <string name="action_retry">Retry</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_edit">Edit</string>
+    <string name="cd_more">More options</string>
+    <string name="cd_undo">Undo</string>
+    <string name="cd_redo">Redo</string>
+
+    <!-- The library, the stage and search (design 7.1). -->
+    <string name="cd_search_open">Search notes</string>
+    <string name="cd_search_close">Close search</string>
+    <string name="cd_search_clear">Clear</string>
+    <string name="search_hint">Search notes</string>
+    <plurals name="search_count">
+        <item quantity="one">%d note</item>
+        <item quantity="other">%d notes</item>
+    </plurals>
+    <string name="search_none">No notes contain “%s”.</string>
+    <string name="day_today">Today</string>
+    <string name="day_yesterday">Yesterday</string>
+    <string name="empty_title">Speak, and it’s written down.</string>
+    <string name="empty_body">Tap Record and talk.\nText appears after each pause.</string>
+    <string name="title_fallback">Note at %s</string>
+    <string name="dateline_today">Today, %s</string>
+    <string name="dateline_yesterday">Yesterday, %s</string>
+    <string name="dateline">%1$s, %2$s</string>
+    <!-- Units drawn small after separate numerals on the stage: “12 min”, “1 h 12 min”, “42 s”. -->
+    <string name="len_s">s</string>
+    <string name="len_min">min</string>
+    <string name="len_h">h</string>
+    <string name="dur_s">%d s</string>
+    <string name="dur_min">%d min</string>
+    <string name="dur_h">%d h</string>
+    <string name="dur_h_min">%1$d h %2$d min</string>
+    <string name="stage_transcribing">Transcribing · %d%%</string>
+    <string name="stage_waiting">Waiting to transcribe</string>
+    <string name="stage_preparing">Preparing speech model</string>
+    <string name="paused_storage">Storage is full</string>
+    <string name="state_preparing">Preparing speech model</string>
+    <string name="state_later">Text will catch up</string>
+    <string name="hint_first_text">Text appears after each pause.</string>
+    <string name="row_transcribing">Transcribing</string>
+    <string name="row_waiting">Waiting to transcribe</string>
+    <string name="row_preparing">Preparing speech model</string>
+    <string name="row_percent">%d%%</string>
+    <string name="no_speech">No speech was recognized.</string>
+    <string name="partial_failure">Part of this note couldn’t be transcribed.</string>
+
+    <!-- The recording scene (design 7.4). -->
+    <string name="cd_collapse">Collapse. Recording continues</string>
+    <string name="notice_notifications_off">Notifications are off, so Pause and Finish are only in Focal.</string>
+    <string name="jump_latest">Latest</string>
+
+    <!-- Menus (design 7.2). -->
+    <string name="menu_copy_text">Copy text</string>
+    <string name="menu_share">Share</string>
+    <string name="menu_rename">Rename</string>
+    <string name="menu_remove_audio">Remove audio</string>
+    <string name="menu_delete">Delete</string>
+    <string name="menu_find">Find and replace</string>
+    <string name="menu_restore">Restore original</string>
+
+    <!-- The feedback pill (design 7.3). -->
+    <string name="feedback_deleted">Note deleted</string>
+    <string name="feedback_audio_removed">Audio removed</string>
+    <string name="feedback_too_late">Too late to undo</string>
+    <string name="feedback_text_copied">Text copied</string>
+    <string name="feedback_nothing_recorded">Nothing was recorded</string>
+    <string name="feedback_storage">Free up about %s to record.</string>
+    <string name="feedback_storage_resume">Free up about %s, then resume.</string>
+    <string name="feedback_mic_busy">Another app is using the microphone.</string>
+    <plurals name="feedback_replaced">
+        <item quantity="one">Replaced %d</item>
+        <item quantity="other">Replaced %d</item>
+    </plurals>
+    <string name="feedback_restored">Original restored</string>
+    <string name="feedback_save_failed">Couldn’t save your edit. Free up some space, then tap Retry.</string>
+
+    <!-- Failures in the feedback pill: what went wrong and what to do; never an exception's own text. -->
+    <string name="error_start">Couldn’t start recording. Try again.</string>
+    <string name="error_finishing">Finishing the previous recording. Try again in a moment.</string>
+    <string name="error_already_recording">A recording is already running.</string>
+    <string name="error_note_busy">This note is busy. Try again in a moment.</string>
+    <string name="error_recording_unreachable">Couldn’t reach the recording. Try again.</string>
+    <string name="error_load_notes">Couldn’t load your notes. Try again when storage is available.</string>
+    <string name="error_notes">Something went wrong. Your notes are still on this device.</string>
+    <string name="error_note">Something went wrong. Your note is still on this device.</string>
+    <string name="error_load_note">Couldn’t load this note.</string>
+    <string name="error_delete">Couldn’t delete this note.</string>
+    <string name="error_delete_active">Finish this recording or transcription before deleting it.</string>
+    <string name="error_note_gone">This note is no longer available.</string>
+    <string name="error_no_audio">This note has no audio.</string>
+    <string name="error_remove_transcribing">Finish transcription before removing the audio.</string>
+    <string name="error_remove_failed_parts">Part of this note couldn’t be transcribed. Retry it before removing the audio.</string>
+    <string name="error_remove_audio">Couldn’t remove the audio.</string>
+    <string name="error_remove_audio_later">Couldn’t delete the audio file yet. Focal will try again when it next opens.</string>
+    <string name="error_replace">Couldn’t replace the matches.</string>
+    <string name="error_replace_too_large">A paragraph would get too long. Nothing was replaced.</string>
+    <string name="error_restore">Couldn’t restore the original.</string>
+    <string name="error_copy">Couldn’t copy the text.</string>
+    <string name="error_copy_too_long">This note is too long to copy at once. Select the part you need.</string>
+    <string name="error_share">Couldn’t open sharing.</string>
+    <string name="error_share_too_long">This note is too long to share at once. Select the part you need.</string>
+    <string name="error_retry">Couldn’t continue transcription.</string>
+    <string name="error_save">Couldn’t save your edit.</string>
+    <string name="error_join">Can’t join these paragraphs.</string>
+    <string name="error_playback">Couldn’t play the audio.</string>
+    <string name="error_playback_recording">Finish recording before playing audio.</string>
+
+    <!-- The note, Edit and Find (design 7.5). -->
+    <string name="meta">%1$s · %2$s</string>
+    <string name="meta_text_only">Text only</string>
+    <string name="gap_not_transcribed">%s not transcribed</string>
+    <string name="ended_unexpectedly">Recording stopped unexpectedly at %s. Everything before that was saved.</string>
+    <string name="ended_permission">Recording stopped at %s because microphone access was turned off. Everything before that was saved.</string>
+    <string name="waiting_after_recording">Transcription continues after the current recording.</string>
+    <string name="model_failed">Not enough free memory to transcribe right now.</string>
+    <!-- The engine guard stopped the speech work after repeated crashes or failed loads, cause unknown (5.4). -->
+    <string name="engine_stopped">Transcription stopped after repeated failures. Your audio is saved.</string>
+    <string name="stage_engine_stopped">Transcription stopped after repeated failures.</string>
+    <!-- The speech model could not be copied out of the APK: too little free storage (%s: "850 MB"), or anything else. -->
+    <string name="model_storage">Free up about %s to prepare the speech model. Your audio is saved.</string>
+    <string name="stage_model_storage">Free up about %s to prepare the speech model.</string>
+    <string name="model_install_failed">The speech model couldn’t be prepared. Your audio is saved.</string>
+    <string name="stage_model_install_failed">The speech model couldn’t be prepared.</string>
+    <string name="model_damaged">The speech model is damaged: reinstall Focal. Your audio is saved.</string>
+    <string name="stage_model_damaged">The speech model is damaged: reinstall Focal.</string>
+    <string name="provenance_edited">Edited</string>
+    <string name="not_saved">Not saved</string>
+    <string name="find_hint">Find in note</string>
+    <string name="replace_hint">Replace with</string>
+    <string name="find_count">%1$d of %2$d</string>
+    <string name="find_none">No matches</string>
+    <string name="cd_find_close">Close find</string>
+    <string name="cd_find_prev">Previous match</string>
+    <string name="cd_find_next">Next match</string>
+    <string name="replace_all">Replace all</string>
+    <string name="replace_all_n">Replace all (%d)</string>
+    <string name="jump_now_playing">Now playing</string>
+
+    <!-- Settings, licences and permissions (design 7.6). -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_theme">Theme</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="settings_storage">Storage</string>
+    <string name="storage_audio">Audio</string>
+    <plurals name="storage_desc">
+        <item quantity="one">Kept for %d note. To free space, remove audio from a note in its menu. The text stays.</item>
+        <item quantity="other">Kept for %d notes. To free space, remove audio from a note in its menu. The text stays.</item>
+    </plurals>
+    <string name="settings_about">About</string>
+    <string name="works_offline">Works offline</string>
+    <string name="works_offline_desc">Focal has no internet permission. Audio and text never leave this phone.</string>
+    <string name="source_code">Source code</string>
+    <string name="source_code_url" translatable="false">https://github.com/andreizpgh/Focal</string>
+    <string name="licenses">Open-source licenses</string>
+    <string name="version">Focal %s</string>
+    <string name="perm_title">Focal needs the microphone</string>
+    <string name="perm_body">Focal turns speech into text on this phone. It has no internet access, so your audio never leaves the device.</string>
+    <string name="perm_allow">Allow microphone</string>
+    <string name="perm_not_now">Not now</string>
+    <string name="perm_settings">Open settings</string>
+
+    <!-- The open-source licences page: names and origins of what Focal ships. -->
+    <string name="lic_parakeet" translatable="false">Parakeet Ultra speech model</string>
+    <string name="lic_parakeet_origin">CC BY 4.0 · Moondream’s post-training of NVIDIA Parakeet TDT 0.6B v3</string>
+    <string name="lic_silero" translatable="false">Silero VAD</string>
+    <string name="lic_silero_origin">MIT · The voice activity model, as published in sherpa-onnx</string>
+    <string name="lic_sherpa" translatable="false">sherpa-onnx</string>
+    <string name="lic_sherpa_origin">Apache 2.0 · The speech runtime</string>
+    <string name="lic_onnxruntime" translatable="false">ONNX Runtime</string>
+    <string name="lic_onnxruntime_origin">MIT, with its third-party notices</string>
+    <string name="lic_inter" translatable="false">Inter</string>
+    <string name="lic_inter_origin">SIL Open Font License 1.1 · The typeface</string>
+    <string name="lic_androidx" translatable="false">AndroidX and Jetpack Compose</string>
+    <string name="lic_androidx_origin">Apache 2.0 · The interface toolkit</string>
+    <string name="lic_symbols" translatable="false">Material Symbols</string>
+    <string name="lic_symbols_origin">Apache 2.0 · The icons</string>
+    <string name="lic_kotlin" translatable="false">Kotlin</string>
+    <string name="lic_kotlin_origin">Apache 2.0 · The standard library and kotlinx.coroutines</string>
+    <string name="lic_focal" translatable="false">Focal</string>
+    <string name="lic_focal_origin">MIT · This app</string>
+
+    <!-- Accessibility (design 7.8): spoken, never drawn. -->
+    <plurals name="a11y_hours">
+        <item quantity="one">%d hour</item>
+        <item quantity="other">%d hours</item>
+    </plurals>
+    <plurals name="a11y_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <plurals name="a11y_seconds">
+        <item quantity="one">%d second</item>
+        <item quantity="other">%d seconds</item>
+    </plurals>
+    <plurals name="a11y_transcribing">
+        <item quantity="one">Transcribing, %d percent</item>
+        <item quantity="other">Transcribing, %d percent</item>
+    </plurals>
+    <string name="a11y_play_unavailable">Play, unavailable while recording</string>
+    <string name="a11y_open_settings">Open settings</string>
+    <string name="a11y_stage_live">Recording, %1$s. Latest text: %2$s</string>
+    <string name="a11y_stage_live_empty">Recording, %s</string>
+    <string name="a11y_stage_paused">Paused, %s.</string>
+    <string name="a11y_stage_paused_reason">Paused, %1$s, %2$s.</string>
+    <string name="a11y_reason_call">paused for a call</string>
+    <string name="a11y_reason_other_app">paused for another app</string>
+    <string name="a11y_reason_storage">paused, storage is full</string>
+    <string name="a11y_stage_note">Latest note. %1$s. %2$s, %3$s.</string>
+    <string name="a11y_stage_note_reason">%1$s %2$s</string>
+    <string name="a11y_stage_empty">Speak, and it’s written down. Tap Record and talk. Text appears after each pause.</string>
+    <string name="a11y_copy_note">Copy note</string>
+    <string name="a11y_copy_note_new">Copy note, new</string>
+    <string name="a11y_expand_recording">Expand recording</string>
+    <string name="a11y_collapse">Collapse</string>
+    <string name="a11y_scene_state">Recording, %s</string>
+    <string name="a11y_scene_state_paused">Paused, %s</string>
+    <string name="a11y_scene_state_paused_reason">Paused, %1$s, %2$s</string>
+    <string name="a11y_read_latest">Read latest paragraph</string>
+    <string name="a11y_announce_paused">Paused.</string>
+    <string name="a11y_announce_paused_call">Paused for a call.</string>
+    <string name="a11y_announce_paused_other_app">Paused for another app.</string>
+    <string name="a11y_announce_paused_storage">Paused, storage is full.</string>
+    <string name="a11y_announce_resumed">Resumed.</string>
+    <string name="a11y_open_note">Open note</string>
+    <string name="a11y_note_ready">Note ready</string>
+    <string name="a11y_source_code">Source code, opens in browser</string>
+    <string name="settings_pane">Settings</string>
+    <string name="a11y_audio_position">Audio position</string>
+    <string name="a11y_position_of">%1$s of %2$s</string>
+    <string name="a11y_play_here">Play from here</string>
+    <string name="a11y_edit">Edit</string>
+    <string name="a11y_copy_paragraph">Copy paragraph</string>
+    <plurals name="a11y_unclear">
+        <item quantity="one">%1$d unclear word: %2$s</item>
+        <item quantity="other">%1$d unclear words: %2$s</item>
+    </plurals>
+    <string name="a11y_play_unclear">Play unclear word</string>
+    <plurals name="a11y_replace_all">
+        <item quantity="one">Replace all, %d match</item>
+        <item quantity="other">Replace all, %d matches</item>
+    </plurals>
+
+    <!-- The system's keyboard-shortcuts helper (Meta+/). -->
+    <string name="kbd_group" translatable="false">@string/app_name</string>
+    <string name="kbd_open_settings">Open settings</string>
+    <string name="kbd_play">Play or pause the note</string>
+    <string name="kbd_find">Find and replace in the note</string>
+    <string name="kbd_copy">Copy the note</string>
+    <string name="kbd_undo">Undo an edit</string>
+    <string name="kbd_redo">Redo an edit</string>
+
+    <string name="shortcut_short">Record</string>
+    <string name="shortcut_long">New recording</string>
+    <string name="shortcut_disabled">Recording isn’t available</string>
+</resources>

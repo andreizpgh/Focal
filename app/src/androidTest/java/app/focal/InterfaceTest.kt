@@ -1,1419 +1,1157 @@
 package app.focal
 
+import android.app.UiAutomation
 import android.content.ClipboardManager
-import android.content.ClipData
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.content.res.Configuration
-import android.graphics.Bitmap
+import android.graphics.Rect
+import android.os.SystemClock
+import android.provider.Settings
 import android.view.KeyEvent
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.SemanticsNode
-import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.unit.Density
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.ComposeTimeoutException
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.isHeading
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.ViewCompat
 import androidx.lifecycle.ViewModelProvider
+import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import app.focal.core.Transcript
-import app.focal.data.Chunk
+import androidx.window.layout.FoldingFeature
+import androidx.window.testing.layout.FoldingFeature
+import androidx.window.testing.layout.TestWindowLayoutInfo
+import androidx.window.testing.layout.WindowLayoutInfoPublisherRule
+import app.focal.data.NoteState
 import app.focal.data.NoteStore
-import app.focal.data.Passage
-import app.focal.data.Preferences
+import app.focal.data.StoredWindow
+import app.focal.data.WaitCause
 import app.focal.recording.LiveSession
 import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
+import app.focal.recording.ServiceNotifications
 import app.focal.recording.SessionOperations
-import app.focal.ui.FocalApp
-import app.focal.ui.fitsTextTransferBudget
-import app.focal.ui.LARGE_PASSAGE_PART_CHARS
-import app.focal.ui.passageTextPart
-import app.focal.ui.passageTextPartCount
-import kotlinx.coroutines.flow.MutableStateFlow
-import java.io.File
-import java.time.LocalDate
-import java.time.ZoneId
-import java.util.UUID
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.atomic.AtomicInteger
-import org.junit.Assert.assertArrayEquals
+import app.focal.speech.EngineGuard
+import app.focal.speech.EngineStage
+import app.focal.speech.ModelFailure
+import app.focal.speech.ModelStatus
+import app.focal.speech.waitCause
+import app.focal.ui.state.PlaybackViewModel
+import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertSame
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import java.util.UUID
 
+/**
+ * The rebuilt interface end to end, through MainActivity and the real view models and store: a note opens from the
+ * library and Back returns, Copy fills the clipboard, the note's keyboard shortcuts reach it with nothing focused (Space
+ * plays and pauses, Ctrl+Z and Ctrl+Shift+Z undo and redo in Edit, Space in Find's query is text), Edit saves
+ * through the store, search opens a note at its paragraph, Delete offers
+ * Undo, Settings opens by its accessibility action and applies the theme at once, a recording shows its controls in
+ * the dock, a notification's intent opens its note, and Edit, Find, an open scene and an open note (between one pane
+ * and two, on a tablet-size display) survive turning the display (spec 5.14). Notes are synthetic and removed
+ * afterwards.
+ */
+@RunWith(AndroidJUnit4::class)
 class InterfaceTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule val compose = createEmptyComposeRule()
+    /** Stands in for the device's folds and hinges (androidx.window): none, unless a test publishes one. */
+    @get:Rule val folds = WindowLayoutInfoPublisherRule()
 
-    private fun application(): FocalApplication = ApplicationProvider.getApplicationContext<FocalApplication>().also {
-        kotlinx.coroutines.runBlocking { it.initialized.await() }
+    private lateinit var app: FocalApplication
+    private var scenario: ActivityScenario<MainActivity>? = null
+    private val created = mutableListOf<String>()
+    private val tag = UUID.randomUUID().toString().take(6)
+    private var theme = "system"
+
+    @Before fun setup() {
+        app = ApplicationProvider.getApplicationContext()
+        runBlocking { app.storageReady.await() }
+        assumeTrue("Needs an idle recorder", RecordingState.live.value.noteId == null)
+        // No peek, and no transcription work started by the activity for notes other tests left waiting.
+        app.preferences.settingsOpened = true
+        app.autoResumeTranscription = false
+        theme = app.preferences.settings.value.theme
     }
 
-    private fun readySession(
-        store: NoteStore, title: String, texts: List<String>, language: String = "en",
-        uncertain: Set<Int> = emptySet(), duration: Long = texts.size * 1_000L,
-    ): String {
-        val id = store.create(language)
-        store.audioFile(id).writeBytes(ByteArray((duration * 32).toInt()))
-        val interval = duration / texts.size
-        require(interval in 1..30_000L) { "Fixture passages must fit the recording chunk limit." }
-        texts.forEachIndexed { index, text ->
-            val start = index * interval
-            val end = if (index == texts.lastIndex) duration else (index + 1) * interval
-            val chunk = store.beginChunk(id, start, false)
-            store.finishChunk(chunk, end)
-            store.complete(store.nextChunk(id)!!, listOf(Passage(noteId = id, chunkId = chunk,
-                start = start, end = end, text = text, uncertain = index in uncertain)))
+    @After fun cleanup() {
+        rotationBefore?.let { InstrumentationRegistry.getInstrumentation().uiAutomation.setRotation(it) }
+        // The key tests leave touch mode; the tests after them start in it.
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(true)
+        scenario?.close()
+        RecordingState.live.value = LiveSession()
+        app.preferences.theme(theme)
+        app.autoResumeTranscription = true
+        created.forEach { app.store.delete(it) }
+    }
+
+    private fun note(title: String, paragraphs: List<String>): String =
+        app.store.insertNoteForTests(paragraphs, title = title).also {
+            created += it
+            app.store.audioFile(it).writeBytes(ByteArray(paragraphs.size * BYTES_PER_SECOND))
         }
-        store.rename(id, title)
-        store.duration(id, duration)
-        store.state(id, "READY")
-        return id
+
+    /** A note whose silence lasts long enough to be still playing at the next Space. */
+    private fun longNote(title: String, paragraphs: List<String>): String =
+        app.store.insertNoteForTests(paragraphs, durationMs = LONG_AUDIO_SECONDS * 1_000L, title = title).also {
+            created += it
+            app.store.audioFile(it).writeBytes(ByteArray(LONG_AUDIO_SECONDS * BYTES_PER_SECOND))
+        }
+
+    private fun launch(intent: Intent = Intent(app, MainActivity::class.java)) {
+        scenario = ActivityScenario.launch(intent)
     }
 
-    private fun waitForTitle(title: String) {
+    private fun back() = scenario!!.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+
+    private fun await(what: String, matcher: SemanticsMatcher) {
         try {
-            compose.waitUntil(10_000) { compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
-        } catch (failure: ComposeTimeoutException) {
-            runCatching { capture("title-wait-timeout-${System.currentTimeMillis()}") }
-            runCatching {
-                val model = compose.runOnUiThread { ViewModelProvider(compose.activity)[FocalViewModel::class.java] }
-                val state = model.library.value
-                val nodes = compose.onAllNodes(
-                    SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
-                ).fetchSemanticsNodes()
-                val scroll = compose.runOnUiThread {
-                    nodes.map {
-                        val range = it.config[SemanticsProperties.VerticalScrollAxisRange]
-                        range.value() to range.maxValue()
-                    }
-                }
-                val unmergedMatches = compose.onAllNodesWithText(title, useUnmergedTree = true).fetchSemanticsNodes().size
-                failure.addSuppressed(AssertionError(
-                    "Title diagnostics: libraryLoaded=${state.loaded}, libraryError=${state.error != null}, " +
-                        "notes=${state.notes.size}, publishedMatches=${state.notes.count { it.title == title }}, " +
-                        "detailSelected=${state.selectedId != null}, liveActive=${model.live.value.noteId != null}, " +
-                        "unmergedMatches=$unmergedMatches, scroll=$scroll"
-                ))
-            }
-            throw failure
+            compose.waitUntil(TIMEOUT_MS) { compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty() }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("Not shown: $what", timeout)
         }
     }
 
-    private fun waitForSessionReady(title: String, passage: String? = null, audioAvailable: Boolean = true) {
-        // Selecting a session loads its audio and passages on IO; Compose idle alone does not await that load.
-        compose.waitUntil(10_000) {
-            compose.onAllNodesWithContentDescription("Recording options").fetchSemanticsNodes().isNotEmpty() &&
-                compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() &&
-                (!audioAvailable || compose.onAllNodesWithContentDescription("Audio position").fetchSemanticsNodes().isNotEmpty()) &&
-                (passage == null || compose.onAllNodesWithText(passage).fetchSemanticsNodes().isNotEmpty())
+    private fun awaitGone(what: String, matcher: SemanticsMatcher) {
+        try {
+            compose.waitUntil(TIMEOUT_MS) { compose.onAllNodes(matcher).fetchSemanticsNodes().isEmpty() }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("Still shown: $what", timeout)
         }
     }
 
-    private fun waitForEditor() {
-        compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
+    /**
+     * The note titled [title] in the library: on the stage (the newest note, unless another one is still being
+     * transcribed or waits for it, as notes other tests leave behind may) or as the first row of Today.
+     */
+    private fun inLibrary(title: String): SemanticsMatcher =
+        hasContentDescription("Latest note. $title.", substring = true) or (hasText(title) and hasClickAction())
+
+    private fun openFromLibrary(title: String, firstParagraph: String) {
+        await("$title in the library", inLibrary(title))
+        compose.onAllNodes(inLibrary(title))[0].performClick()
+        await("the note page", hasText(firstParagraph))
     }
 
-    private fun reviewFilter(label: String) = compose.onNode(
-        hasText(label) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected)
-    )
-
-    private fun languageOption(label: String) = compose.onNode(
-        hasText(label) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
-    )
-
-    private fun assertAutomaticLanguage() {
-        compose.onNodeWithContentDescription("Speech language: Automatic").assertIsDisplayed().assert(!hasClickAction())
+    @Test fun aNoteOpensFromTheLibraryAndBackReturns() {
+        val title = "Library fixture $tag"
+        val words = listOf("A synthetic first paragraph for the library.", "A synthetic second paragraph.")
+        note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        compose.onNode(hasText(title) and isHeading()).assertIsDisplayed()
+        compose.onNodeWithText(words[1]).assertIsDisplayed()
+        back()
+        await("the library again", inLibrary(title))
     }
 
-    private fun audioPositionFraction(): Float {
-        val progress = compose.onNodeWithContentDescription("Audio position").fetchSemanticsNode()
-            .config[SemanticsProperties.ProgressBarRangeInfo]
-        return (progress.current - progress.range.start) / (progress.range.endInclusive - progress.range.start)
+    @Test fun copyPutsTheNoteOnTheClipboardAndConfirms() {
+        val title = "Copy fixture $tag"
+        val words = listOf("Copy reads the first synthetic paragraph.", "And the second one, after a blank line.")
+        note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        compose.onNodeWithContentDescription("Copy").performClick()
+        await("Copied", hasContentDescription("Copied"))
+        val clipboard = app.getSystemService(ClipboardManager::class.java)
+        var text: String? = null
+        scenario!!.onActivity { text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() }
+        assertEquals(words.joinToString("\n\n"), text)
     }
 
-    private fun capture(name: String) {
-        if (InstrumentationRegistry.getArguments().getString("screenshots") != "true") return
-        compose.waitForIdle()
+    /** Sends [keyCode] through the input pipeline, as a hardware keyboard would. */
+    private fun press(keyCode: Int, meta: Int = 0) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val output = File(instrumentation.targetContext.getExternalFilesDir(null), "screenshots/$name.png")
-        output.parentFile!!.mkdirs()
-        val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
-        output.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        bitmap.recycle()
+        val now = SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, meta))
+        instrumentation.sendKeySync(KeyEvent(now, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, keyCode, 0, meta))
     }
 
-    @Test fun recordingAndPausedStatesKeepControlsVisible() {
-        val app = application()
-        val original = RecordingState.live.value
-        org.junit.Assume.assumeTrue(original.noteId == null)
-        val id = app.store.create("ru")
-        try {
-            // Synthetic presentation state; microphone and STT behavior are tested separately.
-            RecordingState.live.value = LiveSession(noteId = id, duration = 73_000, level = .65f,
-                message = "Text appears after each spoken phrase.")
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithContentDescription("Pause recording").fetchSemanticsNodes().isNotEmpty()
-            }
-            compose.onNodeWithContentDescription("Pause recording").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Finish recording").assertIsDisplayed()
-            compose.onNodeWithText("Finish").assertIsDisplayed()
-            compose.onNodeWithText("focal", ignoreCase = true).assertDoesNotExist()
-            compose.onNodeWithText("Text appears after each spoken phrase.").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Microphone level").assertRangeInfoEquals(ProgressBarRangeInfo(.65f, 0f..1f))
-            capture("recording-layout")
-            RecordingState.live.value = RecordingState.live.value.copy(paused = true, level = 0f)
-            compose.onNodeWithContentDescription("Resume recording").assertIsDisplayed()
-            compose.onNodeWithText("Recording paused").assertIsDisplayed()
-            compose.onNodeWithText("Resume when you're ready.").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Microphone level").assertRangeInfoEquals(ProgressBarRangeInfo(0f, 0f..1f))
-            capture("recording-paused")
-        } finally {
-            RecordingState.live.value = original
-            app.store.delete(id)
+    @Test fun theNotesShortcutsWorkWithNothingFocused() {
+        val title = "Keys fixture $tag"
+        val words = listOf("A keyboard copies this synthetic paragraph.", "And this one, after a blank line.")
+        note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        val ctrl = KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        // Nothing on the page has focus after a tap: the activity hears the keys and hands them to the page.
+        press(KeyEvent.KEYCODE_C, ctrl)
+        val clipboard = app.getSystemService(ClipboardManager::class.java)
+        var text: String? = null
+        compose.waitUntil(TIMEOUT_MS) {
+            scenario!!.onActivity { text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() }
+            text == words.joinToString("\n\n")
+        }
+        // It went through the dock's Copy, which confirms as a tap does.
+        await("Copied", hasContentDescription("Copied"))
+        press(KeyEvent.KEYCODE_F, ctrl)
+        await("Find", hasSetTextAction() and hasContentDescription("Find in note"))
+    }
+
+    private fun ctrlKey(keyCode: Int, meta: Int = 0) =
+        KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON or meta)
+
+    /** Whether the note's audio plays: the activity's player, read without waiting for Compose to be idle. */
+    private fun playing(): Boolean {
+        var playing = false
+        scenario!!.onActivity { playing = ViewModelProvider(it)[PlaybackViewModel::class.java].session.value.playing }
+        return playing
+    }
+
+    /** Waits for [condition] without syncing with Compose, which is never idle while the player strip moves. */
+    private fun poll(what: String, condition: () -> Boolean) {
+        val end = SystemClock.uptimeMillis() + TIMEOUT_MS
+        while (!condition()) {
+            if (SystemClock.uptimeMillis() > end) throw AssertionError("Not reached: $what")
+            Thread.sleep(POLL_MS)
         }
     }
 
-    @Test fun transcriptionProgressStaysVisibleWithLongTextAndStopsWhenFinished() {
-        val app = application()
-        val original = RecordingState.live.value
-        org.junit.Assume.assumeTrue(original.noteId == null)
-        val id = readySession(app.store, "Processing fixture", List(12) { index ->
-            "Synthetic passage ${index + 1}. The original audio and the written words remain available while transcription continues."
-        })
-        val progress = SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate)
+    @Test fun spacePlaysAndPausesTheNoteBeingRead() {
+        val title = "Space fixture $tag"
+        val words = listOf("Space plays this synthetic paragraph.", "And this one, after a blank line.")
+        longNote(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        val play = hasContentDescription("Play") and hasClickAction()
+        await("Play", play)
+        // Nothing has focus after the tap: the activity hears Space (onKeyDown) and hands it to the page; a held
+        // Space's repeats are not taken.
+        var handled = false
+        val repeat = KeyEvent(0, 0, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 1)
+        scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, repeat) }
+        assertFalse("A repeat is not taken", handled)
+        val space = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE)
+        scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, space) }
+        assertTrue("The activity hands Space to the page", handled)
+        poll("playback") { playing() }
+        frames()
+        scenario!!.onActivity { handled = it.onKeyDown(KeyEvent.KEYCODE_SPACE, space) }
+        assertTrue("The activity hands the next Space to the page", handled)
+        poll("the pause") { !playing() }
+        frames()
+        // Android spends the first key after a touch leaving touch mode, which in one pane puts focus on the top
+        // bar's back button by itself; leave touch mode and focus it here directly (in two panes the list pane's first
+        // control takes that focus). Space is still the page's: held down it plays once (its repeat goes with it), and
+        // it never presses the focused button (Back).
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.setInTouchMode(false)
+        val back = hasContentDescription("Back") and hasClickAction()
+        frames { compose.onNode(back).performSemanticsAction(SemanticsActions.RequestFocus) }
+        frames { compose.onNode(back and isFocused()).assertExists() }
+        val now = SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 0))
+        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 1))
+        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_SPACE, 0))
+        poll("playback from the keyboard") { playing() }
+        frames()
+        assertTrue("Still playing on the note", playing())
+        press(KeyEvent.KEYCODE_SPACE)
+        poll("the pause from the keyboard") { !playing() }
+        frames {
+            compose.onNode(play).assertIsDisplayed()
+            compose.onNode(hasText(title) and isHeading()).assertIsDisplayed()
+        }
+    }
+
+    /**
+     * A note with nothing to play (its audio removed, spec 5.9): Space is still the page's while it is read, so it never
+     * presses the control the first key after a touch focused by itself (Back, in one pane); Enter still does.
+     */
+    @Test fun spaceOnANoteWithoutAudioPressesNoFocusedControl() {
+        val title = "Text-only Space fixture $tag"
+        val words = listOf("A synthetic paragraph whose audio was removed.", "And this one, after a blank line.")
+        // A migrated note: its text needs no windows, so its audio can be removed at once.
+        val id = app.store.insertNoteForTests(words, title = title, legacy = true).also { created += it }
+        app.store.audioFile(id).writeBytes(ByteArray(words.size * BYTES_PER_SECOND))
+        app.store.removeAudio(id)
+        launch()
+        openFromLibrary(title, words[0])
+        val heading = hasText(title) and isHeading()
+        await("the title", heading)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.setInTouchMode(false)
+        val back = hasContentDescription("Back") and hasClickAction()
+        compose.onNode(back).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNode(back and isFocused()).assertExists()
+        press(KeyEvent.KEYCODE_SPACE)
+        compose.waitForIdle()
+        compose.onNode(heading).assertIsDisplayed()
+        compose.onNode(back and isFocused()).assertExists()
+        press(KeyEvent.KEYCODE_ENTER)
+        awaitGone("the note page", heading)
+        await("the library", inLibrary(title))
+    }
+
+    /**
+     * Lets the page catch up with the player, as a person's pace would: the test drives Compose's clock, which moves
+     * only while the test waits on Compose, and the player strip draws every frame, so Compose never idles. [block]
+     * reads the page after the frames.
+     */
+    private fun frames(block: () -> Unit = {}) {
+        compose.mainClock.autoAdvance = false
         try {
-            RecordingState.live.value = LiveSession(noteId = id, processing = true, message = "Transcribing")
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("Transcribing").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNode(progress).assertIsDisplayed()
-            compose.onNodeWithContentDescription("Pause recording").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Microphone level").assertDoesNotExist()
-            val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
-            list.performScrollToNode(hasText("Synthetic passage 12.", substring = true))
-            compose.onNode(progress).assertIsDisplayed()
-            compose.onNodeWithText("Transcribing").assertIsDisplayed()
-            capture("processing")
+            compose.mainClock.advanceTimeBy(SETTLE_MS)
+            block()
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test fun spaceTypedIntoFindStaysInTheQuery() {
+        val title = "Space find fixture $tag"
+        val words = listOf("The harbour opens at six.", "Boats leave the harbour late.")
+        longNote(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        press(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val field = hasSetTextAction() and hasContentDescription("Find in note")
+        await("Find", field)
+        compose.onNode(field).performTextInput("harbour")
+        await("the count", hasText("1 of 2"))
+        // The focused query takes Space as text; playback does not start.
+        press(KeyEvent.KEYCODE_SPACE)
+        await("the space in the query", field and hasText("harbour "))
+        back()
+        awaitGone("Find", field)
+        await("Play", hasContentDescription("Play") and hasClickAction())
+        assertTrue("Not playing", compose.onAllNodes(hasContentDescription("Pause playback")).fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test fun undoAndRedoKeysReachEditFromTheFieldAndFromTheActivity() {
+        val title = "Undo keys fixture $tag"
+        val words = listOf("The paragraph before an edit.", "A paragraph that stays.")
+        val id = note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        compose.onNodeWithContentDescription("Edit").performClick()
+        await("the edit bar", hasContentDescription("Done"))
+        compose.onNodeWithText(words[0]).performClick()
+        await("the paragraph's field", hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
+        fun stored() = app.store.paragraphs(id).firstOrNull()?.text
+        val ctrl = KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        val shift = KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
+        // The field has focus: the page hears Ctrl+Z before the field's own undo, and undoes the session's step.
+        press(KeyEvent.KEYCODE_Z, ctrl)
+        compose.waitUntil(TIMEOUT_MS) { stored() == words[0] }
+        press(KeyEvent.KEYCODE_Z, ctrl or shift)
+        compose.waitUntil(TIMEOUT_MS) { stored() == REVISED }
+        // With no focused node to hear them the activity does (onKeyShortcut), and hands them to the page.
+        var handled = false
+        scenario!!.onActivity { handled = it.onKeyShortcut(KeyEvent.KEYCODE_Z, ctrlKey(KeyEvent.KEYCODE_Z)) }
+        assertTrue("Ctrl+Z through the activity", handled)
+        compose.waitUntil(TIMEOUT_MS) { stored() == words[0] }
+        scenario!!.onActivity { handled = it.onKeyShortcut(KeyEvent.KEYCODE_Z, ctrlKey(KeyEvent.KEYCODE_Z, shift)) }
+        assertTrue("Ctrl+Shift+Z through the activity", handled)
+        compose.waitUntil(TIMEOUT_MS) { stored() == REVISED }
+        // The field shows the redone text before Done reads it (a person cannot tap within that frame).
+        await("the redone field", hasSetTextAction() and hasText(REVISED))
+        // Out of Edit the page declines them, and the activity leaves them to the system.
+        compose.onNode(hasContentDescription("Done")).performClick()
+        awaitGone("the field", hasSetTextAction())
+        scenario!!.onActivity { handled = it.onKeyShortcut(KeyEvent.KEYCODE_Z, ctrlKey(KeyEvent.KEYCODE_Z)) }
+        assertFalse("Ctrl+Z while reading", handled)
+        assertEquals(REVISED, stored())
+    }
+
+    @Test fun editSavesTheParagraphThroughTheStore() {
+        val title = "Edit fixture $tag"
+        val words = listOf("The paragraph before an edit.", "A paragraph that stays.")
+        val id = note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        compose.onNodeWithContentDescription("Edit").performClick()
+        await("the edit bar", hasContentDescription("Done"))
+        compose.onNodeWithText(words[0]).performClick()
+        await("the paragraph's field", hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
+        // While the text differs from the recognizer's, the field says so (spec 4.14).
+        await("the provenance line", hasText("Edited"))
+        compose.onNode(hasContentDescription("Done")).performClick()
+        awaitGone("the field", hasSetTextAction())
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
+        assertEquals(listOf(REVISED, words[1]), app.store.paragraphs(id).filterNot { it.hidden }.map { it.text })
+        await("the saved paragraph", hasText(REVISED))
+        awaitGone("a badge outside Edit", hasText("Edited"))
+    }
+
+    @Test fun searchOpensANoteAtItsParagraph() {
+        val title = "Search fixture $tag"
+        val needle = "zebrafinch$tag"
+        val words = listOf("Nothing to find in this first paragraph.", "The $needle sings in the second paragraph.")
+        note(title, words)
+        launch()
+        await("Search", hasContentDescription("Search notes") and hasClickAction())
+        compose.onNode(hasContentDescription("Search notes") and hasClickAction()).performClick()
+        await("the search field", hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextInput(needle)
+        val result = hasText(title, substring = true) and hasClickAction()
+        await("the result", result)
+        compose.onNode(result).performClick()
+        await("the note at its paragraph", hasText(words[1]))
+        compose.onNodeWithText(words[1]).assertIsDisplayed()
+    }
+
+    @Test fun deleteFromTheMenuOffersUndo() {
+        val title = "Delete fixture $tag"
+        val words = listOf("A synthetic paragraph to delete and keep.")
+        val id = note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        compose.onNodeWithContentDescription("More options").performClick()
+        await("the menu", hasText("Delete") and hasClickAction())
+        compose.onNode(hasText("Delete") and hasClickAction()).performClick()
+        await("the feedback pill", hasText("Note deleted"))
+        compose.waitUntil(TIMEOUT_MS) { app.store.note(id) == null }
+        compose.onNode(hasText("Undo") and hasClickAction()).performClick()
+        compose.waitUntil(TIMEOUT_MS) { app.store.note(id) != null }
+        await("the note back in the library", inLibrary(title))
+    }
+
+    @Test fun settingsOpenByTheirActionAndApplyTheThemeAtOnce() {
+        note("Settings fixture $tag", listOf("A note, so the library dock carries Record."))
+        launch()
+        await("Record", hasContentDescription("Record"))
+        // TalkBack's "Open settings" on the dock's Record (spec 4.23.6).
+        val actions = compose.onNode(hasContentDescription("Record")).fetchSemanticsNode().config[SemanticsActions.CustomActions]
+        compose.runOnIdle { actions.single { it.label == "Open settings" }.action() }
+        val heading = hasText("Settings") and isHeading()
+        await("the settings page", heading)
+        compose.onNode(heading).assertIsFocused()
+        compose.onNodeWithText("Dark").performClick()
+        compose.waitUntil(TIMEOUT_MS) { app.preferences.settings.value.theme == "dark" }
+        compose.onNodeWithText("Light").performClick()
+        compose.waitUntil(TIMEOUT_MS) { app.preferences.settings.value.theme == "light" }
+        compose.onNodeWithText("Open-source licenses").performClick()
+        await("the licences", hasText("Parakeet Ultra speech model"))
+        back()
+        await("settings again", heading)
+        back()
+        awaitGone("the settings page", heading)
+        compose.onNode(hasContentDescription("Record")).assertIsDisplayed()
+    }
+
+    /**
+     * Two panes (spec 5.14, 4.23.4): the licences cover the whole window with the library's pane composed beneath
+     * them, and Back returns to settings, the next Back to the library. Skipped on a display that does not change
+     * panes when turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun theLicencesReturnToSettingsInTwoPanes() {
+        assumeTurnChangesPanes()
+        note("Two-pane settings fixture $tag", listOf("A note, so the library dock carries Record."))
+        launch()
+        turn(landscape = true)
+        await("Record", hasContentDescription("Record"))
+        press(KeyEvent.KEYCODE_COMMA, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val heading = hasText("Settings") and isHeading()
+        await("the settings page", heading)
+        compose.onNodeWithText("Open-source licenses").performClick()
+        val licences = hasText("Parakeet Ultra speech model")
+        await("the licences", licences)
+        back()
+        awaitGone("the licences after Back", licences)
+        await("settings again", heading)
+        back()
+        awaitGone("the settings page", heading)
+        compose.onNode(hasContentDescription("Record")).assertIsDisplayed()
+    }
+
+    @Test fun aRecordingShowsItsControlsInTheDock() {
+        val id = app.store.create().also { created += it }
+        app.store.state(id, NoteState.PAUSED)
+        // Synthetic presentation state; the microphone and the service are tested on their own.
+        RecordingState.live.value = LiveSession(noteId = id, paused = true, duration = 73_000)
+        launch()
+        await("Resume", hasContentDescription("Resume"))
+        compose.onNode(hasContentDescription("Finish")).assertIsDisplayed()
+        compose.onNode(hasContentDescription("Paused, 1 minute 13 seconds.", substring = true)).assertIsDisplayed()
+        // A running wave draws every frame: step the clock by hand from here.
+        compose.mainClock.autoAdvance = false
+        try {
+            RecordingState.live.value = RecordingState.live.value.copy(paused = false)
+            compose.mainClock.advanceTimeBy(SETTLE_MS)
+            compose.onNode(hasContentDescription("Pause")).assertIsDisplayed()
+            compose.onNode(hasContentDescription("Finish")).assertIsDisplayed()
+            compose.onNode(hasContentDescription("Recording, 1 minute 13 seconds", substring = true)).assertIsDisplayed()
+        } finally {
             RecordingState.live.value = LiveSession()
-            compose.waitUntil(10_000) { compose.onAllNodes(progress).fetchSemanticsNodes().isEmpty() }
-            compose.onNodeWithText("Copy text").assertIsDisplayed()
-        } finally {
-            RecordingState.live.value = original
-            app.store.delete(id)
+            compose.mainClock.advanceTimeBy(SETTLE_MS)
+            compose.mainClock.autoAdvance = true
         }
     }
 
-    @Test fun everySpeechLanguageIsAccessibleBeforeRecording() {
-        val app = application()
-        val initial = app.preferences.settings.value.language
-        try {
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("Record").fetchSemanticsNodes().isNotEmpty() }
-            capture("empty")
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) {
-                assertAutomaticLanguage()
-                compose.onNodeWithText("Record").assertIsDisplayed().assertIsEnabled()
-                assertEquals(initial, app.preferences.settings.value.language)
-                return
-            }
-            Preferences.languages.forEach { (id, label) ->
-                val current = Preferences.languages[app.preferences.settings.value.language]
-                compose.onNodeWithContentDescription("Speech language: $current").performClick()
-                languageOption(label).performScrollTo().performClick()
-                compose.onNodeWithContentDescription("Speech language: $label").assertIsDisplayed()
-                compose.onNodeWithText("Record").assertIsDisplayed()
-                assertEquals(id, app.preferences.settings.value.language)
-            }
-        } finally { app.preferences.language(initial) }
-    }
+    /** How the display was turned before a test turned it, to put it back afterwards (a UiAutomation constant). */
+    private var rotationBefore: Int? = null
 
-    @Test fun sessionsHeaderAndRecordingFooterStayCompact() {
-        val app = application()
-        val id = readySession(app.store, "Clean session layout", listOf("A synthetic note for the library layout."))
-        try {
-            waitForTitle("Clean session layout")
-            compose.onNodeWithContentDescription("Browse recording dates").assertIsDisplayed()
-            compose.onNodeWithText("focal", ignoreCase = true).assertDoesNotExist()
-            compose.onNodeWithText("Audio and words, kept together.").assertDoesNotExist()
-            compose.onNodeWithText("Speech language:", substring = true).assertDoesNotExist()
-            compose.onNodeWithText("Record a note").assertDoesNotExist()
-            compose.onNodeWithText("All notes ·", substring = true).assertDoesNotExist()
-            compose.onNode(hasSetTextAction()).assertDoesNotExist()
-            compose.onNodeWithContentDescription("Search recordings").assertIsDisplayed().performClick()
-            compose.onNode(hasSetTextAction()).assertIsDisplayed()
-            compose.onNodeWithContentDescription("Close search").performClick()
-            compose.onNode(hasSetTextAction()).assertDoesNotExist()
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
-            else {
-                val language = Preferences.languages[app.preferences.settings.value.language]
-                compose.onNodeWithContentDescription("Speech language: $language").assertIsDisplayed()
-            }
-            compose.onNodeWithText("Record").assertIsDisplayed()
-            capture("sessions-clean")
-        } finally { app.store.delete(id) }
-    }
-
-    @Test fun prependingASessionShowsItAtTheTopAndPreservesAReaderFurtherDown() {
-        val store = application().store
-        val model = compose.runOnUiThread { ViewModelProvider(compose.activity)[FocalViewModel::class.java] }
-        val query = "Library prepend ${UUID.randomUUID().toString().take(8)}"
-        val ids = mutableListOf<String>()
-        val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
-        val zone = ZoneId.systemDefault()
-        val today = LocalDate.now(zone)
-        val yesterdayStart = today.minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val todayStart = today.atStartOfDay(zone).toInstant().toEpochMilli()
-
-        fun addSession(index: Int, timestamp: Long): String {
-            val db = store.writableDatabase
-            db.beginTransactionNonExclusive()
-            val id = try {
-                val created = readySession(store, "$query $index", listOf("Synthetic library row.")).also(ids::add)
-                // Publish each fixture at its assigned day and unique sort position in one transaction.
-                db.execSQL("UPDATE notes SET created=? WHERE id=?", arrayOf(timestamp, created))
-                db.setTransactionSuccessful()
-                created
-            } finally { db.endTransaction() }
-            // Publish again after the entire fixture row is visible to the library's IO reader.
-            store.state(id, "READY")
-            return id
+    /**
+     * Turns the display as a person turning the phone would (spec 5.14: no orientation locks) and waits until the
+     * activity, recreated, is laid out for it: landscape on a phone is a short window with the dock in the rail, on a
+     * tablet two panes.
+     */
+    private fun turn(landscape: Boolean) {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        if (rotationBefore == null) {
+            val resolver = app.contentResolver
+            val automatic = Settings.System.getInt(resolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
+            // The user rotation setting holds a Surface rotation, which is also the matching freeze constant.
+            rotationBefore = if (automatic) UiAutomation.ROTATION_UNFREEZE else Settings.System.getInt(resolver, Settings.System.USER_ROTATION, 0)
         }
-
-        fun row(title: String) = compose.onNode(hasText(title) and hasClickAction() and !hasSetTextAction())
-        fun rowOffset(title: String): Float {
-            val listNode = list.fetchSemanticsNode()
-            val rowNode = row(title).fetchSemanticsNode()
-            return compose.runOnUiThread { rowNode.boundsInRoot.top - listNode.boundsInRoot.top }
+        automation.setRotation(if (landscape) UiAutomation.ROTATION_FREEZE_90 else UiAutomation.ROTATION_FREEZE_0)
+        val wanted = if (landscape) Configuration.ORIENTATION_LANDSCAPE else Configuration.ORIENTATION_PORTRAIT
+        compose.waitUntil(TIMEOUT_MS) {
+            var orientation = Configuration.ORIENTATION_UNDEFINED
+            scenario!!.onActivity { orientation = it.resources.configuration.orientation }
+            orientation == wanted
         }
-
-        try {
-            repeat(20) { addSession(it, yesterdayStart + it) }
-            compose.waitUntil(10_000) { model.library.value.notes.any { it.id == ids.last() } }
-            compose.onNodeWithContentDescription("Search recordings").performClick()
-            val search = compose.onNode(hasSetTextAction())
-            search.performTextReplacement(query)
-            search.performImeAction()
-            compose.waitUntil(10_000) { model.library.value.notes.map { it.id } == ids.asReversed() }
-            compose.onNodeWithText("$query 19", useUnmergedTree = true).assertIsDisplayed()
-            val listNode = list.fetchSemanticsNode()
-            assertEquals("The library should start at the top without a scroll request", 0f,
-                compose.runOnUiThread { listNode.config[SemanticsProperties.VerticalScrollAxisRange].value() }, .001f)
-            compose.waitForIdle()
-
-            addSession(20, todayStart)
-            waitForTitle("$query 20")
-            compose.onNodeWithText("$query 20", useUnmergedTree = true).assertIsDisplayed()
-
-            val reader = "$query 8"
-            list.performScrollToNode(hasText(reader))
-            row(reader).assertIsDisplayed()
-            row("$query 20").assertIsNotDisplayed()
-            val offset = rowOffset(reader)
-            val newest = addSession(21, todayStart + 1)
-            compose.waitUntil(10_000) { model.library.value.notes.firstOrNull()?.id == newest }
-            compose.waitForIdle()
-            row(reader).assertIsDisplayed()
-            row("$query 21").assertIsNotDisplayed()
-            assertEquals("Prepending moved the reader's row within the library viewport", offset, rowOffset(reader), 1f)
-        } catch (failure: Throwable) {
-            if (failure !is ComposeTimeoutException && failure !is AssertionError) throw failure
-            runCatching { capture("library-prepend-timeout") }
-            val visibleFixtures = runCatching {
-                compose.onRoot(useUnmergedTree = true).printToString().lineSequence()
-                    .filter { query in it }.take(20).joinToString("\n")
-            }.getOrDefault("")
-            val state = model.library.value
-            val published = state.notes.map { ids.indexOf(it.id) }
-            val stored = runCatching { store.notes(query).map { ids.indexOf(it.id) } }.getOrNull()
-            // Fixture ranks preserve ordering without exposing unrelated titles or IDs. -1 is an outside row.
-            failure.addSuppressed(AssertionError(
-                "Fixture rows=${ids.size}, loaded=${state.loaded}, error=${state.error != null}, " +
-                    "publishedTotal=${published.size}, publishedRanks=${published.take(24)}, " +
-                    "storedTotal=${stored?.size}, storedRanks=${stored?.take(24)}\n$visibleFixtures"
-            ))
-            throw failure
-        } finally { ids.asReversed().forEach(store::delete) }
+        compose.waitForIdle()
     }
 
-    @Test fun searchFindsMiddlePassagesInEnglishAndRussianAndSurvivesRotation() {
-        val app = application()
-        val store = app.store
-        val ids = mutableListOf<String>()
-        try {
-            ids += readySession(store, "Transcript search fixture", listOf(
-                "This opening passage is the preview, with no search markers.",
-                "The middle passage mentions a durable marker for the draft.",
-                "В середине записи есть полезная мысль о восстановлении.",
-                "The closing passage has no search markers either.",
-            ), language = "ru")
-            ids += readySession(store, "Other session", listOf("An unrelated recorded idea."))
-            waitForTitle("Other session")
-            compose.onNodeWithContentDescription("Search recordings").performClick()
-            compose.onNode(hasSetTextAction()).performTextReplacement("durable marker")
-            compose.onNode(hasSetTextAction()).performImeAction()
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithText("Transcript search fixture").fetchSemanticsNodes().isNotEmpty() &&
-                    compose.onAllNodesWithText("Other session").fetchSemanticsNodes().isEmpty()
-            }
-            compose.onNodeWithContentDescription("Clear search").performClick()
-            waitForTitle("Other session")
-            // The match is outside both the title and first-passage preview; uppercase exercises Unicode matching.
-            compose.onNode(hasSetTextAction()).performTextReplacement("ВОССТАНОВЛЕНИИ")
-            compose.onNode(hasSetTextAction()).performImeAction()
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("Other session").fetchSemanticsNodes().isEmpty() }
-            compose.onNodeWithText("Transcript search fixture").assertExists()
-            compose.activityRule.scenario.recreate()
-            compose.onNode(hasSetTextAction()).assertTextContains("ВОССТАНОВЛЕНИИ")
-            waitForTitle("Transcript search fixture")
-            compose.onNodeWithText("Other session").assertDoesNotExist()
-            compose.onNode(hasSetTextAction()).performTextReplacement("no-such-session-7492")
-            compose.onNode(hasSetTextAction()).performImeAction()
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("No matching recordings.").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithContentDescription("Close search").performClick()
-            waitForTitle("Other session")
-            compose.onNode(hasSetTextAction()).assertDoesNotExist()
-        } finally { ids.forEach(store::delete) }
+    @Test fun editKeepsItsFieldAcrossARotation() {
+        val title = "Rotate edit fixture $tag"
+        val words = listOf("The paragraph a rotation interrupts.", "A paragraph that stays.")
+        val id = note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        compose.onNodeWithContentDescription("Edit").performClick()
+        await("the edit bar", hasContentDescription("Done"))
+        compose.onNodeWithText(words[0]).performClick()
+        await("the paragraph's field", hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
+        turn(landscape = true)
+        // Still in Edit, the same paragraph's field holding the draft, its provenance shown (spec 4.14).
+        await("the edit bar after the turn", hasContentDescription("Done"))
+        await("the draft after the turn", hasSetTextAction() and hasText(REVISED))
+        await("the provenance line", hasText("Edited"))
+        turn(landscape = false)
+        await("the draft turned back", hasSetTextAction() and hasText(REVISED))
+        compose.onNode(hasContentDescription("Done")).performClick()
+        awaitGone("the field", hasSetTextAction())
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
     }
 
-    @Test fun libraryReviewFilterOpensTheRightNote() {
-        val app = application()
-        val store = app.store
-        val ids = mutableListOf<String>()
-        val initialTheme = app.preferences.settings.value.theme
-        try {
-            ids += readySession(store, "Ideas for the weekend", listOf("A walk by the river, a book and a slow Sunday morning."))
-            ids += readySession(store, "A thought worth keeping", listOf("Make more space for the projects that matter."), uncertain = setOf(0))
-            waitForTitle("A thought worth keeping")
-            app.preferences.theme("light"); capture("library-light")
-            app.preferences.theme("dark"); capture("library-dark")
-            app.preferences.theme("light")
-            val count = store.notes().count { it.reviewCount > 0 || it.state in listOf("ERROR", "INTERRUPTED") }
-            reviewFilter("$count to review").performClick()
-            compose.onNodeWithText("Ideas for the weekend").assertDoesNotExist()
-            reviewFilter("Show all").assertExists()
-            compose.onNodeWithText("A thought worth keeping").performClick()
-            waitForSessionReady("A thought worth keeping", "Make more space for the projects that matter.")
-            compose.onNodeWithContentDescription("Back to recordings").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Recording options").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Play original audio").assertIsDisplayed()
-            compose.onNodeWithText("Make more space for the projects that matter.").assertExists()
-            compose.onNodeWithText("Marked passages may need a closer listen.").assertDoesNotExist()
-            capture("note-light")
-            app.preferences.theme("dark"); capture("note-dark")
-        } finally { ids.forEach(store::delete); app.preferences.theme(initialTheme) }
+    @Test fun findKeepsItsQueryAcrossARotation() {
+        val title = "Rotate find fixture $tag"
+        val words = listOf("The harbour opens at six.", "Boats leave the harbour late, and the harbour master waits.")
+        note(title, words)
+        launch()
+        openFromLibrary(title, words[0])
+        press(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val field = hasSetTextAction() and hasContentDescription("Find in note")
+        await("Find", field)
+        compose.onNode(field).performTextInput("harbour")
+        await("the count", hasText("1 of 3"))
+        turn(landscape = true)
+        await("the query after the turn", field and hasText("harbour"))
+        await("the count after the turn", hasText("of 3", substring = true))
+        compose.onNode(hasContentDescription("Next match") and hasClickAction()).assertIsDisplayed()
     }
 
-    @Test fun libraryReviewFilterAndScrollSurviveOpeningSessionAndRotation() {
-        val app = application()
-        val ids = mutableListOf<String>()
-        try {
-            repeat(16) { index ->
-                ids += readySession(app.store, "Review context $index", listOf("Review fixture passage $index."), uncertain = setOf(0))
-            }
-            val filtered = app.store.notes().filter { it.id in ids }
-            val target = filtered[filtered.size / 2]
-            waitForTitle(filtered.first().title)
-            val count = app.store.notes().count { it.reviewCount > 0 || it.state in listOf("ERROR", "INTERRUPTED") }
-            reviewFilter("$count to review").performClick()
-            val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
-            list.performScrollToNode(hasText(target.title))
-            fun browsingPosition(): Pair<Float, Float> {
-                val listNode = list.fetchSemanticsNode()
-                val rowNode = compose.onNodeWithText(target.title).fetchSemanticsNode()
-                // Read both coordinates in one frame, including while window insets settle.
-                return compose.runOnUiThread {
-                    listNode.config[SemanticsProperties.VerticalScrollAxisRange].value() to
-                        (rowNode.boundsInRoot.top - listNode.boundsInRoot.top)
-                }
-            }
-            val (scrollPosition, rowOffset) = browsingPosition()
-            compose.onNodeWithText(target.title).performClick()
-            waitForSessionReady(target.title, "Review fixture passage ${ids.indexOf(target.id)}.")
-            // The library is absent during recreation; its browsing state must still be saved.
-            compose.activityRule.scenario.recreate()
-            waitForSessionReady(target.title)
-            compose.onNodeWithContentDescription("Back to recordings").performClick()
-            waitForTitle(target.title)
-            compose.onNodeWithText(target.title).assertIsDisplayed()
-            val (restoredPosition, restoredOffset) = browsingPosition()
-            assertEquals("Library logical scroll position changed after navigation and recreation", scrollPosition,
-                restoredPosition, .001f)
-            assertEquals("Session moved within the library viewport after navigation and recreation", rowOffset,
-                restoredOffset, 1f)
-            reviewFilter("Show all").assertIsDisplayed().assertIsSelected()
-        } finally { ids.forEach(app.store::delete) }
+    /** A display that is one pane upright and two panes turned (a tablet, spec 5.14). */
+    private fun assumeTurnChangesPanes() {
+        val config = app.resources.configuration
+        val short = minOf(config.screenWidthDp, config.screenHeightDp)
+        val long = maxOf(config.screenWidthDp, config.screenHeightDp)
+        assumeTrue("Needs a display that is one pane upright and two panes turned", short in 480 until 840 && long >= 840)
     }
 
-    @Test fun searchOpensAtTopAndDoesNotRefocusAfterReturningFromSession() {
-        val app = application()
-        val ids = mutableListOf<String>()
-        try {
-            repeat(16) { index ->
-                ids += readySession(app.store, "Search context [$index]", listOf("Search fixture passage $index."))
-            }
-            val sessions = app.store.notes().filter { it.id in ids }
-            waitForTitle(sessions.first().title)
-            val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
-            list.performScrollToNode(hasText(sessions.last().title))
-            compose.onNodeWithContentDescription("Search recordings").performClick()
-            compose.onNode(hasSetTextAction()).assertIsDisplayed().assertIsFocused()
-            val target = sessions.first()
-            compose.onNode(hasSetTextAction()).performTextReplacement(target.title)
-            compose.onNode(hasSetTextAction()).performImeAction()
-            compose.onNode(hasSetTextAction()).assertIsNotFocused()
-            waitForTitle(target.title)
-            compose.onNode(hasText(target.title) and hasClickAction() and !hasSetTextAction()).performClick()
-            waitForSessionReady(target.title)
-            compose.onNodeWithContentDescription("Back to recordings").performClick()
-            compose.onNode(hasSetTextAction()).assertIsDisplayed().assertIsNotFocused().assertTextContains(target.title)
-        } finally { ids.forEach(app.store::delete) }
+    /**
+     * A tablet (one pane upright, two turned, spec 5.14): the open note moves into the detail pane beside the library
+     * and back, keeping what was being done on it (Edit with its draft and its undo log, Find with its query), and
+     * Back from the detail pane leaves the library with Record. Skipped on a display that does not change panes when
+     * turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun aNoteMovesBetweenOneAndTwoPanesOnATurn() {
+        assumeTurnChangesPanes()
+        val title = "Panes fixture $tag"
+        val words = listOf("A synthetic paragraph that moves between panes.", "The harbour opens at six, and the harbour master waits.")
+        // The library's stage or row, never the page's own title (which also takes a tap, to rename).
+        val listed = hasContentDescription("Latest note. $title.", substring = true) or (hasText(title) and hasClickAction() and !isHeading())
+        val undo = hasContentDescription("Undo") and hasClickAction() and isEnabled()
+        val id = note(title, words)
+        launch()
+        turn(landscape = false)
+        openFromLibrary(title, words[0])
+        // Edit: one saved step (Undo on), then a draft typed just before the turn.
+        compose.onNodeWithContentDescription("Edit").performClick()
+        await("the edit bar", hasContentDescription("Done"))
+        compose.onNodeWithText(words[0]).performClick()
+        await("the paragraph's field", hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
+        await("Undo", undo)
+        compose.onNode(hasSetTextAction()).performTextReplacement(DRAFT)
+        turn(landscape = true)
+        // Side by side: the library's stage or row beside the note, still in Edit with the draft and its log.
+        await("the library beside the note", listed)
+        await("the edit bar in two panes", hasContentDescription("Done"))
+        await("the draft in two panes", hasSetTextAction() and hasText(DRAFT))
+        await("Undo in two panes", undo)
+        turn(landscape = false)
+        awaitGone("the library under the page", listed)
+        await("the draft in one pane", hasSetTextAction() and hasText(DRAFT))
+        // The log came through both turns whole: the draft, then the saved step, then the recognised text.
+        compose.onNode(undo).performClick()
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
+        compose.onNode(undo).performClick()
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == words[0] }
+        compose.onNode(hasContentDescription("Done")).performClick()
+        awaitGone("the field", hasSetTextAction())
+        // Find: its query and count across both turns.
+        press(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val field = hasSetTextAction() and hasContentDescription("Find in note")
+        await("Find", field)
+        compose.onNode(field).performTextInput("harbour")
+        await("the count", hasText("1 of 2"))
+        turn(landscape = true)
+        await("the note beside the library again", listed)
+        await("the query in two panes", field and hasText("harbour"))
+        await("the count in two panes", hasText("of 2", substring = true))
+        turn(landscape = false)
+        await("the query in one pane", field and hasText("harbour"))
+        turn(landscape = true)
+        await("the query turned again", field and hasText("harbour"))
+        back()
+        awaitGone("Find after Back", field)
+        compose.onNode(hasText(title) and isHeading()).assertIsDisplayed()
+        back()
+        awaitGone("the detail pane's note", hasText(words[1]))
+        await("Record in the list pane", hasContentDescription("Record") and hasClickAction())
     }
 
-    @OptIn(ExperimentalTestApi::class)
-    @Test fun searchCaretSurvivesOpeningAResultAndReturning() {
-        val app = application()
-        val query = "Range fixture"
-        val title = "$query target"
-        val passage = "Search selection survives opening this result."
-        val selection = androidx.compose.ui.text.TextRange(6)
-        val id = readySession(app.store, title, listOf(passage))
-        fun assertQueryAndSelection() {
-            // Verify the saved query's characters and caret independently of text decoration.
-            compose.onNode(hasSetTextAction()).assert(
-                SemanticsMatcher("Search query matches exactly") {
-                    it.config[SemanticsProperties.EditableText].text == query
-                }
-            ).assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, selection))
+    /**
+     * Two panes and a hardware keyboard (spec 5.14, 8.5): with focus in the library's pane, where the first key after a
+     * touch puts it by itself, Space plays and pauses the open note (a held Space once) and Ctrl+F opens its Find; a
+     * rename in the library's pane still takes Space as text. Skipped on a display that does not change panes when
+     * turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun theOpenNoteTakesItsShortcutsFromTheLibraryPane() {
+        assumeTurnChangesPanes()
+        val title = "Two-pane keys fixture $tag"
+        val words = listOf("Space plays this synthetic paragraph beside the library.", "And this one, after a blank line.")
+        longNote(title, words)
+        launch()
+        turn(landscape = true)
+        // The library's stage or row, never the page's own title (which also takes a tap, to rename).
+        val listed = hasContentDescription("Latest note. $title.", substring = true) or (hasText(title) and hasClickAction() and !isHeading())
+        await("the note in the library", listed)
+        compose.onAllNodes(listed)[0].performClick()
+        await("the note beside the library", hasText(words[0]))
+        val play = hasContentDescription("Play") and hasClickAction()
+        await("Play", play)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.setInTouchMode(false)
+        frames { compose.onAllNodes(listed)[0].performSemanticsAction(SemanticsActions.RequestFocus) }
+        frames { compose.onAllNodes(listed and isFocused()).assertCountEquals(1) }
+        val now = SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 0))
+        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE, 1))
+        instrumentation.sendKeySync(KeyEvent(now, now + HELD_MS, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_SPACE, 0))
+        poll("playback from the library's pane") { playing() }
+        frames()
+        assertTrue("Still playing", playing())
+        press(KeyEvent.KEYCODE_SPACE)
+        poll("the pause from the library's pane") { !playing() }
+        frames { compose.onAllNodes(listed and isFocused()).assertCountEquals(1) }
+        press(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val find = hasSetTextAction() and hasContentDescription("Find in note")
+        await("Find in the note's pane", find)
+        back()
+        awaitGone("Find", find)
+        // A rename in the library's pane types its Space.
+        frames {
+            val menu = compose.onAllNodes(listed)[0].fetchSemanticsNode().config[SemanticsActions.CustomActions]
+            compose.runOnIdle { menu.first { it.label == "Rename" }.action() }
         }
-        try {
-            waitForTitle(title)
-            compose.onNodeWithContentDescription("Search recordings").performClick()
-            compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(query)
-            compose.onNode(hasSetTextAction()).performTextInputSelection(selection)
-            assertQueryAndSelection()
-            compose.onNode(hasText(title) and hasClickAction() and !hasSetTextAction()).assertIsDisplayed().performClick()
-            waitForSessionReady(title, passage)
-            compose.onNodeWithContentDescription("Back to recordings").performClick()
-            waitForEditor()
-            val fieldView = checkNotNull(compose.onNode(hasSetTextAction()).fetchSemanticsNode().root as? android.view.View)
-            compose.waitUntil(5_000) {
-                compose.runOnUiThread {
-                    ViewCompat.getRootWindowInsets(fieldView)?.isVisible(WindowInsetsCompat.Type.ime()) == false
-                }
-            }
-            // Preserve the text state without reactivating input after returning to Sessions.
-            compose.onNode(hasSetTextAction()).assertIsNotFocused()
-            assertQueryAndSelection()
-        } finally { app.store.delete(id) }
+        val rename = hasSetTextAction() and !hasContentDescription("Find in note")
+        await("the rename field", rename and isFocused())
+        press(KeyEvent.KEYCODE_SPACE)
+        await("the space in the title", rename and hasText(" "))
+        assertFalse("Not playing", playing())
+        back()
+        awaitGone("the rename field", rename)
     }
 
-    @OptIn(ExperimentalTestApi::class)
-    @Test fun activeSearchKeepsSelectionAndKeyboardThroughRecreation() {
-        val app = application()
-        val prefix = "Search rotation"
-        val suffix = " target"
-        val id = readySession(app.store, prefix + suffix, listOf("The search cursor stays where typing stopped."))
-        fun waitForKeyboard(visible: Boolean) {
-            val fieldView = checkNotNull(compose.onNode(hasSetTextAction()).fetchSemanticsNode().root as? android.view.View)
-            compose.waitUntil(5_000) {
-                compose.runOnUiThread {
-                    ViewCompat.getRootWindowInsets(fieldView)?.isVisible(WindowInsetsCompat.Type.ime()) == visible
-                }
-            }
+    /**
+     * Two panes and a hardware keyboard (spec 8.5): a focused stage keeps the keys it answers itself while a note is
+     * open beside the library. Space on the focused live stage expands it instead of going to the note. Skipped on a
+     * display that does not change panes when turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun spaceOnTheFocusedLiveStageExpandsItBesideAnOpenNote() {
+        assumeTurnChangesPanes()
+        val title = "Live stage keys fixture $tag"
+        val words = listOf("A synthetic paragraph open beside a recording.")
+        longNote(title, words)
+        val id = app.store.create().also { created += it }
+        app.store.state(id, NoteState.PAUSED)
+        // Synthetic presentation state (paused, so nothing draws every frame); the service is tested on its own.
+        RecordingState.live.value = LiveSession(noteId = id, paused = true, duration = 73_000)
+        launch()
+        turn(landscape = true)
+        val row = hasText(title) and hasClickAction() and !isHeading()
+        await("the note's row", row)
+        compose.onNode(row).performClick()
+        await("the note beside the library", hasText(words[0]))
+        val stage = hasContentDescription("Paused, 1 minute 13 seconds.", substring = true) and hasClickAction()
+        await("the live stage", stage)
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
+        // Put there on purpose: leaving touch mode puts focus on the stage by itself, which leaves the note its keys.
+        compose.onNode(row).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNode(stage).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNode(stage and isFocused()).assertIsDisplayed()
+        press(KeyEvent.KEYCODE_SPACE)
+        await("the scene", hasContentDescription("Collapse. Recording continues"))
+        assertFalse("The open note does not play", playing())
+    }
+
+    /**
+     * Two panes and a hardware keyboard (spec 8.5): Ctrl+C on a focused stage copies the stage's note and confirms on
+     * its pill, while the note open beside the library is left alone. Skipped on a display that does not change panes
+     * when turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun ctrlCOnTheFocusedStageCopiesItsOwnNoteBesideAnOpenNote() {
+        assumeTurnChangesPanes()
+        val openTitle = "Open copy fixture $tag"
+        val openWords = listOf("The open note's synthetic paragraph.")
+        val stageTitle = "Stage copy fixture $tag"
+        val stageWords = listOf("The stage's own synthetic paragraph.", "And its second one.")
+        // The open note is a minute older, so the stage holds the other one.
+        app.store.insertNoteForTests(openWords, title = openTitle, created = System.currentTimeMillis() - 60_000).also {
+            created += it
+            app.store.audioFile(it).writeBytes(ByteArray(BYTES_PER_SECOND))
         }
-        fun assertSelectionAtEnd(text: String) {
-            compose.onNode(hasSetTextAction()).assert(
-                SemanticsMatcher("Editable text equals the expected draft") {
-                    it.config.contains(SemanticsProperties.EditableText) &&
-                        it.config[SemanticsProperties.EditableText].text == text
-                }
-            ).assert(
-                SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, androidx.compose.ui.text.TextRange(text.length))
-            )
-        }
-        fun returnFromHome(keyboardVisible: Boolean, text: String) {
-            val retainedActivity = compose.activity
-            // Real task focus loss can restore the IME even when a lifecycle-only round trip does not.
-            assertTrue(InstrumentationRegistry.getInstrumentation().uiAutomation
-                .performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME))
-            compose.waitUntil(5_000) {
-                retainedActivity.lifecycle.currentState == androidx.lifecycle.Lifecycle.State.CREATED
-            }
-            InstrumentationRegistry.getInstrumentation().runOnMainSync {
-                retainedActivity.startActivity(Intent(retainedActivity.intent).setClass(retainedActivity, MainActivity::class.java)
-                    .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
-            }
-            compose.waitUntil(5_000) {
-                retainedActivity.lifecycle.currentState == androidx.lifecycle.Lifecycle.State.RESUMED && retainedActivity.hasWindowFocus()
-            }
-            assertSame(retainedActivity, compose.activity)
-            waitForEditor()
-            waitForKeyboard(keyboardVisible)
-            if (keyboardVisible) compose.onNode(hasSetTextAction()).assertIsFocused()
-            else compose.onNode(hasSetTextAction()).assertIsNotFocused()
-            assertSelectionAtEnd(text)
-        }
-        try {
-            waitForTitle(prefix + suffix)
-            compose.onNodeWithContentDescription("Search recordings").performClick()
-            compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(prefix)
-            compose.onNode(hasSetTextAction()).performTextInputSelection(androidx.compose.ui.text.TextRange(prefix.length))
-            assertSelectionAtEnd(prefix)
-            waitForKeyboard(true)
-            returnFromHome(keyboardVisible = true, prefix)
-
-            // Keep MainActivity's real composition and input connection across recreation.
-            compose.activityRule.scenario.recreate()
-            waitForEditor()
-            assertSelectionAtEnd(prefix)
-            waitForKeyboard(true)
-            compose.onNode(hasSetTextAction()).assertIsFocused().performTextInput(suffix)
-            assertSelectionAtEnd(prefix + suffix)
-
-            compose.onNode(hasSetTextAction()).performImeAction()
-            waitForKeyboard(false)
-            compose.onNode(hasSetTextAction()).assertIsNotFocused()
-            compose.activityRule.scenario.recreate()
-            waitForEditor()
-            waitForKeyboard(false)
-            compose.onNode(hasSetTextAction()).assertIsNotFocused()
-            assertSelectionAtEnd(prefix + suffix)
-            compose.onNode(hasText(prefix + suffix) and hasClickAction() and !hasSetTextAction()).performClick()
-            waitForSessionReady(prefix + suffix)
-            compose.onNodeWithContentDescription("Back to recordings").performClick()
-            waitForEditor()
-            waitForKeyboard(false)
-            compose.onNode(hasSetTextAction()).assertIsNotFocused().assertTextEquals(prefix + suffix)
-
-            compose.onNode(hasSetTextAction()).performClick()
-            waitForKeyboard(true)
-            compose.onNode(hasSetTextAction()).performTextInputSelection(androidx.compose.ui.text.TextRange((prefix + suffix).length))
-            assertSelectionAtEnd(prefix + suffix)
-            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
-            waitForKeyboard(false)
-            assertSelectionAtEnd(prefix + suffix)
-            returnFromHome(keyboardVisible = false, prefix + suffix)
-            val retainedActivity = compose.activity
-            compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
-            compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
-            assertSame(retainedActivity, compose.activity)
-            waitForEditor()
-            waitForKeyboard(false)
-            assertSelectionAtEnd(prefix + suffix)
-            compose.activityRule.scenario.recreate()
-            waitForEditor()
-            waitForKeyboard(false)
-            compose.onNode(hasSetTextAction()).assertIsNotFocused()
-            assertSelectionAtEnd(prefix + suffix)
-
-            compose.onNode(hasSetTextAction()).performClick()
-            waitForKeyboard(true)
-            val bounded = "a".repeat(199)
-            // The 200th UTF-16 unit would split this emoji; retain only the valid prefix.
-            compose.onNode(hasSetTextAction()).performTextReplacement(bounded + "🙂".repeat(40_000))
-            assertSelectionAtEnd(bounded)
-            compose.activityRule.scenario.recreate()
-            waitForEditor()
-            waitForKeyboard(true)
-            compose.onNode(hasSetTextAction()).assertIsFocused()
-            assertSelectionAtEnd(bounded)
-            compose.onNodeWithContentDescription("Clear search").performClick()
-            assertSelectionAtEnd("")
-            compose.onNode(hasSetTextAction()).performImeAction()
-            waitForKeyboard(false)
-        } finally { app.store.delete(id) }
-    }
-
-    @Test fun largeFontLandscapeSearchKeepsTheWholeFieldAboveTheKeyboard() {
-        val app = application()
-        val originalOrientation = compose.activity.requestedOrientation
-        val id = readySession(app.store, "Accessible search target", listOf("Search remains readable while typing."), uncertain = setOf(0))
-        var lastGeometry = "The search field has not been measured."
-        try {
-            compose.runOnUiThread { compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
-            compose.waitUntil(10_000) {
-                compose.runOnUiThread {
-                    compose.activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE &&
-                        compose.activity.window.decorView.width > compose.activity.window.decorView.height
-                }
-            }
-            val model = ViewModelProvider(compose.activity)[FocalViewModel::class.java]
-            val density = compose.activity.resources.displayMetrics.density
-            val opened = MutableStateFlow<Pair<String?, Long>>(null to 0)
-            compose.runOnUiThread {
-                compose.activity.setContent {
-                    CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 2f)) {
-                        FocalApp(model, opened)
-                    }
-                }
-            }
-            compose.waitUntil(10_000) {
-                model.library.value.loaded && model.library.value.notes.any { it.id == id }
-            }
-            compose.onNodeWithContentDescription("Search recordings").performClick()
-            val field = compose.onNode(hasSetTextAction())
-            fun wholeFieldAboveKeyboard(): Boolean {
-                val node = field.fetchSemanticsNode()
-                val full = field.getUnclippedBoundsInRoot()
-                val view = checkNotNull(node.root as? android.view.View)
-                return compose.runOnUiThread {
-                    val insets = ViewCompat.getRootWindowInsets(view)
-                    val location = IntArray(2).also(view::getLocationInWindow)
-                    val top = location[1] + full.top.value * density
-                    val bottom = location[1] + full.bottom.value * density
-                    val height = (full.bottom.value - full.top.value) * density
-                    val imeTop = view.rootView.height - (insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0)
-                    val statusBottom = insets?.getInsets(WindowInsetsCompat.Type.statusBars())?.top ?: 0
-                    lastGeometry = "field=$top..$bottom, fullHeight=$height, visibleHeight=${node.boundsInRoot.height}, IME top=$imeTop"
-                    insets?.isVisible(WindowInsetsCompat.Type.ime()) == true && height > 0 &&
-                        node.boundsInRoot.height + 1 >= height && top >= statusBottom - 1 && bottom <= imeTop + 1
-                }
-            }
-            try {
-                compose.waitUntil(5_000) { wholeFieldAboveKeyboard() }
-            } catch (error: ComposeTimeoutException) {
-                throw AssertionError("The whole search field must fit above the real keyboard: $lastGeometry", error)
-            }
-            field.assertIsFocused().performTextInput("Accessible search")
-            field.assertTextContains("Accessible search")
-            assertTrue(lastGeometry, wholeFieldAboveKeyboard())
-            field.performImeAction()
-            compose.waitUntil(5_000) {
-                compose.runOnUiThread {
-                    ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
-                        ?.isVisible(WindowInsetsCompat.Type.ime()) == false
-                }
-            }
-            field.assertIsNotFocused().assertTextContains("Accessible search")
-            compose.onNodeWithContentDescription("Browse recording dates").assertIsDisplayed()
-            compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
-                .performScrollToNode(hasText("Accessible search target"))
-            compose.onNodeWithText("Accessible search target").assertIsDisplayed()
-        } finally {
-            app.store.delete(id)
-            compose.runOnUiThread { compose.activity.requestedOrientation = originalOrientation }
-        }
-    }
-
-    @Test fun continueTranscriptionFindsAnUnpublishedTailAndPreservesManualEdits() {
-        val app = application()
-        val title = "Interrupted session with an unpublished tail"
-        val correction = "Keep this manual correction."
-        val recoveredText = "Recovered the saved tail."
-        val decoded = CopyOnWriteArrayList<Chunk>()
-        val microphoneOpens = AtomicInteger()
-        val previousInputFactory = RecordingService.inputFactoryForTests
-        val previousDecoderFactory = RecordingService.decoderFactoryForTests
-        val id = readySession(app.store, title, listOf("Original text"), uncertain = setOf(0))
-        try {
-            assertTrue("The bundled model must be ready to offer direct recovery", app.models.ready())
-            val original = ByteArray(2000 * 32) { (it % 101).toByte() }
-            app.store.audioFile(id).writeBytes(original)
-            app.store.edit(app.store.passages(id).single(), correction)
-            val saved = app.store.passages(id).single()
-            app.store.state(id, "INTERRUPTED", "Saved audio can still be transcribed.")
-            assertEquals(0, app.store.pendingCount(id))
-
-            RecordingService.inputFactoryForTests = {
-                microphoneOpens.incrementAndGet()
-                error("Recovery must not open the microphone")
-            }
-            RecordingService.decoderFactoryForTests = {
-                object : RecordingDecoder {
-                    override suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int) {
-                        decoded += chunk
-                        store.complete(chunk, listOf(Passage(noteId = chunk.noteId, chunkId = chunk.id,
-                            start = chunk.start, end = chunk.end, text = recoveredText, uncertain = false)))
-                    }
-                    override fun cancel() = Unit
-                    override fun close() = Unit
-                }
-            }
-
-            waitForTitle(title)
-            compose.onNodeWithText(title).performClick()
-            waitForSessionReady(title)
-            compose.onNodeWithText("Transcription interrupted").assertIsDisplayed()
-            capture("interrupted-unpublished-tail")
-            compose.onNodeWithText("Continue transcription").assertExists()
-            compose.onNodeWithContentDescription("Recording options").performClick()
-            compose.onNodeWithText("Remove audio").assertIsNotEnabled()
-            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-            compose.onNodeWithText("Continue transcription").performScrollTo().performClick()
-
-            compose.waitUntil(10_000) {
-                app.store.note(id)?.state == "READY" && RecordingState.live.value.noteId != id &&
-                    !SessionOperations.matchesSession(capture = false, noteId = id)
-            }
-            compose.waitUntil(10_000) { compose.onAllNodesWithText(recoveredText).fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("Continue transcription").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Recording options").performClick()
-            compose.onNodeWithText("Remove audio").assertIsEnabled()
-            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-            assertEquals(listOf(1000L to 2000L), decoded.map { it.start to it.end })
-            assertEquals(0, microphoneOpens.get())
-            assertEquals(0, app.store.pendingCount(id))
-            assertEquals(saved, app.store.passages(id).first())
-            assertArrayEquals(original, app.store.audioFile(id).readBytes())
-        } finally {
-            try {
-                if (SessionOperations.matchesSession(capture = false, noteId = id)) {
-                    app.stopService(Intent(app, RecordingService::class.java))
-                    compose.waitUntil(10_000) { !SessionOperations.matchesSession(capture = false, noteId = id) }
-                }
-            } finally {
-                RecordingService.inputFactoryForTests = previousInputFactory
-                RecordingService.decoderFactoryForTests = previousDecoderFactory
-                app.store.delete(id)
-            }
-        }
-    }
-
-    @Test fun timedPassageStartsOriginalAudioAndDockRemainsVisibleWhileScrolling() {
-        val app = application()
-        val parts = List(12) { index ->
-            "Passage ${index + 1}. Keep the first version focused on capture, review and sharing. Keep the original recording with its text."
-        }
-        // Silent PCM makes this a real player/UI wiring check without a microphone or speech model.
-        val id = readySession(app.store, "Timed playback session", parts, duration = 60_000)
-        try {
-            waitForTitle("Timed playback session")
-            compose.onNodeWithText("Timed playback session").performClick()
-            waitForSessionReady("Timed playback session")
-            compose.onNodeWithContentDescription("Play original audio").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Audio position").assertIsDisplayed()
-            val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
-            val timestamp = "Listen from ${Transcript.time(15_000)}"
-            list.performScrollToNode(hasContentDescription(timestamp))
-            // The real player keeps updating its position while playing. Advance Compose
-            // explicitly instead of asking Espresso to wait for a continuously changing UI.
-            val player = compose.runOnUiThread { ViewModelProvider(compose.activity)[FocalViewModel::class.java].player }
-            val autoAdvance = compose.mainClock.autoAdvance
-            try {
-                compose.mainClock.autoAdvance = false
-                compose.onNodeWithContentDescription(timestamp).performClick()
-                compose.waitUntil(10_000) {
-                    compose.mainClock.advanceTimeByFrame()
-                    compose.onAllNodesWithContentDescription("Pause original audio").fetchSemanticsNodes().isNotEmpty()
-                }
-                compose.waitUntil(10_000) {
-                    compose.mainClock.advanceTimeByFrame()
-                    audioPositionFraction() >= .24f
-                }
-                compose.onNodeWithContentDescription("Pause original audio").performClick()
-                compose.waitUntil(10_000) {
-                    compose.mainClock.advanceTimeByFrame()
-                    compose.onAllNodesWithContentDescription("Play original audio").fetchSemanticsNodes().isNotEmpty()
-                }
-            } finally {
-                // Restore idle even if an assertion failed before tapping Pause.
-                player.pause()
-                compose.mainClock.autoAdvance = autoAdvance
-            }
-            compose.onNodeWithContentDescription("Play original audio").assertIsDisplayed()
-            list.performScrollToNode(hasText(parts.last()))
-            compose.onNodeWithText(parts.last()).assertIsDisplayed()
-            compose.onNodeWithContentDescription("Play original audio").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Audio position").assertIsDisplayed()
-            compose.onNodeWithText("Copy text").assertIsDisplayed()
-            compose.onNodeWithText("Tap a passage to listen or edit.").assertDoesNotExist()
-            capture("session-audio-dock")
-            compose.onNodeWithContentDescription("Back to recordings").performClick()
-        } finally { app.store.delete(id) }
-    }
-
-    @Test fun languageAndAppearanceCanBeChangedWithoutLeavingTheApp() {
-        val app = application()
-        val initial = app.preferences.settings.value
-        try {
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
-            else {
-                val currentLanguage = Preferences.languages[initial.language]
-                compose.onNodeWithContentDescription("Speech language: $currentLanguage").performClick()
-                languageOption("Русский").performScrollTo().performClick()
-            }
-            compose.onNodeWithContentDescription("Settings").performClick()
-            compose.onNodeWithText("Speech language").assertDoesNotExist()
-            compose.onNodeWithText("Dark").performClick()
-            compose.onNodeWithText("Light").performClick()
-            capture("settings-brand")
-            compose.onNodeWithContentDescription("Back to recordings").performClick()
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
-            else {
-                compose.onNodeWithContentDescription("Speech language: Русский").assertIsDisplayed().performClick()
-                languageOption("English").performScrollTo().performClick()
-            }
-            compose.activityRule.scenario.recreate()
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) {
-                assertAutomaticLanguage()
-                assertEquals(initial.language, app.preferences.settings.value.language)
-            } else compose.onNodeWithContentDescription("Speech language: English").assertIsDisplayed()
-        } finally {
-            app.preferences.language(initial.language)
-            app.preferences.theme(initial.theme)
-        }
-    }
-
-    @Test fun activeSessionDraftSurvivesRotationAndSameSessionNotification() {
-        val app = application()
-        val originalLive = RecordingState.live.value
-        org.junit.Assume.assumeTrue(originalLive.noteId == null)
-        val originalText = "The original live phrase stays unchanged until saved."
-        val draft = "An unsaved live draft must survive returning to this recording."
-        val id = readySession(app.store, "Active draft regression", listOf(originalText))
-        try {
-            app.store.state(id, "PAUSED")
-            // A synthetic active session isolates navigation/draft recovery from microphone and decoder behavior.
-            RecordingState.live.value = LiveSession(noteId = id, duration = 1_000, paused = true)
-            // The live screen intentionally omits the title; await its actual loaded content.
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithContentDescription("Recording options").fetchSemanticsNodes().isNotEmpty() &&
-                    compose.onAllNodesWithContentDescription("Resume recording").fetchSemanticsNodes().isNotEmpty() &&
-                    compose.onAllNodesWithText(originalText).fetchSemanticsNodes().isNotEmpty()
-            }
-            compose.onNodeWithText("Active draft regression").assertDoesNotExist()
-            compose.onNode(hasText(originalText) and hasClickAction()).performScrollTo().performClick()
-            waitForEditor()
-            compose.onNodeWithText("Audio unavailable during recording.").assertIsDisplayed()
-            compose.onNode(hasSetTextAction()).performTextReplacement(draft)
-            compose.activityRule.scenario.recreate()
-            waitForEditor()
-            compose.onNode(hasSetTextAction()).assertTextContains(draft)
-
-            val token = System.nanoTime().toString()
-            val resumedActivity = compose.activity
-            compose.activityRule.scenario.onActivity { activity ->
-                // ActivityScenario matches lifecycle callbacks by launch Intent identity. Preserve it when
-                // onNewIntent replaces Activity.intent, but clear task-launch flags before the real delivery.
-                activity.startActivity(Intent(activity.intent).setClass(activity, MainActivity::class.java)
-                    .putExtra(RecordingService.NOTE, id).putExtra("interface-test-token", token)
-                    .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP))
-            }
-            compose.waitUntil(10_000) { compose.activity.intent.getStringExtra("interface-test-token") == token }
-            compose.waitForIdle()
-            assertSame(resumedActivity, compose.activity)
-            compose.onNode(hasSetTextAction()).assertTextContains(draft)
-            compose.onNodeWithText("Leave this recording?").assertDoesNotExist()
-
-            compose.onNodeWithContentDescription("Close editor").performScrollTo().performClick()
-            compose.onNodeWithText("Discard your changes?").assertIsDisplayed()
-            compose.onNodeWithText("Keep editing").performClick()
-            compose.onNode(hasSetTextAction()).assertTextContains(draft)
-            compose.onNodeWithContentDescription("Close editor").performScrollTo().performClick()
-            compose.onNodeWithText("Discard", substring = false).performClick()
-            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            assertEquals(originalText, app.store.passages(id).single().text)
-            compose.onNodeWithContentDescription("Resume recording").assertIsDisplayed()
-        } finally {
-            RecordingState.live.value = originalLive
-            app.store.delete(id)
-        }
-    }
-
-    @Test fun selectedLanguageIsVisibleWhenPickerOpensAtLargeFont() {
-        val app = application()
-        val originalLanguage = app.preferences.settings.value.language
-        val model = ViewModelProvider(compose.activity)[FocalViewModel::class.java]
-        try {
-            app.preferences.language("pt")
-            val density = compose.activity.resources.displayMetrics.density
-            val opened = MutableStateFlow<Pair<String?, Long>>(null to 0)
-            compose.runOnUiThread {
-                compose.activity.setContent {
-                    CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 2f)) {
-                        Box(Modifier.requiredSize(320.dp, 560.dp)) { FocalApp(model, opened) }
-                    }
-                }
-            }
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) {
-                assertAutomaticLanguage()
-                compose.onNodeWithText("Record").assertIsDisplayed().assertIsEnabled()
-                assertEquals("pt", app.preferences.settings.value.language)
-            } else {
-                compose.onNodeWithContentDescription("Speech language: Português").performClick()
-                languageOption("Português").assertIsDisplayed().assertIsSelected()
-            }
-        } finally {
-            app.preferences.language(originalLanguage)
-        }
-    }
-
-    @Test fun largeFontInSmallWindowKeepsCaptureAndSessionControlsReachable() {
-        val app = application()
-        val originalLive = RecordingState.live.value
-        org.junit.Assume.assumeTrue(originalLive.noteId == null)
-        val id = readySession(app.store, "Accessible session", listOf("Readable text with its original audio."))
-        val model = ViewModelProvider(compose.activity)[FocalViewModel::class.java]
-        val originalReady = model.modelReady.value
-        val originalPreparing = model.preparing.value
-        try {
-            // Exercise Compose's actual responsive branches without changing the device's global font settings.
-            val density = compose.activity.resources.displayMetrics.density
-            val opened = MutableStateFlow<Pair<String?, Long>>(null to 0)
-            compose.runOnUiThread {
-                compose.activity.setContent {
-                    CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 2f)) {
-                        Box(Modifier.requiredSize(320.dp, 560.dp)) { FocalApp(model, opened) }
-                    }
-                }
-            }
-            // Missing/preparing transcription must not block the independent audio capture affordance.
-            model.modelReady.value = false
-            model.preparing.value = true
-            compose.waitUntil(10_000) {
-                compose.onAllNodes(hasText("Record") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
-            }
-            if (BuildConfig.FOCAL_ULTRA_BUNDLED) assertAutomaticLanguage()
-            else {
-                val language = Preferences.languages[app.preferences.settings.value.language]
-                compose.onNodeWithContentDescription("Speech language: $language").assertIsDisplayed()
-            }
-            compose.onNodeWithText("Record").assertIsDisplayed().assertIsEnabled()
-            waitForTitle("Accessible session")
-            compose.onNodeWithText("Accessible session").performClick()
-            waitForSessionReady("Accessible session")
-            compose.onNodeWithContentDescription("Play original audio").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Audio position").assertIsDisplayed()
-            compose.onNodeWithText("Copy text").assertIsDisplayed().assertIsEnabled()
-            RecordingState.live.value = LiveSession(noteId = id, duration = 1_000)
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithContentDescription("Pause recording").fetchSemanticsNodes().isNotEmpty()
-            }
-            compose.onNodeWithContentDescription("Pause recording").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Finish recording").assertIsDisplayed()
-            RecordingState.live.value = RecordingState.live.value.copy(paused = true)
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithContentDescription("Resume recording").fetchSemanticsNodes().isNotEmpty()
-            }
-            compose.onNodeWithContentDescription("Resume recording").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Finish recording").assertIsDisplayed()
-            capture("small-window-large-font")
-        } finally {
-            model.modelReady.value = originalReady
-            model.preparing.value = originalPreparing
-            RecordingState.live.value = originalLive
-            app.store.delete(id)
-        }
-    }
-
-    @Test fun reviewAndCopyPreservesRussianEdits() {
-        val app = application()
-        val store = app.store
-        val id = readySession(store, "Sample note", listOf("Это тестовая запись."), language = "ru", uncertain = setOf(0))
-        val reviewHint = "Dots mark recognizer hints. You can check and edit any passage."
-        try {
-            waitForTitle("Sample note")
-            compose.onNodeWithText("Sample note").performClick()
-            waitForSessionReady("Sample note", "Это тестовая запись.")
-            compose.onNodeWithText(reviewHint).assertDoesNotExist()
-            reviewFilter("1 to review").performClick()
-            compose.onNodeWithText(reviewHint).assertDoesNotExist()
-            reviewFilter("Show all").assertIsSelected()
-            compose.onNode(hasText("Это тестовая запись.") and hasClickAction()).performScrollTo().performClick()
-            waitForEditor()
-            capture("review")
-            compose.onNode(hasSetTextAction()).performTextReplacement("Это исправленная запись.")
-            compose.activityRule.scenario.recreate()
-            waitForEditor()
-            compose.onNode(hasSetTextAction()).assertTextContains("Это исправленная запись.")
-            // A real storage write failure must preserve the draft and the saved original text.
-            store.writableDatabase.execSQL("PRAGMA query_only=ON")
-            try {
-                compose.onNodeWithTag("editor-save").performScrollTo().performClick()
-                compose.waitUntil(10_000) {
-                    compose.onAllNodesWithText("Couldn't save. Your changes are still here. Try again.").fetchSemanticsNodes().isNotEmpty()
-                }
-                compose.onNode(hasSetTextAction()).assertTextContains("Это исправленная запись.")
-                assertEquals("Это тестовая запись.", store.passages(id).single().text)
-            } finally { store.writableDatabase.execSQL("PRAGMA query_only=OFF") }
-            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
-            compose.waitUntil(10_000) { store.passages(id).single().reviewed }
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithText("No flagged passages.").fetchSemanticsNodes().isNotEmpty()
-            }
-            compose.onNodeWithText("No flagged passages.").assertIsDisplayed()
-            compose.onNodeWithText("All checked.").assertDoesNotExist()
-            reviewFilter("Show all").performClick()
-            waitForSessionReady("Sample note", "Это исправленная запись.")
-            compose.onNodeWithText(reviewHint).assertDoesNotExist()
-            compose.onNodeWithText("Это исправленная запись.").assertIsDisplayed()
-            compose.onNodeWithText("Copy text").performClick()
-            compose.runOnIdle {
-                assertEquals("Это исправленная запись.", app.getSystemService(ClipboardManager::class.java)
-                    .primaryClip!!.getItemAt(0).text.toString())
-            }
-        } finally { store.delete(id) }
-    }
-
-    @Test fun editorWindowSystemBarsFollowThemeWithoutLosingDraft() {
-        // The platform insets controller identifies the actual dialog window on API 30+.
-        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 30)
-        val app = application()
-        val initialTheme = app.preferences.settings.value.theme
-        val title = "Editor theme fixture"
-        val original = "Keep the saved passage."
-        val draft = "Keep the unsaved draft too."
-        val id = readySession(app.store, title, listOf(original))
-        val activityDecor = compose.activity.window.decorView
-        val field = compose.onNode(hasSetTextAction())
-        try {
-            compose.runOnIdle { app.preferences.theme("light") }
-            waitForTitle(title)
-            compose.onNodeWithText(title).performClick()
-            waitForSessionReady(title, original)
-            compose.onNode(hasText(original) and hasClickAction()).performScrollTo().performClick()
-            waitForEditor()
-            field.performTextReplacement(draft)
-            for (theme in listOf("dark", "light")) {
-                compose.runOnIdle { app.preferences.theme(theme) }
-                field.assertTextContains(draft)
-                val editorView = checkNotNull(field.fetchSemanticsNode().root as? android.view.View)
-                capture("editor-system-bars-$theme")
-                compose.runOnIdle {
-                    assertTrue("The editor must have its own window", editorView.rootView !== activityDecor)
-                    val bars = checkNotNull(ViewCompat.getWindowInsetsController(editorView))
-                    assertEquals("Editor status bar in $theme theme", theme == "light", bars.isAppearanceLightStatusBars)
-                    assertEquals("Editor navigation bar in $theme theme", theme == "light", bars.isAppearanceLightNavigationBars)
-                }
-            }
-            assertEquals(original, app.store.passages(id).single().text)
-        } finally {
-            compose.runOnUiThread { app.preferences.theme(initialTheme) }
-            app.store.delete(id)
-        }
-    }
-
-    @Test fun saveAndNextAdvancesReviewAndSaveAndCloseCopiesCommittedText() {
-        val app = application()
-        val originals = listOf("Первый фрагмент.", "Второй фрагмент.", "Третий фрагмент.")
-        val edits = listOf("Первый исправленный фрагмент.", "Второй исправленный фрагмент.")
-        val id = readySession(app.store, "Review sequence fixture", originals, language = "ru", uncertain = setOf(0, 1, 2))
-        try {
-            waitForTitle("Review sequence fixture")
-            compose.onNodeWithText("Review sequence fixture").performClick()
-            waitForSessionReady("Review sequence fixture", originals.first())
-            compose.onNode(hasText(originals.first()) and hasClickAction()).performScrollTo().performClick()
-            waitForEditor()
-            compose.onNode(hasSetTextAction()).performTextReplacement(edits.first())
-            // The editor lives in a dialog window, separate from the Activity's
-            // window. Clear the actual text-field root focus and hide its IME.
-            val editorView = checkNotNull(compose.onNode(hasSetTextAction()).fetchSemanticsNode().root as? android.view.View)
-            compose.runOnUiThread {
-                editorView.clearFocus()
-                editorView.context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
-                    .hideSoftInputFromWindow(editorView.windowToken, 0)
-            }
-            compose.onNode(hasSetTextAction()).assertIsNotFocused()
-            compose.waitForIdle()
-            compose.waitUntil(5_000) {
-                compose.runOnUiThread {
-                    ViewCompat.getRootWindowInsets(editorView)
-                        ?.isVisible(WindowInsetsCompat.Type.ime()) != true
-                }
-            }
-            val saveNext = compose.onNodeWithText("Save & next").performScrollTo().assertIsDisplayed().assertIsEnabled()
-            compose.waitForIdle()
-            val saveAction = checkNotNull(saveNext.fetchSemanticsNode().config[SemanticsActions.OnClick].action)
-            val sheet = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.PaneTitle)).fetchSemanticsNode()
-            val sheetTop = sheet.boundsInRoot.top
-            fun editableText(node: SemanticsNode): String? =
-                if (node.config.contains(SemanticsProperties.EditableText)) node.config[SemanticsProperties.EditableText].text
-                else node.children.firstNotNullOfOrNull(::editableText)
-            val autoAdvance = compose.mainClock.autoAdvance
-            try {
-                compose.mainClock.autoAdvance = false
-                // Scroll and fetch while frames advance. Dispatch only the already
-                // resolved semantic click while frozen; never synchronously await scrolling.
-                compose.runOnUiThread { org.junit.Assert.assertTrue(saveAction()) }
-                compose.waitUntil(10_000) {
-                    compose.mainClock.advanceTimeByFrame()
-                    compose.runOnUiThread {
-                        assertEquals("Save & next moved or hid the bottom sheet", sheetTop, sheet.boundsInRoot.top, 1f)
-                        editableText(sheet) == originals[1]
-                    }
-                }
-                // A new SheetState would replay its entrance after the next passage appears.
-                repeat(24) {
-                    compose.mainClock.advanceTimeByFrame()
-                    compose.runOnUiThread {
-                        assertEquals("The bottom sheet replayed its entrance after advancing review", sheetTop, sheet.boundsInRoot.top, 1f)
-                    }
-                }
-            } finally {
-                compose.mainClock.autoAdvance = autoAdvance
-            }
-            assertEquals(edits.first(), app.store.passages(id)[0].text)
-            org.junit.Assert.assertTrue(app.store.passages(id)[0].reviewed)
-            compose.onNode(hasSetTextAction()).performTextReplacement(edits[1])
-            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
-            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            val passages = app.store.passages(id)
-            assertEquals(edits[1], passages[1].text)
-            org.junit.Assert.assertTrue(passages[1].reviewed)
-            org.junit.Assert.assertFalse(passages[2].reviewed)
-            compose.onNodeWithText("Copy text").performClick()
-            compose.runOnIdle {
-                assertEquals((edits + originals.last()).joinToString("\n\n"), app.getSystemService(ClipboardManager::class.java)
-                    .primaryClip!!.getItemAt(0).text.toString())
-            }
-        } finally { app.store.delete(id) }
-    }
-
-    @Test fun backgroundSoundDecisionKeepsSourceAndCanBeRestoredAfterRecreation() {
-        val app = application()
-        val texts = listOf("Synthetic noise words.", "Keep these words.")
-        val title = "Background sound fixture"
-        val id = readySession(app.store, title, texts)
-        val originalAudio = app.store.audioFile(id).readBytes()
+        note(stageTitle, stageWords)
+        launch()
+        turn(landscape = true)
+        val row = hasText(openTitle) and hasClickAction() and !isHeading()
+        await("the open note's row", row)
+        compose.onNode(row).performClick()
+        await("the note beside the library", hasText(openWords[0]))
+        val stage = hasContentDescription("Latest note. $stageTitle.", substring = true)
+        await("the stage", stage)
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
+        // Put there on purpose: leaving touch mode puts focus on the stage by itself, which leaves the note its keys.
+        compose.onNode(row).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNode(stage).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNode(stage and isFocused()).assertIsDisplayed()
+        press(KeyEvent.KEYCODE_C, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
         val clipboard = app.getSystemService(ClipboardManager::class.java)
+        var text: String? = null
         try {
-            waitForTitle(title)
-            compose.onNodeWithText(title).performClick()
-            waitForSessionReady(title, texts.first())
-            compose.onNodeWithContentDescription("Recording options").performClick()
-            compose.onNodeWithText("Check background sound").performScrollTo().performClick()
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithText("Exclude text").fetchSemanticsNodes().isNotEmpty()
+            compose.waitUntil(TIMEOUT_MS) {
+                scenario!!.onActivity { text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() }
+                text == stageWords.joinToString("\n\n")
             }
-            assertEquals(texts, app.store.passages(id).map { it.text })
-            assertTrue(app.store.passages(id).none { it.excluded })
-            capture("background-sound-proposal")
-            compose.onNodeWithText("Exclude text").performScrollTo().performClick()
-            compose.waitUntil(10_000) { app.store.passages(id).first().excluded }
-            compose.onNodeWithText("Keep text").performScrollTo().performClick()
-            compose.waitUntil(10_000) { app.store.passages(id).last().reviewed }
-            compose.onNodeWithText("Done").performScrollTo().performClick()
-            compose.onNodeWithText("Copy text").performClick()
-            compose.runOnIdle { assertEquals(texts.last(), clipboard.primaryClip!!.getItemAt(0).text.toString()) }
-
-            compose.activityRule.scenario.recreate()
-            waitForSessionReady(title, "Excluded background sound")
-            compose.onNodeWithText("Excluded background sound").performClick()
-            waitForEditor()
-            compose.onNode(hasSetTextAction()).assertTextContains(texts.first())
-            capture("background-sound-retained-text")
-            // Merely viewing the retained text and pressing Done must not restore it.
-            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
-            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            assertTrue(app.store.passages(id).first().excluded)
-            compose.onNodeWithText("Excluded background sound").performClick()
-            waitForEditor()
-            compose.onNodeWithText("Restore text").performScrollTo().performClick()
-            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            compose.onNodeWithText("Copy text").performClick()
-            compose.runOnIdle { assertEquals(texts.joinToString("\n\n"), clipboard.primaryClip!!.getItemAt(0).text.toString()) }
-            assertEquals(texts, app.store.passages(id).map { it.originalTranscriptText })
-            assertArrayEquals(originalAudio, app.store.audioFile(id).readBytes())
-        } finally { app.store.delete(id) }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("The clipboard holds \"$text\", not the stage's note", timeout)
+        }
+        // Through the stage's pill, which confirms as a tap does; the open note's Copy did not run.
+        await("Copied on the stage", hasContentDescription("Copied") and hasAnyAncestor(stage))
+        compose.onAllNodes(hasContentDescription("Copied")).assertCountEquals(1)
     }
 
-    @Test fun textTransferBudgetAccountsForUtf8AndUtf16() {
-        org.junit.Assert.assertTrue(fitsTextTransferBudget("a".repeat(131_072)))
-        org.junit.Assert.assertFalse(fitsTextTransferBudget("a".repeat(131_073)))
-        org.junit.Assert.assertTrue(fitsTextTransferBudget("Ж".repeat(131_072)))
-        org.junit.Assert.assertFalse(fitsTextTransferBudget("€".repeat(90_000)))
-        org.junit.Assert.assertTrue(fitsTextTransferBudget("🙂".repeat(65_536)))
-    }
-
-    @Test fun oversizedCopyAndShareKeepSavedTextAndExistingClipboard() {
-        val app = application()
-        val texts = List(32) { index -> "Passage $index. " + "Synthetic sample. ".repeat(260) }
-        val id = readySession(app.store, "Large transfer fixture", texts)
+    /**
+     * Two panes and a hardware keyboard (spec 8.5): the first key after a touch leaves touch mode and puts focus where
+     * the framework chooses, by itself: the stage. A stage that gets it that way takes none of the open note's keys:
+     * beside a stage holding another note Space plays and pauses the note opened from its row; beside a live stage
+     * (the recording holds the audio, so nothing plays) Space does not expand the scene; and Ctrl+C copies the open
+     * note. Skipped on a display that does not change panes when turned (run it with
+     * `adb shell wm size 1600x2560`).
+     */
+    @Test fun keysAfterATouchGoToTheOpenNoteBesideAStage() {
+        assumeTurnChangesPanes()
         val clipboard = app.getSystemService(ClipboardManager::class.java)
-        try {
-            waitForTitle("Large transfer fixture")
-            compose.onNodeWithText("Large transfer fixture").performClick()
-            waitForSessionReady("Large transfer fixture")
-            compose.runOnIdle { clipboard.setPrimaryClip(ClipData.newPlainText("Test", "Existing clipboard")) }
-            compose.onNodeWithText("Copy text").performClick()
-            compose.onNodeWithText("This transcript is too long to copy at once. Copy a smaller selection from the passage editor.").assertIsDisplayed()
-            compose.runOnIdle { assertEquals("Existing clipboard", clipboard.primaryClip!!.getItemAt(0).text.toString()) }
-            compose.onNodeWithContentDescription("Recording options").performClick()
-            compose.onNodeWithText("Share text").performClick()
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithText("This transcript is too long to share at once. Copy a smaller selection from the passage editor.")
-                    .fetchSemanticsNodes().isNotEmpty()
+        for (live in listOf(false, true)) {
+            InstrumentationRegistry.getInstrumentation().setInTouchMode(true)
+            val openTitle = "Touch keys fixture ${if (live) "live" else "note"} $tag"
+            val openWords = listOf("The open note's synthetic paragraph, which Space plays.")
+            // Older than the stage's note, so the stage holds that one.
+            app.store.insertNoteForTests(openWords, durationMs = LONG_AUDIO_SECONDS * 1_000L, title = openTitle,
+                created = System.currentTimeMillis() - 60_000).also {
+                created += it
+                app.store.audioFile(it).writeBytes(ByteArray(LONG_AUDIO_SECONDS * BYTES_PER_SECOND))
             }
-            compose.runOnIdle { assertEquals("Existing clipboard", clipboard.primaryClip!!.getItemAt(0).text.toString()) }
-            assertEquals(texts, app.store.passages(id).map { it.text })
-        } finally { app.store.delete(id) }
-    }
-
-    @Test fun renamedTitleDraftAndKeyboardSurviveRecreation() {
-        val app = application()
-        val originalTitle = "Rename recreation fixture"
-        val originalText = "The recorded passage stays unchanged."
-        val draft = "a".repeat(118) + "🙂"
-        val id = readySession(app.store, originalTitle, listOf(originalText))
-        fun waitForDialogKeyboard() {
-            val field = compose.onNode(hasSetTextAction())
-            val dialogView = checkNotNull(field.fetchSemanticsNode().root as? android.view.View)
-            compose.waitUntil(5_000) {
-                compose.runOnUiThread {
-                    ViewCompat.getRootWindowInsets(dialogView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
-                }
-            }
-            field.assertIsFocused()
-        }
-        try {
-            waitForTitle(originalTitle)
-            compose.onNodeWithText(originalTitle).performClick()
-            waitForSessionReady(originalTitle, originalText)
-            compose.onNodeWithContentDescription("Recording options").performClick()
-            compose.onNodeWithText("Rename").performClick()
-            waitForEditor()
-            waitForDialogKeyboard()
-            compose.onNode(hasSetTextAction()).performTextReplacement(draft)
-            assertEquals(originalTitle, app.store.note(id)?.title)
-            compose.activityRule.scenario.recreate()
-            waitForEditor()
-            waitForDialogKeyboard()
-            compose.onNode(hasSetTextAction()).assertTextContains(draft)
-            compose.onNodeWithText("Save").assertIsDisplayed().assertIsEnabled().performClick()
-            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            waitForSessionReady(draft, originalText)
-            assertEquals(draft, app.store.note(id)?.title)
-            assertEquals(originalText, app.store.passages(id).single().text)
-        } finally { app.store.delete(id) }
-    }
-
-    @Test fun oversizedEditorInputKeepsTheValidDraftThroughRotation() {
-        val app = application()
-        val id = readySession(app.store, "Bounded draft fixture", listOf("Saved original."))
-        val draft = "A valid manual edit stays here."
-        fun assertWarningVisible(stage: String) {
-            val message = "This text is too long for one passage. Paste a smaller selection."
+            if (live) {
+                val id = app.store.create().also { created += it }
+                app.store.state(id, NoteState.PAUSED)
+                RecordingState.live.value = LiveSession(noteId = id, paused = true, duration = 73_000)
+            } else note("Stage beside it $tag", listOf("The stage's own synthetic paragraph."))
+            launch()
+            turn(landscape = true)
+            val row = hasText(openTitle) and hasClickAction() and !isHeading()
+            await("the open note's row", row)
+            compose.onNode(row).performClick()
+            await("the note beside the library", hasText(openWords[0]))
+            // A recording holds the audio: the open note cannot play, and Space while reading does nothing then.
+            if (!live) await("Play", hasContentDescription("Play") and hasClickAction())
+            // Out of touch mode as the first key leaves it: the framework puts focus on the stage by itself.
+            InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
+            var focusedBefore = emptyList<String>()
+            frames { focusedBefore = focusedNodes() }
+            press(KeyEvent.KEYCODE_SPACE)
+            if (!live) poll("the open note playing") { playing() }
+            press(KeyEvent.KEYCODE_SPACE)
+            if (!live) poll("the open note paused") { !playing() }
+            // Without syncing with Compose, which is never idle while the player strip moves.
+            frames { compose.onAllNodes(hasContentDescription("Collapse. Recording continues")).assertCountEquals(0) }
+            press(KeyEvent.KEYCODE_C, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+            var text: String? = null
             try {
-                // Sheet and IME restoration can outlast the first editor node.
-                compose.waitUntil(5_000) {
-                    compose.onAllNodesWithText(message).fetchSemanticsNodes().isNotEmpty() &&
-                        compose.onNodeWithText(message).isDisplayed()
+                // Advancing Compose's clock, which runs the dock's copy.
+                compose.waitUntil(TIMEOUT_MS) {
+                    scenario!!.onActivity { text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() }
+                    text == openWords[0]
                 }
-                compose.onNodeWithText(message).assertIsDisplayed()
-            } catch (error: ComposeTimeoutException) {
-                throw AssertionError("The rejected-input warning must be visible $stage", error)
-            } catch (error: AssertionError) {
-                throw AssertionError("The rejected-input warning must be visible $stage", error)
+            } catch (missing: ComposeTimeoutException) {
+                var focusedAfter = emptyList<String>()
+                var copied = 0
+                frames {
+                    focusedAfter = focusedNodes()
+                    copied = compose.onAllNodes(hasContentDescription("Copied")).fetchSemanticsNodes().size
+                }
+                throw AssertionError("The clipboard holds \"$text\", not the open note (live stage: $live; focused before the keys " +
+                    "$focusedBefore, after $focusedAfter; Copied shown $copied)", missing)
             }
+            scenario?.close()
+            scenario = null
+            RecordingState.live.value = LiveSession()
         }
-        try {
-            waitForTitle("Bounded draft fixture")
-            compose.onNodeWithText("Bounded draft fixture").performClick()
-            waitForSessionReady("Bounded draft fixture", "Saved original.")
-            compose.onNode(hasText("Saved original.") and hasClickAction()).performScrollTo().performClick()
-            waitForEditor()
-            compose.onNode(hasSetTextAction()).performTextReplacement(draft)
-            // UTF-16 length fits, but UTF-8 bytes exceed the shared saved-passage budget.
-            compose.onNode(hasSetTextAction()).performTextReplacement("🙂".repeat(40_000))
-            assertWarningVisible("before rotation")
-            compose.onNode(hasSetTextAction()).assertTextContains(draft)
-            capture("oversized-editor-before-recreation")
-            compose.activityRule.scenario.recreate()
-            waitForEditor()
-            compose.onNode(hasSetTextAction()).assertTextContains(draft)
-            assertWarningVisible("after rotation")
-            capture("oversized-editor-after-recreation")
-            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
-            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            assertEquals(draft, app.store.passages(id).single().text)
-        } finally { app.store.delete(id) }
     }
 
-    @Test fun rejectedEditorInputFeedbackClearsOnlyAfterAChangedValidDraft() {
-        val app = application()
-        val original = "Saved original."
-        val id = readySession(app.store, "Rejected input feedback fixture", listOf(original))
-        val draft = "A valid manual edit stays here."
-        val changedDraft = "A changed valid manual edit can be saved."
-        val warning = "This text is too long for one passage. Paste a smaller selection."
-        try {
-            waitForTitle("Rejected input feedback fixture")
-            compose.onNodeWithText("Rejected input feedback fixture").performClick()
-            waitForSessionReady("Rejected input feedback fixture", original)
-            compose.onNode(hasText(original) and hasClickAction()).performScrollTo().performClick()
-            waitForEditor()
-            compose.onNode(hasSetTextAction()).performTextReplacement(draft)
-            compose.onNode(hasSetTextAction()).performTextReplacement("🙂".repeat(40_000))
-            compose.waitUntil(5_000) {
-                compose.onAllNodesWithText(warning).fetchSemanticsNodes().isNotEmpty() &&
-                    compose.onNodeWithText(warning).isDisplayed()
-            }
-            compose.onNodeWithText(warning).assertIsDisplayed()
-            compose.onNode(hasSetTextAction()).assertTextContains(draft)
-            // The input connection may repeat the accepted text after rejecting a paste.
-            compose.onNode(hasSetTextAction()).performTextReplacement(draft)
-            compose.onNodeWithText(warning).assertIsDisplayed()
-            compose.onNode(hasSetTextAction()).assertTextContains(draft)
-            assertEquals(original, app.store.passages(id).single().text)
-            compose.onNode(hasSetTextAction()).performTextReplacement(changedDraft)
-            compose.onNodeWithText(warning).assertDoesNotExist()
-            compose.onNode(hasSetTextAction()).assertTextContains(changedDraft)
-            compose.onNodeWithTag("editor-save").performScrollTo().performClick()
-            compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-            assertEquals(changedDraft, app.store.passages(id).single().text)
-        } finally { app.store.delete(id) }
+    /** What has focus, by its description or text, for a failure's message. */
+    private fun focusedNodes(): List<String> = compose.onAllNodes(isFocused(), useUnmergedTree = true).fetchSemanticsNodes().map { node ->
+        node.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
+            ?: node.config.getOrNull(SemanticsProperties.Text)?.joinToString() ?: "a node without a label"
     }
 
-    @Test fun largePassagePartsPreserveSurrogatesAndLineEndings() {
-        val size = LARGE_PASSAGE_PART_CHARS
-        val texts = listOf(
-            "a".repeat(size - 1) + "🙂",
-            "a".repeat(size - 1) + "\r\nb",
-            "a".repeat(size - 1) + "🙂\r\n" + "б".repeat(size) + "\r\n🙂tail",
+    /**
+     * Two panes (spec 4.23.6, 5.14): Ctrl+, opens settings with a note open beside the library, as it does from the
+     * library alone, and Back returns to the note. Skipped on a display that does not change panes when turned (run it
+     * with `adb shell wm size 1600x2560`).
+     */
+    @Test fun ctrlCommaOpensSettingsBesideAnOpenNote() {
+        assumeTurnChangesPanes()
+        val title = "Two-pane settings key fixture $tag"
+        val words = listOf("A synthetic paragraph open beside the library.")
+        note(title, words)
+        launch()
+        turn(landscape = true)
+        val listed = hasContentDescription("Latest note. $title.", substring = true) or (hasText(title) and hasClickAction() and !isHeading())
+        await("the note in the library", listed)
+        compose.onAllNodes(listed)[0].performClick()
+        await("the note beside the library", hasText(words[0]))
+        press(KeyEvent.KEYCODE_COMMA, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val heading = hasText("Settings") and isHeading()
+        await("the settings page", heading)
+        back()
+        awaitGone("the settings page", heading)
+        compose.onNode(hasText(words[0])).assertIsDisplayed()
+    }
+
+    /**
+     * A foldable (spec 5.14): with a separating vertical hinge across a two-pane window, the library's pane ends at the
+     * hinge and the note, its dock with it, starts after it; a horizontal fold (tabletop) leaves the panes as the
+     * window's size has them. The hinge is simulated (androidx.window's testing publisher). Skipped on a display that
+     * does not change panes when turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun aSeparatingHingeSplitsTheTwoPanesAtItself() {
+        assumeTurnChangesPanes()
+        val title = "Hinge fixture $tag"
+        val words = listOf("A synthetic paragraph beside a hinge.")
+        note(title, words)
+        launch()
+        turn(landscape = true)
+        val listed = hasContentDescription("Latest note. $title.", substring = true) or (hasText(title) and hasClickAction() and !isHeading())
+        await("the note in the library", listed)
+        compose.onAllNodes(listed)[0].performClick()
+        val heading = hasText(title) and isHeading()
+        await("the note beside the library", heading)
+        val copy = hasContentDescription("Copy") and hasClickAction()
+        await("the note's Copy", copy)
+        // No fold: the list pane is the window's first 412 dp, the note after it.
+        val unfolded = compose.onNode(heading).getBoundsInRoot().left
+        assertTrue("The note starts after 412 dp", unfolded >= 412.dp)
+        assertTrue("The library ends by 412 dp", compose.onAllNodes(listed)[0].getBoundsInRoot().right <= 412.dp)
+        // A 32 dp hinge across the window's middle, as the activity's window would report it.
+        var window = Rect()
+        var hinge: FoldingFeature? = null
+        scenario!!.onActivity { activity ->
+            val size = (HINGE_DP * activity.resources.displayMetrics.density).toInt()
+            hinge = FoldingFeature(activity, size = size, state = FoldingFeature.State.FLAT, orientation = FoldingFeature.Orientation.VERTICAL)
+            window = Rect(0, 0, activity.window.decorView.width, activity.window.decorView.height)
+        }
+        val feature = hinge!!
+        assertTrue("A hinge with a width separates", feature.isSeparating)
+        val density = app.resources.displayMetrics.density
+        val hingeStart = (feature.bounds.left / density).dp
+        val hingeEnd = (feature.bounds.right / density).dp
+        assumeTrue("Both sides of the hinge leave 360 dp", hingeStart >= 360.dp && (window.width() / density).dp - hingeEnd >= 360.dp)
+        val split = TestWindowLayoutInfo(listOf(feature))
+        compose.waitUntil(TIMEOUT_MS) {
+            // The publisher keeps nothing for a collector that starts later: publish until the layout follows.
+            folds.overrideWindowLayoutInfo(split)
+            compose.onNode(heading).getBoundsInRoot().left >= hingeEnd
+        }
+        val library = compose.onAllNodes(listed)[0].getBoundsInRoot()
+        assertTrue("The library ends before the hinge (${library.right} > $hingeStart)", library.right <= hingeStart)
+        assertTrue("The library widens up to the hinge (${library.right})", library.right > 412.dp || hingeStart <= 412.dp + 24.dp)
+        assertTrue("The note's dock starts after the hinge", compose.onNode(copy).getBoundsInRoot().left >= hingeEnd)
+        // A fold across the window (tabletop) changes nothing: the panes are as the window's size has them.
+        val tabletop = TestWindowLayoutInfo(
+            listOf(FoldingFeature(window, state = FoldingFeature.State.HALF_OPENED, orientation = FoldingFeature.Orientation.HORIZONTAL)),
         )
-        texts.forEach { text ->
-            val parts = (0 until passageTextPartCount(text)).map { passageTextPart(text, it) }
-            assertEquals(text, parts.joinToString(""))
-            parts.forEach { part ->
-                org.junit.Assert.assertTrue(part.isNotEmpty())
-                org.junit.Assert.assertFalse(part.first().isLowSurrogate())
-                org.junit.Assert.assertFalse(part.last().isHighSurrogate())
+        compose.waitUntil(TIMEOUT_MS) {
+            folds.overrideWindowLayoutInfo(tabletop)
+            compose.onNode(heading).getBoundsInRoot().left < hingeStart
+        }
+        assertEquals(unfolded.value, compose.onNode(heading).getBoundsInRoot().left.value, 0.5f)
+    }
+
+    /** A tablet turned with library search open (spec 5.2, 5.14): search stays open, its query and results with it. */
+    @Test fun librarySearchStaysOpenAcrossATurnBetweenPanes() {
+        assumeTurnChangesPanes()
+        val title = "Panes search fixture $tag"
+        val needle = "kingfisher$tag"
+        note(title, listOf("The $needle waits on the reed."))
+        launch()
+        turn(landscape = false)
+        await("Search", hasContentDescription("Search notes") and hasClickAction())
+        compose.onNode(hasContentDescription("Search notes") and hasClickAction()).performClick()
+        await("the search field", hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextInput(needle)
+        val result = hasText(title, substring = true) and hasClickAction()
+        await("the result", result)
+        turn(landscape = true)
+        await("the query in two panes", hasSetTextAction() and hasText(needle))
+        await("the result in two panes", result)
+        turn(landscape = false)
+        await("the query in one pane", hasSetTextAction() and hasText(needle))
+        await("the result in one pane", result)
+        back()
+        awaitGone("the search field after Back", hasSetTextAction())
+    }
+
+    @Test fun anOpenSceneStaysOpenAcrossARotation() {
+        val id = app.store.create().also { created += it }
+        app.store.state(id, NoteState.PAUSED)
+        // Synthetic presentation state (paused, so nothing draws every frame); the service is tested on its own.
+        RecordingState.live.value = LiveSession(noteId = id, paused = true, duration = 73_000)
+        launch()
+        val stage = hasContentDescription("Paused, 1 minute 13 seconds.", substring = true) and hasClickAction()
+        await("the live stage", stage)
+        compose.onNode(stage).performClick()
+        val chevron = hasContentDescription("Collapse. Recording continues")
+        await("the scene", chevron)
+        turn(landscape = true)
+        // The scene is still open, now in two columns with Resume and Finish in the rail (spec 5.14).
+        await("the scene after the turn", chevron)
+        compose.onNode(hasContentDescription("Resume") and hasClickAction()).assertIsDisplayed()
+        compose.onNode(hasContentDescription("Finish") and hasClickAction()).assertIsDisplayed()
+        turn(landscape = false)
+        await("the scene turned back", chevron)
+    }
+
+    /** What TalkBack, Switch Access and Voice Access get: Android's accessibility tree, not Compose's semantics. */
+    @Test fun accessibilityServicesSeeTheStageAndItsActions() {
+        note("Accessibility fixture $tag", listOf("A note, so the stage and the dock carry their actions."))
+        launch()
+        await("the stage", hasContentDescription("Latest note.", substring = true))
+        // The tree fills in once the automation's accessibility connection reaches the window.
+        var nodes = emptyList<AccessibilityNodeInfo>()
+        fun described(prefix: String) = nodes.filter { it.contentDescription?.startsWith(prefix) == true }
+        try {
+            compose.waitUntil(TIMEOUT_MS) { nodes = platformNodes(); listOf("Latest note.", "Copy note", "Record").all { described(it).isNotEmpty() } }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("Not in the accessibility tree: ${nodes.mapNotNull { it.contentDescription ?: it.text }}", timeout)
+        }
+        // Compose gives a merged node's description its own child, so TalkBack focuses the actionable node above it.
+        fun actionable(label: String): AccessibilityNodeInfo = described(label).first().let { node ->
+            generateSequence(node) { it.parent }.take(PARENT_STEPS).firstOrNull { it.isClickable || it.actionList.any { a -> a.id == AccessibilityNodeInfo.ACTION_CLICK } } ?: node
+        }
+        fun AccessibilityNodeInfo.describe() =
+            "$contentDescription visible=$isVisibleToUser bounds=${android.graphics.Rect().also(::getBoundsInScreen)} " +
+                "actions=${actionList.map { it.label ?: it.id.toString() }}"
+        for (label in listOf("Latest note.", "Copy note", "Record")) {
+            val node = actionable(label)
+            assertTrue("Visible: ${node.describe()}", node.isVisibleToUser)
+            // A note with no words has nothing to copy: its Copy is disabled instead.
+            assertTrue("Clickable: ${node.describe()}", !node.isEnabled || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })
+        }
+        for (label in listOf("Latest note.", "Record")) {
+            val node = actionable(label)
+            assertTrue("Open settings: ${node.describe()}", node.actionList.any { it.label == "Open settings" })
+        }
+        assertTrue("The stage offers the row menu", actionable("Latest note.").actionList.any { it.label == "Delete" })
+    }
+
+    private fun platformNodes(): List<AccessibilityNodeInfo> {
+        val root = InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow ?: return emptyList()
+        val all = mutableListOf<AccessibilityNodeInfo>()
+        fun walk(node: AccessibilityNodeInfo) {
+            all += node
+            for (i in 0 until node.childCount) node.getChild(i)?.let(::walk)
+        }
+        walk(root)
+        return all
+    }
+
+    /**
+     * Spec 5.4 "Model couldn't load": once the speech work killed the process or failed to load twice (the engine
+     * guard), a waiting note says why (memory only when confirmed) and offers Try again, which forgets the failures and
+     * transcribes it.
+     */
+    @Test fun aStoppedSpeechEngineOffersTryAgainOnAWaitingNote() {
+        val id = app.store.create().also { created += it }
+        // A recording a process death left waiting: saved near-silence (one step of noise, so it is kept), no text yet.
+        app.store.audioFile(id).writeBytes(ByteArray(2 * BYTES_PER_SECOND) { if (it % 4 == 2) 1 else 0 })
+        app.store.duration(id, 2_000)
+        app.store.state(id, NoteState.INTERRUPTED)
+        repeat(EngineGuard.MAX_DEATHS) { app.engineGuard.failed(EngineStage.RECOGNIZER) }
+        // Silence needs no decode; this one only keeps the real recognizer from loading.
+        RecordingService.decoderFactoryForTests = {
+            object : RecordingDecoder {
+                override suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int) = error("Silence is never decoded")
+                override fun cancel() = Unit
+                override fun close() = Unit
             }
-            parts.zipWithNext().forEach { (left, right) ->
-                org.junit.Assert.assertFalse(left.endsWith("\r") && right.startsWith("\n"))
+        }
+        try {
+            launch(Intent(app, MainActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra(RecordingService.NOTE, id))
+            // Failed loads are not a confirmed out-of-memory: the neutral sentence, with the audio kept.
+            val reason = hasText("Transcription stopped after repeated failures. Your audio is saved.")
+            await("the reason", reason)
+            val tryAgain = hasContentDescription("Try again") and hasClickAction()
+            compose.onNode(tryAgain).assertIsDisplayed()
+            compose.onNode(tryAgain).performClick()
+            // Try again reaches the service, which forgets the failures before it transcribes.
+            compose.waitUntil(TIMEOUT_MS) { app.engineGuard.allows() }
+            await("the transcribed note", hasText("No speech was recognized."))
+            awaitGone("the reason", reason)
+            compose.waitUntil(TIMEOUT_MS) {
+                app.store.note(id)?.state == NoteState.READY && !SessionOperations.matchesSession(false, id) &&
+                    RecordingState.live.value.noteId == null
             }
+        } finally {
+            app.engineGuard.clearForTests()
+            RecordingService.decoderFactoryForTests = null
+            ServiceNotifications.cancelReady(app, id)
         }
     }
 
-    @Test fun largeLegacyPassageUsesReadOnlyPagesAndSurvivesRotation() {
-        val app = application()
-        val id = readySession(app.store, "Large legacy fixture", listOf("Initial text."))
-        val legacy = "Legacy start🙂\r\n" + "a".repeat(2_100_000) + "\r\nLegacy end🙂"
+    /**
+     * A model that could not be prepared leaves a waiting note that says why and offers Try again: what to free when
+     * storage ran short, a neutral sentence when the copy failed otherwise. Try again prepares the model again (copied
+     * from the APK unless it is installed already) and transcribes the note, which keeps its audio throughout. A damaged
+     * copy in the APK says to reinstall Focal and offers no Try again, which could not mend it.
+     */
+    @Test fun aModelThatCouldNotBePreparedSaysWhyAndTryAgainTranscribes() {
+        assumeTrue("The model is bundled", runBlocking { app.models.awaitFiles() } != null)
+        RecordingService.decoderFactoryForTests = {
+            object : RecordingDecoder {
+                override suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int) = error("Silence is never decoded")
+                override fun cancel() = Unit
+                override fun close() = Unit
+            }
+        }
+        val cases = listOf(
+            ModelStatus.Failed("Free up space to prepare the speech model.", failure = ModelFailure.STORAGE, shortBytes = 850_000_000) to
+                "Free up about 850 MB to prepare the speech model. Your audio is saved.",
+            ModelStatus.Failed("Could not prepare private storage for the speech model.", failure = ModelFailure.INSTALL) to
+                "The speech model couldn’t be prepared. Your audio is saved.",
+        )
         try {
-            val passage = app.store.passages(id).single()
-            app.store.writableDatabase.execSQL("UPDATE passages SET text=? WHERE id=?", arrayOf(legacy, passage.id))
-            app.store.rename(id, "Large legacy fixture")
-            waitForTitle("Large legacy fixture")
-            compose.onNodeWithText("Large legacy fixture").performClick()
-            waitForSessionReady("Large legacy fixture")
-            compose.onNodeWithText("Open full passage").performScrollTo().performClick()
-            compose.onNodeWithText("Saved passage").assertIsDisplayed()
-            compose.onNode(hasSetTextAction()).assertDoesNotExist()
-            val count = passageTextPartCount(legacy)
-            compose.onNodeWithText("Part 1 of $count").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Next text part").performScrollTo().performClick()
-            compose.onNodeWithText("Part 2 of $count").assertIsDisplayed()
-            // Only the page index and small scroll state belong in saved instance state.
-            compose.activityRule.scenario.recreate()
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("Part 2 of $count").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNode(hasSetTextAction()).assertDoesNotExist()
-            compose.onNodeWithContentDescription("Previous text part").performScrollTo().performClick()
-            compose.onNodeWithText("Part 1 of $count").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Close editor").performScrollTo().performClick()
-            compose.onNodeWithText("Discard your changes?").assertDoesNotExist()
-            assertEquals(legacy, app.store.passages(id).single().text)
-        } finally { app.store.delete(id) }
+            for ((failure, sentence) in cases) {
+                val id = app.store.create().also { created += it }
+                app.store.audioFile(id).writeBytes(ByteArray(2 * BYTES_PER_SECOND) { if (it % 4 == 2) 1 else 0 })
+                app.store.duration(id, 2_000)
+                app.store.state(id, NoteState.INTERRUPTED, WaitCause.encode(failure.waitCause()))
+                launch(Intent(app, MainActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra(RecordingService.NOTE, id))
+                // The foreground start checks a failed install again by itself; this one fails after that check.
+                runBlocking { app.models.awaitFiles() }
+                app.models.settleForTests(failure)
+                val reason = hasText(sentence)
+                await("the reason", reason)
+                val tryAgain = hasContentDescription("Try again") and hasClickAction()
+                compose.onNode(tryAgain).assertIsDisplayed()
+                compose.onNode(tryAgain).performClick()
+                await("the transcribed note", hasText("No speech was recognized."))
+                awaitGone("the reason", reason)
+                compose.waitUntil(TIMEOUT_MS) {
+                    app.store.note(id)?.state == NoteState.READY && app.store.audioFile(id).length() == 2L * BYTES_PER_SECOND &&
+                        !SessionOperations.matchesSession(false, id) && RecordingState.live.value.noteId == null
+                }
+                assertTrue(app.models.status.value is ModelStatus.Ready)
+                scenario?.close()
+                scenario = null
+                ServiceNotifications.cancelReady(app, id)
+            }
+            val damaged = ModelStatus.Failed("The bundled speech model is damaged. Reinstall Focal.", permanent = true, failure = ModelFailure.DAMAGED)
+            val id = app.store.create().also { created += it }
+            app.store.audioFile(id).writeBytes(ByteArray(2 * BYTES_PER_SECOND) { if (it % 4 == 2) 1 else 0 })
+            app.store.duration(id, 2_000)
+            app.store.state(id, NoteState.INTERRUPTED, WaitCause.encode(damaged.waitCause()))
+            launch(Intent(app, MainActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra(RecordingService.NOTE, id))
+            runBlocking { app.models.awaitFiles() }
+            app.models.settleForTests(damaged)
+            await("the reason", hasText("The speech model is damaged: reinstall Focal. Your audio is saved."))
+            compose.onNode(hasContentDescription("Try again") and hasClickAction()).assertDoesNotExist()
+            assertTrue("Its audio is kept", app.store.audioFile(id).length() == 2L * BYTES_PER_SECOND)
+        } finally {
+            RecordingService.decoderFactoryForTests = null
+            if (app.models.status.value is ModelStatus.Failed) app.models.retry()
+        }
+    }
+
+    @Test fun aNotificationOpensItsNote() {
+        val words = listOf("A synthetic paragraph a notification opens.")
+        val id = note("Notification fixture $tag", words)
+        launch(Intent(app, MainActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra(RecordingService.NOTE, id))
+        await("the note", hasText(words[0]))
+        assertNotNull(app.store.note(id))
+    }
+
+    private companion object {
+        const val TIMEOUT_MS = 10_000L
+        const val SETTLE_MS = 1_000L
+        const val BYTES_PER_SECOND = 32_000
+        const val LONG_AUDIO_SECONDS = 30
+        const val POLL_MS = 50L
+        const val HELD_MS = 500L
+        const val REVISED = "The paragraph after a synthetic edit."
+        const val DRAFT = "The paragraph after a synthetic edit, typed on."
+        const val PARENT_STEPS = 3
+        /** The simulated hinge's width. */
+        const val HINGE_DP = 32
     }
 }

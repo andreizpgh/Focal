@@ -1,0 +1,6 @@
+# Focal's own code, compiled ahead of time from the first launch: the library's first frame, the recording surface
+# and its morph, the note page, search and the page transforms all run app code that would otherwise start
+# interpreted (the libraries ship their own profiles, which the build merges with this one). Hand-written and broad
+# on purpose; a profile generated on a phone (Macrobenchmark) would narrow it to the paths users take.
+HSPLapp/focal/**;->**(**)**
+Lapp/focal/**;

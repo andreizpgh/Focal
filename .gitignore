@@ -20,13 +20,24 @@ service-account*.json
 *.apk
 *.aab
 *.pcm
+# Verified speech model and runtime from scripts/fetch-model.py. Weights never enter Git.
+/models/parakeet-ultra/
+/libs/
+*.onnx
+*.aar
+*.bin
+*.gguf
+*.safetensors
+*.tflite
+*.pt
+*.pth
+*.ckpt
+*.partial
+# Whisper-era fetch scripts left these in older checkouts; the build refuses to package them.
+app/src/main/assets/model-provenance.json
 *.db
 *.db-shm
 *.db-wal
-models/*.bin
-app/src/main/assets/*.bin
-app/src/main/assets/*.partial
-app/src/main/assets/model-provenance.json
 captures/
 .codex-attachments/
 .DS_Store

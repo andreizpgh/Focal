@@ -1,2 +1,1 @@
-# UI explorations document design decisions and are not Android app sources.
-design/explorations/** linguist-documentation
+app/src/main/cpp/third_party/** linguist-vendored

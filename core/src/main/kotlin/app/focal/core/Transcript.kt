@@ -1,50 +1,10 @@
 package app.focal.core
 
 import java.text.Normalizer
-import kotlin.math.exp
-import kotlin.math.ln
 
 object Transcript {
     /** Absolute times in the original recording. Reviewed corrections are trusted by the caller. */
     data class Segment(val start: Long, val end: Long, val text: String, val uncertain: Boolean = false)
-
-    /** A review cue, not a calibrated probability of correctness. */
-    fun needsReview(probabilities: List<Float>, noSpeech: Float): Boolean {
-        if (probabilities.isEmpty() || !noSpeech.isFinite() || noSpeech !in 0f..1f ||
-            probabilities.any { !it.isFinite() || it !in 0f..1f }) return true
-        val mean = exp(probabilities.map { ln(it.coerceIn(0.0001f, 1f).toDouble()) }.average())
-        return mean < 0.62 || probabilities.count { it < 0.35f } >= 2 || noSpeech > 0.45
-    }
-
-    /** Lexical match only. Audio-boundary decisions belong in [reconcileBoundary]. */
-    fun removeOverlap(previous: String, next: String): String {
-        return dropWords(next, matchingPrefixWords(previous, next, minimum = 2))
-    }
-
-    /** A prompt contains whole words from a contiguous trusted tail, never overlapped audio. */
-    fun trustedContext(previous: List<Segment>, before: Long, maxChars: Int = 240): String {
-        require(maxChars >= 0)
-        val tail = ArrayDeque<String>()
-        var remaining = maxChars
-        var cursor = before
-        for (segment in previous.asReversed()) {
-            if (segment.start >= before) continue
-            // Manual text stays intact, but a NUL cannot enter Whisper's C-string
-            // prompt. Stop the contiguous tail rather than rewriting the correction.
-            if (segment.uncertain || segment.text.isBlank() || '\u0000' in segment.text) break
-            // Segment timestamps do not locate individual words. Do not prompt with a
-            // partly overlapping segment, or invent a textual cut within it.
-            if (segment.end > before) continue
-            if (segment.end > cursor || cursor - segment.end >= 5000) break
-            val text = wholeWordTail(segment.text, remaining)
-            if (text.isBlank()) break
-            tail.addFirst(text)
-            remaining -= text.length + 1
-            cursor = segment.start
-            if (remaining <= 0 || text.length < segment.text.trim().length) break
-        }
-        return tail.joinToString(" ")
-    }
 
     /**
      * Only text timed wholly inside already decoded audio may be removed. A segment
@@ -126,9 +86,6 @@ object Transcript {
         return head
     }
 
-    private fun matchingPrefixWords(previous: String, next: String, minimum: Int): Int =
-        matchingPrefixWords(trailingWordKeys(listOf(previous)), leadingWordKeys(listOf(next)), minimum)
-
     private fun matchingPrefixWords(left: List<String?>, right: List<String?>, minimum: Int): Int {
         for (count in minOf(left.size, right.size) downTo minimum) {
             val prefix = right.take(count)
@@ -141,16 +98,6 @@ object Transcript {
         if (count == 0) return text.trim()
         val last = WORD.findAll(text).take(count).lastOrNull() ?: return text.trim()
         return text.substring(last.range.last + 1).trimStart()
-    }
-
-    private fun wholeWordTail(text: String, limit: Int): String {
-        if (limit <= 0) return ""
-        val trimmed = text.trim()
-        var start = (trimmed.length - limit).coerceAtLeast(0)
-        if (start > 0 && !trimmed[start - 1].isWhitespace()) {
-            while (start < trimmed.length && !trimmed[start].isWhitespace()) start++
-        }
-        return trimmed.substring(start).trimStart()
     }
 
     /** Keep a UTF-16 prefix without cutting a surrogate pair. */

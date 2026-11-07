@@ -8,13 +8,13 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
+import androidx.activity.ComponentActivity
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.Note
 import app.focal.data.NoteStore
-import app.focal.data.Passage
 import app.focal.speech.PlaybackState
 import app.focal.speech.SpeechPlayer
 import app.focal.recording.SessionOperations
@@ -43,17 +43,17 @@ class SpeechPlayerTest {
     private lateinit var store: NoteStore
     private lateinit var player: SpeechPlayer
     private lateinit var owner: CoroutineScope
-    private lateinit var activity: ActivityScenario<MainActivity>
+    private lateinit var activity: ActivityScenario<ComponentActivity>
     private val created = mutableListOf<String>()
     private val errors = CopyOnWriteArrayList<String>()
     private val onError: (String) -> Unit = { errors += it }
 
     @Before fun setup() {
         val app = ApplicationProvider.getApplicationContext<FocalApplication>()
-        runBlocking { app.initialized.await() }
+        runBlocking { app.storageReady.await() }
         store = app.store
         // Android 15 grants media focus only to a foreground app or eligible service.
-        activity = ActivityScenario.launch(MainActivity::class.java)
+        activity = ActivityScenario.launch(ComponentActivity::class.java)
         owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         player = SpeechPlayer(app, store, owner)
     }
@@ -210,7 +210,7 @@ class SpeechPlayerTest {
 
     @Test fun seekingLeavesAnExcerptAndClampsToTheOriginalAudio() {
         val note = syntheticNote(5000, metadataDuration = 900)
-        val passage = Passage(42, note.id, "synthetic", 1400, 1800, "Synthetic excerpt", true)
+        val passage = testParagraph(42, note.id, 1400, 1800, "Synthetic excerpt")
         player.play(passage, onError)
         await { player.playback.value.isPlaying && player.playback.value.passageId == 42L }
         assertEquals(42L, player.playing.value)
@@ -260,7 +260,7 @@ class SpeechPlayerTest {
     }
 
     private fun syntheticNote(durationMs: Long, metadataDuration: Long = durationMs): Note {
-        val id = store.create("en").also { created += it }
+        val id = store.insertNoteForTests(emptyList(), 0, legacy = true).also { created += it }
         // A low-amplitude 220 Hz tone, PCM16 little endian / mono / 16 kHz.
         store.audioFile(id).outputStream().buffered().use { output ->
             val buffer = ByteArray(2048)

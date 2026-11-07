@@ -1,0 +1,343 @@
+package app.focal.gallery
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.AbsoluteAlignment
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.focal.ui.components.BottomColumn
+import app.focal.ui.components.Dock
+import app.focal.ui.components.DockActions
+import app.focal.ui.components.DockState
+import app.focal.ui.components.FeedbackAction
+import app.focal.ui.components.FeedbackHostState
+import app.focal.ui.components.FeedbackPill
+import app.focal.ui.components.FocalIcon
+import app.focal.ui.components.FocalIconButton
+import app.focal.ui.components.FocalPrimaryPill
+import app.focal.ui.components.FocalTextButton
+import app.focal.ui.components.Mark
+import app.focal.ui.components.MaterialBounds
+import app.focal.ui.components.NineBars
+import app.focal.ui.components.NotePill
+import app.focal.ui.components.PauseBadge
+import app.focal.ui.components.PauseBadgeMetrics
+import app.focal.ui.components.PlayCircle
+import app.focal.ui.components.ProgressPhase
+import app.focal.ui.components.RecordDot
+import app.focal.ui.components.WaveDress
+import app.focal.ui.components.WaveMode
+import app.focal.ui.components.WaveRenderer
+import app.focal.ui.components.markBox
+import app.focal.ui.components.rememberBottomColumnState
+import app.focal.ui.components.sceneMaterial
+import app.focal.ui.design.FocalGrid
+import app.focal.ui.design.FocalShapes
+import app.focal.ui.design.FocalTheme
+import app.focal.ui.design.FocalType
+import app.focal.ui.design.FocalWeight
+import app.focal.ui.design.Scene
+import app.focal.ui.design.Stage
+
+/** The foundation stage's renders: tokens, every control state, the bars, the material, the shell's layers. */
+object FoundationShots {
+    val all: List<Shot> = buildList {
+        addAll(themed("tokens-colour") { ColourSheet() })
+        addAll(themed("tokens-type") { TypeSheet() })
+        addAll(themed("controls-library") { LibraryControls() })
+        addAll(themed("controls-note") { NoteControls() })
+        add(Shot("controls-material", dark = false) { MaterialControls() })
+        addAll(themed("waves") { WaveSheet() })
+        add(Shot("ready-morph-light", dark = false, settleMs = after(READY_AT_MS, 80)) { ReadyMorph() })
+        add(Shot("copied-light", dark = false, settleMs = 300, click = COPY_TAG) { CopiedDock() })
+        add(Shot("controls-library-light-200", dark = false, fontScale = 2f) { LibraryControls() })
+        // At 2.0x the nine note docks do not fit one frame: two frames, every dock whole.
+        add(Shot("controls-note-light-200", dark = false, fontScale = 2f) { NoteControls(NoteDocks.take(NOTE_DOCKS_FIRST)) })
+        add(Shot("controls-note-more-light-200", dark = false, fontScale = 2f) { NoteControls(NoteDocks.drop(NOTE_DOCKS_FIRST)) })
+    }
+}
+
+private const val READY_AT_MS = 512L
+private const val COPY_TAG = "copy"
+private val noActions = DockActions()
+
+@Composable
+private fun Page(content: @Composable () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = FocalGrid.x24, vertical = FocalGrid.x16),
+        verticalArrangement = Arrangement.spacedBy(FocalGrid.x12),
+    ) { content() }
+}
+
+@Composable
+private fun Head(text: String) {
+    Text(text, style = FocalType.section, color = FocalTheme.colors.muted, modifier = Modifier.padding(top = FocalGrid.x4))
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ColourSheet() {
+    val c = FocalTheme.colors
+    Page {
+        Head("Paper")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x12), verticalArrangement = Arrangement.spacedBy(FocalGrid.x12)) {
+            listOf(
+                "paper" to c.paper, "ink" to c.ink, "muted" to c.muted, "faint" to c.faint, "line" to c.line,
+                "s1" to c.s1, "s2" to c.s2, "lens" to c.lens, "select" to c.select, "inv" to c.inv, "onInv" to c.onInv,
+                "raised" to c.raised, "press" to c.press, "bar top" to c.centreBarTop, "bar end" to c.centreBarBottom,
+            ).forEach { (name, color) -> Swatch(name, color) }
+        }
+        Head("Scene and stage")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x12), verticalArrangement = Arrangement.spacedBy(FocalGrid.x12)) {
+            listOf(
+                "top" to Scene.top, "mid" to Scene.mid, "bottom" to Scene.bottom, "ink" to Scene.ink, "hi" to Scene.hi,
+                "muted" to Scene.muted, "stage" to Stage.muted, "glass" to Scene.glass,
+            ).forEach { (name, color) -> Swatch(name, color, onMaterial = true) }
+        }
+        Head("Material, card size")
+        Box(Modifier.fillMaxWidth().height(200.dp).sceneMaterial(FocalShapes.sheetRadius, ring = c.stageRing))
+    }
+}
+
+@Composable
+private fun Swatch(name: String, color: Color, onMaterial: Boolean = false) {
+    Column(Modifier.width(56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier.size(56.dp)
+                .then(if (onMaterial) Modifier.sceneMaterial(FocalShapes.blockRadius) else Modifier)
+                .border(1.dp, FocalTheme.colors.line, FocalShapes.block)
+                .background(color, FocalShapes.block),
+        )
+        FakeCaption(name)
+    }
+}
+
+@Composable
+private fun TypeSheet() {
+    val c = FocalTheme.colors
+    Page {
+        listOf(
+            "title 28/34" to FocalType.title, "headline 22/28" to FocalType.headline, "body 18/28" to FocalType.body,
+            "rowTitle 17/24" to FocalType.rowTitle, "field 17/24" to FocalType.field, "label 16/20" to FocalType.label,
+            "action 15/20" to FocalType.action, "secondary 15/22" to FocalType.secondary, "meta 15/20" to FocalType.meta,
+            "dateline 15/20" to FocalType.dateline, "section 14/20" to FocalType.section, "caption 13/18" to FocalType.caption,
+        ).forEach { (name, style) ->
+            Column {
+                FakeCaption(name)
+                Text("Speak, and it’s written down. 0123456789 Ёж", style = style, color = c.ink, maxLines = 1)
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(220.dp).sceneMaterial(FocalShapes.sheetRadius, ring = c.stageRing).padding(FocalGrid.x20)) {
+            Column {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("12", style = FocalType.stageLength, color = Scene.ink)
+                    Spacer(Modifier.width(5.dp))
+                    Text("min", style = FocalType.meta.copy(fontWeight = FocalWeight.Medium), color = Stage.muted, modifier = Modifier.padding(bottom = 9.dp))
+                    Spacer(Modifier.weight(1f))
+                    Text("4:16", style = FocalType.sceneTimer.copy(fontSize = 60.sp, lineHeight = 66.sp), color = Scene.hi)
+                }
+                Text("If the forecast still says rain after lunch, we turn back.", style = FocalType.sceneText, color = Scene.ink)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DockDemo(caption: String, state: DockState, actions: DockActions = noActions, edge: (() -> Float)? = null) {
+    Column(verticalArrangement = Arrangement.spacedBy(FocalGrid.x4)) {
+        FakeCaption(caption, Modifier.then(if (edge != null) Modifier.graphicsLayer { alpha = 0.9f } else Modifier))
+        Dock(state, actions, material = edge?.let { e -> { MaterialBounds.above(e()) } })
+    }
+}
+
+@Composable
+private fun LibraryControls() {
+    val feedback = remember { FeedbackHostState() }
+    LaunchedEffect(feedback) { feedback.show("Note deleted", FeedbackAction("Undo", FocalIcon.Undo)) }
+    Page {
+        DockDemo("Library, empty", DockState.LibraryEmpty)
+        DockDemo("Library", DockState.LibraryIdle)
+        DockDemo("Recording (library dress)", DockState.Live(paused = false))
+        DockDemo("Paused (library dress)", DockState.Live(paused = true))
+        FakeCaption("Feedback")
+        FeedbackPill(feedback)
+        FakeCaption("Icon buttons, text button, primary pill")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FocalIconButton(FocalIcon.Back, "Back", {})
+            FocalIconButton(FocalIcon.Edit, "Edit", {})
+            FocalIconButton(FocalIcon.More, "More options", {})
+            FocalIconButton(FocalIcon.Redo, "Redo", {}, enabled = false)
+            Spacer(Modifier.width(FocalGrid.x8))
+            FocalTextButton("Not now", {})
+        }
+        FocalPrimaryPill("Allow microphone", {}, Modifier.fillMaxWidth(), leading = { RecordDot(it) })
+    }
+}
+
+/** Every note dock state, captioned. */
+private val NoteDocks: List<Pair<String, DockState>> = listOf(
+    "Transcribing, 64 %" to DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Transcribing, 0.64f)),
+    "Transcribing, 18 %" to DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Transcribing, 0.18f)),
+    "Waiting" to DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Waiting, 0.4f)),
+    "Preparing" to DockState.Note(PlayCircle.Play, NotePill.Progress(ProgressPhase.Preparing, 0f)),
+    "Ready" to DockState.Note(PlayCircle.Play, NotePill.Copy()),
+    "Playing" to DockState.Note(PlayCircle.PausePlayback, NotePill.Copy()),
+    "Text only" to DockState.Note(PlayCircle.None, NotePill.Copy()),
+    "No speech" to DockState.Note(PlayCircle.Play, NotePill.Copy(enabled = false)),
+    "Recording elsewhere" to DockState.Note(PlayCircle.Unavailable, NotePill.Copy()),
+)
+
+/** How many of [NoteDocks] the first 2.0x frame holds. */
+private const val NOTE_DOCKS_FIRST = 5
+
+@Composable
+private fun NoteControls(docks: List<Pair<String, DockState>> = NoteDocks) {
+    Page {
+        docks.forEach { (caption, state) -> DockDemo(caption, state) }
+    }
+}
+
+@Composable
+private fun MaterialControls() {
+    var dockTop by remember { mutableFloatStateOf(0f) }
+    val half = with(LocalDensity.current) { 28.dp.toPx() }
+    Box(Modifier.fillMaxSize().sceneMaterial()) {
+        Column(
+            Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = FocalGrid.x24, vertical = FocalGrid.x16),
+            verticalArrangement = Arrangement.spacedBy(FocalGrid.x24),
+        ) {
+            Text("Material dress", style = FocalType.section, color = Scene.muted)
+            Dock(DockState.Live(paused = false), noActions, material = { MaterialBounds.Everywhere })
+            Dock(DockState.Live(paused = true), noActions, material = { MaterialBounds.Everywhere })
+            Text("The wipe at the material's edge (half way)", style = FocalType.section, color = Scene.muted)
+            Box(Modifier.onGloballyPositioned { dockTop = it.positionInWindow().y }) {
+                Dock(DockState.Live(paused = false), noActions, material = { MaterialBounds.above(dockTop + half) })
+            }
+            Box(Modifier.fillMaxWidth().background(FocalTheme.colors.paper, FocalShapes.sheet).padding(FocalGrid.x16)) {
+                Dock(DockState.Live(paused = true), noActions)
+            }
+        }
+    }
+}
+
+private val previewLevels = floatArrayOf(0.94f, 0.62f, 0.88f, 0.55f, 0.38f)
+
+@Composable
+private fun WaveSheet() {
+    val c = FocalTheme.colors
+    val meter = remember { FixedMeter(previewLevels) }
+    Page {
+        Box(Modifier.fillMaxWidth().height(300.dp).sceneMaterial(FocalShapes.sheetRadius, ring = c.stageRing)) {
+            Column(Modifier.padding(FocalGrid.x16), verticalArrangement = Arrangement.spacedBy(FocalGrid.x8)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x4)) {
+                    listOf(WaveRenderer.Layers, WaveRenderer.Sprites, WaveRenderer.AlphaOnly).forEach { renderer ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            NineBars(WaveMode.Live(meter), WaveDress.Material, Modifier.markBox(84.dp), renderer)
+                            Text(renderer.name, style = FocalType.caption, color = Scene.muted)
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x24), verticalAlignment = Alignment.CenterVertically) {
+                    WithBadge(56.dp, PauseBadgeMetrics.stage) { NineBars(WaveMode.Live(meter, paused = true), WaveDress.Material, Modifier.markBox(56.dp)) }
+                    NineBars(WaveMode.Live(meter), WaveDress.Material, Modifier.markBox(56.dp))
+                    WithBadge(88.dp, PauseBadgeMetrics.scene) { NineBars(WaveMode.Live(meter, paused = true), WaveDress.Material, Modifier.markBox(88.dp)) }
+                }
+            }
+        }
+        Head("Paper")
+        Row(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x24), verticalAlignment = Alignment.CenterVertically) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                NineBars(WaveMode.Rest, WaveDress.paper(c), Modifier.markBox(112.dp))
+                FakeCaption("rest 112")
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                NineBars(WaveMode.Static, WaveDress.paper(c), Modifier.markBox(40.dp))
+                FakeCaption("static 40")
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                NineBars(WaveMode.Working(frozenAtMs = 300L), WaveDress.paper(c), Modifier.markBox(40.dp))
+                FakeCaption("working 40")
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                NineBars(WaveMode.Static, WaveDress.paper(c), Modifier.markBox(16.dp).graphicsLayer { alpha = 0.4f })
+                FakeCaption("gap 16")
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(FocalGrid.x24), verticalAlignment = Alignment.CenterVertically) {
+            NineBars(WaveMode.Live(meter), WaveDress.paper(c), Modifier.markBox(40.dp), WaveRenderer.Sprites)
+            NineBars(WaveMode.Working(paused = true, frozenAtMs = 300L), WaveDress.paper(c), Modifier.markBox(40.dp))
+            Box(Modifier.size(4.dp, 24.dp).background(c.ink, FocalShapes.pill))
+        }
+    }
+}
+
+/** A wave with the pause badge at its box-relative position: box origin + (64, 47) x h / 56. */
+@Composable
+private fun WithBadge(height: Dp, diameter: Dp, wave: @Composable () -> Unit) {
+    Box {
+        wave()
+        val k = height.value / Mark.BADGE_REFERENCE_HEIGHT
+        PauseBadge(
+            diameter = { diameter },
+            modifier = Modifier
+                .align(AbsoluteAlignment.TopLeft)
+                .absoluteOffset((Mark.BADGE_X * k).dp - PauseBadgeMetrics.scene / 2, (Mark.BADGE_Y * k).dp - PauseBadgeMetrics.scene / 2),
+        )
+    }
+}
+
+/** T8: the dock's progress pill a few frames into its one morph into Copy. */
+@Composable
+private fun ReadyMorph() {
+    var pill by remember { mutableStateOf<NotePill>(NotePill.Progress(ProgressPhase.Transcribing, 0.9f)) }
+    LaunchedEffect(Unit) { waitFrames(READY_AT_MS); pill = NotePill.Copy() }
+    val bottom = rememberBottomColumnState()
+    BottomColumn(bottom, dock = { Dock(DockState.Note(PlayCircle.Play, pill), noActions) }, modifier = Modifier.fillMaxSize())
+}
+
+/** T9: Copy confirmed (the check and "Copied"). */
+@Composable
+private fun CopiedDock() {
+    val bottom = rememberBottomColumnState()
+    val actions = remember { DockActions(copy = { true }) }
+    BottomColumn(
+        bottom,
+        dock = { Box(Modifier.testTag(COPY_TAG)) { Dock(DockState.Note(PlayCircle.Play, NotePill.Copy()), actions) } },
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+

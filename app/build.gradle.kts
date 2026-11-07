@@ -1,238 +1,276 @@
+import com.android.build.api.artifact.SingleArtifact
 import groovy.json.JsonSlurper
-import java.security.MessageDigest
+import java.io.File
 import java.nio.file.Files
+import java.security.MessageDigest
+import java.util.zip.ZipFile
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+// AGP 9 compiles Kotlin itself (built-in Kotlin); only the Compose compiler plugin is applied.
 plugins {
-    id("com.android.application")
-    kotlin("android")
-    id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
 }
 
-val nativeFaultVariant = providers.gradleProperty("focalNativeFaultTests").orNull
-require(nativeFaultVariant == null || nativeFaultVariant in setOf("baseline", "patched")) {
-    "focalNativeFaultTests must be baseline or patched; omit it for a normal build."
-}
-val parakeetTestOption = providers.gradleProperty("focalParakeetTests").orNull
-require(parakeetTestOption == null || parakeetTestOption == "true") {
-    "focalParakeetTests must be true; omit it for a normal build."
-}
-val parakeetTests = parakeetTestOption == "true"
-val parakeetPreviewOption = providers.gradleProperty("focalParakeetPreview").orNull
-require(parakeetPreviewOption == null || parakeetPreviewOption == "true") {
-    "focalParakeetPreview must be true; omit it for a normal build."
-}
-val parakeetPreview = parakeetPreviewOption == "true"
-val ultraOption = providers.gradleProperty("focalUltra").orNull
-require(ultraOption == null || ultraOption == "true") {
-    "focalUltra must be true; omit it for a normal build."
-}
-val ultra = ultraOption == "true"
-val primaryProbe = providers.gradleProperty("focalPrimaryProbe").orNull.let {
-    require(it == null || it == "true") { "focalPrimaryProbe must be true or omitted." }
-    it == "true"
-}
-require(!primaryProbe || ultra) { "Primary pipeline probes require the bundled Ultra variant." }
-require(listOf(nativeFaultVariant != null, parakeetTests, parakeetPreview, ultra).count { it } <= 1) {
-    "Choose only one research build option."
-}
-val parakeetRuntime = rootProject.file("build/dependencies/sherpa-onnx-2.0.1.aar")
-if (parakeetTests || parakeetPreview || ultra) {
-    require(parakeetRuntime.isFile) { "Missing verified Parakeet test runtime. See docs/parakeet-android-probe.md." }
+fun sha256(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
-    parakeetRuntime.inputStream().use { input ->
-        val buffer = ByteArray(65536)
-        while (true) {
-            val count = input.read(buffer)
-            if (count < 0) break
-            digest.update(buffer, 0, count)
-        }
+    file.inputStream().use { input ->
+        val buffer = ByteArray(65_536)
+        while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
     }
-    check(digest.digest().joinToString("") { "%02x".format(it) } ==
-        "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7") {
-        "Parakeet test runtime checksum mismatch."
-    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
 }
+
+// models/*.json pin the speech runtime and model. scripts/fetch-model.py reads the same files,
+// so paths, sizes and digests live in one place.
+data class Pinned(val name: String, val bytes: Long, val sha256: String)
+
+@Suppress("UNCHECKED_CAST")
+fun lock(name: String) = JsonSlurper().parse(rootProject.file("models/$name.json")) as Map<String, Any>
+val runtimeLock = lock("sherpa-onnx")
+val modelLock = lock("parakeet-ultra")
+@Suppress("UNCHECKED_CAST")
+val modelFiles = (modelLock.getValue("files") as List<Map<String, Any>>).map {
+    Pinned(it.getValue("name") as String, (it.getValue("bytes") as Number).toLong(), it.getValue("sha256") as String)
+}
+
+// sherpa-onnx: every build links Focal's JNI bridge against the C API library inside this AAR,
+// so the AAR is verified first. Nothing else from it (Kotlin API, JNI library) is used.
+val speechRuntime = rootProject.file(runtimeLock.getValue("path") as String)
+require(speechRuntime.isFile) {
+    "Missing the speech runtime ${speechRuntime.path}. Run: python3 scripts/fetch-model.py --runtime-only"
+}
+check(speechRuntime.length() == (runtimeLock.getValue("bytes") as Number).toLong() &&
+    sha256(speechRuntime) == runtimeLock.getValue("sha256")) {
+    "The speech runtime ${speechRuntime.path} does not match models/sherpa-onnx.json."
+}
+// The bridge compiles against the C API header of the same sherpa-onnx commit, vendored unchanged.
+@Suppress("UNCHECKED_CAST")
+val cApiHeader = (runtimeLock.getValue("c_api_header") as Map<String, Any>).let {
+    rootProject.file(it.getValue("path") as String) to it.getValue("sha256") as String
+}
+check(cApiHeader.first.isFile && sha256(cApiHeader.first) == cApiHeader.second) {
+    "${cApiHeader.first.path} is not the sherpa-onnx C API header pinned in models/sherpa-onnx.json."
+}
+// The ABIs Focal ships (release: arm64-v8a only) and the two prebuilt libraries the bridge needs.
+val speechRuntimeAbis = listOf("arm64-v8a", "x86_64")
+val speechRuntimeLibraries = listOf("libsherpa-onnx-c-api.so", "libonnxruntime.so")
+val speechRuntimeDirectory = layout.buildDirectory.dir("speech-runtime").get().asFile
+val extractSpeechRuntime = tasks.register<Sync>("extractSpeechRuntime") {
+    group = "build"
+    description = "Unpacks the sherpa-onnx C API and ONNX Runtime libraries from the verified AAR for CMake."
+    from(zipTree(speechRuntime)) {
+        include(speechRuntimeAbis.flatMap { abi -> speechRuntimeLibraries.map { "jni/$abi/$it" } })
+        eachFile { path = path.removePrefix("jni/") }
+        includeEmptyDirs = false
+    }
+    into(speechRuntimeDirectory)
+}
+
+// Parakeet Ultra INT8 is packaged straight from this ignored directory; no extra 670 MB staging copy.
+// Release builds always need it. Debug, unit-test and lint builds work without it, so checks can run
+// without the download; such an APK records but says it cannot transcribe.
+val ultraModelDirectory = rootProject.file(modelLock.getValue("directory") as String)
+// Any locked file means a model is meant to be packaged, and verifyUltraModel then requires all of them.
+// Stray files alone (.DS_Store, an interrupted copy) leave a model-less debug build working.
+val modelPresent = modelFiles.any { ultraModelDirectory.resolve(it.name).exists() }
+val requireModel = when (val value = providers.gradleProperty("focal.requireModel").orNull) {
+    null, "false" -> false
+    "true" -> true
+    else -> error("focal.requireModel must be true or false, not $value")
+}
+if (!modelPresent) logger.lifecycle(
+    "Speech model not found in ${ultraModelDirectory.path}: debug APKs will record but not transcribe. " +
+        "Run python3 scripts/fetch-model.py for a complete build."
+)
+// Local QA only, never for a published APK: -Pfocal.emulatorRelease=true adds the x86_64 runtime to the
+// minified release, so R8, resource shrinking and the bridge's by-name JNI binding can be exercised end to
+// end on an x86_64 emulator. The arm64 release cannot record there: ONNX Runtime crashes under the
+// emulator's arm64 translation. Without the property every release, the published one included, is
+// arm64-only. Only the command line's -P counts: a value left in a gradle.properties file, an
+// ORG_GRADLE_PROJECT_ variable or -Dorg.gradle.project. would otherwise turn every later release into
+// an emulator build. Such a build says so in its versionName, and verifyReleaseAbis checks every release APK.
+val emulatorRelease = when (val value = gradle.startParameter.projectProperties["focal.emulatorRelease"]) {
+    null, "false" -> false
+    "true" -> true
+    else -> error("focal.emulatorRelease must be true or false, not $value")
+}
+if (!emulatorRelease && providers.gradleProperty("focal.emulatorRelease").orNull != null) logger.warn(
+    "focal.emulatorRelease is ignored outside the command line: this release is arm64-only. " +
+        "Pass -Pfocal.emulatorRelease=true for an emulator QA build."
+)
+if (emulatorRelease) logger.warn(
+    "focal.emulatorRelease=true: this release APK also carries x86_64 libraries for emulator QA. Do not publish it."
+)
+// The native ABIs a release APK must carry, exactly.
+val releaseAbis = if (emulatorRelease) listOf("arm64-v8a", "x86_64") else listOf("arm64-v8a")
 
 android {
     namespace = "app.focal"
-    compileSdk = 35
-    ndkVersion = "28.0.13004108"
+    // The pinned AndroidX set (Compose BOM 2026.09.00) requires compiling against API 37.
+    // Runtime behaviour follows targetSdk, deliberately raised from 35 to 36 with this toolchain.
+    compileSdk = 37
     defaultConfig {
         applicationId = "app.focal"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 9
-        versionName = "0.1.0-alpha.9"
-        buildConfigField("boolean", "FOCAL_ULTRA_BUNDLED", ultra.toString())
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
-        externalNativeBuild {
-            cmake {
-                arguments += listOf("-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Release",
-                    "-DFOCAL_NATIVE_FAULT_TESTS=${if (nativeFaultVariant == null) "OFF" else "ON"}",
-                    "-DFOCAL_NATIVE_FAULT_VARIANT=${nativeFaultVariant.orEmpty()}")
-            }
-        }
+        targetSdk = 36
+        versionCode = 10
+        versionName = "0.2.0"
+        // The app verifies its installed model copy against the same lock the build used.
+        buildConfigField("String", "ULTRA_MODEL_FILES",
+            "\"" + modelFiles.joinToString(";") { "${it.name}:${it.bytes}:${it.sha256}" } + "\"")
+        buildConfigField("String", "SPEECH_RUNTIME_VERSION", "\"${runtimeLock.getValue("version")}\"")
+        buildConfigField("String", "SPEECH_RUNTIME_REVISION", "\"${runtimeLock.getValue("revision")}\"")
+        buildConfigField("String", "ONNXRUNTIME_VERSION", "\"${runtimeLock.getValue("onnxruntime")}\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake { arguments += "-DFOCAL_SPEECH_RUNTIME_DIR=${speechRuntimeDirectory.path}" }
+        }
     }
+    // The JNI bridge (src/main/cpp) is Focal's only native code.
+    ndkVersion = "28.2.13676358"
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    kotlinOptions { jvmTarget = "17" }
-    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
-    androidResources {
-        noCompress += "bin"
-        if (ultra) noCompress += "onnx"
-    }
+    // The recognizer streams its model out of the APK once; keep the ONNX files stored.
+    androidResources { noCompress += "onnx" }
+    // Ship the verified sherpa-onnx and ONNX Runtime binaries byte for byte; only the bridge is stripped.
+    packaging { jniLibs { keepDebugSymbols += speechRuntimeLibraries.map { "**/$it" } } }
+    if (modelPresent) sourceSets.getByName("main").assets.directories.add(ultraModelDirectory.path)
+    // ABI filters are set per build type only: AGP unions them with defaultConfig's.
     buildTypes {
-        debug {
-            externalNativeBuild { cmake { arguments += "-DFOCAL_ANDROID_DEBUG_BUILD=ON" } }
-        }
+        // x86_64 serves the emulator for debug builds and device tests.
+        debug { ndk { abiFilters += listOf("arm64-v8a", "x86_64") } }
         release {
-            externalNativeBuild { cmake { arguments += "-DFOCAL_ANDROID_DEBUG_BUILD=OFF" } }
+            // Phones are arm64: a published release carries no x86_64 runtime libraries (emulatorRelease adds
+            // them for local emulator QA only).
+            ndk { abiFilters += releaseAbis }
+            // Badging and the app's own version show an emulator QA build for what it is.
+            if (emulatorRelease) versionNameSuffix = "-emulator-qa"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            if (ultra) proguardFile("ultra-proguard-rules.pro")
         }
     }
-    if (nativeFaultVariant != null) {
-        sourceSets.getByName("debug").java.srcDir("src/nativeFault/java")
-        sourceSets.getByName("androidTest").java.setSrcDirs(listOf(
-            "src/nativeFaultTestSupport/java",
-            if (nativeFaultVariant == "baseline") "src/nativeFaultBaselineTest/java" else "src/nativeFaultTest/java"))
-    }
-    if (parakeetTests) {
-        sourceSets.getByName("androidTest").java.setSrcDirs(listOf("src/parakeetProbeTest/java"))
-    }
-    sourceSets.getByName("debug").java.srcDir(
-        if (parakeetPreview || ultra) "src/parakeetPreview/java" else "src/standard/java")
-    sourceSets.getByName("release").java.srcDir(
-        if (ultra) "src/parakeetPreview/java" else "src/standard/java")
-    if (ultra) {
-        sourceSets.getByName("main").assets.srcDir(rootProject.file("build/stt/parakeet-ultra-20261105/model"))
-        sourceSets.getByName("main").assets.srcDir("src/ultra/assets")
-    }
-    if (parakeetPreview) sourceSets.getByName("androidTest").java.srcDir("src/parakeetPreviewTest/java")
-    if (parakeetPreview || ultra) sourceSets.getByName("androidTest").java.srcDir("src/alternativeTest/java")
-    if (ultra) sourceSets.getByName("androidTest").java.srcDir("src/ultraTest/java")
-    if (primaryProbe) sourceSets.getByName("androidTest").java.srcDir("src/primaryProbeTest/java")
     lint { abortOnError = true }
 }
 
-gradle.taskGraph.whenReady {
-    // Native optimization is Release for both Android variants in this project.
-    val releaseTasks = allTasks.filter {
-        it.project.path == project.path && it.name.contains("release", ignoreCase = true) &&
-            !it.name.startsWith("configureCMakeRelease[") && !it.name.startsWith("buildCMakeRelease[")
-    }
-    check(nativeFaultVariant == null || releaseTasks.isEmpty()) {
-        "Native fault tests are debug-only. Omit focalNativeFaultTests for ${releaseTasks.joinToString { it.path }}."
-    }
-    check(!(parakeetTests || parakeetPreview) || releaseTasks.isEmpty()) {
-        "Parakeet research is debug-only. Omit focalParakeetTests/focalParakeetPreview for ${releaseTasks.joinToString { it.path }}."
-    }
-    check(!primaryProbe || releaseTasks.isEmpty()) { "Primary batch probes are debug-only." }
-}
+kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
 dependencies {
     implementation(project(":core"))
-    implementation(platform("androidx.compose:compose-bom:2025.04.01"))
-    implementation("androidx.core:core-ktx:1.16.0")
-    implementation("androidx.activity:activity-compose:1.10.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2025.04.01"))
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    if (parakeetTests) androidTestImplementation(files(parakeetRuntime))
-    if (parakeetPreview) debugImplementation(files(parakeetRuntime))
-    if (ultra) implementation(files(parakeetRuntime))
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    implementation(platform(libs.compose.bom))
+    implementation(libs.core.ktx)
+    implementation(libs.activity.compose)
+    implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.lifecycle.viewmodel.compose)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.material3)
+    implementation(libs.navigation3.runtime)
+    implementation(libs.navigation3.ui)
+    implementation(libs.core.splashscreen)
+    implementation(libs.window)
+    implementation(libs.coroutines.android)
+    debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.window.testing)
 }
 
-val verifyBundledModel by tasks.registering {
+val verifyUltraModel = tasks.register("verifyUltraModel") {
     group = "verification"
-    description = "Release APKs must contain the verified offline speech model."
+    description = "The packaged model directory must hold exactly the files in models/parakeet-ultra.json."
+    val folder = ultraModelDirectory
+    val expected = modelFiles
+    val stamp = layout.buildDirectory.file("verified-model/parakeet-ultra.txt")
+    inputs.files(fileTree(folder)).withPropertyName("model")
+    inputs.property("lock", expected.toString())
+    outputs.file(stamp)
     doLast {
-        val model = file("src/main/assets/ggml-base-q5_1.bin")
-        val provenance = file("src/main/assets/model-provenance.json")
-        check(model.isFile && provenance.isFile) {
-            "Missing speech model. Run python3 scripts/fetch-model.py before making a release."
+        check(folder.isDirectory && !Files.isSymbolicLink(folder.toPath())) {
+            "Missing speech model in ${folder.path}. Release builds (and -Pfocal.requireModel=true) need it. " +
+                "Run: python3 scripts/fetch-model.py"
         }
-        val metadata = JsonSlurper().parse(provenance) as Map<*, *>
-        val digest = MessageDigest.getInstance("SHA-256")
-        model.inputStream().use { input ->
-            val buffer = ByteArray(65536)
-            while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) }
+        val fix = "Run: python3 scripts/fetch-model.py"
+        val found = folder.list().orEmpty().toSet()
+        val names = expected.map { it.name }.toSet()
+        check(found == names) {
+            "${folder.path} must hold exactly the files in models/parakeet-ultra.json" +
+                (names - found).sorted().let { if (it.isEmpty()) "" else "; missing: ${it.joinToString()}" } +
+                (found - names).sorted().let { if (it.isEmpty()) "" else "; unexpected: ${it.joinToString()}" } +
+                ". Remove unexpected files and run: python3 scripts/fetch-model.py"
         }
-        val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        check(actual == metadata["sha256"]) { "Bundled model checksum mismatch; run the verified downloader." }
+        expected.forEach { file ->
+            val model = folder.resolve(file.name)
+            check(model.isFile && !Files.isSymbolicLink(model.toPath()) && model.length() == file.bytes) {
+                "Missing or invalid model file: ${model.path}. $fix"
+            }
+            check(sha256(model) == file.sha256) { "Model file checksum mismatch: ${model.path}. $fix" }
+        }
+        stamp.get().asFile.apply { parentFile.mkdirs(); writeText(expected.joinToString("\n", postfix = "\n")) }
     }
 }
-tasks.matching { it.name in setOf("packageRelease", "bundleRelease") }.configureEach { dependsOn(verifyBundledModel) }
-
-val verifyBundledSpeechPresenceModel by tasks.registering {
+// src/main/assets is AGP's default asset directory, and Whisper-era fetch scripts put model files
+// there. They are ignored by Git, so only this check keeps them out of the APK.
+val verifyAppAssets = tasks.register("verifyAppAssets") {
     group = "verification"
-    description = "Debug and release builds require the pinned speech presence model."
+    description = "src/main/assets may hold only the bundled licence texts."
+    val folder = file("src/main/assets")
+    val shipped = setOf("licenses.txt", "ultra-licenses.txt")
     doLast {
-        val model = file("src/main/assets/ggml-silero-v5.1.2.bin")
-        val expectedSize = 885_098L
-        val expectedSha256 = "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf"
-        check(model.isFile && model.length() == expectedSize) {
-            "Missing or incomplete speech presence model. Run python3 scripts/fetch-vad-model.py."
+        val unexpected = folder.list().orEmpty().filterNot { it in shipped }.sorted()
+        check(unexpected.isEmpty()) {
+            "${folder.path} holds files that must not ship: ${unexpected.joinToString()}. " +
+                "Older Focal builds placed model files there; move them out of the project."
         }
-        val digest = MessageDigest.getInstance("SHA-256")
-        model.inputStream().use { input ->
-            val buffer = ByteArray(65_536)
-            while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
-        }
-        val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        check(actual == expectedSha256) { "Bundled speech presence model checksum mismatch; run the verified downloader." }
     }
 }
-tasks.matching { it.name in setOf("preDebugBuild", "preReleaseBuild") }.configureEach {
-    dependsOn(verifyBundledSpeechPresenceModel)
+// Every packaged model is verified; release builds and -Pfocal.requireModel=true require one.
+val verifiedAssetMerges = buildSet {
+    add("mergeReleaseAssets")
+    if (modelPresent || requireModel) add("mergeDebugAssets")
 }
+tasks.matching { it.name in verifiedAssetMerges }.configureEach { dependsOn(verifyUltraModel) }
+tasks.matching { it.name in setOf("mergeDebugAssets", "mergeReleaseAssets") }.configureEach { dependsOn(verifyAppAssets) }
 
-// Opt-in only: source files remain in ignored local cache; no extra 670 MB staging copy.
-if (ultra) {
-    val verifyBundledUltraModel by tasks.registering {
-        group = "verification"
-        val folder = rootProject.file("build/stt/parakeet-ultra-20261105/model")
-        val expected = mapOf(
-            "encoder.int8.onnx" to (652_282_526L to "7ef3ca4ffb49d60d4faa757b2930c8cec9927e73c24f6155d5b23a00229a7ed6"),
-            "decoder.int8.onnx" to (11_845_274L to "1fab98fe6c12aded87d2da66272cc9e148d0a0044ce3850a12fe56302ec4a922"),
-            "joiner.int8.onnx" to (6_355_277L to "8ba94c6919c17a6bd27368fb89533628a72ffc81d4acedebf3cdcb2cae331dbb"),
-            "tokens.txt" to (93_939L to "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
-        )
-        doLast {
-            check(folder.isDirectory && !Files.isSymbolicLink(folder.toPath()) &&
-                folder.listFiles()?.map { it.name }?.toSet() == expected.keys) {
-                "Ultra asset directory must contain exactly the four pinned model files."
-            }
-            expected.forEach { (name, identity) ->
-                val model = folder.resolve(name)
-                check(model.isFile && !Files.isSymbolicLink(model.toPath()) && model.length() == identity.first) {
-                    "Missing or invalid Ultra file: $name"
-                }
-                val digest = MessageDigest.getInstance("SHA-256")
-                model.inputStream().use { input ->
-                    val buffer = ByteArray(65_536)
-                    while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
-                }
-                check(digest.digest().joinToString("") { "%02x".format(it) } == identity.second) {
-                    "Ultra file checksum mismatch: $name"
+// A release APK carries exactly the ABIs its build asked for (arm64-v8a; x86_64 too only for an emulator QA
+// build), checked in the packaged APK at every assembleRelease, so x86_64 libraries cannot ship unnoticed.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        val apks = variant.artifacts.get(SingleArtifact.APK)
+        val expected = releaseAbis.sorted()
+        tasks.register("verifyReleaseAbis") {
+            group = "verification"
+            description = "The release APK must carry exactly the native ABIs its build asked for."
+            inputs.files(apks).withPropertyName("apks")
+            inputs.property("abis", expected)
+            doLast {
+                val packaged = apks.get().asFile.listFiles { file -> file.extension == "apk" }.orEmpty()
+                check(packaged.isNotEmpty()) { "No release APK in ${apks.get().asFile.path}." }
+                packaged.forEach { apk ->
+                    val abis = ZipFile(apk).use { zip ->
+                        zip.entries().asSequence().map { it.name.split('/') }
+                            .filter { it.size >= 3 && it[0] == "lib" }.map { it[1] }.toSortedSet().toList()
+                    }
+                    check(abis == expected) {
+                        "${apk.name} carries native libraries for ${abis.ifEmpty { listOf("no ABI") }.joinToString()}, " +
+                            "not ${expected.joinToString()}. x86_64 belongs only in an emulator QA build " +
+                            "(-Pfocal.emulatorRelease=true on the command line), never in a published release."
+                    }
                 }
             }
         }
     }
-    tasks.matching { it.name in setOf("preDebugBuild", "preReleaseBuild", "mergeDebugAssets", "mergeReleaseAssets") }.configureEach {
-        dependsOn(verifyBundledUltraModel)
+}
+tasks.matching { it.name == "assembleRelease" }.configureEach { dependsOn("verifyReleaseAbis") }
+
+// CMake links the bridge against the extracted runtime, so it must exist before any native build.
+tasks.configureEach {
+    if (listOf("configureCMake", "buildCMake", "generateJsonModel", "externalNativeBuild").any { name.startsWith(it) }) {
+        dependsOn(extractSpeechRuntime)
     }
 }

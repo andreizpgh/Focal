@@ -1,0 +1,598 @@
+{
+  "description": "Reference transcriptions of the 84 FLEURS read-speech clips behind Focal's speech-quality figures: six per language and split for English, Russian, German, French, Spanish, Italian and Portuguese. The dev clips are the DEV set and the test clips the held-out set of docs/speech-quality.md. Audio is not included; each id names the clip's WAV in the dataset's per-language audio archive.",
+  "dataset": "google/fleurs",
+  "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+  "license": "CC-BY-4.0",
+  "attribution": "FLEURS, Conneau et al. (2022), Google; https://huggingface.co/datasets/google/fleurs",
+  "provenance": "fleurs-corpus.json (selection rule and the SHA-256 of every source WAV, PCM and reference)",
+  "clips": [
+    {
+      "id": "fleurs-en_us-dev-10098964113747380446",
+      "split": "dev",
+      "language": "en",
+      "text": "Then, Lakkha Singh took the lead in singing the bhajans.",
+      "reference_sha256": "e3e341fdb66f8c41d1cab291f5c6309be88bee494d2f75770494934390157675"
+    },
+    {
+      "id": "fleurs-en_us-dev-10146705666908229607",
+      "split": "dev",
+      "language": "en",
+      "text": "The major religion in Moldova is Orthodox Christian.",
+      "reference_sha256": "992c591373981c9ad061384f583cd606a1204cc2ee0d6751c56829ab1e43e513"
+    },
+    {
+      "id": "fleurs-en_us-dev-10238777279729691182",
+      "split": "dev",
+      "language": "en",
+      "text": "The East African Islands are in the Indian Ocean off the eastern coast of Africa.",
+      "reference_sha256": "b6c53e5841c03c32489848b7f9d3e8eaeb6994d2d47378697b7f26f3f1a8c90e"
+    },
+    {
+      "id": "fleurs-en_us-dev-10280794863324544626",
+      "split": "dev",
+      "language": "en",
+      "text": "Some festivals have special camping areas for families with young children.",
+      "reference_sha256": "0d613fbb2d880a5fc830eac90176a232888c81f63818ab77dc1432544b73e538"
+    },
+    {
+      "id": "fleurs-en_us-dev-10290896634244679159",
+      "split": "dev",
+      "language": "en",
+      "text": "The Tibetan Buddhism is based on the teachings of Buddha, but were extended by the mahayana path of love and by a lot of techniques from Indian Yoga.",
+      "reference_sha256": "2cf0b73173308eca99ffffdfeda20192f87d136ad5835fd4ae0d5cfd5cf0f6fa"
+    },
+    {
+      "id": "fleurs-en_us-dev-10305808618795196942",
+      "split": "dev",
+      "language": "en",
+      "text": "Pronunciation is relatively easy in Italian since most words are pronounced exactly how they are written",
+      "reference_sha256": "0213eb78db600a7ab8d0f465a6056ad1a18c9f52f722546cec8662b2bc95fdb0"
+    },
+    {
+      "id": "fleurs-en_us-test-10235738076911595987",
+      "split": "test",
+      "language": "en",
+      "text": "The hospital has followed protocol for infection control, including separating the patient from others to prevent possible infection of others.",
+      "reference_sha256": "e71bc7a42adb8e24a82108087896f4fef0355b2713156c84629b1533baa4198f"
+    },
+    {
+      "id": "fleurs-en_us-test-10323357556845456822",
+      "split": "test",
+      "language": "en",
+      "text": "The Northern Marianas emergency management office said that there were no damages reported in the nation.",
+      "reference_sha256": "38d901be0ea7f49ef8697e5b100f48d9d94d1f35f819fad48c00bc5076b8f529"
+    },
+    {
+      "id": "fleurs-en_us-test-10335587906469246566",
+      "split": "test",
+      "language": "en",
+      "text": "Twentieth century research has shown that there are two pools of genetic variation: hidden and expressed.",
+      "reference_sha256": "4c2ed6b3f083afe8cf22baef2ee0ec56364a40531ebe7b700c0ea574b82ac9df"
+    },
+    {
+      "id": "fleurs-en_us-test-10344335557154974057",
+      "split": "test",
+      "language": "en",
+      "text": "The aspect ratio of this format (dividing by twelve to obtain the simplest whole-number ratio) is therefore said to be 3:2.",
+      "reference_sha256": "a412c8d9671188861194df5d63cf4bb0a6a4407e1a75db9bdd2440c27cf70d5a"
+    },
+    {
+      "id": "fleurs-en_us-test-1036771894648013441",
+      "split": "test",
+      "language": "en",
+      "text": "As light pollution in their heyday was not the kind of problem it is today, they are usually located in cities or at campuses, easier to reach than those built in modern times.",
+      "reference_sha256": "833a9475d46748f8b8a309fe4cc203745e5118a5b48a479c3031f0c7cc3bf6a8"
+    },
+    {
+      "id": "fleurs-en_us-test-1038214857203833067",
+      "split": "test",
+      "language": "en",
+      "text": "Through the night between 150 and 200 copies were made, now known as \"Dunlap broadsides\".",
+      "reference_sha256": "a52b95aa4e386cc14d0c7898f342cfdcfe04b9c6a8d67cf621a68882236f6fa9"
+    },
+    {
+      "id": "fleurs-ru_ru-dev-10121434821159649865",
+      "split": "dev",
+      "language": "ru",
+      "text": "Тысячи лет назад человек по имени Аристарх сказал, что Солнечная система вращается вокруг Солнца.",
+      "reference_sha256": "97c00e1d491e2306055e3a8da0dcd8b6c2660303092b44db609a7aaefe0026f8"
+    },
+    {
+      "id": "fleurs-ru_ru-dev-10189896593749349276",
+      "split": "dev",
+      "language": "ru",
+      "text": "Робин Утхаппа  набрал рекордное количество очков в иннинге: 70 ранов за всего 41 подачу, отбил 11 четвёрок и 2 шестёрки.",
+      "reference_sha256": "70dbac7abe32686472fb2cc67001619f91dd29d78d41e940cde95d533369552c"
+    },
+    {
+      "id": "fleurs-ru_ru-dev-10215205936009281840",
+      "split": "dev",
+      "language": "ru",
+      "text": "Эти теории предполагают, что у людей есть определённые потребности и/или желания, которые накапливаются внутри в процессе взросления.",
+      "reference_sha256": "8752ad02c98db6d605bea14954d0623f9d8c7498767ef738f4f63896d538d56d"
+    },
+    {
+      "id": "fleurs-ru_ru-dev-10221250944584729444",
+      "split": "dev",
+      "language": "ru",
+      "text": "О первых случаях заболевания в этом сезоне было сообщено в июле.",
+      "reference_sha256": "7fc4182a756bd6e07183fc11c53110c14081922cd574f3e3983e0a6d6c3cbd7d"
+    },
+    {
+      "id": "fleurs-ru_ru-dev-1024552646813367065",
+      "split": "dev",
+      "language": "ru",
+      "text": "В северной части, то есть на хребте Сентинел, находятся самые высокие горы Антарктиды — массив Винсон, самая высшая точка которого достигает 4892 м и называется пик Винсон.",
+      "reference_sha256": "5b767d4e195479b4ea19f6a05bfc6dd9d7fc23a7c389b0b72e1527fe97d328a3"
+    },
+    {
+      "id": "fleurs-ru_ru-dev-10267351211453560920",
+      "split": "dev",
+      "language": "ru",
+      "text": "Вариант, становящийся всё более популярным для тех, кто планирует взять академический год, это путешествовать и учиться.",
+      "reference_sha256": "8ccbe0492d26666ad79ec18c0c92cbd85d5cbb4b45106865b4a8eb84e0ba2c23"
+    },
+    {
+      "id": "fleurs-ru_ru-test-10021068571959461962",
+      "split": "test",
+      "language": "ru",
+      "text": "В 1990 году он был добавлен в список всемирного наследия, находящегося под угрозой из-за опасности со стороны песков пустыни.",
+      "reference_sha256": "4ad54b286e4b61e79cf1b36d3256aa8a318490e25d95eb538e40ddaf2f8d0d62"
+    },
+    {
+      "id": "fleurs-ru_ru-test-10024935581249406669",
+      "split": "test",
+      "language": "ru",
+      "text": "Согласно ядерному управлению Японии, на заводе были обнаружены радиоактивный цезий и йод.",
+      "reference_sha256": "4656da0c43d541f98640b72c3de0ced0e71418cf368df157c9cf45c0e9816080"
+    },
+    {
+      "id": "fleurs-ru_ru-test-10037381448507469978",
+      "split": "test",
+      "language": "ru",
+      "text": "Надлежащее использование блогов может дать учащимся возможность стать более аналитичными и критичными. Путём активного отклика на интернет-материалы учащиеся могут определять свою позицию в контексте чужих работ, а также излагать свои собственные взгляды на конкретные вопросы (Оравек, 2002).",
+      "reference_sha256": "6e10d017cbe79003e55c64a47ce2c2cdcc94acec4533d6992464fe782021e1c6"
+    },
+    {
+      "id": "fleurs-ru_ru-test-10040813106556859083",
+      "split": "test",
+      "language": "ru",
+      "text": "Только мутации в клетках зародышевой линии могут передаваться далее детям, в то время как мутации где-то ещё могут привести к гибели клеток или раку.",
+      "reference_sha256": "17d10677925d4a546ff587cea91854a0210485a7e6f5e4b75c7b7958dc1b5c31"
+    },
+    {
+      "id": "fleurs-ru_ru-test-10042408394614123272",
+      "split": "test",
+      "language": "ru",
+      "text": "Не оскверняйте это место, нанося или выцарапывая граффити на объекты вокруг.",
+      "reference_sha256": "021a65e80182987e6c8145d4f04c669393498bb62c861d749c570de34518eb4f"
+    },
+    {
+      "id": "fleurs-ru_ru-test-10065691302010639580",
+      "split": "test",
+      "language": "ru",
+      "text": "Когда все доступные ресурсы эффективно используются во всех функциональных подразделениях организации, то могут проявиться креативность и изобретательность.",
+      "reference_sha256": "3422aceeafb27e8f4b06c5a21ce6a0b59ea4cef7d502d227a2eec13ecb17e69f"
+    },
+    {
+      "id": "fleurs-de_de-dev-10271331673746997728",
+      "split": "dev",
+      "language": "de",
+      "text": "Die Wissenschaft weist nun darauf hin, dass diese massive Kohlenstoffwirtschaft die Biosphäre aus einem ihrer stabilen Zustände, der die menschliche Evolution in den letzten zwei Millionen Jahren getragen hat, herausgebracht hat.",
+      "reference_sha256": "5b7e7307bc1e20d01d31bb116773bb2483e14e2a99460361f572503c5f3a7151"
+    },
+    {
+      "id": "fleurs-de_de-dev-10277724703757163249",
+      "split": "dev",
+      "language": "de",
+      "text": "Ein Kurs deckt alle hier diskutierten Probleme in der Regel viel detaillierter ab, normalerweise in Kombination mit praktischer Erfahrung.",
+      "reference_sha256": "6c92fee1231bacfe8aaa57362c96add0b7949466df85f9e75009a8b6547fc79a"
+    },
+    {
+      "id": "fleurs-de_de-dev-10370307408957851245",
+      "split": "dev",
+      "language": "de",
+      "text": "Handgefertigte Produkte könnten als „antik“ bezeichnet werden, obwohl sie jünger als ähnliche Erzeugnisse aus Massenproduktion sind.",
+      "reference_sha256": "648ac806c84b5d8eae98974b1a26ce5a4d4116dd335c196f69fdf8b371342836"
+    },
+    {
+      "id": "fleurs-de_de-dev-10391130436992033127",
+      "split": "dev",
+      "language": "de",
+      "text": "Das erschien mir nicht sinnvoll; es war ganz gewiss nicht fair.",
+      "reference_sha256": "2feed0d09b226fac0cb673ca8769581daccb88e61226b447b28fb6c786fbbae2"
+    },
+    {
+      "id": "fleurs-de_de-dev-10495200964727225611",
+      "split": "dev",
+      "language": "de",
+      "text": "Die lokalen Behörden ermahnen die Einwohner in der Nähe der Anlage dazu, sich innerhalb von Gebäuden aufzuhaltem, Klimaanlagen auszuschalten und kein Leitungswasser zu trinken.",
+      "reference_sha256": "41764e9eb8dc7e3d209f8885e40fc47917740a3cb76871f6d027280c0719ea99"
+    },
+    {
+      "id": "fleurs-de_de-dev-10512438316606927662",
+      "split": "dev",
+      "language": "de",
+      "text": "Auf vereisten und verschneiten Straßen ist die Haftung gering und man kann nicht fahren, als befinde man sich auf nacktem Asphalt.",
+      "reference_sha256": "e4736f78eb37eef619fbc667da045346644d99006f8a97c2cbd9a154d3ad9339"
+    },
+    {
+      "id": "fleurs-de_de-test-10058299886985225661",
+      "split": "test",
+      "language": "de",
+      "text": "Dieses Sediment war nötig, um Sandbänke und Strände zu bilden, die als Lebensräume für Wildtiere dienten.",
+      "reference_sha256": "1903559eda98b2c7aa1775fd44b4f8c1a01649c86605de731a71f2d2ab783653"
+    },
+    {
+      "id": "fleurs-de_de-test-10095057775426831514",
+      "split": "test",
+      "language": "de",
+      "text": "Blogs können auch dazu beitragen, die Schreibfertigkeiten von Schülern zu verbessern. Zwar haben Schüler am Anfang ihrer Blogerfahrung oft eine schlampige Grammatik und Rechtschreibung, aber das ändert sich normalerweise, wenn es ein Publikum gibt.",
+      "reference_sha256": "4b8e96dcee176498146f95c05545978e6b19ed5bf28f36837516bbe522e67259"
+    },
+    {
+      "id": "fleurs-de_de-test-10159541282515887574",
+      "split": "test",
+      "language": "de",
+      "text": "Nachdem der Damm 1963 erbaut worden war, kamen die jahreszeitlichen Überflutungen, die Sedimente im Fluss verteilen, zum Stillstand.",
+      "reference_sha256": "a677b367f43216b89626b9ffc644fa523795037b437efe503c47fb0d7f795162"
+    },
+    {
+      "id": "fleurs-de_de-test-10166547362714956625",
+      "split": "test",
+      "language": "de",
+      "text": "Insbesondere wird behauptet, dass man erkennen kann, ob jemand lügt, indem man minimale Veränderungen des Gesichtsausdrucks richtig deutet.x",
+      "reference_sha256": "81f017ac91f1211d63f4998a57d2f7b4792fe1dc77eceaa355a1e9d347306309"
+    },
+    {
+      "id": "fleurs-de_de-test-10229344228128634115",
+      "split": "test",
+      "language": "de",
+      "text": "Jeder nimmt an der Gesellschaft teil und benutzt Transportsysteme. Fast jeder beklagt sich über die Transportsysteme.x",
+      "reference_sha256": "2147316775b1c47efd0b55cf499eb6aa8ac5318745ad7573080ef54b2d6cb2aa"
+    },
+    {
+      "id": "fleurs-de_de-test-10240730312646485406",
+      "split": "test",
+      "language": "de",
+      "text": "NextGen ist ein System, von dem die FAA behauptet, dass es Flugzeugen erlauben würde, kürzere Strecken zu fliegen und jedes Jahr Millionen Gallonen an Treibstoff zu sparen und die Kohlenstoffemissionen zu reduzieren.",
+      "reference_sha256": "20ef25b651981bb819284d21233fe267972c51d4cafe0af3a661028e5f79fda5"
+    },
+    {
+      "id": "fleurs-fr_fr-dev-10245663879872870443",
+      "split": "dev",
+      "language": "fr",
+      "text": "De nombreux formats courants (famille de formats APS, par exemple) sont égaux à ce rapport d’aspect ou s’en approchent de près.",
+      "reference_sha256": "7a7b1d87c6385426a5cdc1d396f65815a67854e932d7b837699788577aacf989"
+    },
+    {
+      "id": "fleurs-fr_fr-dev-10283447552217995593",
+      "split": "dev",
+      "language": "fr",
+      "text": "La principale religion en Moldavie est le christianisme orthodoxe.",
+      "reference_sha256": "d7acd93adfe761448f87d13fafb62cf801e941ac1e3a606995ed4c00d02e1abc"
+    },
+    {
+      "id": "fleurs-fr_fr-dev-10287816837959150787",
+      "split": "dev",
+      "language": "fr",
+      "text": "Sur les routes glacées et enneigées, le frottement est faible et vous ne pouvez pas conduire comme si vous étiez sur l'asphalte nu.",
+      "reference_sha256": "5d2a394750d0ee4bff3291c7f2a034e6f815baaaa020e3a8ed3b202dfac5dbc4"
+    },
+    {
+      "id": "fleurs-fr_fr-dev-10331759741273598924",
+      "split": "dev",
+      "language": "fr",
+      "text": "La science montre désormais que cette économie massivement basée sur le carbone a délogé la biosphère de son état de stabilité qui a soutenu l'évolution humaine pendant deux millions d'années.",
+      "reference_sha256": "eb8549709b42fae029c304bb762f8f7392660871e7c2b136a39b485d74f259db"
+    },
+    {
+      "id": "fleurs-fr_fr-dev-10333866429138543044",
+      "split": "dev",
+      "language": "fr",
+      "text": "Noël est l'une des fêtes les plus importantes de la chrétienté, elle célèbre la naissance de Jésus.",
+      "reference_sha256": "1681f9d87f87c873f1aee3a053c1ffc64fd04db3ad60f7c17e9761ea1ed166f2"
+    },
+    {
+      "id": "fleurs-fr_fr-dev-10376292502408079741",
+      "split": "dev",
+      "language": "fr",
+      "text": "Le match s'est joué à un point, 21 à 20, mettant fin à la série de 15 victoires des All Blacks.",
+      "reference_sha256": "c9ac0abf4964b1a00d2b3b707a2d6e390ad7e5edb4776e4d0dbdb4075aee81d1"
+    },
+    {
+      "id": "fleurs-fr_fr-test-10174413140250646001",
+      "split": "test",
+      "language": "fr",
+      "text": "Giancarlo Fisichella a perdu le contrôle de sa voiture et a terminé la course peu après le démarrage.",
+      "reference_sha256": "8ee359ed06e8ac5c43d7b02c72261cfdce37f88289297a2533e90a30aee4affb"
+    },
+    {
+      "id": "fleurs-fr_fr-test-10221277978969763776",
+      "split": "test",
+      "language": "fr",
+      "text": "Malgré le net avantage de Del Potro pendant le deuxième set, il a fallu passer par un tie-break une fois que le score a atteint 6-6.",
+      "reference_sha256": "bff4e4df8e9e236714c3834e91d5db21e0c08b5311008cc43f62df5b3bebcf8d"
+    },
+    {
+      "id": "fleurs-fr_fr-test-10334413597118469552",
+      "split": "test",
+      "language": "fr",
+      "text": "Malheureusement, il est difficile d'étudier le flux de circulation car le comportement des conducteurs ne peut être prédit avec cent pour cent de certitude.",
+      "reference_sha256": "57897d48505c5ac6cd09df00a7d708c58bc3eabc99e39d87a0c29dbbb4669ac8"
+    },
+    {
+      "id": "fleurs-fr_fr-test-10385751433252343757",
+      "split": "test",
+      "language": "fr",
+      "text": "Les deux composés réagissent l'un avec l'autre pour former des cristaux qui peuvent bloquer la fonction rénale, ont déclaré des chercheurs de l'université.",
+      "reference_sha256": "6a4ab662dd9f3f00126f10ed16582997d150b654c0001ae49c1fe75dab2938d1"
+    },
+    {
+      "id": "fleurs-fr_fr-test-10399459061919571703",
+      "split": "test",
+      "language": "fr",
+      "text": "Par exemple, des étudiants de l'école Bennet en Caroline du Nord conçoivent chaque année un site web consacré à leur visite de la capitale de l'État. Chaque année, le site est remis à jour, mais les anciennes versions sont conservées en ligne pour servir d'album.",
+      "reference_sha256": "c2d1b3ec61ce6ceed56b78144a0af67dcca34d09d547b8192e207bd6b151239e"
+    },
+    {
+      "id": "fleurs-fr_fr-test-10451502537136425109",
+      "split": "test",
+      "language": "fr",
+      "text": "Par exemple, le format de photographie le plus courant au monde est le 35 mm ; c'était le format de pellicule le plus répandu à la fin de l'ère des films analogiques.",
+      "reference_sha256": "51b7d5c1abe0fca13a80ca4bfa0dd9c5b5d22525d0bb2e4d6ad478ff5b4746ed"
+    },
+    {
+      "id": "fleurs-es_419-dev-10065021285799740602",
+      "split": "dev",
+      "language": "es",
+      "text": "La ONU tiene la intención de completar un fondo de asistencia en favor de los países víctima de los efectos del calentamiento global, a fin de poder enfrentar su impacto.",
+      "reference_sha256": "b240a52785ff68ee2aa3f069d1ad9ca9a6b4e0be3f40d2fcafd8c89fbc4c1437"
+    },
+    {
+      "id": "fleurs-es_419-dev-10284528973491487253",
+      "split": "dev",
+      "language": "es",
+      "text": "No se han producido cambios en la población original, que aún precisan de las mismas adaptaciones que en el pasado.",
+      "reference_sha256": "838d03459cd76d8c21db6593d8ea4090a59c5d28c69bed478f08dd2b564c168c"
+    },
+    {
+      "id": "fleurs-es_419-dev-10305846877561840904",
+      "split": "dev",
+      "language": "es",
+      "text": "Los rasgos que distinguen a una subcultura pueden ser lingüísticos, estéticos, sexuales, geográficos o estar relacionados con la religión o la política, o una mezcla de factores.",
+      "reference_sha256": "201576876944cfcd51b28aa10a7a75657430efa5df320fecff9d450bd099ad50"
+    },
+    {
+      "id": "fleurs-es_419-dev-10361147817044300684",
+      "split": "dev",
+      "language": "es",
+      "text": "Dele al lugar toda la dignidad, la solemnidad y el respeto que amerita. No bromee acerca del Holocausto o el nazismo.",
+      "reference_sha256": "c1a0e920d2717cb5fe58ed151ac891f24ff6553d48f3f2829625b27aa50945ef"
+    },
+    {
+      "id": "fleurs-es_419-dev-10448209797108863023",
+      "split": "dev",
+      "language": "es",
+      "text": "La estructura que presenta el plumaje sugiere que su función no estaba relacionada con el vuelo, sino que las usaban para regular la temperatura o como indicador de la misma. Los investigadores sostienen que, aunque se trata de la cola de un dinosaurio joven, la muestra analizada presenta rasgos del plumaje de un adulto y no de un polluelo.",
+      "reference_sha256": "0029e7b73d993d7c5dd6c131e5a0408dc6be48d4393c35fc8da52bb338830a17"
+    },
+    {
+      "id": "fleurs-es_419-dev-10482186709370617761",
+      "split": "dev",
+      "language": "es",
+      "text": "Es probable que los safaris sean el mayor atractivo turístico de África y la parte más memorable para muchos visitantes.",
+      "reference_sha256": "92f36ec6f46990a587c3700a428f5a43ddd993d7347dcd6f6609278e6e01d9bf"
+    },
+    {
+      "id": "fleurs-es_419-test-1013662909103347734",
+      "split": "test",
+      "language": "es",
+      "text": "Hoy en día, las personas escriben mensajes en las pantallas de sus computadoras. No tienen la necesidad de, siquiera, aproximarse a un sacapuntas.",
+      "reference_sha256": "2dff69e7e9ebd66bde29807beed1eadc37b6064441175ee2aa5745ef4fb09c2c"
+    },
+    {
+      "id": "fleurs-es_419-test-10149016836336603986",
+      "split": "test",
+      "language": "es",
+      "text": "Los luchadores compañeros de Luna también le rindieron homenaje.",
+      "reference_sha256": "23b03d9304a96433658b88d33b31d76ec32615be73c2c4e8b3e47ce43da6c08a"
+    },
+    {
+      "id": "fleurs-es_419-test-10150624747569080019",
+      "split": "test",
+      "language": "es",
+      "text": "Duvall, que está casado y tiene dos hijos adultos, no causó una buena impresión a Miller, que fue a quien le relató la historia.",
+      "reference_sha256": "2b18b609d24fb9986b827e7e7c6ea79c96324fa41323fe76d2d6cd8529f8b04c"
+    },
+    {
+      "id": "fleurs-es_419-test-10155332265364188477",
+      "split": "test",
+      "language": "es",
+      "text": "Entre los fenómenos climáticos regionales y estacionales extremos encontramos los ventarrones, las tormentas de nieve, hielo o polvo.",
+      "reference_sha256": "d2ede9f2b977d8550efb7f3278341ad5ad83944e154cf97407823ca9d00ad832"
+    },
+    {
+      "id": "fleurs-es_419-test-10192388533260519980",
+      "split": "test",
+      "language": "es",
+      "text": "Se puede definir a una civilización como una cultura específica de la que forma parte un extenso grupo de personas que viven y trabajan en conjunto; es decir, una sociedad.",
+      "reference_sha256": "319351874b5ef9c549a0904aee8eaa2382df854b5fa30c9d83a45837124bc77f"
+    },
+    {
+      "id": "fleurs-es_419-test-10206659851013694932",
+      "split": "test",
+      "language": "es",
+      "text": "Las playas son casi todas de arena con lugares seguros para nadar y en su mayoría tienen árboles pohutukawa que ofrecen lugares de sombra.",
+      "reference_sha256": "43e52d54fdd924cf8751fae9f2277cc9b70ed9efa6e67ce4b9eb92b067abb9d1"
+    },
+    {
+      "id": "fleurs-it_it-dev-10165734210172752151",
+      "split": "dev",
+      "language": "it",
+      "text": "Nel giro di due ore sono esplose altre tre bombe nelle vicinanze degli edifici governativi.",
+      "reference_sha256": "8a91d6e548a38e04597b00c08b45ce4c9d1bd8b316f7f66622212ded946cc9d2"
+    },
+    {
+      "id": "fleurs-it_it-dev-10186053991329522638",
+      "split": "dev",
+      "language": "it",
+      "text": "Al termine dei combattimenti, una volta trasportati i feriti in ospedale, circa 40 dei restanti detenuti rimasero nel piazzale, rifiutandosi di tornare nelle loro celle.",
+      "reference_sha256": "fbf841eda409b50e95a16c3de0c8453c04320381d3df1c2c37656cad8167b7fb"
+    },
+    {
+      "id": "fleurs-it_it-dev-10216872320499187194",
+      "split": "dev",
+      "language": "it",
+      "text": "Il punteggio finale ha decretato la vittoria di un punto (21 a 20), interrompendo la serie di 15 vittorie consecutive degli All Blacks.",
+      "reference_sha256": "92aba8a42ba21566a8304c737736c3bc9765070b7ad79e89a28dc26c7124d3d0"
+    },
+    {
+      "id": "fleurs-it_it-dev-10233042189338940206",
+      "split": "dev",
+      "language": "it",
+      "text": "Alcuni cantanti famosi da tutto il Paese hanno offerto ai piedi di Shri Shyam i bhajan, ovvero dei canti di devozione.",
+      "reference_sha256": "72fad50445504de5f349a4097f4764bc63a49aea2d31def34142b50abece700a"
+    },
+    {
+      "id": "fleurs-it_it-dev-10252058248850833592",
+      "split": "dev",
+      "language": "it",
+      "text": "Su carreggiate ghiacciate e innevate, l'attrito è ridotto e non è possibile guidare come quando ci si trova sull'asfalto pulito.",
+      "reference_sha256": "cf0eba4f97d22c36892f193839dddc64452060f7b8b48bbfb1256ff4a09ac6aa"
+    },
+    {
+      "id": "fleurs-it_it-dev-10276931521973782931",
+      "split": "dev",
+      "language": "it",
+      "text": "L'unica banca delle isole, situata a Stanley di fronte al negozio FIC West, offre il servizio di cambio valuta.",
+      "reference_sha256": "116ec7ff2e8649d545c8fddcc166769718489661c827ebfc1d1fce8df5cf1374"
+    },
+    {
+      "id": "fleurs-it_it-test-10127750728509182272",
+      "split": "test",
+      "language": "it",
+      "text": "In maniera analoga, agli uomini è richiesto di indossare pantaloni lunghi fin sotto le ginocchia.",
+      "reference_sha256": "ba44bf0f38e08d5a294638e3f30b01b4c7e43895e5b0da30b68762dea4bf995e"
+    },
+    {
+      "id": "fleurs-it_it-test-10163392299961827450",
+      "split": "test",
+      "language": "it",
+      "text": "L'iniziativa contro le oscenità è stata finanziata dal Congresso a partire dall'anno fiscale 2005, con la specifica richiesta all'FBI di assegnare 10 agenti alla pornografia per adulti.",
+      "reference_sha256": "c923c72be266d214398931fa9cd1b2150bd15b57c414c974ee209027f375b1b6"
+    },
+    {
+      "id": "fleurs-it_it-test-10166843301601278560",
+      "split": "test",
+      "language": "it",
+      "text": "Anche nelle elezioni parlamentari la maggioranza resta in mano al partito di governo, l'Organizzazione del Popolo dell'Africa del Sud-Ovest (SWAPO).",
+      "reference_sha256": "0ab6dd438f949b3e4f2d62d3fc154aab20569ac3a2a0328a94f7383a5cbfbe15"
+    },
+    {
+      "id": "fleurs-it_it-test-10168148107941542925",
+      "split": "test",
+      "language": "it",
+      "text": "La grotta poggia sulla sommità di una delle montagne a nord della Mecca, completamente distaccata dal resto del mondo.",
+      "reference_sha256": "39c44a6dd91cb39424da86b6015e7aae0a26ff19e897036589c72d4c74e9cd22"
+    },
+    {
+      "id": "fleurs-it_it-test-10173541521390065753",
+      "split": "test",
+      "language": "it",
+      "text": "Secondo il sovrintendente della polizia Chandra Shekhar Solanki, gli imputati sono apparsi in tribunale con il volto coperto.",
+      "reference_sha256": "44d14df7154ced63d11586f6e20ecb6308b053897c92802b232a39bf4a5c11cd"
+    },
+    {
+      "id": "fleurs-it_it-test-10210638754804006465",
+      "split": "test",
+      "language": "it",
+      "text": "Eppure gli uccelli hanno molte caratteristiche che li accomunano ai dinosauri.",
+      "reference_sha256": "56f962515b2d1f00c9dd0c24ab9095d2060c442075bb17bf8c765d11b7c7763c"
+    },
+    {
+      "id": "fleurs-pt_br-dev-10181533133173393073",
+      "split": "dev",
+      "language": "pt",
+      "text": "Robin Uthappa fez a pontuação mais alta do Innings, 70 corridas em apenas 41 bolas, acertando 11 quatros e 2 seis.",
+      "reference_sha256": "81352f7338199a445e71dee260fcbf1e0df598037b5dbb52b6eb401a1067cbfa"
+    },
+    {
+      "id": "fleurs-pt_br-dev-10214311447059175309",
+      "split": "dev",
+      "language": "pt",
+      "text": "A principal cerveja local é a 'Number One'. Ela não é uma cerveja elaborada, mas é prazerosa e refrescante. A outra cerveja local se chama \"Manta\".",
+      "reference_sha256": "0d01ba64c6b0f4be80b846d760787740a63d0b2e8118dc0fcffc49f70221365f"
+    },
+    {
+      "id": "fleurs-pt_br-dev-10221738448089878097",
+      "split": "dev",
+      "language": "pt",
+      "text": "No começo, as vestimentas foram muito influenciadas pela cultura bizantina na região leste.",
+      "reference_sha256": "7410fffb61b8b1713334f76e3140f6f40d6f3bbed1d8768c3c5aa6db999f040c"
+    },
+    {
+      "id": "fleurs-pt_br-dev-10264842099136155935",
+      "split": "dev",
+      "language": "pt",
+      "text": "Como os estudantes frequentemente são a audiência mais crítica, o autor do blog começa a empenhar-se para melhorar a escrita e evitar críticas.",
+      "reference_sha256": "7db145a8018dd62c2c0bacf89d396988c7f4d001677b1d6c7ef977a7079f0b17"
+    },
+    {
+      "id": "fleurs-pt_br-dev-10275176137959631739",
+      "split": "dev",
+      "language": "pt",
+      "text": "A maioria dos distritos é servida por micro-ônibus costeiros japoneses, que são confortáveis e resistentes.",
+      "reference_sha256": "d6109e76dfd3913ef9b615e38d6dc9e440598716882b9a9f5fe55ac34dd24f47"
+    },
+    {
+      "id": "fleurs-pt_br-dev-10281411371095075004",
+      "split": "dev",
+      "language": "pt",
+      "text": "O Amazonas também é o rio mais largo da Terra, às vezes com quase 10 km de largura.",
+      "reference_sha256": "215b105c4518634187943ff05053f34fcd1cb78cf9d9d82e0161407dce400be2"
+    },
+    {
+      "id": "fleurs-pt_br-test-10123292114373653004",
+      "split": "test",
+      "language": "pt",
+      "text": "A parte central da meditação tibetana é o Deity Yoga. Através da visualização de várias divindades, os canais de energia são limpos, os chacras são ativados e a consciência da iluminação é criada.",
+      "reference_sha256": "04c77c4203aa9b77be34ed24873e244c1241537b7b6b5f5e47041b51595228b8"
+    },
+    {
+      "id": "fleurs-pt_br-test-10124265429093233069",
+      "split": "test",
+      "language": "pt",
+      "text": "Suas longas mandíbulas eram cravejadas com mais de 70 dentes afiados, junto com um conjunto extra no céu da boca, o que mostra que nada que cruzasse seu caminho poderia escapar.",
+      "reference_sha256": "a61c9c6972eac73f694c0dd731ffaac47e35cc342d7f9f121087368a57f956ec"
+    },
+    {
+      "id": "fleurs-pt_br-test-101298017130488094",
+      "split": "test",
+      "language": "pt",
+      "text": "O acidente ocorreu em grande altitude no terreno montanhoso, e acredita-se que tenha sido causado por fogo inimigo.",
+      "reference_sha256": "9d09a686b41795ae14eaca860bd497adddc91bdd1f5f9fa9ce46ad8c66b991b7"
+    },
+    {
+      "id": "fleurs-pt_br-test-10134749222604455839",
+      "split": "test",
+      "language": "pt",
+      "text": "Ele também estava envolvido na gravação de cédulas para muitos países, e exemplos recentes de seu trabalho incluíram os retratos do primeiro-ministro nas novas notas de 5 e 100 dólares canadenses.",
+      "reference_sha256": "7ce52700900924fb405170a3aa8191369a28febce762dc24cd3e885bc0c77207"
+    },
+    {
+      "id": "fleurs-pt_br-test-10181435093488396236",
+      "split": "test",
+      "language": "pt",
+      "text": "Consequentemente, duas espécies de peixe entraram em extinção, e duas outras passaram a correr risco, como a espécie Gila cypha.",
+      "reference_sha256": "ed55090388324df9995efbb3a1ae35f8f8ab52df45d872c139df28c0a0b1a666"
+    },
+    {
+      "id": "fleurs-pt_br-test-10182869931433112315",
+      "split": "test",
+      "language": "pt",
+      "text": "Os dois compostos reagem um com o outro para formar cristais que podem bloquear a função renal, afirmaram os pesquisadores da universidade.",
+      "reference_sha256": "4cd411262aeaedcb8805cef68118a84645ab39979821f4aa04f1d58227ad8fc4"
+    }
+  ]
+}

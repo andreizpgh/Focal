@@ -1,0 +1,526 @@
+{
+  "date": "2026-11-05",
+  "scope": "Exploratory host experiments for the segmentation, confidence, formatting and thread choices of the speech pipeline. Parakeet Ultra INT8 through the sherpa-onnx 2.0.1 Python package, greedy TDT, automatic language, CPU, 2 threads unless stated. Inputs: the 84 FLEURS clips of fleurs-references.json, joined per split and language into continuous streams of 42-85 s in four variants (normal 0.3-0.8 s gaps; pause_stress 0.8-2.5 s gaps of -55 dBFS noise; quiet = normal at gain 0.1; noise_gap 0.5-1.5 s pink-noise gaps). Read speech only; x86_64 host timing is relative and not a phone measurement. Both splits informed the choices, so every figure is in-sample.",
+  "scoring": "Same normalisation as scripts/score-wer.py. latency_p50 and finish_to_ready_mean are simulated seconds at a real-time factor of 0.15, not measurements.",
+  "policies": {
+    "whole": "each stream decoded as one window (comparator only)",
+    "focal30": "a replica of the Alpha 9 planner: 30 s windows, 35 s live threshold, low-energy cuts",
+    "energy_min6_max20_p500": "relative-energy detector, pause cut at >= 500 ms once a window holds 6 s, hard cut at 20 s",
+    "silero_min6_max20_p500": "the same cut rule with Silero VAD flags",
+    "silero_min6_max20_p500_rctx": "the same plus 1 s of right context after each pause cut (adopted)"
+  },
+  "exp_a_segmentation": {
+    "dev": {
+      "whole": {
+        "ref_words": 3456,
+        "word_errors": 263,
+        "ref_chars": 17396,
+        "char_errors": 727,
+        "sentences": 184,
+        "dropped_sentences": 4,
+        "insertions": 2,
+        "deletions": 85,
+        "substitutions": 176,
+        "calls": 28,
+        "pause_cuts": 0,
+        "hard_cuts": 0,
+        "break_fp": 24,
+        "max_window_s": 78.53,
+        "latency_p50": 9.75,
+        "finish_to_ready_mean": 8.91,
+        "variants": {
+          "normal": {
+            "word_errors": 52,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          },
+          "quiet": {
+            "word_errors": 107,
+            "ref_words": 864,
+            "dropped_sentences": 4
+          },
+          "pause_stress": {
+            "word_errors": 50,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          },
+          "noise_gap": {
+            "word_errors": 54,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          }
+        }
+      },
+      "focal30": {
+        "ref_words": 3456,
+        "word_errors": 244,
+        "ref_chars": 17396,
+        "char_errors": 730,
+        "sentences": 184,
+        "dropped_sentences": 4,
+        "insertions": 1,
+        "deletions": 86,
+        "substitutions": 157,
+        "calls": 73,
+        "pause_cuts": 45,
+        "hard_cuts": 0,
+        "break_fp": 24,
+        "max_window_s": 29.88,
+        "latency_p50": 10.52,
+        "finish_to_ready_mean": 3.44,
+        "variants": {
+          "normal": {
+            "word_errors": 46,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          },
+          "quiet": {
+            "word_errors": 100,
+            "ref_words": 864,
+            "dropped_sentences": 4
+          },
+          "pause_stress": {
+            "word_errors": 45,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          },
+          "noise_gap": {
+            "word_errors": 53,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          }
+        }
+      },
+      "energy_min6_max20_p500": {
+        "ref_words": 3456,
+        "word_errors": 230,
+        "ref_chars": 17396,
+        "char_errors": 605,
+        "sentences": 184,
+        "dropped_sentences": 1,
+        "insertions": 5,
+        "deletions": 60,
+        "substitutions": 165,
+        "calls": 192,
+        "pause_cuts": 153,
+        "hard_cuts": 11,
+        "break_fp": 30,
+        "max_window_s": 17.18,
+        "latency_p50": 1.99,
+        "finish_to_ready_mean": 1.08,
+        "variants": {
+          "normal": {
+            "word_errors": 54,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          },
+          "quiet": {
+            "word_errors": 84,
+            "ref_words": 864,
+            "dropped_sentences": 1
+          },
+          "pause_stress": {
+            "word_errors": 47,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          },
+          "noise_gap": {
+            "word_errors": 45,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          }
+        }
+      },
+      "silero_min6_max20_p500": {
+        "ref_words": 3456,
+        "word_errors": 221,
+        "ref_chars": 17396,
+        "char_errors": 566,
+        "sentences": 184,
+        "dropped_sentences": 2,
+        "insertions": 2,
+        "deletions": 66,
+        "substitutions": 153,
+        "calls": 199,
+        "pause_cuts": 165,
+        "hard_cuts": 6,
+        "break_fp": 34,
+        "max_window_s": 19.0,
+        "latency_p50": 1.91,
+        "finish_to_ready_mean": 0.96,
+        "variants": {
+          "normal": {
+            "word_errors": 49,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          },
+          "quiet": {
+            "word_errors": 89,
+            "ref_words": 864,
+            "dropped_sentences": 2
+          },
+          "pause_stress": {
+            "word_errors": 40,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          },
+          "noise_gap": {
+            "word_errors": 43,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          }
+        }
+      },
+      "silero_min6_max20_p500_rctx": {
+        "ref_words": 3456,
+        "word_errors": 227,
+        "ref_chars": 17396,
+        "char_errors": 613,
+        "sentences": 184,
+        "dropped_sentences": 2,
+        "insertions": 13,
+        "deletions": 66,
+        "substitutions": 148,
+        "calls": 199,
+        "pause_cuts": 165,
+        "hard_cuts": 6,
+        "break_fp": 15,
+        "max_window_s": 20.0,
+        "latency_p50": 2.62,
+        "finish_to_ready_mean": 1.3,
+        "variants": {
+          "normal": {
+            "word_errors": 50,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          },
+          "quiet": {
+            "word_errors": 91,
+            "ref_words": 864,
+            "dropped_sentences": 2
+          },
+          "pause_stress": {
+            "word_errors": 45,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          },
+          "noise_gap": {
+            "word_errors": 41,
+            "ref_words": 864,
+            "dropped_sentences": 0
+          }
+        }
+      }
+    },
+    "test": {
+      "whole": {
+        "ref_words": 3844,
+        "word_errors": 393,
+        "ref_chars": 20040,
+        "char_errors": 1096,
+        "sentences": 192,
+        "dropped_sentences": 7,
+        "insertions": 7,
+        "deletions": 173,
+        "substitutions": 213,
+        "calls": 28,
+        "pause_cuts": 0,
+        "hard_cuts": 0,
+        "break_fp": 20,
+        "max_window_s": 84.81,
+        "latency_p50": 12.58,
+        "finish_to_ready_mean": 10.16,
+        "variants": {
+          "normal": {
+            "word_errors": 81,
+            "ref_words": 961,
+            "dropped_sentences": 1
+          },
+          "quiet": {
+            "word_errors": 155,
+            "ref_words": 961,
+            "dropped_sentences": 4
+          },
+          "pause_stress": {
+            "word_errors": 78,
+            "ref_words": 961,
+            "dropped_sentences": 1
+          },
+          "noise_gap": {
+            "word_errors": 79,
+            "ref_words": 961,
+            "dropped_sentences": 1
+          }
+        }
+      },
+      "focal30": {
+        "ref_words": 3844,
+        "word_errors": 335,
+        "ref_chars": 20040,
+        "char_errors": 1003,
+        "sentences": 192,
+        "dropped_sentences": 7,
+        "insertions": 8,
+        "deletions": 162,
+        "substitutions": 165,
+        "calls": 80,
+        "pause_cuts": 52,
+        "hard_cuts": 0,
+        "break_fp": 29,
+        "max_window_s": 29.88,
+        "latency_p50": 10.39,
+        "finish_to_ready_mean": 3.43,
+        "variants": {
+          "normal": {
+            "word_errors": 69,
+            "ref_words": 961,
+            "dropped_sentences": 1
+          },
+          "quiet": {
+            "word_errors": 134,
+            "ref_words": 961,
+            "dropped_sentences": 4
+          },
+          "pause_stress": {
+            "word_errors": 67,
+            "ref_words": 961,
+            "dropped_sentences": 1
+          },
+          "noise_gap": {
+            "word_errors": 65,
+            "ref_words": 961,
+            "dropped_sentences": 1
+          }
+        }
+      },
+      "energy_min6_max20_p500": {
+        "ref_words": 3844,
+        "word_errors": 274,
+        "ref_chars": 20040,
+        "char_errors": 703,
+        "sentences": 192,
+        "dropped_sentences": 2,
+        "insertions": 16,
+        "deletions": 93,
+        "substitutions": 165,
+        "calls": 216,
+        "pause_cuts": 179,
+        "hard_cuts": 9,
+        "break_fp": 49,
+        "max_window_s": 19.24,
+        "latency_p50": 1.92,
+        "finish_to_ready_mean": 1.14,
+        "variants": {
+          "normal": {
+            "word_errors": 82,
+            "ref_words": 961,
+            "dropped_sentences": 1
+          },
+          "quiet": {
+            "word_errors": 92,
+            "ref_words": 961,
+            "dropped_sentences": 1
+          },
+          "pause_stress": {
+            "word_errors": 50,
+            "ref_words": 961,
+            "dropped_sentences": 0
+          },
+          "noise_gap": {
+            "word_errors": 50,
+            "ref_words": 961,
+            "dropped_sentences": 0
+          }
+        }
+      },
+      "silero_min6_max20_p500": {
+        "ref_words": 3844,
+        "word_errors": 244,
+        "ref_chars": 20040,
+        "char_errors": 551,
+        "sentences": 192,
+        "dropped_sentences": 0,
+        "insertions": 15,
+        "deletions": 52,
+        "substitutions": 177,
+        "calls": 234,
+        "pause_cuts": 197,
+        "hard_cuts": 9,
+        "break_fp": 55,
+        "max_window_s": 20.0,
+        "latency_p50": 1.9,
+        "finish_to_ready_mean": 0.89,
+        "variants": {
+          "normal": {
+            "word_errors": 59,
+            "ref_words": 961,
+            "dropped_sentences": 0
+          },
+          "quiet": {
+            "word_errors": 70,
+            "ref_words": 961,
+            "dropped_sentences": 0
+          },
+          "pause_stress": {
+            "word_errors": 58,
+            "ref_words": 961,
+            "dropped_sentences": 0
+          },
+          "noise_gap": {
+            "word_errors": 57,
+            "ref_words": 961,
+            "dropped_sentences": 0
+          }
+        }
+      },
+      "silero_min6_max20_p500_rctx": {
+        "ref_words": 3844,
+        "word_errors": 237,
+        "ref_chars": 20040,
+        "char_errors": 517,
+        "sentences": 192,
+        "dropped_sentences": 0,
+        "insertions": 16,
+        "deletions": 51,
+        "substitutions": 170,
+        "calls": 234,
+        "pause_cuts": 197,
+        "hard_cuts": 9,
+        "break_fp": 30,
+        "max_window_s": 21.0,
+        "latency_p50": 2.62,
+        "finish_to_ready_mean": 1.42,
+        "variants": {
+          "normal": {
+            "word_errors": 54,
+            "ref_words": 961,
+            "dropped_sentences": 0
+          },
+          "quiet": {
+            "word_errors": 71,
+            "ref_words": 961,
+            "dropped_sentences": 0
+          },
+          "pause_stress": {
+            "word_errors": 58,
+            "ref_words": 961,
+            "dropped_sentences": 0
+          },
+          "noise_gap": {
+            "word_errors": 54,
+            "ref_words": 961,
+            "dropped_sentences": 0
+          }
+        }
+      }
+    }
+  },
+  "exp_b_confidence": {
+    "feature": "minimum content-token probability of a word",
+    "threshold": 0.5,
+    "dev": {
+      "flag_rate": 0.0076,
+      "precision": 0.79,
+      "recall": 0.12,
+      "auroc": 0.88
+    },
+    "test": {
+      "flag_rate": 0.01,
+      "precision": 0.86,
+      "recall": 0.17,
+      "auroc": 0.855
+    },
+    "distinct_flagged_words": {
+      "dev": 15,
+      "test": 21
+    },
+    "precision_distinct_words_ci95": {
+      "dev": [
+        0.55,
+        0.93
+      ],
+      "test": [
+        0.6,
+        0.92
+      ]
+    },
+    "caveat": "Flags repeat across the variants of the same clips; fewer than 10 flags per language, German 0 of 1 on both splits."
+  },
+  "exp_c_formatting": {
+    "seam_repair_lowercase_rule": {
+      "adopted_policy_with_right_context": {
+        "seams": 271,
+        "fixed": 8,
+        "damaged": 1
+      },
+      "without_right_context": {
+        "seams": 283,
+        "fixed": 38,
+        "damaged": 1
+      },
+      "rejected_title_case_lowering_with_right_context": {
+        "seams": 271,
+        "fixed": 14,
+        "damaged": 23
+      }
+    },
+    "hard_cut_duplicate_guard": {
+      "stress_hard_o10": {
+        "word_errors": 153,
+        "ref_words": 1728,
+        "hard_cuts": 86,
+        "deduped": 0,
+        "extra_near_cut": 16,
+        "changed_near_cut": 13,
+        "lost_near_cut": 4
+      },
+      "stress_hard_o10+dedupe": {
+        "word_errors": 139,
+        "ref_words": 1728,
+        "hard_cuts": 86,
+        "deduped": 14,
+        "extra_near_cut": 2,
+        "changed_near_cut": 13,
+        "lost_near_cut": 4
+      }
+    },
+    "paragraph_grid": {
+      "T1.0_minS2_L80": {
+        "paragraphs": 166,
+        "sentences_mean": 2.33,
+        "share_1": 0.223,
+        "words_p50": 40.0,
+        "words_max": 102
+      },
+      "T1.5_minS2_L80": {
+        "paragraphs": 151,
+        "sentences_mean": 2.56,
+        "share_1": 0.219,
+        "words_p50": 41,
+        "words_max": 102
+      },
+      "T2.0_minS2_L80": {
+        "paragraphs": 138,
+        "sentences_mean": 2.8,
+        "share_1": 0.196,
+        "words_p50": 44.5,
+        "words_max": 102
+      }
+    },
+    "paragraph_note": "Synthetic gaps; no reference paragraphs exist. Pauses are measured from token times and run about 0.3-0.5 s longer than the acoustic gap."
+  },
+  "exp_d_threads": {
+    "median_rtf": {
+      "2_threads": 0.127,
+      "4_threads": 0.092
+    },
+    "speedup_4_over_2": 1.38,
+    "load_s_median": 2.85,
+    "peak_rss_mib_by_window_s": {
+      "20": 1470,
+      "30": 1673,
+      "74": 2538
+    },
+    "note": "x86_64 host, relative only: phone thread scaling, memory and heat are not measured."
+  }
+}

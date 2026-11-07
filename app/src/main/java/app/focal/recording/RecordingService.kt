@@ -1,41 +1,70 @@
 package app.focal.recording
 
 import android.Manifest
-import android.app.*
+import android.app.Notification
+import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
-import android.media.*
-import android.os.*
-import androidx.core.app.NotificationCompat
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioRecord
+import android.media.AudioRecordingConfiguration
+import android.media.MediaRecorder
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.os.Process
+import android.os.SystemClock
+import android.text.format.Formatter
+import android.util.Log
 import androidx.core.content.ContextCompat
 import app.focal.BuildConfig
 import app.focal.FocalApplication
-import app.focal.MainActivity
 import app.focal.R
 import app.focal.core.DecodePolicy
-import app.focal.core.SpeechGate
-import app.focal.core.Transcript
-import app.focal.data.Chunk
+import app.focal.core.LevelMeter
+import app.focal.core.MeterMath
+import app.focal.core.SpeechDetector
+import app.focal.data.CaptureReason
+import app.focal.data.NoteState
 import app.focal.data.NoteStore
-import app.focal.speech.Transcriber
+import app.focal.data.StoredWindow
+import app.focal.data.WaitCause
+import app.focal.speech.DeviceSpeechPolicy
+import app.focal.speech.ENGINE_STOPPED
+import app.focal.speech.EngineFault
+import app.focal.speech.EngineStage
+import app.focal.speech.MODEL_MISSING
+import app.focal.speech.ModelStatus
+import app.focal.speech.SileroVad
+import app.focal.speech.UltraEngine
+import app.focal.speech.UltraModel
 import app.focal.speech.UltraTranscriber
-import app.focal.speech.UltraWindowPlanner
-import app.focal.speech.PreviewEngineFactory
-import kotlinx.coroutines.*
+import app.focal.speech.waitCause
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.BufferedOutputStream
+import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
-
-data class LiveSession(val noteId: String? = null, val paused: Boolean = false, val processing: Boolean = false,
-                       val duration: Long = 0, val level: Float = 0f, val message: String = "", val pending: Int = 0)
-object RecordingState { val live = MutableStateFlow(LiveSession()) }
 
 /** Small device boundaries also allow deterministic capture-durability tests without speech models. */
 internal interface RecordingInput : AutoCloseable {
@@ -45,12 +74,31 @@ internal interface RecordingInput : AutoCloseable {
     fun stop()
     fun read(samples: ShortArray, offset: Int, count: Int): Int
 }
+
 internal interface RecordingDecoder : AutoCloseable {
-    suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int)
+    /** Loads the recognizer ahead of the first window, with [threads] fixed for its lifetime. */
+    fun prepare(threads: Int) {}
+
+    /** Decodes one persisted window and commits it with [NoteStore.commitDecoded]. */
+    suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int)
     fun cancel()
 }
 
-/** The activity is only a controller. This microphone foreground service owns capture. */
+/**
+ * Owns capture and transcription. The activity is only a controller.
+ *
+ * Capture (one microphone session at a time) writes 16 kHz PCM to the note's file on its own thread at
+ * audio priority, syncs it every second and never waits for SQLite, the model or the UI. Pause, an
+ * automatic pause (a call or another app silenced the microphone, storage nearly full) and Resume keep the
+ * microphone foreground-service type; each pause is recorded as a break where segmentation closes the
+ * open window.
+ *
+ * One speech worker transcribes sequentially: the live recording first (windows planned by Silero VAD over
+ * the synced audio, each persisted before it is decoded), then the recording that just finished, notes the
+ * user asked to retry, and, when started from the visible app, every note waiting for transcription. A new
+ * recording preempts the queue; the preempted note waits. After Finish the service switches to the
+ * media-processing (dataSync before Android 15) type, drains the rest and posts "Note ready".
+ */
 class RecordingService : Service() {
     private val app get() = application as FocalApplication
     private val store get() = app.store
@@ -61,231 +109,425 @@ class RecordingService : Service() {
     private val speechDispatcher = Executors.newSingleThreadExecutor { task ->
         Thread({ Process.setThreadPriority(Process.THREAD_PRIORITY_DEFAULT); task.run() }, "focal-speech")
     }.asCoroutineDispatcher()
-    private val stopping = AtomicBoolean(false)
-    private val paused = AtomicBoolean(false)
+    private val main = Handler(Looper.getMainLooper())
+    private lateinit var notifications: ServiceNotifications
+    private val notificationLock = Any()
+    private val workLock = Any()
+    private val power by lazy { getSystemService(PowerManager::class.java) }
+    private var wakeLock: PowerManager.WakeLock? = null
+    /** When the wake lock was last acquired (elapsed realtime); guarded by the service monitor. */
+    private var wakeAcquiredAt = 0L
     private val captureAwake = AtomicBoolean(false)
     private val decoderAwake = AtomicBoolean(false)
-    private val inputLock = Any()
-    private val notificationLock = Any()
     @Volatile private var destroyed = false
-    private var input: RecordingInput? = null
-    @Volatile private var inputRunning = false
-    @Volatile private var recordingDone = false
-    @Volatile private var noteId: String? = null
-    @Volatile private var transcriber: RecordingDecoder? = null
-    @Volatile private var captureFailure: String? = null
-    @Volatile private var decodeFailure: String? = null
-    private var started = false
-    private var ownership: SessionOperations.SessionClaim? = null
-    private var wakeLock: PowerManager.WakeLock? = null
-    private var startup: Job? = null
+    /** This instance's generation: its teardown never changes what a newer instance published. */
+    private val liveGeneration = RecordingState.newGeneration()
+    /** The latest start id (main thread): stopping with it never cancels a newer queued command. */
+    private var lastStartId = 0
+
+    // Guarded by workLock.
+    @Volatile private var capture: Capture? = null
+    private val finishing = ArrayDeque<String>()
+    private val requested = LinkedHashSet<String>()
+    private val owned = HashMap<String, SessionOperations.SessionClaim>()
+    private var drainWaiting = false
+    /** DRAIN arrived since the worker last looked for waiting notes. */
+    private var drainRequested = false
+    /** RECOVER commands accepted but not yet in [requested] (their failed windows are being reset). */
+    private var pendingRequests = 0
     private var worker: Job? = null
-    private var capture: Job? = null
-    private val power by lazy { getSystemService(PowerManager::class.java) }
+
+    // Speech worker state.
+    @Volatile private var transcriber: RecordingDecoder? = null
+    @Volatile private var processingNote: String? = null
+    @Volatile private var processingTitle = ""
+    /** When the note being transcribed was made: its notification says "Note at 14:32" until it has a title. */
+    @Volatile private var processingCreated = 0L
+    @Volatile private var engineRetry = false
+    private val skipped = HashSet<String>()
 
     override fun onCreate() {
         super.onCreate()
-        getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "Recording", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Recording controls and transcription progress"; setSound(null, null)
-            })
+        notifications = ServiceNotifications(this).also { it.createChannels() }
+        wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Focal:recording").apply { setReferenceCounted(false) }
     }
+
     override fun onBind(intent: Intent?) = null
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        lastStartId = startId
         when (intent?.action) {
-            START, RECOVER -> if (!started) {
-                val recovery = intent.action == RECOVER
-                val recoverId = intent.getStringExtra(NOTE)
-                recordingDone = recovery
-                // Every raw FGS start must be promoted before rejecting it. A stale idle
-                // command can share a ServiceRecord with a newer queued foreground start.
-                try { foreground(if (recovery) "Preparing transcript…" else "Starting recording…", recovery) }
-                catch (error: RuntimeException) {
-                    RecordingState.live.value = LiveSession(message = if (error is SecurityException)
-                        "Allow microphone access and start recording while Focal is open." else "Recording could not start. Open Focal and try again.")
-                    // A microphone permission can disappear after command validation.
-                    // Processing promotion opens no microphone and disarms the FGS deadline.
-                    runCatching { foreground("Recording unavailable", true) }
+            START -> startCapture(intent.getStringExtra(OPERATION), startId)
+            RECOVER -> {
+                val id = intent.getStringExtra(NOTE)
+                if (id.isNullOrBlank()) {
+                    // A malformed raw intent: answer the foreground start, then stop unless other work runs.
+                    runCatching { restoreForeground(preferProcessing = true) }
                     SessionOperations.releasePending(intent.getStringExtra(OPERATION))
-                    stopSelfResult(startId); return START_NOT_STICKY
-                }
-                if (recovery && recoverId.isNullOrBlank()) {
-                    RecordingState.live.value = LiveSession(message = "This note is no longer available.")
-                    stopSelfResult(startId); return START_NOT_STICKY
-                }
-                val claim = try {
-                    SessionOperations.acceptSession(intent.getStringExtra(OPERATION), capture = !recovery, noteId = if (recovery) recoverId else null)
-                } catch (_: Exception) { null }
-                if (claim == null) {
-                    if (RecordingState.live.value.noteId == null)
-                        RecordingState.live.value = LiveSession(message = "This session is busy. Try again when its current operation finishes.")
-                    stopSelfResult(startId); return START_NOT_STICKY
-                }
-                ownership = claim
-                started = true
-                startup = scope.launch { begin(if (recovery) recoverId else null) }
+                    stopIfIdle(startId)
+                } else startProcessing(id, intent.getStringExtra(OPERATION), intent.getBooleanExtra(RETRY_FAILED, false), startId)
             }
-            PAUSE, RESUME -> if (started && !recordingDone && !stopping.get() && !RecordingState.live.value.processing) {
-                paused.set(intent.action == PAUSE)
-                if (paused.get()) interruptInput()
-                // Capture acknowledges only after the microphone stops and PCM is synced.
-            } else if (!started) stopSelfResult(startId)
-            STOP -> if (started) {
-                stopping.set(true)
-                interruptInput()
-            } else stopSelfResult(startId)
-            else -> if (!started) stopSelfResult(startId)
+            DRAIN -> startProcessing(null, null, false, startId)
+            PAUSE -> capture?.requestPause() ?: stopIfIdle(startId)
+            RESUME -> capture?.requestResume() ?: stopIfIdle(startId)
+            STOP -> capture?.requestStop() ?: stopIfIdle(startId)
+            else -> stopIfIdle(startId)
         }
         // Never silently reopen a microphone after process death.
         return START_NOT_STICKY
     }
 
-    private suspend fun begin(recover: String?) {
-        try {
-            app.storageReady.await()
-            if (stopping.get()) { stopSelf(); return }
-            val newEngine = (if (BuildConfig.DEBUG) speechEngineForTests else null)
-                ?: if (BuildConfig.FOCAL_ULTRA_BUNDLED) "ultra-v1" else "whisper"
-            val id = recover?.also { checkNotNull(store.note(it)) { "This note is no longer available." } }
-                ?: store.create(if (newEngine == "ultra-v1") "auto" else app.preferences.settings.value.language, newEngine)
-            noteId = id
-            ownership?.bindNote(id)
-            val note = checkNotNull(store.note(id))
-            RecordingState.live.value = LiveSession(id, paused = paused.get(), processing = recover != null,
-                duration = note.duration, message = if (recover != null) "Preparing transcript…" else "Starting recording…")
-            wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Focal:recording").apply { setReferenceCounted(false) }
-            recordingDone = recover != null
-            if (recover != null) {
-                // A failed live finalization can leave WRITING metadata or a
-                // durable tail even though application startup already recovered.
-                store.recover(id)
-                val duration = checkNotNull(store.note(id)).duration
-                RecordingState.live.update { if (it.noteId == id) it.copy(duration = duration) else it }
-                store.state(id, "PROCESSING")
+    // ------------------------------------------------------------------ commands
+
+    private fun startCapture(token: String?, startId: Int) {
+        // Every foreground-service start must be promoted before it can be rejected.
+        try { promote(microphoneType(), capture?.let { recordingNotification(it) } ?: notifications.starting()) }
+        catch (error: RuntimeException) {
+            // The microphone type can be refused (permission removed, or a start from the background).
+            RecordingState.events.tryEmit(ServiceEvent.StartFailed(
+                if (error is SecurityException) StartFailure.PERMISSION else StartFailure.OTHER, getString(R.string.error_start)))
+            // Processing promotion opens no microphone and disarms the foreground-start deadline.
+            runCatching { promote(processingType(), notifications.transcribing(processingNote, "", 0, null, false)) }
+            SessionOperations.releasePending(token)
+            stopIfIdle(startId); return
+        }
+        val claim = try { SessionOperations.acceptSession(token, capture = true, noteId = null) } catch (_: Exception) { null }
+        if (claim == null) {
+            // A second Record while recording is idempotent; anything else reports that capture is busy.
+            restoreForeground()
+            stopIfIdle(startId); return
+        }
+        val session = Capture(claim)
+        synchronized(workLock) { capture = session }
+        // A finishing recording may have promoted transcription since the promotion above: the microphone
+        // type and notification of this capture win now that it is current.
+        promoteForCurrentWork()
+        session.job = scope.launch(captureDispatcher) { runCapture(session) }
+        ensureWorker()
+    }
+
+    private fun startProcessing(noteId: String?, token: String?, retryFailed: Boolean, startId: Int) {
+        try { restoreForeground(preferProcessing = true) }
+        catch (_: RuntimeException) {
+            SessionOperations.releasePending(token)
+            stopIfIdle(startId); return
+        }
+        if (noteId != null) {
+            val claim = try { SessionOperations.acceptSession(token, capture = false, noteId = noteId) } catch (_: Exception) { null }
+            if (claim == null) {
+                stopIfIdle(startId); return
             }
-            else capture = scope.launch(captureDispatcher) { captureAudio(id, note.speechEngine == "ultra-v1") }
-            worker = scope.launch(speechDispatcher) { processQueue(id, note.language, note.speechEngine) }
+            synchronized(workLock) {
+                owned[noteId]?.takeIf { it !== claim }?.release()
+                owned[noteId] = claim
+                skipped -= noteId
+                // Counted now, so a worker that is just going idle does not stop the service under it.
+                pendingRequests++
+            }
+            // The user's Retry forgets the speech work's deaths and failed loads, then tries a failed model install
+            // again, before the worker looks at either.
+            val unblocked = app.engineGuard.reset()
+            val reinstall = app.models.status.value is ModelStatus.Failed
+            app.models.retry()
+            engineRetry = true
+            notifications.cancelTimedOut()
             scope.launch {
-                var ticks = 0
-                while (isActive && RecordingState.live.value.noteId == id) {
-                    delay(1000)
-                    if (++ticks % (30 * 60) == 0) reconcileWake(renew = true)
-                    runCatching { store.pendingCount(id) }.getOrNull()?.let { pending ->
-                        RecordingState.live.update { if (it.noteId == id) it.copy(pending = pending) else it }
+                try {
+                    // Only the user's explicit retry gives failed windows new attempts.
+                    if (retryFailed) store.retryFailed(noteId)
+                } catch (error: Exception) { Log.w(TAG, "Could not reset failed windows", error) }
+                finally {
+                    // Queued only now, so the worker never sees the note before its failed windows are pending.
+                    synchronized(workLock) {
+                        requested += noteId; pendingRequests--
+                        // Try again lifted the guard's block or tried a failed model install again, either of which had
+                        // kept every waiting note from resuming (the foreground start sent no DRAIN): they follow this
+                        // one, also those it set aside meanwhile. RECOVER comes only from the visible app, as DRAIN must.
+                        if (unblocked || reinstall) { skipped.clear(); drainWaiting = true; drainRequested = true }
                     }
-                    updateNotification()
                 }
+                ensureWorker()
             }
-        } catch (error: Exception) {
-            if (error is CancellationException) throw error
-            captureFailure = error.message ?: "Could not start recording."
-            noteId?.let { runCatching { store.state(it, "ERROR", captureFailure!!) } }
-            RecordingState.live.value = LiveSession(message = captureFailure!!)
-            stopSelf()
+        } else {
+            // The foreground start's automatic resume: a stage that dies soon after it counts as quick before API 30.
+            app.engineGuard.resumedAutomatically()
+            synchronized(workLock) { drainWaiting = true; drainRequested = true }
+            notifications.cancelTimedOut()
+            ensureWorker()
         }
     }
 
-    private fun interruptInput() = synchronized(inputLock) { runCatching { input?.stop() }; inputRunning = false }
-    private fun microphoneInterrupted() {
-        captureFailure = "Android muted the microphone, possibly because of a call or another app. Saved audio is safe."
-        stopping.set(true)
-        interruptInput()
+    private fun stopIfIdle(startId: Int) {
+        val idle = synchronized(workLock) { capture == null && worker == null }
+        if (idle) stopSelfResult(startId)
     }
 
+    // ------------------------------------------------------------------ foreground
+
+    private fun microphoneType() = if (Build.VERSION.SDK_INT >= 30) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
+    private fun processingType() = when {
+        Build.VERSION.SDK_INT >= 35 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
+        Build.VERSION.SDK_INT >= 29 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        else -> 0
+    }
+
+    private fun promote(type: Int, notification: Notification) = synchronized(notificationLock) {
+        if (destroyed) return@synchronized
+        if (Build.VERSION.SDK_INT >= 29) startForeground(ServiceNotifications.FOREGROUND_ID, notification, type)
+        else startForeground(ServiceNotifications.FOREGROUND_ID, notification)
+    }
+
+    /** Re-promotes with the type the current work needs (each foreground start must be answered). */
+    private fun restoreForeground(preferProcessing: Boolean = false) = synchronized(notificationLock) {
+        val session = capture
+        if (session != null && !session.ended) promote(microphoneType(), foregroundNotification())
+        else if (preferProcessing || worker != null) promote(processingType(), transcribingNotification())
+    }
+
+    /**
+     * Promotes with the type and notification of the current work, decided under the notification lock: a
+     * live capture keeps the microphone type, otherwise transcription's type. Throws if Android refuses.
+     */
+    private fun promoteForCurrentWork() = synchronized(notificationLock) {
+        val session = capture
+        if (session != null && !session.ended) promote(microphoneType(), foregroundNotification())
+        else promote(processingType(), transcribingNotification())
+    }
+
+    /** The foreground notification for the current work: a live capture always wins over transcription. */
+    private fun foregroundNotification(): Notification {
+        val session = capture
+        return when {
+            session == null || session.ended -> transcribingNotification()
+            session.noteId == null -> notifications.starting()
+            else -> recordingNotification(session)
+        }
+    }
+
+    /** Changes the published session as this instance ([RecordingState.publish]); [transform] must not block. */
+    private fun updateLive(transform: (LiveSession) -> LiveSession) = RecordingState.publish(liveGeneration, transform)
+
+    /**
+     * Re-posts the foreground notification for whatever runs now. Every update goes through here, so a
+     * transcription update that lands after a new recording started cannot replace its chronometer and
+     * Pause/Finish actions.
+     */
+    private fun refreshNotification() = synchronized(notificationLock) {
+        if (!destroyed) notifications.update(foregroundNotification())
+    }
+
+    private fun recordingNotification(session: Capture): Notification =
+        notifications.recording(session.noteId, session.elapsedMs, session.paused.get(), session.pauseReason)
+
+    private fun transcribingNotification(): Notification {
+        val live = RecordingState.live.value
+        val id = processingNote ?: live.noteId
+        return notifications.transcribing(id, processingTitle, processingCreated, live.progress, live.speech == SpeechAvailability.PREPARING)
+    }
+
+
+    /**
+     * Holds the CPU awake while capture or a decode needs it. The lock has a timeout (a lost release never
+     * holds it for good), so long work renews it: capture calls this every second and the worker on every
+     * pass, which re-acquires it [WakePolicy.RENEW_MS] after the last acquisition and whenever it expired,
+     * whether or not anything is being decoded (long silence, a model still installing, thermal waits).
+     */
+    @Synchronized private fun reconcileWake() {
+        wakeLock?.let { lock ->
+            val wanted = captureAwake.get() || decoderAwake.get()
+            val now = SystemClock.elapsedRealtime()
+            when (WakePolicy.action(wanted, lock.isHeld, wakeAcquiredAt, now)) {
+                WakePolicy.Action.RELEASE -> runCatching { lock.release() }
+                WakePolicy.Action.ACQUIRE -> {
+                    // Not reference counted: acquiring a held lock re-arms its timeout.
+                    lock.acquire(WakePolicy.TIMEOUT_MS)
+                    wakeAcquiredAt = now
+                }
+                WakePolicy.Action.KEEP -> Unit
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ capture
+
     private sealed interface CaptureEvent {
-        data class Begin(val startMs: Long, val overlap: Boolean) : CaptureEvent
-        data class End(val endMs: Long) : CaptureEvent
         data class Duration(val ms: Long) : CaptureEvent
         data class State(val name: String) : CaptureEvent
+        data class AutoPause(val reason: String) : CaptureEvent
+        /** A Pause at this PCM sample, already synced: segmentation closes the open window there. */
+        data class Break(val sample: Long) : CaptureEvent
+    }
+
+    /** One microphone session: its claim, controls and the state the worker and notifications read. */
+    private inner class Capture(val claim: SessionOperations.SessionClaim) {
+        @Volatile var noteId: String? = null
+        val stopping = AtomicBoolean(false)
+        val paused = AtomicBoolean(false)
+        val resumeRequested = AtomicBoolean(false)
+        @Volatile var pauseReason: String? = null
+        @Volatile var storageShort = 0L
+        /** The microphone delivered audio once: the recognizer may load now. */
+        @Volatile var started = false
+        /** Audio is closed and its metadata drained: transcription treats the recording as finished. */
+        @Volatile var ended = false
+        @Volatile var failure: String? = null
+        @Volatile var endReason: String? = null
+        @Volatile var elapsedMs = 0L
+        @Volatile var deviceFailed = false
+        var job: Job? = null
+        private val inputLock = Any()
+        private var input: RecordingInput? = null
+        @Volatile var inputRunning = false
+
+        fun attach(device: RecordingInput?) = synchronized(inputLock) { input = device; inputRunning = false }
+
+        /** Starts the microphone unless a stop or pause arrived first. */
+        fun startInput(): Boolean = synchronized(inputLock) {
+            val device = input ?: return false
+            if (!stopping.get() && !paused.get()) { device.start(); inputRunning = true }
+            inputRunning
+        }
+
+        fun stopInput() = synchronized(inputLock) { runCatching { input?.stop() }; inputRunning = false }
+
+        fun requestPause() {
+            if (ended || stopping.get()) return
+            pauseReason = null
+            paused.set(true)
+            stopInput()
+            // Capture acknowledges only after the microphone stops and PCM is synced.
+        }
+
+        fun requestResume() {
+            if (ended || stopping.get() || !paused.get()) return
+            resumeRequested.set(true)
+        }
+
+        fun requestStop() {
+            stopping.set(true)
+            stopInput()
+        }
+
+        /** Pauses on its own (call, silenced microphone, storage); the user resumes when ready. */
+        fun pauseAutomatically(reason: String) {
+            if (ended || stopping.get()) return
+            pauseReason = reason
+            paused.set(true)
+            stopInput()
+        }
     }
 
     /** Scalar metadata only: capture never waits for SQLite or queues audio in memory. */
-    private inner class CaptureMetadata(private val id: String) {
+    private inner class CaptureMetadata(private val session: Capture, private val id: String) {
         private val events = Channel<CaptureEvent>(
             if (BuildConfig.DEBUG) metadataCapacityForTests?.coerceIn(1, METADATA_CAPACITY) ?: METADATA_CAPACITY else METADATA_CAPACITY
         )
-        private val failed = AtomicBoolean(false)
-        private val unpublishedFrom = AtomicLong(Long.MAX_VALUE)
-        @Volatile private var lastPublishedEndMs = 0L
+        private val rejected = AtomicBoolean(false)
         private val job = app.scope.launch(Dispatchers.IO) {
-            var chunkId: String? = null
-            var activeStart: Long? = null
             try {
                 for (event in events) {
                     when (event) {
-                        is CaptureEvent.Begin -> {
-                            activeStart = event.startMs
-                            chunkId = store.beginChunk(id, event.startMs, event.overlap)
-                        }
-                        is CaptureEvent.End -> {
-                            store.finishChunk(checkNotNull(chunkId) { "Missing audio range metadata." }, event.endMs)
-                            lastPublishedEndMs = maxOf(lastPublishedEndMs, event.endMs)
-                            chunkId = null; activeStart = null
-                        }
                         is CaptureEvent.Duration -> store.duration(id, event.ms)
                         is CaptureEvent.State -> store.state(id, event.name)
+                        is CaptureEvent.AutoPause -> store.pauseAutomatically(id, event.reason)
+                        is CaptureEvent.Break -> store.addBreak(id, event.sample)
                     }
                 }
             } catch (_: Exception) {
-                failed.set(true)
-                activeStart?.let { start -> unpublishedFrom.accumulateAndGet(start, { a, b -> minOf(a, b) }) }
-                captureFailure = captureFailure ?: "Recording metadata could not be saved. Original audio is kept for recovery."
-                stopping.set(true); interruptInput()
+                rejected.set(true)
+                session.failure = session.failure ?: "Recording metadata could not be saved. Original audio is kept for recovery."
+                session.requestStop()
                 events.close()
-                while (true) {
-                    val event = events.tryReceive().getOrNull() ?: break
-                    if (event is CaptureEvent.Begin) unpublishedFrom.accumulateAndGet(event.startMs, { a, b -> minOf(a, b) })
-                }
+                // Drop queued scalar updates; the synced file length is the durable duration.
+                while (events.tryReceive().isSuccess) continue
             }
         }
 
+        /** The durable duration is rebuilt from the synced file, so a dropped update loses no audio. */
+        val failed get() = rejected.get()
+
         fun enqueue(event: CaptureEvent) {
             if (events.trySend(event).isFailure) {
-                failed.set(true)
-                // A rejected scalar update is not a rejected audio range. Use the final
-                // published watermark after drain; only an unqueued Begin pins an earlier offset.
-                if (event is CaptureEvent.Begin) unpublishedFrom.accumulateAndGet(event.startMs, { a, b -> minOf(a, b) })
+                rejected.set(true)
                 error("Recording stopped because saved-audio metadata could not keep up. Original audio is kept for recovery.")
             }
         }
 
         suspend fun finish() { events.close(); job.join() }
-        fun recoveryFromMs(): Long? = if (failed.get()) minOf(lastPublishedEndMs, unpublishedFrom.get()) else null
+    }
+
+    private suspend fun runCapture(session: Capture) {
+        var device: RecordingInput? = null
+        try {
+            app.storageReady.await()
+            if (session.stopping.get()) return
+            @Suppress("UsableSpace")
+            val short = StorageReserve.shortfall(filesDir.usableSpace, StorageReserve.START_BYTES)
+            if (short > 0) {
+                fail(session, ServiceEvent.StartFailed(StartFailure.STORAGE,
+                    getString(R.string.feedback_storage, Formatter.formatShortFileSize(this, short)), short))
+                return
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                fail(session, ServiceEvent.StartFailed(StartFailure.PERMISSION, getString(R.string.perm_title)))
+                return
+            }
+            // The microphone is opened before a note exists: a busy microphone creates no note.
+            device = try { openInput() } catch (error: Exception) { null }
+            if (device == null || !device.initialized) {
+                runCatching { device?.close() }
+                device = null
+                fail(session, ServiceEvent.StartFailed(StartFailure.MICROPHONE, getString(R.string.feedback_mic_busy)))
+                return
+            }
+            val id = store.create()
+            session.noteId = id
+            session.claim.bindNote(id)
+            val started = LiveSession(id, speech = speechAvailability())
+            updateLive { started }
+            val opened = device
+            device = null
+            captureAudio(session, id, opened)
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            runCatching { device?.close() }
+            if (session.noteId == null) fail(session, ServiceEvent.StartFailed(StartFailure.OTHER, getString(R.string.error_start)))
+            else session.failure = session.failure ?: (error.message ?: "Could not start recording.")
+        } finally {
+            withContext(NonCancellable + Dispatchers.IO) { finishCapture(session) }
+        }
+    }
+
+    private fun fail(session: Capture, event: ServiceEvent.StartFailed) {
+        RecordingState.events.tryEmit(event)
+    }
+
+    @Suppress("MissingPermission")
+    private fun openInput(): RecordingInput =
+        if (BuildConfig.DEBUG) inputFactoryForTests?.invoke() ?: DeviceInput() else DeviceInput()
+
+    /** Why Android silenced the microphone: a call if the audio mode says so, else another app or the system. */
+    private fun silencedReason(): String {
+        val mode = getSystemService(AudioManager::class.java).mode
+        return if (mode != AudioManager.MODE_NORMAL && mode >= AudioManager.MODE_RINGTONE) CaptureReason.CALL else CaptureReason.MICROPHONE
     }
 
     @Suppress("MissingPermission", "UsableSpace")
-    private suspend fun captureAudio(id: String, ultra: Boolean) {
-        var device: RecordingInput? = null
+    private suspend fun captureAudio(session: Capture, id: String, first: RecordingInput) {
+        var device: RecordingInput? = first
         var stream: BufferedOutputStream? = null
         var fileStream: FileOutputStream? = null
         var samplesWritten = 0L
-        val frame = ShortArray(SpeechGate.FRAME_SAMPLES)
-        var filled = 0
-        val metadata = CaptureMetadata(id)
-        val gate = SpeechGate(object : SpeechGate.Sink {
-            override fun begin(startSample: Long, overlap: Boolean) {
-                if (!ultra) metadata.enqueue(CaptureEvent.Begin(startSample / 16, overlap))
-            }
-            override fun audio(samples: ShortArray) = Unit
-            override fun end(endSample: Long) {
-                // Ultra frames the complete original on the speech worker from synced duration.
-                // The gate only supplies the microphone level; it must not discard quiet speech.
-                if (ultra) return
-                stream?.flush(); fileStream?.fd?.sync()
-                metadata.enqueue(CaptureEvent.End(endSample / 16))
-            }
-        })
+        val frame = ShortArray(LevelMeter.FRAME_SAMPLES)
+        // The speech worker frames the complete synced original; the meter only feeds the UI.
+        val meter = LevelMeter()
+        val metadata = CaptureMetadata(session, id)
         try {
-            check(filesDir.usableSpace > MIN_FREE_BYTES) { "Storage is almost full. Free some space before recording." }
-            check(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { "Microphone access is required." }
             val raw = FileOutputStream(store.audioFile(id))
             fileStream = raw
             val buffered = BufferedOutputStream(raw, 16384)
             stream = buffered
-            val current = if (BuildConfig.DEBUG) inputFactoryForTests?.invoke() ?: DeviceInput() else DeviceInput()
-            device = current
-            check(current.initialized) { "The microphone is unavailable. Close other recording apps and try again." }
-            synchronized(inputLock) { input = current }
+            session.attach(first)
             var acknowledgedPause = false
             var lastUi = 0L
             var lastSync = SystemClock.elapsedRealtime()
@@ -294,190 +536,183 @@ class RecordingService : Service() {
                 buffered.flush(); raw.fd.sync()
                 metadata.enqueue(CaptureEvent.Duration(samplesWritten / 16))
             }
-            while (currentCoroutineContext().isActive && !stopping.get()) {
-                if (paused.get()) {
+            fun publishPaused() {
+                updateLive {
+                    if (it.noteId == id) it.copy(paused = true, pauseReason = session.pauseReason, storageShortBytes = session.storageShort,
+                        duration = samplesWritten / 16) else it
+                }
+                refreshNotification()
+            }
+            while (currentCoroutineContext().isActive && !session.stopping.get()) {
+                if (session.paused.get()) {
                     if (!acknowledgedPause) {
-                        synchronized(inputLock) { current.stop(); inputRunning = false }
-                        if (filled > 0) { gate.acceptPartial(frame, filled); filled = 0 }
-                        gate.flush(); syncAudio()
+                        session.stopInput()
+                        syncAudio()
                         captureAwake.set(false); reconcileWake()
-                        metadata.enqueue(CaptureEvent.State("PAUSED"))
-                        RecordingState.live.update { if (it.noteId == id) it.copy(paused = true, duration = samplesWritten / 16, level = 0f, message = "Paused") else it }
-                        updateNotification()
+                        if (samplesWritten > 0) metadata.enqueue(CaptureEvent.Break(samplesWritten))
+                        val reason = session.pauseReason
+                        metadata.enqueue(if (reason == null) CaptureEvent.State(NoteState.PAUSED) else CaptureEvent.AutoPause(reason))
+                        AudioLevel.publish(0f)
+                        publishPaused()
+                        if (reason != null) notifications.alertAutoPause(id, samplesWritten / 16, reason)
                         acknowledgedPause = true
+                    }
+                    if (session.resumeRequested.getAndSet(false)) {
+                        val short = StorageReserve.shortfall(filesDir.usableSpace, StorageReserve.RESUME_BYTES)
+                        if (short > 0) {
+                            session.pauseReason = CaptureReason.STORAGE
+                            session.storageShort = short
+                            metadata.enqueue(CaptureEvent.AutoPause(CaptureReason.STORAGE))
+                            publishPaused()
+                            RecordingState.events.tryEmit(ServiceEvent.ResumeRefused(short))
+                        } else {
+                            if (device == null || session.deviceFailed) {
+                                // A microphone that stopped delivering audio is reopened for Resume.
+                                runCatching { device?.close() }
+                                session.attach(null)
+                                device = runCatching { openInput() }.getOrNull()?.takeIf { it.initialized }
+                                session.attach(device)
+                                session.deviceFailed = device == null
+                            }
+                            if (device == null) {
+                                session.pauseReason = CaptureReason.MICROPHONE
+                                metadata.enqueue(CaptureEvent.AutoPause(CaptureReason.MICROPHONE))
+                                publishPaused()
+                            } else {
+                                session.pauseReason = null
+                                session.storageShort = 0
+                                notifications.cancelAutoPause()
+                                session.paused.set(false)
+                            }
+                        }
                     }
                     delay(30); continue
                 }
-                if (!inputRunning) {
-                    synchronized(inputLock) {
-                        if (!stopping.get() && !paused.get()) { current.start(); inputRunning = true }
-                    }
-                    if (!inputRunning) continue
+                val current = device
+                if (current == null) {
+                    session.deviceFailed = true
+                    session.pauseAutomatically(CaptureReason.MICROPHONE)
+                    continue
+                }
+                if (!session.inputRunning) {
+                    if (!session.startInput()) continue
                     captureAwake.set(true); reconcileWake()
                     acknowledgedPause = false
-                    metadata.enqueue(CaptureEvent.State("RECORDING"))
-                    RecordingState.live.update { if (it.noteId == id) it.copy(paused = false, message = if (decodeFailure == null) "Listening" else "Transcription paused · audio is still being saved") else it }
-                    updateNotification()
+                    session.started = true
+                    metadata.enqueue(CaptureEvent.State(NoteState.RECORDING))
+                    updateLive {
+                        if (it.noteId == id) it.copy(paused = false, pauseReason = null, storageShortBytes = 0) else it
+                    }
+                    refreshNotification()
                 }
-                check(!current.silenced) { "Android muted the microphone, possibly because of a call or another app. Saved audio is safe." }
-                val count = current.read(frame, filled, frame.size - filled)
+                if (current.silenced) { session.pauseAutomatically(silencedReason()); continue }
+                val count = current.read(frame, 0, frame.size)
                 if (count <= 0) {
-                    if (stopping.get() || paused.get() || !inputRunning) continue
-                    error("Microphone disconnected. Saved audio is safe.")
+                    if (session.stopping.get() || session.paused.get() || !session.inputRunning) continue
+                    // The microphone stopped delivering audio: pause, keep what is saved, reopen on Resume.
+                    session.deviceFailed = true
+                    session.pauseAutomatically(CaptureReason.MICROPHONE)
+                    continue
                 }
-                check(count <= frame.size - filled) { "The microphone returned an invalid audio buffer." }
+                check(count <= frame.size) { "The microphone returned an invalid audio buffer." }
                 repeat(count) { index ->
-                    val sample = frame[filled + index].toInt()
+                    val sample = frame[index].toInt()
                     bytes[index * 2] = sample.toByte(); bytes[index * 2 + 1] = (sample shr 8).toByte()
                 }
                 buffered.write(bytes, 0, count * 2)
                 samplesWritten += count
-                filled += count
-                if (filled == frame.size) { gate.accept(frame); filled = 0 }
+                session.elapsedMs = samplesWritten / 16
+                meter.accept(frame, count)
+                AudioLevel.publish(MeterMath.normalized(meter.rms))
                 // A successful read belongs to the original, even if Android silenced
-                // the microphone while that read was in flight. Persist it before stopping.
-                check(!current.silenced) { "Android muted the microphone, possibly because of a call or another app. Saved audio is safe." }
+                // the microphone while that read was in flight. It is written before pausing.
+                if (current.silenced) session.pauseAutomatically(silencedReason())
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastUi >= 100) {
-                    RecordingState.live.update { if (it.noteId == id) it.copy(duration = samplesWritten / 16, level = gate.level) else it }
+                    updateLive { if (it.noteId == id) it.copy(duration = samplesWritten / 16) else it }
                     lastUi = now
                 }
                 if (now - lastSync >= 1000) {
                     syncAudio(); lastSync = now
-                    check(filesDir.usableSpace > MIN_FREE_BYTES) { "Storage is almost full. Recording stopped; your saved audio is safe." }
-                    check(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { "Microphone access was removed. Saved audio is safe." }
+                    reconcileWake()
+                    if (filesDir.usableSpace < StorageReserve.PAUSE_BYTES) session.pauseAutomatically(CaptureReason.STORAGE)
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                        session.endReason = CaptureReason.PERMISSION
+                        error("Microphone access was removed. Saved audio is safe.")
+                    }
                 }
             }
         } catch (error: Exception) {
-            if (error !is CancellationException) captureFailure = error.message ?: "Recording was interrupted."
+            if (error !is CancellationException) session.failure = session.failure ?: (error.message ?: "Recording was interrupted.")
         } finally {
-            synchronized(inputLock) {
-                runCatching { device?.stop() }
-                runCatching { device?.close() }
-                if (input === device) { input = null; inputRunning = false }
-            }
-            // Finish the gate using exactly the real partial tail; no zero padding or lost samples.
-            try {
-                if (filled in 1 until frame.size) { gate.acceptPartial(frame, filled); filled = 0 }
-                gate.flush()
-            } catch (error: Exception) { captureFailure = error.message ?: "Could not finish saving audio." }
+            session.attach(null)
+            runCatching { device?.stop() }
+            runCatching { device?.close() }
             try { stream?.flush(); fileStream?.fd?.sync() }
-            catch (error: Exception) { captureFailure = error.message ?: "Could not finish saving audio." }
+            catch (error: Exception) { session.failure = session.failure ?: (error.message ?: "Could not finish saving audio.") }
             try { stream?.close() }
-            catch (error: Exception) { captureFailure = error.message ?: "Could not close saved audio." }
-            ownership?.finishCapture()
-            RecordingState.live.update { if (it.noteId == id) it.copy(processing = true, paused = false, level = 0f, message = captureFailure ?: "Finishing transcript…") else it }
+            catch (error: Exception) { session.failure = session.failure ?: (error.message ?: "Could not close saved audio.") }
+            AudioLevel.publish(0f)
+            notifications.cancelAutoPause()
+            session.claim.finishCapture()
+            updateLive {
+                if (it.noteId == id) it.copy(processing = true, paused = false, pauseReason = null, storageShortBytes = 0) else it
+            }
             // The microphone and original file are closed before waiting on any database work.
             withContext(NonCancellable + Dispatchers.IO) {
-                try {
-                    try { foreground("Finishing transcript…", true) }
-                    catch (_: RuntimeException) {
-                        decodeFailure = "Saved audio needs transcription. Open the note to continue."
-                        stopSelf()
-                    }
-                    metadata.finish()
-                    val recoveryFrom = metadata.recoveryFromMs()
-                    if (captureFailure != null || recoveryFrom != null) store.recover(id, tailFromMs = recoveryFrom)
-                    val duration = store.audioFile(id).length() / 32
-                    store.duration(id, duration)
-                    store.state(id, "PROCESSING", captureFailure.orEmpty())
-                    RecordingState.live.update { if (it.noteId == id) it.copy(duration = duration) else it }
-                } catch (error: Exception) {
-                    captureFailure = error.message ?: "Could not finish saving audio."
-                } finally {
-                    captureAwake.set(false); reconcileWake()
-                    // Publish after the metadata actor has drained, including the final queued range.
-                    recordingDone = true
-                }
+                try { metadata.finish() }
+                catch (error: Exception) { session.failure = session.failure ?: (error.message ?: "Could not finish saving audio.") }
             }
         }
     }
 
-    private suspend fun processQueue(id: String, language: String, speechEngine: String) {
+    /**
+     * The microphone session is over: the note's duration comes from the synced file, an empty recording is
+     * discarded, and the note moves to the transcription queue (the capture slot is free for the next one).
+     */
+    private fun finishCapture(session: Capture) {
+        val id = session.noteId
+        var queued = false
         try {
-            try {
-                val testFactory = if (BuildConfig.DEBUG) decoderFactoryForTests else null
-                if (testFactory == null && speechEngine == "whisper") app.initialized.await()
-                decoderAwake.set(true); reconcileWake()
-                val engine = try {
-                    testFactory?.invoke() ?: deviceDecoder(speechEngine)
-                } finally { decoderAwake.set(false); reconcileWake() }
-                transcriber = engine
-                engine.use {
-                    while (currentCoroutineContext().isActive) {
-                        val finished = recordingDone
-                        var chunk = store.nextChunk(id)
-                        if (chunk == null && speechEngine == "ultra-v1") {
-                            val saved = checkNotNull(store.note(id)) { "This note is no longer available." }
-                            val previous = store.lastChunk(id)
-                            // A final window can have nextStart=end; a hard cut retains its
-                            // overlap cursor even across process death. Never decode only that overlap.
-                            if (saved.duration > (previous?.end ?: 0L)) {
-                                val window = UltraWindowPlanner.plan(store.audioFile(id),
-                                    previous?.nextStart ?: 0L, previous?.end, saved.duration,
-                                    finished = finished || saved.state == "PAUSED")
-                                if (window != null) chunk = store.enqueueUltraWindow(id,
-                                    window.startMs, window.endMs, window.nextStartMs)
-                            }
-                        }
-                        if (chunk == null && finished) break
-                        if (Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
-                            RecordingState.live.update { if (it.noteId == id) it.copy(message = "Cooling down · audio is saved") else it }
-                            delay(3000); continue
-                        }
-                        if (chunk == null) { delay(150); continue }
-                        decoderAwake.set(true); reconcileWake()
-                        try {
-                            RecordingState.live.update { if (it.noteId == id) it.copy(message = if (recordingDone) "Finishing transcript…" else "Recording · transcribing") else it }
-                            val start = SystemClock.elapsedRealtime()
-                            val warm = Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_MODERATE
-                            val threads = DecodePolicy.threads(Runtime.getRuntime().availableProcessors(), power.isPowerSaveMode, warm)
-                            engine.transcribe(store, chunk, language, threads)
-                            RecordingState.live.update { if (it.noteId == id) it.copy(pending = store.pendingCount(id)) else it }
-                            val cooldown = DecodePolicy.cooldownMs(SystemClock.elapsedRealtime() - start, power.isPowerSaveMode, warm)
-                            val savedTail = speechEngine == "ultra-v1" &&
-                                (store.note(id)?.duration ?: 0L) > chunk.end
-                            if (cooldown > 0 && (savedTail || store.nextChunk(id) != null)) delay(cooldown)
-                        } finally { decoderAwake.set(false); reconcileWake() }
-                    }
+            if (id != null) {
+                val duration = store.audioFile(id).length() / 32
+                store.duration(id, duration)
+                session.endReason?.let { store.endReason(id, it) }
+                if (store.discardIfEmpty(id)) {
+                    // No bytes, or exactly constant samples: nothing was recorded.
+                    RecordingState.events.tryEmit(ServiceEvent.NothingRecorded)
+                    updateLive { if (it.noteId == id) LiveSession() else it }
+                } else {
+                    store.state(id, NoteState.PROCESSING, session.failure.orEmpty())
+                    updateLive { if (it.noteId == id) it.copy(duration = duration) else it }
+                    queued = true
                 }
-            } catch (error: Exception) {
-                if (error is CancellationException) throw error
-                decodeFailure = error.message ?: "Transcription paused. Saved audio can be retried."
-                RecordingState.live.update { if (it.noteId == id) it.copy(message = "Transcription paused · audio is still being saved") else it }
-                // Decoder failure never ends healthy capture; chunks remain durable and pending.
-                capture?.join()
             }
-            val problem = captureFailure ?: decodeFailure
-            decoderAwake.set(true); reconcileWake()
-            store.state(id, if (problem == null) "READY" else "INTERRUPTED", problem.orEmpty())
         } catch (error: Exception) {
-            if (error is CancellationException) throw error
-            decodeFailure = error.message ?: "Saved audio can be transcribed when storage is available."
-            runCatching { store.state(id, "INTERRUPTED", captureFailure ?: decodeFailure!!) }
+            Log.w(TAG, "Could not finish the recording", error)
+            if (id != null) runCatching { store.recover(id) }
         } finally {
-            transcriber = null
-            decoderAwake.set(false); reconcileWake()
-            // Keep live ownership until onDestroy has joined capture/worker cleanup.
-            stopSelf()
+            synchronized(workLock) {
+                if (queued && id != null) {
+                    SessionOperations.handOver(session.claim)?.let { owned[id] = it }
+                    finishing.addLast(id)
+                } else session.claim.release()
+                if (capture === session) capture = null
+                session.ended = true
+            }
+            captureAwake.set(false); reconcileWake()
         }
-    }
-
-    private fun deviceDecoder(speechEngine: String): RecordingDecoder {
-        if (speechEngine == "ultra-v1") {
-            check(BuildConfig.FOCAL_ULTRA_BUNDLED) { "This note needs the Focal APK with Ultra to continue transcription." }
-            return UltraTranscriber { threads, checkCancelled ->
-                PreviewEngineFactory.openBundled(app, threads.coerceIn(1, 2), checkCancelled)
+        if (queued) {
+            // A new recording may already be current: it keeps the microphone type.
+            try { promoteForCurrentWork() }
+            catch (error: RuntimeException) {
+                // Android refused background processing: the note waits for the next foreground start.
+                Log.w(TAG, "Could not continue transcription in the background", error)
+                synchronized(workLock) { finishing.remove(id); owned.remove(id)?.release() }
+                runCatching { store.state(id!!, NoteState.INTERRUPTED, "Saved audio needs transcription. Open the note to continue.") }
             }
         }
-        check(speechEngine == "whisper") { "This note needs a newer speech engine." }
-        check(app.models.ready()) { "Audio is saved. Add the speech model to transcribe this note." }
-        val engine = Transcriber(app.models.model.absolutePath)
-        return object : RecordingDecoder {
-            override suspend fun transcribe(store: NoteStore, chunk: Chunk, language: String, threads: Int) = engine.transcribe(store, chunk, language, threads)
-            override fun cancel() = engine.cancel()
-            override fun close() = engine.close()
-        }
+        ensureWorker()
     }
 
     @Suppress("MissingPermission")
@@ -500,7 +735,8 @@ class RecordingService : Service() {
             if (Build.VERSION.SDK_INT >= 29) {
                 callback = object : AudioManager.AudioRecordingCallback() {
                     override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>) {
-                        if (!closed && configs.any { it.isClientSilenced } && recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) microphoneInterrupted()
+                        if (!closed && configs.any { it.isClientSilenced } && recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+                            capture?.pauseAutomatically(silencedReason())
                     }
                 }.also {
                     try { recorder.registerAudioRecordingCallback(mainExecutor, it) }
@@ -518,53 +754,499 @@ class RecordingService : Service() {
         }
     }
 
-    private fun notification(text: String): Notification {
-        val open = Intent(this, MainActivity::class.java).putExtra(NOTE, noteId).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        val builder = NotificationCompat.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle("Focal")
-            .setContentText(text).setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-            .setOngoing(true).setOnlyAlertOnce(true).setSilent(true).setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-        if (!recordingDone && !RecordingState.live.value.processing) {
-            fun action(name: String, code: Int) = PendingIntent.getService(this, code, Intent(this, RecordingService::class.java).setAction(name), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            builder.addAction(0, if (paused.get()) "Resume" else "Pause", action(if (paused.get()) RESUME else PAUSE, 1))
-            builder.addAction(0, "Finish", action(STOP, 2))
-        }
-        return builder.build()
-    }
-    @Synchronized private fun reconcileWake(renew: Boolean = false) {
-        wakeLock?.let { lock ->
-            val wanted = captureAwake.get() || decoderAwake.get()
-            if (lock.isHeld && (!wanted || renew)) runCatching { lock.release() }
-            if (wanted && !lock.isHeld) lock.acquire(35 * 60_000L)
+    // ------------------------------------------------------------------ transcription
+
+    private fun ensureWorker() {
+        synchronized(workLock) {
+            if (destroyed || worker != null) return
+            val job = scope.launch(speechDispatcher, start = CoroutineStart.LAZY) { work() }
+            worker = job
+            job.invokeOnCompletion { main.post { onWorkerIdle(job) } }
+            job.start()
         }
     }
-    private fun foreground(text: String, processing: Boolean) = synchronized(notificationLock) {
-        if (destroyed) return@synchronized
-        val type = when {
-            processing && Build.VERSION.SDK_INT >= 35 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
-            processing && Build.VERSION.SDK_INT >= 29 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-            Build.VERSION.SDK_INT >= 30 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            else -> 0
+
+    /** The worker found nothing left (or ended): restart it if work arrived meanwhile, else stop the service. */
+    private fun onWorkerIdle(job: Job) {
+        val more = synchronized(workLock) {
+            if (worker !== job) return
+            worker = null
+            // A RECOVER still resetting its windows starts the worker itself when it is queued.
+            if (pendingRequests > 0) return
+            capture != null || finishing.isNotEmpty() || requested.isNotEmpty() || drainRequested
         }
-        if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION, notification(text), type)
-        else startForeground(NOTIFICATION, notification(text))
+        if (destroyed) return
+        if (more) { ensureWorker(); return }
+        updateLive { if (it.noteId != null) LiveSession() else it }
+        stopSelfResult(lastStartId)
     }
-    private fun updateNotification() = synchronized(notificationLock) {
-        if (destroyed) return@synchronized
-        val live = RecordingState.live.value
-        val text = when {
-            // Ultra plans its next window on demand; queued windows are not a progress total.
-            live.processing -> if (live.message.startsWith("Cooling down")) live.message else "Finishing transcript…"
-            live.paused -> "Paused · ${Transcript.time(live.duration)}"
-            else -> "Recording · ${Transcript.time(live.duration)}"
+
+    /** A note to transcribe; [automatic] when the drain picked it, not the person or a recording. */
+    private class Target(val noteId: String, val live: Boolean, val automatic: Boolean = false)
+
+    /** The live recording, then the finished one, then retries, then (from the visible app) waiting notes. */
+    private fun nextTarget(): Target? {
+        synchronized(workLock) {
+            capture?.let { session ->
+                val id = session.noteId
+                if (id != null && !session.ended) return Target(id, live = true)
+                if (id == null && !session.ended) return Target("", live = true)
+            }
+            finishing.firstOrNull()?.let { return Target(it, live = false) }
+            requested.firstOrNull()?.let { return Target(it, live = false) }
+            if (!drainWaiting) return null
+            // This scan answers every DRAIN so far; a later one makes the worker look again.
+            drainRequested = false
         }
-        try { getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(text)) }
-        catch (_: SecurityException) { /* Notification permission may be removed during capture. */ }
+        val waiting = try { store.waitingNotes() } catch (_: Exception) { emptyList() }
+        return synchronized(workLock) { waiting.firstOrNull { it !in skipped && it !in owned }?.let { Target(it, live = false, automatic = true) } }
     }
+
+    private fun dequeue(id: String) = synchronized(workLock) {
+        finishing.remove(id); requested.remove(id)
+        owned.remove(id)?.release()
+        Unit
+    }
+
+    /** Claims [id] for transcription unless a destructive operation holds it. */
+    private fun own(id: String): Boolean = synchronized(workLock) {
+        if (owned[id] != null) return true
+        val claim = SessionOperations.reserveSession(capture = false, noteId = id) ?: return false
+        SessionOperations.acceptSession(claim.token, capture = false, noteId = id)
+        owned[id] = claim
+        true
+    }
+
+    /** A capture is starting or running: the queue yields to it. */
+    private fun preempted(): Boolean = capture?.let { !it.ended } == true
+
+    private suspend fun work() {
+        val engine = Engine()
+        var feedNote: String? = null
+        var feed: WindowFeed? = null
+        try {
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val target = nextTarget() ?: break
+                if (target.noteId.isEmpty()) { delay(50); continue } // a capture is opening its note
+                app.engineGuard.working(target.automatic)
+                if (feedNote != target.noteId) {
+                    feedNote = target.noteId
+                    feed = WindowFeed(store, target.noteId) { engine.detector() }
+                }
+                val outcome = try { process(target, checkNotNull(feed), engine) }
+                catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    Log.w(TAG, "Transcription stopped for a note", error)
+                    if (target.live) {
+                        // Capture goes on; the note is transcribed after Finish (or waits, if this persists).
+                        feedNote = null; feed = null
+                        delay(1000); continue
+                    }
+                    Outcome.Blocked(error.message ?: "Saved audio can be transcribed later.")
+                }
+                when (outcome) {
+                    Outcome.Continue -> Unit
+                    Outcome.Yielded -> { feedNote = null; feed = null; refreshNotification() }
+                    Outcome.Done -> { feedNote = null; feed = null; dequeue(target.noteId) }
+                    is Outcome.Blocked -> {
+                        feedNote = null; feed = null
+                        // A typed cause, so the note can say why it waits and offer Try again; otherwise it simply waits.
+                        val stored = outcome.cause?.let(WaitCause::encode) ?: outcome.message
+                        runCatching { store.state(target.noteId, NoteState.INTERRUPTED, stored) }
+                        synchronized(workLock) { skipped += target.noteId }
+                        dequeue(target.noteId)
+                    }
+                }
+                if (outcome != Outcome.Continue) updateLive {
+                    if (it.noteId == target.noteId && it.processing) LiveSession() else it
+                }
+            }
+        } finally {
+            processingNote = null
+            transcriber = null
+            engine.close()
+            decoderAwake.set(false); reconcileWake()
+        }
+    }
+
+    private sealed interface Outcome {
+        /** The live recording ended; its note continues as the finished recording. */
+        data object Continue : Outcome
+        /** A recording started: the note waits and is resumed after it. */
+        data object Yielded : Outcome
+        data object Done : Outcome
+        /**
+         * The note waits: for the person ([cause]: a model that could not be prepared, or the engine guard's stop) or,
+         * without a cause, for the next foreground start. [message] is kept for a plain interruption.
+         */
+        data class Blocked(val message: String, val cause: WaitCause? = null) : Outcome
+    }
+
+    private suspend fun process(target: Target, feed: WindowFeed, engine: Engine): Outcome {
+        val id = target.noteId
+        val live = target.live
+        if (!live) {
+            if (!own(id)) { synchronized(workLock) { skipped += id }; return Outcome.Done }
+            val saved = store.note(id) ?: return Outcome.Done
+            if (saved.state == NoteState.READY && !store.hasUntranscribedAudio(saved)) return Outcome.Done
+            // A failed live finalization or process death can leave a durable tail: the file is the duration.
+            store.recover(id)
+            // Process death before the first sync can leave nothing at all: discarded, as Finish would.
+            if (store.discardIfEmpty(id)) return Outcome.Done
+            store.state(id, NoteState.PROCESSING)
+            processingNote = id
+            decoderAwake.set(true); reconcileWake()
+            publishProcessing(id, engine)
+        }
+        try {
+            var lastProgress = -1f
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                reconcileWake()
+                val session = capture
+                val stillLive = live && session != null && session.noteId == id && !session.ended
+                if (live && !stillLive) return Outcome.Continue
+                if (!live && preempted()) {
+                    store.state(id, NoteState.INTERRUPTED)
+                    synchronized(workLock) { owned.remove(id)?.release() }
+                    return Outcome.Yielded
+                }
+                if (!engine.settled()) {
+                    // The notification follows only a change (publishSpeech), never every poll.
+                    publishSpeech(id, SpeechAvailability.PREPARING)
+                    delay(250); continue
+                }
+                if (engine.stopped) {
+                    // The speech work killed the process or failed to load twice: nothing native runs and nothing is
+                    // planned until the person's Try again. Capture goes on; a finished note waits.
+                    publishSpeech(id, SpeechAvailability.UNAVAILABLE)
+                    if (live) { delay(LIVE_POLL_MS); continue }
+                    return Outcome.Blocked(engine.failure ?: ENGINE_STOPPED, WaitCause.EngineStopped)
+                }
+                // The recognizer loads once the microphone delivers audio (never before capture starts).
+                if (!live || session?.started == true) engine.load()
+                publishSpeech(id, engine.availability)
+                val note = store.note(id) ?: return Outcome.Done
+                val pending = store.pendingWindows(id).firstOrNull()
+                val decoder = engine.decoder
+                if (pending != null && decoder != null) {
+                    if (Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
+                        delay(3000); continue
+                    }
+                    // A window that already failed or killed the process twice is marked failed instead.
+                    val window = store.beginDecode(pending.id) ?: continue
+                    decoderAwake.set(true); reconcileWake()
+                    val started = SystemClock.elapsedRealtime()
+                    try {
+                        transcriber = decoder
+                        app.engineGuard.inside(EngineStage.DECODE) { decoder.transcribe(store, window, engine.threads) }
+                        engine.succeeded()
+                    } catch (error: OutOfMemoryError) {
+                        // Not this window's fault: it keeps its attempt. The recognizer goes, to give the memory back,
+                        // and the guard counts a confirmed out-of-memory, as a load that failed.
+                        Log.w(TAG, "Window ${window.index} ran out of memory", error)
+                        runCatching { store.cancelDecode(window.id) }
+                        engine.outOfMemory(EngineStage.DECODE)
+                        continue
+                    } catch (error: Exception) {
+                        if (error is CancellationException) { runCatching { store.cancelDecode(window.id) }; throw error }
+                        Log.w(TAG, "Window ${window.index} failed (attempt ${window.attempts})", error)
+                        if (window.attempts >= MAX_DECODE_ATTEMPTS) store.failWindow(window.id, error.message ?: "This part could not be transcribed.")
+                        engine.failed(error, window.id)
+                        continue
+                    } finally {
+                        if (live) { decoderAwake.set(false); reconcileWake() }
+                    }
+                    if (!live) lastProgress = publishProgress(id, lastProgress)
+                    else {
+                        val pending = store.pendingCount(id)
+                        updateLive { if (it.noteId == id) it.copy(pending = pending) else it }
+                    }
+                    val warm = DeviceSpeechPolicy.warm(this)
+                    val cooldown = DecodePolicy.cooldownMs(SystemClock.elapsedRealtime() - started, power.isPowerSaveMode, warm)
+                    if (cooldown > 0 && !feed.complete) delay(cooldown)
+                    continue
+                }
+                // Silero VAD's calls are a guarded stage too, marked only when a pass reaches the detector.
+                val planned = try { feed.advance(note.duration, finished = !live, legacy = note.legacy) }
+                catch (error: OutOfMemoryError) {
+                    // The bridge turns the runtime's bad_alloc into this, and it is no Exception: left to fly, it would
+                    // end the process after the stage was cleared, and nothing would count the death that the next
+                    // foreground start repeats. Counted as a confirmed out-of-memory instead, as a decode's is; the
+                    // recognizer goes to give the memory back. The pass is planned again from its last saved window.
+                    Log.w(TAG, "Segmentation ran out of memory", error)
+                    engine.outOfMemory(EngineStage.SEGMENT)
+                    if (live) throw IllegalStateException("Segmentation ran out of memory.", error)
+                    return Outcome.Blocked(engine.failure ?: "Saved audio can be transcribed later.", engine.cause)
+                } finally { engine.segmented() }
+                if (planned) continue
+                if (!live && feed.complete) {
+                    if (pending != null) return Outcome.Blocked(engine.failure ?: "Saved audio can be transcribed later.", engine.cause)
+                    return complete(id)
+                }
+                delay(if (live) LIVE_POLL_MS else 50)
+            }
+        } finally {
+            if (!live) {
+                processingNote = null
+                decoderAwake.set(false); reconcileWake()
+            }
+        }
+    }
+
+    /** Every window is decided: the note is ready (possibly with failed parts) and "Note ready" is posted. */
+    private fun complete(id: String): Outcome {
+        if (!store.markReady(id)) return Outcome.Blocked("Saved audio can still be transcribed.")
+        store.note(id)?.let { note -> notifications.ready(id, note.title, note.created, partial = note.failedWindows > 0) }
+        updateLive { if (it.noteId == id) it.copy(progress = 1f, pending = 0) else it }
+        return Outcome.Done
+    }
+
+    private fun publishProcessing(id: String, engine: Engine) {
+        val progress = progressOf(id)
+        val note = store.note(id)
+        processingTitle = note?.title.orEmpty()
+        processingCreated = note?.created ?: 0L
+        val session = LiveSession(id, processing = true, duration = note?.duration ?: 0,
+            progress = progress, speech = engine.availabilityOrPreparing(),
+            pending = runCatching { store.pendingCount(id) }.getOrDefault(0))
+        // A recording that started since this note was picked owns the live state: never overwrite it.
+        updateLive { if (it.capturing) it else session }
+        refreshNotification()
+    }
+
+    private fun publishSpeech(id: String, speech: SpeechAvailability) {
+        if (RecordingState.live.value.let { it.noteId == id && it.speech != speech }) {
+            updateLive { if (it.noteId == id) it.copy(speech = speech) else it }
+            refreshNotification()
+        }
+    }
+
+    private fun progressOf(id: String): Float? = runCatching {
+        val progress = store.progress(id)
+        if (progress.durationMs <= 0) null else (1f - progress.remainingMs.toFloat() / progress.durationMs).coerceIn(0f, 1f)
+    }.getOrNull()
+
+    /** Publishes progress; the notification changes only at whole percents. */
+    private fun publishProgress(id: String, previous: Float): Float {
+        val progress = progressOf(id) ?: return previous
+        val pending = runCatching { store.pendingCount(id) }.getOrNull()
+        updateLive { if (it.noteId == id) it.copy(progress = progress, pending = pending ?: it.pending) else it }
+        if ((progress * 100).toInt() != (previous * 100).toInt()) {
+            // The automatic title appears with the first words.
+            store.note(id)?.title?.let { processingTitle = it }
+            refreshNotification()
+        }
+        return progress
+    }
+
+    private fun speechAvailability(): SpeechAvailability = when (app.models.status.value) {
+        is ModelStatus.Installing, ModelStatus.Checking -> SpeechAvailability.PREPARING
+        is ModelStatus.Failed, ModelStatus.NotBundled -> SpeechAvailability.UNAVAILABLE
+        is ModelStatus.Ready -> SpeechAvailability.READY
+    }
+
+    /**
+     * The worker's speech resources: Silero VAD for segmentation (relative energy if it cannot load) and
+     * one recognizer, created on the speech thread with the device's thread policy and released when the
+     * worker has nothing left to do. Every call that can kill the process (VAD's creation and decisions, the
+     * recognizer's creation, each decode) runs inside a stage of the app's [app.focal.speech.EngineGuard]; while
+     * the guard is blocked the engine is [stopped] and none of them starts.
+     */
+    private inner class Engine {
+        var decoder: RecordingDecoder? = null
+            private set
+        var failure: String? = null
+            private set
+        /** Why the notes wait for the person, when they do: the model install's failure or the guard's stop. */
+        var cause: WaitCause? = null
+            private set
+        var threads = 1
+            private set
+        private var vad: SileroVad? = null
+        private var files: Map<String, File>? = null
+        private var resolved = false
+        /** Resolved without a usable model (a failed install or a build without one). */
+        private var modelUnavailable = false
+        private var loadTried = false
+        private var consecutiveFailures = 0
+        private var lastFailedWindow: Long? = null
+        /** A planning pass reached Silero VAD: its segmentation stage is marked until the pass returns. */
+        private var segmenting = false
+        private val testDecoder = if (BuildConfig.DEBUG) decoderFactoryForTests else null
+        private val guard get() = app.engineGuard
+
+        /**
+         * The speech work killed the process or failed to load [app.focal.speech.EngineGuard.MAX_DEATHS] times in a
+         * row: until the person's Try again nothing native starts, and no window is planned.
+         */
+        val stopped: Boolean get() = decoder == null && !guard.allows()
+
+        val availability: SpeechAvailability get() = when {
+            decoder != null -> SpeechAvailability.READY
+            failure != null -> SpeechAvailability.UNAVAILABLE
+            else -> speechAvailability()
+        }
+
+        fun availabilityOrPreparing() = if (resolved) availability else SpeechAvailability.PREPARING
+
+        /**
+         * False while the model is still being installed; the detector is decided once it is not. A failed
+         * install settles too (the note then waits with its message); it is never restarted from here, only
+         * followed when a retry elsewhere (the user's, a foreground start) changes it.
+         */
+        fun settled(): Boolean {
+            // The user's Retry gives a failed install or recognizer load another chance.
+            if (engineRetry && decoder == null) {
+                engineRetry = false
+                reset()
+            }
+            if (stopped) { failure = ENGINE_STOPPED; cause = WaitCause.EngineStopped; resolved = true; return true }
+            if (testDecoder != null) { resolved = true; return true }
+            val status = app.models.status.value
+            if (resolved && modelUnavailable && status !is ModelStatus.Failed && status != ModelStatus.NotBundled) reset()
+            if (resolved) return true
+            when (status) {
+                // Only the first attempt starts here: a failed one is not repeated on every poll.
+                ModelStatus.Checking -> { app.models.ensureStarted(); return false }
+                is ModelStatus.Installing -> return false
+                is ModelStatus.Ready -> {
+                    files = status.files
+                    if (vad == null) vad = try {
+                        // Usually the first call into the native runtime: its libraries load here.
+                        guard.inside(EngineStage.VAD_OPEN) { SileroVad.open(status.files.getValue(UltraModel.VAD)) }
+                    } catch (error: Throwable) {
+                        // The relative-energy detector segments instead.
+                        Log.w(TAG, "Silero VAD unavailable; using the energy detector", error)
+                        null
+                    }
+                }
+                is ModelStatus.Failed -> { failure = status.message; cause = status.waitCause(); modelUnavailable = true }
+                ModelStatus.NotBundled -> { failure = MODEL_MISSING; modelUnavailable = true }
+            }
+            resolved = true
+            return true
+        }
+
+        private fun reset() {
+            resolved = false; modelUnavailable = false; loadTried = false; failure = null; cause = null
+            consecutiveFailures = 0; lastFailedWindow = null
+        }
+
+        /**
+         * A fresh detector state for each new segmenter; null selects the energy fallback. Its native calls mark the
+         * segmentation stage on their first use in a planning pass, so a pass with nothing to plan writes nothing.
+         */
+        fun detector(): SpeechDetector? = vad?.let { opened ->
+            segmenting()
+            opened.reset()
+            SpeechDetector { window -> segmenting(); opened.isSpeech(window) }
+        }
+
+        private fun segmenting() {
+            if (segmenting) return
+            guard.enter(EngineStage.SEGMENT)
+            segmenting = true
+        }
+
+        /** The planning pass returned or threw: Silero VAD is no longer deciding. */
+        fun segmented() {
+            if (!segmenting) return
+            segmenting = false
+            guard.leave(EngineStage.SEGMENT)
+        }
+
+        /** Loads the recognizer once (again after a user retry). Never throws. */
+        fun load() {
+            if (loadTried || decoder != null) return
+            loadTried = true
+            // Loads that kept failing or killed the process wait for the user's Retry, also during capture.
+            if (!guard.allows()) { failure = ENGINE_STOPPED; cause = WaitCause.EngineStopped; return }
+            val installed = files
+            if (testDecoder == null && installed == null) { failure = failure ?: MODEL_MISSING; return }
+            threads = DeviceSpeechPolicy.recognizerThreads(this@RecordingService)
+            decoderAwake.set(true); reconcileWake()
+            try {
+                decoder = guard.inside(EngineStage.RECOGNIZER) {
+                    val opened = testDecoder?.invoke() ?: UltraTranscriber { count, _ ->
+                        UltraEngine.open(this@RecordingService, checkNotNull(installed), count)
+                    }
+                    try { opened.prepare(threads) }
+                    catch (error: Throwable) { runCatching { opened.close() }; throw error }
+                    opened
+                }
+                failure = null
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                Log.w(TAG, "The recognizer could not load", error)
+                // A recognizer that cannot load counts as a death would (test decoders fail on purpose).
+                if (testDecoder == null) guard.failed(EngineStage.RECOGNIZER, if (error is OutOfMemoryError) EngineFault.MEMORY else EngineFault.OTHER)
+                failure = when (error) {
+                    is OutOfMemoryError -> "Not enough free memory to transcribe right now."
+                    else -> error.message ?: "The speech model could not load."
+                }
+                // A confirmed out-of-memory is named, and offers Try again, while the guard still allows the work.
+                if (error is OutOfMemoryError) cause = WaitCause.OutOfMemory
+            } finally {
+                decoderAwake.set(processingNote != null); reconcileWake()
+            }
+        }
+
+        /** A window was decoded and committed: the whole chain works, so the guard forgets every death. */
+        fun succeeded() {
+            consecutiveFailures = 0; lastFailedWindow = null
+            guard.completed(EngineStage.DECODE)
+        }
+
+        /**
+         * A decode or the speech detector at [stage] ran out of memory: the recognizer is released and the guard counts
+         * it (until Try again or a restart). The notes left waiting say so and offer Try again ([WaitCause.OutOfMemory]).
+         */
+        fun outOfMemory(stage: EngineStage) {
+            guard.failed(stage, EngineFault.MEMORY)
+            failure = "Not enough free memory to transcribe right now."
+            cause = WaitCause.OutOfMemory
+            runCatching { decoder?.close() }
+            decoder = null
+        }
+
+        /**
+         * Different windows failing one after another mean the recognizer itself is broken: it is dropped and
+         * the remaining windows stay pending. A window failing twice on its own is marked failed by the store.
+         */
+        fun failed(error: Exception, windowId: Long) {
+            if (lastFailedWindow == windowId) return
+            lastFailedWindow = windowId
+            if (++consecutiveFailures < BROKEN_AFTER_FAILURES) return
+            failure = error.message ?: "Transcription failed."
+            // The notes left waiting say why and offer Try again, which loads the recognizer again.
+            cause = WaitCause.EngineFailed
+            runCatching { decoder?.close() }
+            decoder = null
+        }
+
+        fun close() {
+            segmented()
+            runCatching { decoder?.close() }
+            decoder = null
+            runCatching { vad?.close() }
+            vad = null
+        }
+    }
+
+    // ------------------------------------------------------------------ lifecycle
+
     override fun onTimeout(startId: Int, fgsType: Int) {
-        decodeFailure = "Android stopped background processing. Open the note to continue."
-        stopping.set(true); interruptInput(); transcriber?.cancel()
+        // Android's background-processing quota ran out (Android 15+, 6 h per day): pause the queue. The
+        // note waits; the next foreground start of Focal continues it. Must stop within seconds.
+        val id = processingNote ?: RecordingState.live.value.noteId
+        transcriber?.cancel()
+        synchronized(workLock) { worker?.cancel() }
+        notifications.timedOut(id)
         stopSelf()
     }
+
     override fun onDestroy() {
         synchronized(notificationLock) {
             destroyed = true
@@ -574,69 +1256,100 @@ class RecordingService : Service() {
                 // notify() can then be a regular ongoing notification, outside the FGS
                 // removal contract. Cancel synchronously here, before a new service's
                 // main-thread startup can take ownership of the same notification ID.
-                getSystemService(NotificationManager::class.java).cancel(NOTIFICATION)
+                notifications.cancelForeground()
             }
         }
-        stopping.set(true); interruptInput()
+        val session = capture
+        session?.requestStop()
         // Prevent a worker that is still opening its engine from starting a decode
         // after teardown has already looked for an engine to cancel.
         scope.cancel()
         transcriber?.cancel()
         app.scope.launch {
             try {
-                startup?.join(); capture?.join(); worker?.join()
-                noteId?.let { id ->
-                    var cleanupMessage = ""
+                session?.job?.join()
+                synchronized(workLock) { worker }?.join()
+                val notes = synchronized(workLock) { (owned.keys + listOfNotNull(session?.noteId)).toSet() }
+                for (id in notes) {
                     try {
-                        if (store.note(id)?.state in listOf("RECORDING", "PAUSED", "PROCESSING"))
-                            store.state(id, "INTERRUPTED", captureFailure ?: decodeFailure ?: "Recording stopped. Saved audio can be transcribed.")
-                    } catch (_: Exception) {
-                        cleanupMessage = "Recording stopped. Reopen Focal to recover the saved audio."
-                    } finally {
-                        if (RecordingState.live.value.noteId == id) RecordingState.live.value = LiveSession(message = cleanupMessage)
-                        ownership?.release()
+                        if (store.note(id)?.state in NoteState.ACTIVE)
+                            store.state(id, NoteState.INTERRUPTED, session?.failure.orEmpty())
+                    } catch (error: Exception) {
+                        Log.w(TAG, "Could not mark a note as waiting", error)
                     }
                 }
+                updateLive { if (it.noteId != null) LiveSession() else it }
             } finally {
+                synchronized(workLock) {
+                    owned.values.forEach { it.release() }
+                    owned.clear()
+                    session?.claim?.release()
+                }
                 captureAwake.set(false); decoderAwake.set(false); reconcileWake()
                 captureDispatcher.close(); speechDispatcher.close()
-                ownership?.release()
             }
         }
         super.onDestroy()
     }
+
     companion object {
         const val START = "app.focal.START"
         const val STOP = "app.focal.STOP"
         const val PAUSE = "app.focal.PAUSE"
         const val RESUME = "app.focal.RESUME"
+        /** Transcribe one note now (user Retry or Continue); [command]'s retryFailed resets its failed windows. */
         const val RECOVER = "app.focal.RECOVER"
+        /** Continue every note waiting for transcription. Send only from a visible activity. */
+        const val DRAIN = "app.focal.DRAIN"
         const val NOTE = "note"
         private const val OPERATION = "operation"
-        private const val CHANNEL = "recording"
-        private const val NOTIFICATION = 1
-        private const val MIN_FREE_BYTES = 64L * 1024 * 1024
+        private const val RETRY_FAILED = "retryFailed"
+        private const val TAG = "FocalService"
         private const val METADATA_CAPACITY = 64
+        private const val LIVE_POLL_MS = 200L
+        /** Matches the store's crash-loop guard. */
+        private const val MAX_DECODE_ATTEMPTS = 2
+        /** Consecutive failed windows after which the recognizer is treated as broken. */
+        private const val BROKEN_AFTER_FAILURES = 2
         @Volatile internal var inputFactoryForTests: (() -> RecordingInput)? = null
         @Volatile internal var decoderFactoryForTests: (() -> RecordingDecoder)? = null
         @Volatile internal var metadataCapacityForTests: Int? = null
-        @Volatile internal var speechEngineForTests: String? = null
-        fun command(context: Context, action: String, id: String? = null) {
+
+        /** A command the service turns down for now, with the sentence that says why (strings.xml). */
+        class Refused(message: String) : IllegalStateException(message)
+
+        /** The sentence of a [Refused] command, for the feedback pill; null for any other failure. */
+        fun refusal(error: Throwable): String? = (error as? Refused)?.message
+
+        /**
+         * Sends a command. START needs the microphone permission and a visible activity; RECOVER claims
+         * [id] for transcription ([retryFailed]: its failed windows get new attempts); DRAIN continues
+         * waiting notes and must also come from a visible activity.
+         */
+        fun command(context: Context, action: String, id: String? = null, retryFailed: Boolean = false) {
             require(action != RECOVER || !id.isNullOrBlank()) { "Choose an existing note to continue transcription." }
             if (action == START && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
                 throw SecurityException("Microphone access is required.")
             val intent = Intent(context, RecordingService::class.java).setAction(action).putExtra(NOTE, id)
-            if (action == START || action == RECOVER) {
-                val capture = action == START
-                val claim = SessionOperations.reserveSession(capture, if (capture) null else id)
-                if (claim == null) {
-                    if (SessionOperations.matchesSession(capture, id)) return
-                    error("This session is busy. Finish its current operation before recording or transcribing.")
+                .putExtra(RETRY_FAILED, retryFailed)
+            when (action) {
+                START, RECOVER -> {
+                    val capture = action == START
+                    val claim = SessionOperations.reserveSession(capture, if (capture) null else id)
+                    if (claim == null) {
+                        // The microphone slot is still held while the previous recording closes its note:
+                        // nothing would start, so say so instead of accepting the tap silently.
+                        if (capture && SessionOperations.captureFinishing()) throw Refused(context.getString(R.string.error_finishing))
+                        if (SessionOperations.matchesSession(capture, id)) return
+                        throw Refused(context.getString(if (capture) R.string.error_already_recording else R.string.error_note_busy))
+                    }
+                    intent.putExtra(OPERATION, claim.token)
+                    try { ContextCompat.startForegroundService(context, intent) }
+                    catch (error: Exception) { claim.release(); throw error }
                 }
-                intent.putExtra(OPERATION, claim.token)
-                try { ContextCompat.startForegroundService(context, intent) }
-                catch (error: Exception) { claim.release(); throw error }
-            } else context.startService(intent)
+                DRAIN -> ContextCompat.startForegroundService(context, intent)
+                else -> context.startService(intent)
+            }
         }
     }
 }

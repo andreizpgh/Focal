@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The two inks of paper (design spec 2.1), for the window and the splash before Compose draws. -->
+<resources>
+    <color name="paper">#FFFFFF</color>
+    <color name="ink">#111111</color>
+    <bool name="light_system_bars">true</bool>
+</resources>
