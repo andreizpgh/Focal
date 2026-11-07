@@ -905,9 +905,11 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
         val coordinates = placement.coordinates
         if (id == null || coordinates == null || !pages.flying(id)) null
         else pages.flight(change, f, coordinates, this, colors)?.let { title ->
+            // At its box's whole width, as both ends set it: the text aligns in its own direction inside the box.
+            val width = max(1, title.width.roundToInt())
             val layout = measurer.measure(
                 title.text, title.style, overflow = TextOverflow.Ellipsis, maxLines = title.lines,
-                constraints = Constraints(maxWidth = max(1, title.width.roundToInt())), density = this, layoutDirection = layoutDirection,
+                constraints = Constraints(minWidth = width, maxWidth = width), density = this, layoutDirection = layoutDirection,
             )
             FlightText(title, layout)
         }

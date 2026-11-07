@@ -66,6 +66,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -98,6 +99,7 @@ import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.LocalWindowLayout
 import app.focal.ui.design.Scene
 import app.focal.ui.design.Stage
+import app.focal.ui.design.alignWith
 import app.focal.ui.design.lineScale
 import app.focal.ui.scene.StageTranscript
 import app.focal.ui.scene.TimerText
@@ -576,11 +578,14 @@ private fun NoteStage(
     LaunchedEffect(overlapping) { lengthYields.animateTo(if (overlapping) 0f else 1f, FocalMotion.fadeFast()) }
     val lineHeight = with(density) { FocalType.stageText.lineHeight.toPx() }
     val short = LocalWindowLayout.current.rail
+    val titleText = noteTitle(row, dates)
+    // A time on its own line keeps to the title's edge (a derived title follows the note's direction, spec 8.5).
+    val titleLeft = alignWith(titleText) == TextAlign.Left
     Layout(
         contents = listOf(
             {
                 if (renameField != null) renameField() else Text(
-                    noteTitle(row, dates), style = FocalType.headline.copy(lineBreak = LineBreak.Heading),
+                    titleText, style = FocalType.headline.copy(lineBreak = LineBreak.Heading),
                     color = if (fallback) colors.stageRecede else colors.stageInk,
                     maxLines = if (large) StageMetrics.TITLE_LINES_LARGE else StageMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
                     // While the stage opens into its page (or folds back), a copy of the title flies between them.
@@ -608,7 +613,9 @@ private fun NoteStage(
         // From 1.5x, or when the time is long (a date), it takes its own line under the title (spec 4.22.4, 4.22.7).
         val timeOwnLine = large || time.width + StageMetrics.timeGap.roundToPx() > StageMetrics.TIME_SHARE * column
         val titleWidth = if (timeOwnLine) column else column - time.width - StageMetrics.timeGap.roundToPx()
-        val title = titles.first().measure(Constraints(maxWidth = titleWidth))
+        // The title takes its whole width, so its text aligns in its own direction over the text under it, however
+        // short it is (a box as wide as its text would sit at the start edge, the right in a mirrored layout).
+        val title = titles.first().measure(Constraints(minWidth = titleWidth, maxWidth = titleWidth))
         val timeTop = if (timeOwnLine) inset + title.height else inset + title[FirstBaseline] - time[FirstBaseline]
         val headBottom = if (timeOwnLine) inset + title.height + time.height else inset + title.height
         val textTop = headBottom + StageMetrics.textGap.roundToPx()
@@ -637,7 +644,11 @@ private fun NoteStage(
         // Relative: right to left, the time sits at the title's left and the pill at the start of the footer (8.5).
         layout(width, height) {
             title.placeRelative(inset, inset)
-            time.placeRelative(if (timeOwnLine) inset else width - inset - time.width, timeTop)
+            when {
+                !timeOwnLine -> time.placeRelative(width - inset - time.width, timeTop)
+                titleLeft -> time.place(inset, timeTop)
+                else -> time.place(width - inset - time.width, timeTop)
+            }
             text.placeRelative(inset, textTop)
             length.placeRelative(inset, lengthTop + (lengthSlot - length.height) / 2)
             pill.placeRelative(pillX, footerTop)

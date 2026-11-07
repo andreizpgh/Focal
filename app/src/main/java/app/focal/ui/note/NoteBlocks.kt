@@ -61,6 +61,7 @@ import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.design.alignWith
 import app.focal.ui.library.RenameField
 import app.focal.ui.shell.LocalPageReveal
 import app.focal.ui.shell.pageTitle
@@ -177,9 +178,11 @@ internal fun NoteHead(
             )
         }
         Spacer(Modifier.height(NoteBlockMetrics.headGap))
+        // The meta lines up with the title over it: in a mirrored layout a title derived from the note keeps the
+        // note's own edge (spec 8.5), and the meta keeps it too rather than parting to the other side.
         Text(
-            head.meta, style = FocalType.meta, color = colors.recede, maxLines = 2,
-            modifier = Modifier.graphicsLayer { alpha = metaShown() },
+            head.meta, style = FocalType.meta, color = colors.recede, maxLines = 2, textAlign = alignWith(head.title),
+            modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = metaShown() },
         )
         head.notices.forEach { notice ->
             Spacer(Modifier.height(NoteBlockMetrics.headGap))

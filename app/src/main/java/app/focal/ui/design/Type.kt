@@ -1,5 +1,6 @@
 package app.focal.ui.design
 
+import android.text.TextDirectionHeuristics
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
@@ -131,6 +132,19 @@ fun TextStyle.words(): TextStyle = copy(textDirection = TextDirection.Content)
 @Composable
 @ReadOnlyComposable
 fun chromeAlign(): TextAlign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) TextAlign.Right else TextAlign.Left
+
+/**
+ * The edge [text] aligns to when it fills its line (the user's words, a title derived from them): its own start, from
+ * its first strong letter, or the layout's start when it has none, as [TextDirection.Content] resolves it. A line set
+ * under such a title (the note's meta, a time or duration that wraps under it) takes the same edge, so the block keeps
+ * one alignment in a mirrored layout.
+ */
+@Composable
+@ReadOnlyComposable
+fun alignWith(text: CharSequence): TextAlign {
+    val heuristic = if (LocalLayoutDirection.current == LayoutDirection.Rtl) TextDirectionHeuristics.FIRSTSTRONG_RTL else TextDirectionHeuristics.FIRSTSTRONG_LTR
+    return if (heuristic.isRtl(text, 0, text.length)) TextAlign.Right else TextAlign.Left
+}
 
 /** Tabular figures on a style whose numbers change in place ("tnum on numbers" in the scale). */
 fun TextStyle.tabular(): TextStyle = copy(fontFeatureSettings = TNUM)

@@ -45,9 +45,11 @@ fun CutText(
             .semantics { this.text = text }
             .layout { measurable, constraints ->
                 val width = constraints.maxWidth
+                // At the full width, so a single line aligns in the text's own direction as a wrapped one does.
+                val textConstraints = Constraints.fixedWidth(width)
                 fun measure(value: AnnotatedString, lines: Int) = measurer.measure(
                     value, styled, overflow = TextOverflow.Clip, maxLines = lines,
-                    constraints = Constraints(maxWidth = width), density = this, layoutDirection = layoutDirection,
+                    constraints = textConstraints, density = this, layoutDirection = layoutDirection,
                 )
                 val line = styled.lineHeight.toPx()
                 val fit = if (constraints.hasBoundedHeight && line > 0f) (constraints.maxHeight / line).toInt().coerceAtLeast(1) else maxLines

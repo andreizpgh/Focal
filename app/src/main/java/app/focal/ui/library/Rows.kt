@@ -54,6 +54,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
@@ -69,6 +70,7 @@ import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
+import app.focal.ui.design.alignWith
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.pageOrigin
 import app.focal.ui.shell.rememberRowOrigin
@@ -174,12 +176,14 @@ fun NoteRowItem(
                         titleText, style = RowTitleStyle, color = if (row.title.isBlank()) colors.recede else colors.ink,
                         maxLines = RowMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
+                            .fillMaxWidth()
                             .pageOrigin(origin, title = true)
                             .graphicsLayer { alpha = if (pages.flying(row.id)) 0f else 1f },
                     )
                 },
                 trailing = trailing,
                 trailingInk = row.phase == NotePhase.TRANSCRIBING,
+                titleText = titleText,
             )
             Spacer(Modifier.height(RowMetrics.previewGap))
             Preview(runIn, previewAfterTitle(row))
@@ -194,24 +198,28 @@ fun NoteRowItem(
 
 private val RowTitleStyle = FocalType.rowTitle.copy(lineBreak = LineBreak.Heading)
 
-/** The title and, flush right on its first baseline, the duration (it wraps under the title from 1.5×). */
+/**
+ * The title and, flush right on its first baseline, the duration (it wraps under the title from 1.5×). The title fills
+ * its slot ([title] sets it at full width), so a derived title aligns in the note's own direction over the preview
+ * under it; a duration wrapped under it keeps to the same edge ([titleText]'s).
+ */
 @Composable
-private fun TitleLine(title: @Composable () -> Unit, trailing: String, trailingInk: Boolean) {
+private fun TitleLine(title: @Composable () -> Unit, trailing: String, trailingInk: Boolean, titleText: String) {
     val colors = FocalTheme.colors
     val wraps = LocalDensity.current.fontScale >= RowMetrics.WRAP_FONT
-    val duration: @Composable (Modifier) -> Unit = { modifier ->
-        Text(trailing, style = FocalType.meta, color = if (trailingInk) colors.ink else colors.recede, maxLines = 1, modifier = modifier)
+    val duration: @Composable (Modifier, TextAlign?) -> Unit = { modifier, align ->
+        Text(trailing, style = FocalType.meta, color = if (trailingInk) colors.ink else colors.recede, maxLines = 1, textAlign = align, modifier = modifier)
     }
     if (wraps) {
         Column {
             title()
-            duration(Modifier)
+            duration(Modifier.fillMaxWidth(), alignWith(titleText))
         }
     } else {
         Row {
             Box(Modifier.weight(1f).alignByBaseline()) { title() }
             Spacer(Modifier.width(RowMetrics.durationGap))
-            duration(Modifier.alignByBaseline())
+            duration(Modifier.alignByBaseline(), null)
         }
     }
 }
@@ -281,6 +289,7 @@ fun durationText(durationMs: Long): String {
 fun SearchResultItem(result: SearchRow, dates: LibraryDates, today: LocalDate, onOpen: (SearchRow) -> Unit, modifier: Modifier = Modifier) {
     val colors = FocalTheme.colors
     val row = result.row
+    val title = noteTitle(row, dates)
     val source = remember { MutableInteractionSource() }
     Box(
         modifier
@@ -293,12 +302,13 @@ fun SearchResultItem(result: SearchRow, dates: LibraryDates, today: LocalDate, o
             TitleLine(
                 title = {
                     Text(
-                        noteTitle(row, dates), style = FocalType.rowTitle, color = if (row.title.isBlank()) colors.recede else colors.ink,
-                        maxLines = RowMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
+                        title, style = FocalType.rowTitle, color = if (row.title.isBlank()) colors.recede else colors.ink,
+                        maxLines = RowMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(),
                     )
                 },
                 trailing = durationText(row.durationMs),
                 trailingInk = false,
+                titleText = title,
             )
             Spacer(Modifier.height(RowMetrics.previewGap))
             Preview(dates.searchDay(row.created, today), result.snippet, result.snippetHits)
