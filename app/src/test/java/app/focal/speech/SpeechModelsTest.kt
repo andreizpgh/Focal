@@ -119,15 +119,17 @@ class SpeechModelsTest {
         models.retry(automatic = true)
         settle()
         assertEquals(2, attempts.get())
-        // Any other failure is the install's; a damaged APK copy too, which only the person retries.
+        // Any other failure is the install's, except a damaged APK copy: its own, which a copy again cannot mend.
         outcome = { error("Could not prepare private storage for the speech model.") }
         models.retry(automatic = true)
         val other = settle()
         assertTrue(other is ModelStatus.Failed && other.failure == ModelFailure.INSTALL && !other.permanent)
+        assertEquals(app.focal.data.WaitCause.ModelInstall, (other as ModelStatus.Failed).waitCause())
         outcome = { throw BundledModelException("The bundled speech model is damaged. Reinstall Focal.") }
         models.retry(automatic = true)
         val damaged = settle()
-        assertTrue(damaged is ModelStatus.Failed && damaged.failure == ModelFailure.INSTALL && damaged.permanent)
+        assertTrue(damaged is ModelStatus.Failed && damaged.failure == ModelFailure.DAMAGED && damaged.permanent)
+        assertEquals(app.focal.data.WaitCause.ModelDamaged, (damaged as ModelStatus.Failed).waitCause())
     }
 
     @Test fun storageThatFillsDuringTheCopyIsAStorageFailure() {

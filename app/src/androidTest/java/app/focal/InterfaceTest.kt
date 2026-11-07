@@ -992,7 +992,8 @@ class InterfaceTest {
     /**
      * A model that could not be prepared leaves a waiting note that says why and offers Try again: what to free when
      * storage ran short, a neutral sentence when the copy failed otherwise. Try again prepares the model again (copied
-     * from the APK unless it is installed already) and transcribes the note, which keeps its audio throughout.
+     * from the APK unless it is installed already) and transcribes the note, which keeps its audio throughout. A damaged
+     * copy in the APK says to reinstall Focal and offers no Try again, which could not mend it.
      */
     @Test fun aModelThatCouldNotBePreparedSaysWhyAndTryAgainTranscribes() {
         assumeTrue("The model is bundled", runBlocking { app.models.awaitFiles() } != null)
@@ -1006,7 +1007,7 @@ class InterfaceTest {
         val cases = listOf(
             ModelStatus.Failed("Free up space to prepare the speech model.", failure = ModelFailure.STORAGE, shortBytes = 850_000_000) to
                 "Free up about 850 MB to prepare the speech model. Your audio is saved.",
-            ModelStatus.Failed("The bundled speech model is damaged. Reinstall Focal.", permanent = true, failure = ModelFailure.INSTALL) to
+            ModelStatus.Failed("Could not prepare private storage for the speech model.", failure = ModelFailure.INSTALL) to
                 "The speech model couldn’t be prepared. Your audio is saved.",
         )
         try {
@@ -1035,6 +1036,17 @@ class InterfaceTest {
                 scenario = null
                 ServiceNotifications.cancelReady(app, id)
             }
+            val damaged = ModelStatus.Failed("The bundled speech model is damaged. Reinstall Focal.", permanent = true, failure = ModelFailure.DAMAGED)
+            val id = app.store.create().also { created += it }
+            app.store.audioFile(id).writeBytes(ByteArray(2 * BYTES_PER_SECOND) { if (it % 4 == 2) 1 else 0 })
+            app.store.duration(id, 2_000)
+            app.store.state(id, NoteState.INTERRUPTED, WaitCause.encode(damaged.waitCause()))
+            launch(Intent(app, MainActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra(RecordingService.NOTE, id))
+            runBlocking { app.models.awaitFiles() }
+            app.models.settleForTests(damaged)
+            await("the reason", hasText("The speech model is damaged: reinstall Focal. Your audio is saved."))
+            compose.onNode(hasContentDescription("Try again") and hasClickAction()).assertDoesNotExist()
+            assertTrue("Its audio is kept", app.store.audioFile(id).length() == 2L * BYTES_PER_SECOND)
         } finally {
             RecordingService.decoderFactoryForTests = null
             if (app.models.status.value is ModelStatus.Failed) app.models.retry()

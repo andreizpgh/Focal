@@ -456,7 +456,10 @@ internal fun headUi(
         if (note.phase == NotePhase.WAITING) when {
             captureElsewhere -> add(Notice(stringResource(R.string.waiting_after_recording)))
             note.waitingReason != null -> add(
-                Notice(waitingText(note.waitingReason, page = true), action = tryAgain.takeIf { note.canRetry && interactive }, onAction = actions.retry),
+                Notice(
+                    waitingText(note.waitingReason, page = true),
+                    action = tryAgain.takeIf { note.canRetry && interactive && note.waitingReason.retries }, onAction = actions.retry,
+                ),
             )
         }
     }

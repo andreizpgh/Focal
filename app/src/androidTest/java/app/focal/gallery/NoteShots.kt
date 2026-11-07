@@ -70,6 +70,8 @@ object NoteShots {
         addAll(themed("waiting-failures") { Note(saturdayNote(NotePhase.WAITING).copy(waitingReason = WaitingReason.Failures, canRetry = true)) })
         add(Shot("waiting-storage-light", dark = false) { Note(saturdayNote(NotePhase.WAITING).copy(waitingReason = WaitingReason.Storage(850_000_000), canRetry = true)) })
         add(Shot("waiting-install-light", dark = false) { Note(saturdayNote(NotePhase.WAITING).copy(waitingReason = WaitingReason.Install, canRetry = true)) })
+        // A damaged APK copy: the remedy, and no Try again.
+        add(Shot("waiting-damaged-light", dark = false) { Note(saturdayNote(NotePhase.WAITING).copy(waitingReason = WaitingReason.Damaged, canRetry = true)) })
         addAll(themed("partial") { Note(partial()) })
         add(Shot("no-speech-light", dark = false) { Note(noSpeech()) })
         add(Shot("text-only-light", dark = false) { Note(design().copy(audioPresent = false, canPlay = false, canRemoveAudio = false)) })

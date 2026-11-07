@@ -178,8 +178,8 @@ class EngineGuardServiceTest {
         assumeTrue("The model is bundled", runBlocking { app.models.awaitFiles() } != null)
         dying = false
         val storage = ModelStatus.Failed("Free up space to prepare the speech model.", failure = ModelFailure.STORAGE, shortBytes = 850_000_000)
-        val damaged = ModelStatus.Failed("The bundled speech model is damaged. Reinstall Focal.", permanent = true, failure = ModelFailure.INSTALL)
-        for ((failure, cause) in listOf(storage to WaitCause.ModelStorage(850_000_000), damaged to WaitCause.ModelInstall)) {
+        val damaged = ModelStatus.Failed("The bundled speech model is damaged. Reinstall Focal.", permanent = true, failure = ModelFailure.DAMAGED)
+        for ((failure, cause) in listOf(storage to WaitCause.ModelStorage(850_000_000), damaged to WaitCause.ModelDamaged)) {
             val waiting = waitingNote(SAVED_MS)
             val other = waitingNote(SAVED_MS)
             // The real speech path, which looks at the model: it cannot run, so nothing is decoded.
@@ -198,7 +198,8 @@ class EngineGuardServiceTest {
                 app.autoResumeTranscription = true
                 activity.onActivity { app.resumeWaitingTranscription(it) }
             } else {
-                // A damaged copy is not retried by a foreground start; the person's Try again copies it again.
+                // A damaged copy is not retried by a foreground start (the note offers no Try again; a retry asked for
+                // all the same, as after a reinstall, copies it again).
                 activity.onActivity { app.resumeWaitingTranscription(it) }
                 SystemClock.sleep(QUIET_MS)
                 assertEquals(damaged, app.models.status.value)

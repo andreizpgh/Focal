@@ -165,6 +165,8 @@
     <string name="stage_model_storage">Free up about %s to prepare the speech model.</string>
     <string name="model_install_failed">The speech model couldn’t be prepared. Your audio is saved.</string>
     <string name="stage_model_install_failed">The speech model couldn’t be prepared.</string>
+    <string name="model_damaged">The speech model is damaged: reinstall Focal. Your audio is saved.</string>
+    <string name="stage_model_damaged">The speech model is damaged: reinstall Focal.</string>
     <string name="provenance_edited">Edited</string>
     <string name="not_saved">Not saved</string>
     <string name="find_hint">Find in note</string>

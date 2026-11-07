@@ -96,6 +96,12 @@ sealed interface WaitingReason {
 
     /** The speech model could not be prepared otherwise: Try again copies it out of the APK again. */
     data object Install : WaitingReason
+
+    /** The APK's copy of the speech model is damaged or missing: "Reinstall Focal", and no Try again (it cannot help). */
+    data object Damaged : WaitingReason
+
+    /** Whether Try again can help. */
+    val retries: Boolean get() = this != Damaged
 }
 
 /**
@@ -118,6 +124,7 @@ fun waitingReason(note: Note, phase: NotePhase, model: ModelState = ModelState(S
     return when (val cause = model.failure ?: stored) {
         is WaitCause.ModelStorage -> WaitingReason.Storage(cause.shortBytes).takeUnless { ready }
         WaitCause.ModelInstall -> WaitingReason.Install.takeUnless { ready }
+        WaitCause.ModelDamaged -> WaitingReason.Damaged.takeUnless { ready }
         // The speech work failed with the model ready: why, so the note offers Try again at once.
         WaitCause.OutOfMemory -> WaitingReason.Memory
         WaitCause.EngineFailed -> WaitingReason.Failures

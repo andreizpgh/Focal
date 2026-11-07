@@ -49,7 +49,9 @@ sealed interface ModelStatus {
 enum class ModelFailure {
     /** Too little free storage for the copy. */
     STORAGE,
-    /** Anything else: a damaged or missing copy in the APK, a write that failed. */
+    /** The APK's copy is damaged or missing ([BundledModelException]): only reinstalling Focal helps. */
+    DAMAGED,
+    /** Anything else: a write that failed. */
     INSTALL,
     /** Not tried: the engine guard stopped the speech work. */
     ENGINE_STOPPED,
@@ -58,6 +60,7 @@ enum class ModelFailure {
 /** The cause a waiting note stores, and names, for this failed install. */
 fun ModelStatus.Failed.waitCause(): WaitCause = when (failure) {
     ModelFailure.STORAGE -> WaitCause.ModelStorage(shortBytes)
+    ModelFailure.DAMAGED -> WaitCause.ModelDamaged
     ModelFailure.INSTALL -> WaitCause.ModelInstall
     ModelFailure.ENGINE_STOPPED -> WaitCause.EngineStopped
 }
@@ -146,10 +149,13 @@ class SpeechModels internal constructor(
             } catch (error: Exception) {
                 runCatching { Log.w(TAG, "Speech model install failed", error) } // never decides the outcome
                 val storage = error as? InsufficientStorageException
-                ModelStatus.Failed(
-                    error.message ?: "The speech model could not be prepared.", error is BundledModelException,
-                    if (storage != null) ModelFailure.STORAGE else ModelFailure.INSTALL, storage?.shortBytes ?: 0,
-                )
+                val damaged = error is BundledModelException
+                val failure = when {
+                    storage != null -> ModelFailure.STORAGE
+                    damaged -> ModelFailure.DAMAGED
+                    else -> ModelFailure.INSTALL
+                }
+                ModelStatus.Failed(error.message ?: "The speech model could not be prepared.", damaged, failure, storage?.shortBytes ?: 0)
             }
         }
     }

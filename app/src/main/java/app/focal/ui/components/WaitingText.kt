@@ -22,4 +22,5 @@ internal fun waitingText(reason: WaitingReason, page: Boolean): String = when (r
         stringResource(if (page) R.string.model_storage else R.string.stage_model_storage, amount)
     }
     WaitingReason.Install -> stringResource(if (page) R.string.model_install_failed else R.string.stage_model_install_failed)
+    WaitingReason.Damaged -> stringResource(if (page) R.string.model_damaged else R.string.stage_model_damaged)
 }

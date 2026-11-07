@@ -135,6 +135,13 @@ class NotePhasesTest {
             ModelState(SpeechAvailability.UNAVAILABLE)))
         // A note without audio has nothing to transcribe again.
         assertNull(waitingReason(interrupted.copy(audioPresent = false), NotePhase.WAITING, failedStorage))
+        // A damaged APK copy says what helps, and offers no Try again: copying it again cannot.
+        val damaged = ModelState(SpeechAvailability.UNAVAILABLE, failure = WaitCause.ModelDamaged)
+        assertEquals(WaitingReason.Damaged, waitingReason(interrupted, NotePhase.WAITING, damaged))
+        assertEquals(WaitingReason.Damaged, waitingReason(interrupted.copy(error = WaitCause.encode(WaitCause.ModelDamaged)),
+            NotePhase.WAITING, ModelState(SpeechAvailability.UNAVAILABLE)))
+        assertFalse(WaitingReason.Damaged.retries)
+        assertTrue(WaitingReason.Install.retries && WaitingReason.Memory.retries)
     }
 
     /**
@@ -157,7 +164,7 @@ class NotePhasesTest {
 
     @Test fun waitCausesRoundTripThroughTheStore() {
         for (cause in listOf(WaitCause.ModelStorage(0), WaitCause.ModelStorage(1_234_567_890_123), WaitCause.ModelInstall,
-            WaitCause.EngineStopped, WaitCause.OutOfMemory, WaitCause.EngineFailed))
+            WaitCause.ModelDamaged, WaitCause.EngineStopped, WaitCause.OutOfMemory, WaitCause.EngineFailed))
             assertEquals(cause, WaitCause.decode(WaitCause.encode(cause)))
         // What older builds stored, and damaged values, are plain interruptions.
         for (text in listOf(null, "", "Saved audio needs transcription. Open the note to continue.", "wait:model-storage:",

@@ -54,8 +54,11 @@ sealed interface WaitCause {
     /** Too little free storage to copy the speech model out of the APK: [shortBytes] more are needed. */
     data class ModelStorage(val shortBytes: Long) : WaitCause
 
-    /** The model copy failed otherwise (a damaged or missing copy in the APK, a failed write). */
+    /** The model copy failed otherwise (a failed write): Try again copies it again. */
     data object ModelInstall : WaitCause
+
+    /** The APK's copy of the model is damaged or missing: copying it again cannot help, reinstalling Focal can. */
+    data object ModelDamaged : WaitCause
 
     /** The engine guard stopped the speech work after it killed the process or failed to load repeatedly. */
     data object EngineStopped : WaitCause
@@ -73,6 +76,7 @@ sealed interface WaitCause {
     companion object {
         private const val STORAGE = "wait:model-storage:"
         private const val INSTALL = "wait:model-install"
+        private const val DAMAGED = "wait:model-damaged"
         private const val ENGINE = "wait:engine-stopped"
         private const val MEMORY = "wait:out-of-memory"
         private const val FAILED = "wait:engine-failed"
@@ -80,6 +84,7 @@ sealed interface WaitCause {
         fun encode(cause: WaitCause): String = when (cause) {
             is ModelStorage -> STORAGE + cause.shortBytes.coerceAtLeast(0)
             ModelInstall -> INSTALL
+            ModelDamaged -> DAMAGED
             EngineStopped -> ENGINE
             OutOfMemory -> MEMORY
             EngineFailed -> FAILED
@@ -90,6 +95,7 @@ sealed interface WaitCause {
             error == null -> null
             error.startsWith(STORAGE) -> error.removePrefix(STORAGE).toLongOrNull()?.takeIf { it >= 0 }?.let(::ModelStorage)
             error == INSTALL -> ModelInstall
+            error == DAMAGED -> ModelDamaged
             error == ENGINE -> EngineStopped
             error == MEMORY -> OutOfMemory
             error == FAILED -> EngineFailed
