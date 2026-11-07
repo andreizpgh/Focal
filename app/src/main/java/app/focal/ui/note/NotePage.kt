@@ -98,6 +98,7 @@ import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteUiState
 import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.PlayingWord
+import app.focal.ui.state.WriteQueue
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -142,26 +143,15 @@ private class CentredMatch {
 }
 
 /**
- * Edit's steps in the order they were asked for (main thread): an undo, redo, restore, split or join, and Done. Each
- * starts once the one before it has finished, so it reads the field that step reseeded, never the text it replaced.
+ * The list keys last drawn in Edit: a paragraph put just before the first one on screen (the text before a split) takes
+ * that one's place there ([NotePage]).
  */
-private class EditQueue {
-    private var last: Job? = null
-
-    /** Launches [block] in [scope] once the step asked for before it has finished. */
-    fun launch(scope: CoroutineScope, block: suspend () -> Unit): Job {
-        val previous = last
-        return scope.launch {
-            previous?.join()
-            block()
-        }.also { last = it }
-    }
-
-    /** Waits for every step asked for so far. */
-    suspend fun settle() {
-        last?.join()
-    }
+private class ShownKeys {
+    var keys: List<Any> = emptyList()
 }
+
+/** The field and the page's changes as a write that reseeds the field found them ([NotePage]). */
+private class FieldMark(val field: FieldFocus?, val text: String?, val changes: Int)
 
 /** Above the text: the fades and the jump pill, then the bars. */
 private const val FADES_Z = 1f
@@ -205,7 +195,9 @@ fun NotePage(
     val focusManager = LocalFocusManager.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val session = remember(edits) { EditSession(edits) }
-    val editQueue = remember(session) { EditQueue() }
+    // Every write of Edit, one at a time in the order asked for (the note's view model's queue on a real page).
+    val ownWrites = remember(scope) { WriteQueue(scope) }
+    val writes = actions.writes ?: ownWrites
     val focus = page.focus
     val find = page.find
     val listFade = remember { Animatable(1f) }
@@ -324,25 +316,61 @@ fun NotePage(
     val stripWanted = playingHere && !page.editing && !find.open
     LaunchedEffect(stripWanted) { if (stripWanted) page.stripShown = true }
 
-    // Edit (spec 5.7).
-    // [commit]: a tap moved the caret, so the paragraph it left is saved now; a split, join, undo or restore already
-    // wrote it (saving its old draft again would undo the step).
+    // Edit (spec 5.7). Every write goes through [writes], one at a time in the order asked for, and reads the field
+    // when it runs; Enter and Backspace change the page at once, so what is typed after them is never lost. The
+    // session reads the field from here.
+    val cannotJoin = stringResource(R.string.error_join)
+    val currentCannotJoin by rememberUpdatedState(cannotJoin)
+    SideEffect {
+        session.field = { page.field?.takeIf { page.editing }?.let { FieldText(it.id, it.text.text.toString()) } }
+        page.storedId = session::resolve
+        // A join the store refused after the page showed it: the paragraph comes back, and leaves the field's text.
+        session.joinRefused = { id, prefix ->
+            val current = page.field
+            if (current != null && session.resolve(current.id) == session.resolve(id) && current.text.text.startsWith(prefix)) {
+                current.text.edit {
+                    val from = this.selection
+                    replace(0, prefix.length, "")
+                    this.selection = TextRange((from.start - prefix.length).coerceAtLeast(0), (from.end - prefix.length).coerceAtLeast(0))
+                }
+            }
+            scope.launch { bottom.feedback.show(currentCannotJoin) }
+        }
+    }
+    // The field stays on its paragraph when that paragraph's stored id changes (a split it was typed in reached the
+    // store, or an undo or redo brought it back under a new id).
+    fun followField() {
+        val current = page.field ?: return
+        val id = session.resolve(current.id)
+        if (id == current.id) return
+        page.field = FieldFocus(id, current.text.text.toString(), current.text.selection)
+        focus.editingId = id
+    }
+    fun write(block: suspend () -> Unit) {
+        writes.launch {
+            block()
+            followField()
+        }
+    }
+    // [commit]: a tap moved the caret, so the paragraph it left keeps its draft on screen and is saved in turn; a
+    // split, join, undo or restore already wrote it (saving its old draft again would undo the step).
     fun focusField(at: CaretAt, refresh: Boolean = true, commit: Boolean = false) {
-        val text = session.paragraph(at.id)?.text ?: paragraphs.firstOrNull { it.id == at.id }?.text ?: return
+        val id = session.resolve(at.id)
+        val text = session.paragraph(id)?.text ?: paragraphs.firstOrNull { it.id == id }?.text ?: return
         val current = page.field
-        if (current != null && current.id == at.id) {
+        if (current != null && session.resolve(current.id) == id) {
             current.text.edit {
                 if (refresh && toString() != text) replace(0, length, text)
                 this.selection = TextRange(at.caret.coerceIn(0, length))
             }
         } else {
             if (current != null && commit) {
-                val draft = current.text.text.toString()
-                scope.launch { session.save(current.id, draft) }
+                session.leave(current.id, current.text.text.toString())
+                write { session.save() }
             }
-            page.field = FieldFocus(at.id, text, at.caret)
+            page.field = FieldFocus(id, text, at.caret)
         }
-        focus.editingId = at.id
+        focus.editingId = id
     }
     fun enterEdit(at: CaretAt?) {
         if (!note.editable || page.editing) return
@@ -369,12 +397,11 @@ fun NotePage(
         focusManager.clearFocus()
     }
     val saveFailed = stringResource(R.string.feedback_save_failed)
-    // Done, Esc and Back save the field as the steps before them left it: an undo or redo still writing (a busy
-    // database holds it) reseeds the field first, so its text is never saved back over the undo as a new step.
+    // Done, Esc and Back store everything shown, as the writes before them left it: an undo or redo still writing (a
+    // busy database holds it) reseeds the field first, so its text is never saved back over the undo as a new step.
     fun done() {
-        editQueue.launch(scope) {
-            val field = page.field
-            if (field == null || session.save(field.id, field.text.text.toString())) exitEdit()
+        write {
+            if (session.save()) exitEdit()
             else if (session.failures >= 2) scope.launch { bottom.feedback.show(saveFailed) }
         }
     }
@@ -391,89 +418,119 @@ fun NotePage(
         focusField(CaretAt(stored.id, current.text.selection.start.coerceAtMost(stored.text.length)))
     }
     // The note stopped being editable under Edit (it started transcribing again): Edit ends after one last save of
-    // the draft (once the steps on their way have reseeded it). The store may refuse it; then the pill says so.
+    // everything shown (once the writes on their way have reseeded it). The store may refuse it; the pill says so.
     val notSaved = stringResource(R.string.error_save)
     LaunchedEffect(note.loaded, note.editable) {
         if (!note.loaded || note.editable || !page.editing) return@LaunchedEffect
-        editQueue.settle()
-        if (!page.editing) return@LaunchedEffect
+        write {
+            if (!page.editing) return@write
+            val saved = session.save()
+            exitEdit()
+            if (!saved) scope.launch { bottom.feedback.show(notSaved) }
+        }
+    }
+    // A write that changes the stored text under the field (undo, redo, restore, Replace all) has the field take the
+    // result, unless something was typed, Enter or Backspace pressed or the caret moved while it ran: what the person
+    // did since wins and the next write stores it, so nothing typed is dropped for a step it came after. (A field whose
+    // paragraph the step took away goes where the step puts the caret.)
+    fun mark() = page.field.let { FieldMark(it, it?.text?.text?.toString(), session.changesMade) }
+    fun untouched(since: FieldMark): Boolean {
         val current = page.field
-        val saved = current == null || session.save(current.id, current.text.text.toString())
-        exitEdit()
-        if (!saved) bottom.feedback.show(notSaved)
+        val same = current === since.field && current?.text?.text?.toString() == since.text && session.changesMade == since.changes
+        return same || current?.let { session.paragraph(it.id) } == null
     }
-    fun withDraft(block: suspend (FieldFocus?) -> CaretAt?) {
-        editQueue.launch(scope) { block(page.field)?.takeIf { it.id >= 0 }?.let { focusField(it) } }
-    }
-    val undo: () -> Unit = {
-        withDraft { field ->
-            if (field != null && !session.save(field.id, field.text.text.toString())) null else session.undo()
+    fun step(run: suspend () -> CaretAt?) {
+        write {
+            val since = mark()
+            val caret = run() ?: return@write
+            if (untouched(since)) focusField(caret)
         }
     }
-    val redo: () -> Unit = {
-        withDraft { field ->
-            if (field != null && !session.save(field.id, field.text.text.toString())) null else session.redo()
+    val undo: () -> Unit = { step { session.undo() } }
+    val redo: () -> Unit = { step { session.redo() } }
+    val restore: () -> Unit = { step { session.restore() } }
+    // Enter, from the field's input handling: the field already holds the text after the caret; the text before it
+    // is drawn as a new paragraph above at once, and the store splits in turn.
+    val enter: (String, Int) -> Unit = { full, at ->
+        page.field?.let { current ->
+            session.split(current.id, full, at)
+            write { session.save() }
         }
     }
-    val restore: () -> Unit = { withDraft { field -> field?.let { session.restore(it.id, it.text.text.toString()) } } }
-    // Backspace at a paragraph's start. A join the store refuses (a paragraph whose original is unknown beside one
-    // whose original is known) keeps both and the caret, and says so in the pill (spec 4.8: no haptic, 2.9).
-    val cannotJoin = stringResource(R.string.error_join)
+    // Backspace at a paragraph's start: the paragraph before goes in front of the field's text at once. A join the
+    // store keeps apart (a paragraph whose original is unknown beside one whose original is known) keeps both and the
+    // caret, and says so in the pill (spec 4.8: no haptic, 2.9).
     val join: () -> Unit = {
-        page.field?.id?.let { id ->
-            editQueue.launch(scope) {
-                val current = page.field?.takeIf { it.id == id } ?: return@launch
-                when (val joined = session.mergeIntoPrevious(id, current.text.text.toString())) {
-                    is JoinResult.Joined -> joined.caret.takeIf { it.id >= 0 }?.let { focusField(it) }
-                    JoinResult.Refused -> scope.launch { bottom.feedback.show(cannotJoin) }
-                    JoinResult.Skipped -> Unit
+        page.field?.let { current ->
+            when (val joined = session.join(current.id, current.text.text.toString())) {
+                is JoinResult.Joined -> {
+                    current.text.edit {
+                        replace(0, 0, joined.prefix)
+                        this.selection = TextRange(joined.caret.coerceIn(0, length))
+                    }
+                    write { session.save() }
                 }
+                JoinResult.Refused -> {
+                    scope.launch { bottom.feedback.show(cannotJoin) }
+                    write { session.save() }
+                }
+                JoinResult.Skipped -> Unit
             }
         }
     }
-    // A page recreated in Edit (rotation, process death) goes on with its session once the note is there, its undo
-    // and redo log included; the saved state reads the log from here.
+    // A page recreated in Edit (rotation, process death) goes on with its session once the note is there: its undo
+    // and redo log, and the empty paragraphs it had made (the field may be typing in one). The saved state reads the
+    // log from here.
     LaunchedEffect(note.loaded) {
         if (note.loaded && page.editing && !session.started) {
-            session.begin(paragraphs, page.restoredLog)
+            session.begin(paragraphs, page.restoredLog, note.blankParagraphs, page.field?.id)
             page.restoredLog = null
         }
     }
     DisposableEffect(page, session) {
         // With the focused field's draft: its last save (below) is still on its way when the state is saved.
-        page.editLog = {
-            val current = page.field?.takeIf { page.editing }
-            session.log(current?.id, current?.text?.text?.toString()) ?: page.restoredLog
-        }
+        page.editLog = { session.log() ?: page.restoredLog }
         onDispose { page.editLog = { page.restoredLog } }
     }
-    // The draft's last save outlives the page: when the activity stops (recreation included) and when the page goes,
-    // it is written in the note's own scope, so nothing typed in the last 600 ms is lost.
-    val currentActions by rememberUpdatedState(actions)
+    // Everything not stored yet is written when the activity stops (recreation included) and when the page goes, after
+    // the writes already asked for, in the note's own scope: nothing typed in the last 600 ms is lost, and an undo still
+    // writing is never overwritten by the text it replaces.
     DisposableEffect(lifecycle, session) {
-        fun persistDraft() {
-            val current = page.field?.takeIf { page.editing } ?: return
-            val draft = current.text.text.toString()
-            currentActions.persist { session.save(current.id, draft) }
+        fun persist() {
+            if (page.editing) write { session.save() }
         }
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) persistDraft() }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) persist() }
         lifecycle.addObserver(observer)
         onDispose {
             lifecycle.removeObserver(observer)
-            persistDraft()
+            persist()
         }
     }
     // Autosave 600 ms after typing stops (spec 5.7).
     val field = page.field
     LaunchedEffect(field) {
         val current = field ?: return@LaunchedEffect
-        snapshotFlow { current.text.text.toString() }.drop(1).collectLatest { draft ->
+        snapshotFlow { current.text.text.toString() }.drop(1).collectLatest {
             delay(FocalTiming.AUTOSAVE_DEBOUNCE_MS)
-            session.save(current.id, draft)
+            write { session.save() }
         }
     }
     LaunchedEffect(field, find.open) {
         if (field != null && !find.open && page.takesFocus) runCatching { field.requester.requestFocus() }
+    }
+    // A paragraph put just before the first one on screen in Edit (the text before a split, by Enter or a redo) takes
+    // its place there, so the lines stay put and the rest moves down, as text does where Enter is pressed: the list
+    // would keep the first paragraph's own key in place and push the new one out of view above it.
+    val itemKeys = remember(items) { items.map { it.key } }
+    val shownKeys = remember { ShownKeys() }
+    SideEffect {
+        val before = shownKeys.keys
+        shownKeys.keys = itemKeys
+        if (!page.editing || before === itemKeys || before.isEmpty()) return@SideEffect
+        val first = before.getOrNull(listState.firstVisibleItemIndex) ?: return@SideEffect
+        val now = indexOf[first] ?: return@SideEffect
+        val added = itemKeys.getOrNull(now - 1)
+        if (added is Long && added !in before) listState.requestScrollToItem(now - 1, listState.firstVisibleItemScrollOffset)
     }
 
     // Find and replace (spec 5.8).
@@ -481,10 +538,7 @@ fun NotePage(
         if (!note.editable && !(note.phase == NotePhase.READY && !note.audioPresent)) return
         page.menu = false
         page.editMenu = false
-        page.field?.let { current ->
-            val draft = current.text.text.toString()
-            scope.launch { session.save(current.id, draft) }
-        }
+        if (page.editing) write { session.save() }
         if (playingHere) {
             playback.pause()
             page.playerDismissed = true
@@ -557,31 +611,45 @@ fun NotePage(
         }
         scope.launch { bottom.feedback.show(message) }
     }
+    // Replace all and its Undo are writes in turn too: inside Edit they first store everything shown, so the store
+    // replaces in the text the page shows and the field takes the result back.
     val replaceAll: () -> Unit = {
         val query = find.matchedQuery
         val replacement = find.replacement.text.toString()
         val label = replacedTemplate
-        val before = paragraphs.associate { it.id to it.text }
-        scope.launch {
+        write {
+            if (page.editing && !session.save()) {
+                scope.launch { bottom.feedback.show(notSaved) }
+                return@write
+            }
+            val since = mark()
+            val before = session.storedTexts()
             val outcome = actions.replaceAll(query, replacement)
             if (outcome !is EditOutcome.Saved) {
                 report(outcome, if (outcome == EditOutcome.TooLarge) words.tooLarge else words.replace)
-                return@launch
+                return@write
             }
             if (page.editing) {
                 session.recordReplace(outcome.paragraphs, before)
-                reseedField()
+                if (untouched(since)) reseedField()
             } else session.applySaved(outcome.paragraphs)
             find.refresh()
-            if (bottom.feedback.show(label, FeedbackAction(undoLabel, FocalIcon.Undo)) == FeedbackResult.ActionPerformed) {
-                if (page.editing && session.undoReplace()) reseedField() else {
-                    val undone = actions.undoReplace()
-                    if (undone is EditOutcome.Saved) {
-                        session.applySaved(undone.paragraphs)
-                        reseedField()
-                    } else report(undone, words.tooLate)
+            // The pill waits for its Undo outside the queue; the Undo is a write in turn.
+            scope.launch {
+                if (bottom.feedback.show(label, FeedbackAction(undoLabel, FocalIcon.Undo)) != FeedbackResult.ActionPerformed) return@launch
+                write {
+                    val undoing = mark()
+                    if (page.editing && session.undoReplace()) {
+                        if (untouched(undoing)) reseedField()
+                    } else {
+                        val undone = actions.undoReplace()
+                        if (undone is EditOutcome.Saved) {
+                            session.applySaved(undone.paragraphs)
+                            if (untouched(undoing)) reseedField()
+                        } else report(undone, words.tooLate)
+                    }
+                    find.refresh()
                 }
-                find.refresh()
             }
         }
     }
@@ -589,17 +657,20 @@ fun NotePage(
     // Restore original outside Edit (TalkBack's paragraph action): "Original restored · Undo".
     val restoredLabel = stringResource(R.string.feedback_restored)
     val restoreOutside: (ParagraphUi) -> Unit = { paragraph ->
-        scope.launch {
+        write {
             val outcome = edits.restore(paragraph.id, paragraph.revision)
             if (outcome !is EditOutcome.Saved) {
                 report(outcome, words.restore)
-                return@launch
+                return@write
             }
             session.applySaved(outcome.paragraphs)
-            val restored = outcome.paragraphs.firstOrNull { it.id == paragraph.id } ?: return@launch
-            if (bottom.feedback.show(restoredLabel, FeedbackAction(undoLabel, FocalIcon.Undo)) == FeedbackResult.ActionPerformed) {
-                val undone = edits.edit(restored.id, restored.revision, paragraph.text)
-                if (undone is EditOutcome.Saved) session.applySaved(undone.paragraphs) else report(undone, words.tooLate)
+            val restored = outcome.paragraphs.firstOrNull { it.id == paragraph.id } ?: return@write
+            scope.launch {
+                if (bottom.feedback.show(restoredLabel, FeedbackAction(undoLabel, FocalIcon.Undo)) != FeedbackResult.ActionPerformed) return@launch
+                write {
+                    val undone = edits.edit(restored.id, restored.revision, paragraph.text)
+                    if (undone is EditOutcome.Saved) session.applySaved(undone.paragraphs) else report(undone, words.tooLate)
+                }
             }
         }
     }
@@ -878,10 +949,7 @@ fun NotePage(
                                         item.paragraph, labels, note, canPlay, page.editing, play = playFromWord,
                                         enterEdit = { enterEdit(it) }, copy = actions.copyParagraph, restore = restoreOutside,
                                     ),
-                                    onEnter = { offset ->
-                                        val id = page.field?.id ?: return@ParagraphItem
-                                        withDraft { field -> field?.takeIf { it.id == id }?.let { session.split(id, it.text.text.toString(), offset) } }
-                                    },
+                                    onEnter = enter,
                                     onJoin = join,
                                     onRestore = restore,
                                 )

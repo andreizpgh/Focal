@@ -11,6 +11,7 @@ import app.focal.R
 import app.focal.data.EditResult
 import app.focal.data.NoteState
 import app.focal.data.ReplaceUndo
+import app.focal.data.SplitOrigin
 import app.focal.data.TextMatch
 import app.focal.data.WindowState
 import app.focal.recording.AppPresence
@@ -19,6 +20,7 @@ import app.focal.recording.RecordingState
 import app.focal.recording.SessionOperations
 import app.focal.recording.SpeechAvailability
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -41,11 +43,12 @@ import kotlinx.coroutines.withContext
 sealed interface EditOutcome {
     /**
      * The change is stored. [paragraphs] are the affected paragraphs as now stored, with their new
-     * revisions: after a split the kept part and the new one (the new one's id is what undo merges; it may
-     * be empty and so not yet in [NoteUiState.paragraphs]), after a merge the joined paragraph. Session
-     * undo takes ids and revisions from here instead of waiting for the state to reload.
+     * revisions: after a split the new part before the split and then the paragraph that kept its id with
+     * the rest (either may be empty and so not in [NoteUiState.paragraphs]), with the paragraph's [origin]
+     * for undoing it; after a merge the joined paragraph. Session undo takes ids and revisions from here
+     * instead of waiting for the state to reload.
      */
-    data class Saved(val paragraphs: List<ParagraphUi>) : EditOutcome
+    data class Saved(val paragraphs: List<ParagraphUi>, val origin: SplitOrigin? = null) : EditOutcome
     /** The paragraph changed since it was read (or is gone): reload; the draft is not saved. */
     data object Stale : EditOutcome
     /** The note is recording or transcribing. */
@@ -80,6 +83,13 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
     val events: SharedFlow<NoteEvent> = eventFlow.asSharedFlow()
     private val refresh = MutableStateFlow(0)
     private var lastReplace: ReplaceUndo? = null
+
+    /**
+     * The note page's Edit writes, in order, in this model's scope: a sequence running when the page goes still
+     * finishes, and a recreated page's writes wait for its predecessor's. Main, not Main.immediate: a write asked for
+     * from a text field's input handling starts after it.
+     */
+    val writes = WriteQueue(CoroutineScope(viewModelScope.coroutineContext + Dispatchers.Main))
     /** Paragraph conversions by id and revision: a commit re-aligns only the paragraphs it changed. */
     private val converted = HashMap<Long, ParagraphUi>()
 
@@ -92,15 +102,19 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
 
     private val modelState: Flow<ModelState> = app.modelStates()
 
-    private data class Loaded(val note: app.focal.data.Note?, val paragraphs: List<ParagraphUi>, val gaps: List<GapUi>,
-                              val remainingMs: Long, val error: String?)
+    private data class Loaded(val note: app.focal.data.Note?, val paragraphs: List<ParagraphUi>, val blank: List<BlankParagraph>,
+                              val gaps: List<GapUi>, val remainingMs: Long, val error: String?)
 
     private val loaded: Flow<Loaded> = combine(store.changes, refresh) { _, _ -> }.mapLatest {
         try {
             app.storageReady.await()
-            val note = store.note(noteId) ?: return@mapLatest Loaded(null, emptyList(), emptyList(), 0, null)
+            val note = store.note(noteId) ?: return@mapLatest Loaded(null, emptyList(), emptyList(), emptyList(), 0, null)
             val all = store.paragraphs(noteId)
             val visible = all.filter { it.visible }
+            // Paragraphs with no text yet (Enter at the end of one), each after the one before it.
+            val shown = all.filter { !it.hidden }
+            val blank = shown.withIndex().filter { it.value.text.isBlank() }
+                .map { (index, paragraph) -> BlankParagraph(ParagraphUi.of(paragraph), shown.getOrNull(index - 1)?.id) }
             val paragraphs = synchronized(converted) {
                 converted.keys.retainAll(visible.mapTo(HashSet()) { it.id })
                 visible.map { p -> converted[p.id]?.takeIf { it.revision == p.revision } ?: ParagraphUi.of(p).also { converted[p.id] = it } }
@@ -111,10 +125,10 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
                 .map { GapUi(it.ownStartMs, it.ownEndMs, after(it.ownStartMs), failed = true) } +
                 store.gaps(noteId).map { GapUi(it.startMs, it.endMs, after(it.startMs), failed = false) })
                 .sortedBy { it.startMs }
-            Loaded(note, paragraphs, gaps, store.progress(noteId).remainingMs, null)
+            Loaded(note, paragraphs, blank, gaps, store.progress(noteId).remainingMs, null)
         } catch (error: Exception) {
             if (error is CancellationException) throw error
-            Loaded(null, emptyList(), emptyList(), 0, app.getString(R.string.error_load_note))
+            Loaded(null, emptyList(), emptyList(), emptyList(), 0, app.getString(R.string.error_load_note))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -139,7 +153,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
             editable = note.state == NoteState.READY && (phase == NotePhase.READY || phase == NotePhase.PARTIAL_FAILURE),
             canRemoveAudio = audio && note.state == NoteState.READY && phase == NotePhase.READY,
             canRetry = note.audioPresent && (phase == NotePhase.PARTIAL_FAILURE || phase == NotePhase.WAITING),
-            paragraphs = data.paragraphs, gaps = data.gaps, failedParts = note.failedWindows,
+            paragraphs = data.paragraphs, blankParagraphs = data.blank, gaps = data.gaps, failedParts = note.failedWindows,
             endReason = EndReason.of(note.endReason),
             noSpeech = note.state == NoteState.READY && data.paragraphs.isEmpty(),
             legacy = note.legacy,
@@ -158,14 +172,21 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
     suspend fun editParagraph(paragraphId: Long, revision: Long, text: String): EditOutcome =
         edit { store.editParagraph(paragraphId, revision, text) }
 
-    /** Enter at [charOffset]: the paragraph splits there; each half keeps its words' times. */
+    /**
+     * Enter at [charOffset]: the text before it becomes a new paragraph before this one, which keeps the rest; each
+     * part keeps its words' times.
+     */
     suspend fun split(paragraphId: Long, revision: Long, charOffset: Int): EditOutcome =
         edit { store.splitParagraph(paragraphId, revision, charOffset) }
 
+    /** Undoes a split exactly: [keepId] takes back [origin] and [removeId], the part before it, goes. */
+    suspend fun unsplit(keepId: Long, keepRevision: Long, removeId: Long, removeRevision: Long, offset: Int, origin: SplitOrigin): EditOutcome =
+        edit { store.unsplitParagraph(keepId, keepRevision, removeId, removeRevision, offset, origin) }
+
     /**
-     * Backspace at the start of [secondId]: it joins [firstId], the paragraph the editor shows before it. The editor
-     * names both, so a new paragraph that is still empty (and therefore not in [NoteUiState.paragraphs]) can be
-     * joined, and a split can be undone by id.
+     * Backspace at the start of [secondId]: [firstId], the paragraph the editor shows before it, joins it, and
+     * [secondId] keeps the joined text. The editor names both, so a new paragraph that is still empty (and therefore
+     * not in [NoteUiState.paragraphs]) can be joined.
      */
     suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditOutcome =
         edit { store.mergeParagraphs(firstId, firstRevision, secondId, secondRevision) }
@@ -236,7 +257,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
     }
 
     private fun outcome(result: EditResult): EditOutcome = when (result) {
-        is EditResult.Saved -> EditOutcome.Saved(result.paragraphs.map(ParagraphUi::of))
+        is EditResult.Saved -> EditOutcome.Saved(result.paragraphs.map(ParagraphUi::of), result.origin)
         EditResult.Conflict, EditResult.Missing -> EditOutcome.Stale
         EditResult.NotEditable -> EditOutcome.NotEditable
         EditResult.TooLarge -> EditOutcome.TooLarge

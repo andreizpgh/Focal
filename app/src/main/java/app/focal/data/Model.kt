@@ -173,9 +173,26 @@ data class SearchResult(
     val snippetHitStart: Int,
 )
 
+/**
+ * A paragraph's stored content as it was before a split, which undoing the split writes back exactly
+ * ([NoteStore.unsplitParagraph]): its text with every space, its source text and timed words, its times and
+ * edited flag. Joining the two parts again would put one space where the split was and re-derive the rest.
+ */
+data class SplitOrigin(
+    val text: String,
+    val sourceText: String?,
+    val wordsJson: String?,
+    val startMs: Long,
+    val endMs: Long,
+    val edited: Boolean,
+)
+
 sealed interface EditResult {
-    /** The change is saved; [paragraphs] are the affected paragraphs as now stored. */
-    data class Saved(val paragraphs: List<Paragraph>) : EditResult
+    /**
+     * The change is saved; [paragraphs] are the affected paragraphs as now stored. A split also gives the
+     * paragraph's [origin], what it was before.
+     */
+    data class Saved(val paragraphs: List<Paragraph>, val origin: SplitOrigin? = null) : EditResult
     /** The paragraph changed since the caller read it ([Paragraph.revision]). */
     data object Conflict : EditResult
     data object Missing : EditResult

@@ -225,6 +225,8 @@ data class WordUi(val start: Int, val end: Int, val startMs: Long?, val endMs: L
  * A visible paragraph of a note. [words] cover its text; [exactTimes] is true when every word kept its time
  * (the playing-word lens is allowed). Pass [revision] back to edits: a stale one is refused. [canRestore]
  * offers "Restore original" (the recognizer's text). [open] paragraphs still grow while transcribing.
+ * [originKnown] is false for text saved before recognizer originals were kept, and [hasOriginal] says the
+ * recognizer produced some of it: Edit tells from them which joins the store keeps apart.
  */
 @Immutable
 data class ParagraphUi(
@@ -238,6 +240,8 @@ data class ParagraphUi(
     val edited: Boolean,
     val canRestore: Boolean,
     val open: Boolean,
+    val originKnown: Boolean = true,
+    val hasOriginal: Boolean = false,
 ) {
     /** Where a tap at [charOffset] plays from: the word's start (null: play from the paragraph start). */
     fun seekMs(charOffset: Int): Long? {
@@ -270,10 +274,19 @@ data class ParagraphUi(
                 startMs = paragraph.startMs, endMs = paragraph.endMs, words = words,
                 exactTimes = words.isNotEmpty() && words.all { it.startMs != null },
                 edited = paragraph.edited, canRestore = paragraph.canRestore, open = paragraph.open,
+                originKnown = paragraph.sourceText != null, hasOriginal = !paragraph.sourceText.isNullOrEmpty(),
             )
         }
     }
 }
+
+/**
+ * A stored paragraph with no text yet (Enter at the end of a paragraph makes one), placed after [after], the
+ * paragraph before it in the note (null: the first). Reading leaves it out; an Edit session that was recreated
+ * (rotation, process death) puts back the ones it had made, with the field that may be typing in one.
+ */
+@Immutable
+data class BlankParagraph(val paragraph: ParagraphUi, val after: Long?)
 
 /**
  * An untranscribed range, drawn as a gap row after [afterParagraphId] (null: before the first paragraph).
@@ -289,7 +302,8 @@ data class GapUi(val startMs: Long, val endMs: Long, val afterParagraphId: Long?
  * without audio or while any recording is live (the speaker must not leak into it). [noSpeech]: a ready note
  * with sound but no recognized words ("No speech was recognized."). [canRemoveAudio]: Remove audio is offered
  * (ready, audio kept, no failed part that Retry still needs). [canRetry]: Retry / Try again can work (the
- * audio is still there); without audio a failed part stays a gap for good.
+ * audio is still there); without audio a failed part stays a gap for good. [blankParagraphs] are the stored paragraphs
+ * with no text yet, which [paragraphs] leaves out.
  */
 @Immutable
 data class NoteUiState(
@@ -309,6 +323,7 @@ data class NoteUiState(
     val canPlay: Boolean = false,
     val editable: Boolean = false,
     val paragraphs: List<ParagraphUi> = emptyList(),
+    val blankParagraphs: List<BlankParagraph> = emptyList(),
     val gaps: List<GapUi> = emptyList(),
     val failedParts: Int = 0,
     val endReason: EndReason? = null,

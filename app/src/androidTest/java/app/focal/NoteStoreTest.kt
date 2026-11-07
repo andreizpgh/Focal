@@ -209,6 +209,46 @@ class NoteStoreTest {
         assertSearchIndexIntact(store)
     }
 
+    /**
+     * Enter keeps the paragraph's id with the text after the caret (the editor's field stays on it) and Backspace keeps
+     * the second paragraph's; Undo of Enter writes the paragraph back exactly, inside a word and with every space, its
+     * source words and times included, and refuses once either part has changed since.
+     */
+    @Test fun aSplitKeepsTheFieldsIdAndItsUndoGivesTheParagraphBackExactly() {
+        val id = transcribedNote()
+        store.markReady(id)
+        val edited = store.paragraphs(id).first().let { store.editParagraph(it.id, it.revision, "Hello world.  This is Focal it keeps going.") }
+        val before = (edited as EditResult.Saved).paragraphs.single()
+        // Enter inside "Focal", after "Fo".
+        val offset = before.text.indexOf("Focal") + 2
+        val split = store.splitParagraph(before.id, before.revision, offset) as EditResult.Saved
+        val (first, second) = split.paragraphs
+        assertEquals(before.id, second.id)
+        assertEquals(listOf("Hello world.  This is Fo", "cal it keeps going."), listOf(first.text, second.text))
+        assertEquals(listOf(first.id, second.id), store.paragraphs(id).take(2).map { it.id })
+        val origin = split.origin!!
+        assertEquals(before.text to before.sourceText, origin.text to origin.sourceText)
+        assertEquals(before.wordsJson to before.startMs, origin.wordsJson to origin.startMs)
+        // A part that changed since keeps the split: undoing it would drop that change.
+        val changed = (store.editParagraph(second.id, second.revision, "cal changed.") as EditResult.Saved).paragraphs.single()
+        assertEquals(EditResult.Conflict, store.unsplitParagraph(changed.id, changed.revision, first.id, first.revision, offset, origin))
+        val back = (store.editParagraph(changed.id, changed.revision, second.text) as EditResult.Saved).paragraphs.single()
+        val restored = (store.unsplitParagraph(back.id, back.revision, first.id, first.revision, offset, origin) as EditResult.Saved).paragraphs.single()
+        assertEquals(before.id, restored.id)
+        assertEquals(listOf(before.text, before.sourceText, before.wordsJson), listOf(restored.text, restored.sourceText, restored.wordsJson))
+        assertEquals(listOf(before.startMs, before.endMs), listOf(restored.startMs, restored.endMs))
+        assertEquals(before.edited, restored.edited)
+        assertNull(store.paragraph(first.id))
+        assertEquals(2, store.paragraphs(id).size)
+        // Backspace: the first paragraph joins the second, which keeps its id.
+        val (a, b) = store.paragraphs(id)
+        val joined = (store.mergeParagraphs(a.id, a.revision, b.id, b.revision) as EditResult.Saved).paragraphs.single()
+        assertEquals(b.id, joined.id)
+        assertEquals("${a.text} ${b.text}", joined.text)
+        assertEquals(listOf(b.id), store.paragraphs(id).map { it.id })
+        assertSearchIndexIntact(store)
+    }
+
     @Test fun splittingOffAddedTextAndMergingBackKeepsRestoreOriginal() {
         val id = transcribedNote()
         store.markReady(id)

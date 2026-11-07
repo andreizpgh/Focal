@@ -353,9 +353,10 @@ internal fun Modifier.editSheet(color: Color, alpha: () -> Float): Modifier = dr
 
 /**
  * The focused paragraph in Edit (spec 4.14): a text field with the reading text's exact style and box, so the swap
- * moves nothing. Enter splits at the caret ([onEnter] with the offset; the line break itself is never inserted),
- * Backspace at the very start joins the paragraph before ([onJoin]), from a hardware key or a soft keyboard
- * ([JoinAtStart]); pasted line breaks become spaces.
+ * moves nothing. Enter splits at the caret: the field keeps the text after it, caret at its start, in the same edit
+ * as the key, and [onEnter] gets the field's text from before the key and the caret, to show the text before the
+ * caret as a new paragraph above (the line break itself is never inserted). Backspace at the very start joins the paragraph before ([onJoin]), from a
+ * hardware key or a soft keyboard ([JoinAtStart]); pasted line breaks become spaces.
  */
 @Composable
 internal fun ParagraphField(
@@ -363,7 +364,7 @@ internal fun ParagraphField(
     paragraphId: Long,
     focusRequester: FocusRequester,
     layouts: ParagraphLayouts,
-    onEnter: (Int) -> Unit,
+    onEnter: (full: String, at: Int) -> Unit,
     onJoin: () -> Unit,
     modifier: Modifier = Modifier,
     sheet: () -> Float = { 0f },
@@ -371,7 +372,7 @@ internal fun ParagraphField(
     val colors = FocalTheme.colors
     val enter by rememberUpdatedState(onEnter)
     val join by rememberUpdatedState(onJoin)
-    val input = remember { ParagraphInput { enter(it) } }
+    val input = remember { ParagraphInput { full, at -> enter(full, at) } }
     val softJoin = remember(state) { JoinAtStart(state) { join() } }
     InterceptPlatformTextInput(softJoin) {
         BasicTextField(
@@ -438,9 +439,13 @@ internal class JoinAtStart(private val state: TextFieldState, private val onJoin
     }
 }
 
-/** Enter is a split, never a line break inside a paragraph (spec 5.7). */
+/**
+ * Enter is a split, never a line break inside a paragraph (spec 5.7). It happens in the key's own edit: the field is
+ * left with the text after the caret ([EditSession.splitTexts]) before the next key can reach it, so whatever is typed
+ * next lands in the second paragraph.
+ */
 @OptIn(ExperimentalFoundationApi::class)
-private class ParagraphInput(private val onEnter: (Int) -> Unit) : InputTransformation {
+private class ParagraphInput(private val onEnter: (full: String, at: Int) -> Unit) : InputTransformation {
     override fun TextFieldBuffer.transformInput() {
         if (changes.changeCount == 1) {
             val range = changes.getRange(0)
@@ -448,7 +453,10 @@ private class ParagraphInput(private val onEnter: (Int) -> Unit) : InputTransfor
             if (original.collapsed && range.length == 1 && asCharSequence()[range.start] == '\n') {
                 val at = range.start
                 revertAllChanges()
-                onEnter(at)
+                val full = asCharSequence().toString()
+                replace(0, length, EditSession.splitTexts(full, at).second)
+                selection = TextRange.Zero
+                onEnter(full, at)
                 return
             }
         }

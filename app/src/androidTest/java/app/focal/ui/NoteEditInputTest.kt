@@ -28,6 +28,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.text.TextRange
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.focal.data.SplitOrigin
 import app.focal.gallery.dates
 import app.focal.gallery.timedParagraphs
 import app.focal.gallery.today
@@ -87,6 +88,8 @@ class NoteEditInputTest {
         }
 
         override suspend fun split(id: Long, revision: Long, offset: Int) = EditOutcome.NotEditable
+        override suspend fun unsplit(keepId: Long, keepRevision: Long, removeId: Long, removeRevision: Long, offset: Int, origin: SplitOrigin) =
+            EditOutcome.NotEditable
 
         override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditOutcome {
             if (refuseJoin) return EditOutcome.CannotMerge
@@ -94,8 +97,9 @@ class NoteEditInputTest {
             val second = paragraphs.first { it.id == secondId }
             if (first.revision != firstRevision || second.revision != secondRevision) return EditOutcome.Stale
             joins.incrementAndGet()
-            val joined = first.copy(text = "${first.text} ${second.text}", revision = first.revision + 1, words = emptyList())
-            paragraphs = paragraphs.filter { it.id != secondId }.map { if (it.id == firstId) joined else it }
+            // As the store does: the second paragraph, where the caret is, keeps its id with the joined text.
+            val joined = second.copy(text = "${first.text} ${second.text}", revision = second.revision + 1, words = emptyList())
+            paragraphs = paragraphs.filter { it.id != firstId }.map { if (it.id == secondId) joined else it }
             return EditOutcome.Saved(listOf(joined))
         }
 

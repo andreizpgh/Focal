@@ -327,7 +327,7 @@ internal fun LazyItemScope.ParagraphItem(
     onTap: (ParagraphUi, Int) -> Unit,
     tapBlocked: () -> Boolean,
     actions: List<CustomAccessibilityAction>,
-    onEnter: (Int) -> Unit,
+    onEnter: (full: String, at: Int) -> Unit,
     onJoin: () -> Unit,
     onRestore: () -> Unit,
 ) {

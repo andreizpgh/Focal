@@ -28,6 +28,7 @@ import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.text.TextRange
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.focal.data.SplitOrigin
 import app.focal.data.TextMatch
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.note.EditBackend
@@ -221,6 +222,8 @@ private class MemoryNote(initial: NoteUiState) : EditBackend {
     }
 
     override suspend fun split(id: Long, revision: Long, offset: Int) = EditOutcome.NotEditable
+    override suspend fun unsplit(keepId: Long, keepRevision: Long, removeId: Long, removeRevision: Long, offset: Int, origin: SplitOrigin) =
+        EditOutcome.NotEditable
     override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long) = EditOutcome.NotEditable
     override suspend fun restore(id: Long, revision: Long) = EditOutcome.NotEditable
 }

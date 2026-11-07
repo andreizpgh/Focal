@@ -18,9 +18,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.focal.R
+import app.focal.data.SplitOrigin
 import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FeedbackResult
 import app.focal.ui.components.FocalIcon
@@ -159,7 +159,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
             find = note::find,
             replaceAll = note::replaceAll,
             undoReplace = note::undoReplace,
-            persist = { write -> note.viewModelScope.launch { write() } },
+            writes = note.writes,
         )
     }
     val edits = remember(note) { ViewModelEdits(note) }
@@ -202,6 +202,8 @@ private class RoutePlayback(private val player: PlaybackViewModel, private val n
 private class ViewModelEdits(private val note: NoteViewModel) : EditBackend {
     override suspend fun edit(id: Long, revision: Long, text: String): EditOutcome = note.editParagraph(id, revision, text)
     override suspend fun split(id: Long, revision: Long, offset: Int): EditOutcome = note.split(id, revision, offset)
+    override suspend fun unsplit(keepId: Long, keepRevision: Long, removeId: Long, removeRevision: Long, offset: Int, origin: SplitOrigin): EditOutcome =
+        note.unsplit(keepId, keepRevision, removeId, removeRevision, offset, origin)
     override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditOutcome =
         note.merge(firstId, firstRevision, secondId, secondRevision)
     override suspend fun restore(id: Long, revision: Long): EditOutcome = note.restoreOriginal(id, revision)

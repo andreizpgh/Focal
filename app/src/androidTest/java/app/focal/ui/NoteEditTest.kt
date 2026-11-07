@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.focal.data.SplitOrigin
 import app.focal.gallery.dates
 import app.focal.gallery.timedParagraphs
 import app.focal.gallery.today
@@ -62,6 +63,8 @@ class NoteEditTest {
             return EditOutcome.Saved(listOf(paragraph.copy(text = text, revision = revision + 1, edited = true, words = emptyList())))
         }
         override suspend fun split(id: Long, revision: Long, offset: Int) = EditOutcome.NotEditable
+        override suspend fun unsplit(keepId: Long, keepRevision: Long, removeId: Long, removeRevision: Long, offset: Int, origin: SplitOrigin) =
+            EditOutcome.NotEditable
         override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long) = EditOutcome.NotEditable
         override suspend fun restore(id: Long, revision: Long) = EditOutcome.NotEditable
     }

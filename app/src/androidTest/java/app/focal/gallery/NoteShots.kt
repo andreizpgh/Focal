@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.focal.R
+import app.focal.data.SplitOrigin
 import app.focal.data.TextMatch
 import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FocalIcon
@@ -167,6 +168,8 @@ private class StillPlayback(override val session: PlaybackSession, private val a
 private object NoEdits : EditBackend {
     override suspend fun edit(id: Long, revision: Long, text: String) = EditOutcome.NotEditable
     override suspend fun split(id: Long, revision: Long, offset: Int) = EditOutcome.NotEditable
+    override suspend fun unsplit(keepId: Long, keepRevision: Long, removeId: Long, removeRevision: Long, offset: Int, origin: SplitOrigin) =
+        EditOutcome.NotEditable
     override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long) = EditOutcome.NotEditable
     override suspend fun restore(id: Long, revision: Long) = EditOutcome.NotEditable
 }
@@ -175,6 +178,8 @@ private object NoEdits : EditBackend {
 private class FailingEdits(private val message: String) : EditBackend {
     override suspend fun edit(id: Long, revision: Long, text: String) = EditOutcome.Failed(message)
     override suspend fun split(id: Long, revision: Long, offset: Int) = EditOutcome.Failed(message)
+    override suspend fun unsplit(keepId: Long, keepRevision: Long, removeId: Long, removeRevision: Long, offset: Int, origin: SplitOrigin) =
+        EditOutcome.Failed(message)
     override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long) = EditOutcome.Failed(message)
     override suspend fun restore(id: Long, revision: Long) = EditOutcome.Failed(message)
 }

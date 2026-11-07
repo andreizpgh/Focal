@@ -643,29 +643,66 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         db.indexParagraph(id)
     }
 
-    /** Splits a paragraph at char [offset] of its text (Enter in the editor). */
+    /**
+     * Splits a paragraph at char [offset] of its text (Enter in the editor). The text before the offset becomes a new
+     * paragraph just before this one, which keeps its id with the rest: the editor's field, whose caret goes to the
+     * start of the second part, stays on the paragraph it was typing in. The result lists both, the new one first,
+     * and the paragraph's [EditResult.Saved.origin] for [unsplitParagraph].
+     */
     fun splitParagraph(id: Long, revision: Long, offset: Int): EditResult = edit {
         val paragraph = paragraphsIn(this, "id=?", listOf(id.toString())).firstOrNull()
         editable(this, paragraph, revision)?.let { return@edit it }
         paragraph!!
         require(offset in 0..paragraph.text.length) { "The split position is outside the paragraph." }
         val (first, second) = ParagraphEdits.split(paragraph.content(), offset)
-        writeContent(this, paragraph.id, first)
-        execSQL("UPDATE paragraphs SET ord=ord+1 WHERE note_id=? AND ord>?", arrayOf<Any>(paragraph.noteId, paragraph.ord))
+        execSQL("UPDATE paragraphs SET ord=ord+1 WHERE note_id=? AND ord>=?", arrayOf<Any>(paragraph.noteId, paragraph.ord))
+        writeContent(this, paragraph.id, second)
         val added = insertOrThrow("paragraphs", null, ContentValues().apply {
-            put("note_id", paragraph.noteId); put("ord", paragraph.ord + 1)
-            put("start_ms", second.startMs); put("end_ms", second.endMs); put("text", second.text)
-            put("source_text", second.sourceText); put("words", second.words?.let(TranscriptJson::encodeWords))
-            put("edited", if (second.edited) 1 else 0); put("hidden", if (paragraph.hidden) 1 else 0)
+            put("note_id", paragraph.noteId); put("ord", paragraph.ord)
+            put("start_ms", first.startMs); put("end_ms", first.endMs); put("text", first.text)
+            put("source_text", first.sourceText); put("words", first.words?.let(TranscriptJson::encodeWords))
+            put("edited", if (first.edited) 1 else 0); put("hidden", if (paragraph.hidden) 1 else 0)
         })
         indexParagraph(added)
         refreshTitle(this, paragraph.noteId)
-        EditResult.Saved(paragraphsIn(this, "id IN (?,?)", listOf(id.toString(), added.toString())))
+        val origin = SplitOrigin(paragraph.text, paragraph.sourceText, paragraph.wordsJson, paragraph.startMs, paragraph.endMs, paragraph.edited)
+        EditResult.Saved(paragraphsIn(this, "id IN (?,?)", listOf(added.toString(), id.toString())), origin)
     }
 
     /**
-     * Joins a paragraph with the next visible one (Backspace at the start of [secondId]). [EditResult.CannotMerge]
-     * when that would drop a known recognizer original; both paragraphs then stay as they are.
+     * Undoes a split exactly: [keepId], the part after the split, takes back [origin] (text, source, words, times and
+     * edited flag as they were) and [removeId], the part before it, goes. [EditResult.Conflict] unless the two are
+     * still what splitting [origin] at [offset] made of it, so nothing written since is ever dropped.
+     */
+    fun unsplitParagraph(keepId: Long, keepRevision: Long, removeId: Long, removeRevision: Long, offset: Int,
+                         origin: SplitOrigin): EditResult = edit {
+        val keep = paragraphsIn(this, "id=?", listOf(keepId.toString())).firstOrNull()
+        val remove = paragraphsIn(this, "id=?", listOf(removeId.toString())).firstOrNull()
+        editable(this, keep, keepRevision)?.let { return@edit it }
+        editable(this, remove, removeRevision)?.let { return@edit it }
+        keep!!; remove!!
+        if (keep.noteId != remove.noteId || remove.ord >= keep.ord || offset !in 0..origin.text.length) return@edit EditResult.Conflict
+        val content = ParagraphContent(origin.text, origin.sourceText, origin.wordsJson?.let(TranscriptJson::decodeWords),
+            origin.startMs, origin.endMs, origin.edited)
+        val (first, second) = ParagraphEdits.split(content, offset)
+        if (first.text != remove.text || second.text != keep.text) return@edit EditResult.Conflict
+        unindexParagraph(remove.id)
+        delete("paragraphs", "id=?", arrayOf(remove.id.toString()))
+        unindexParagraph(keep.id)
+        update("paragraphs", ContentValues().apply {
+            put("text", origin.text); put("source_text", origin.sourceText); put("words", origin.wordsJson)
+            put("start_ms", origin.startMs); put("end_ms", origin.endMs); put("edited", if (origin.edited) 1 else 0)
+        }, "id=?", arrayOf(keep.id.toString()))
+        execSQL("UPDATE paragraphs SET revision=revision+1 WHERE id=?", arrayOf<Any>(keep.id))
+        indexParagraph(keep.id)
+        refreshTitle(this, keep.noteId)
+        EditResult.Saved(paragraphsIn(this, "id=?", listOf(keepId.toString())))
+    }
+
+    /**
+     * Joins a paragraph with the next visible one (Backspace at the start of [secondId]): [secondId] keeps its id
+     * with the joined text, so the editor's field stays on it, and [firstId] goes. [EditResult.CannotMerge] when that
+     * would drop a known recognizer original; both paragraphs then stay as they are.
      */
     fun mergeParagraphs(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditResult = edit {
         val first = paragraphsIn(this, "id=?", listOf(firstId.toString())).firstOrNull()
@@ -681,11 +718,11 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         if (between > 0) return@edit EditResult.Conflict
         val merged = ParagraphEdits.merge(first.content(), second.content()) ?: return@edit EditResult.CannotMerge
         if (!fitsPassageDraftBudget(merged.text)) return@edit EditResult.TooLarge
-        unindexParagraph(second.id)
-        delete("paragraphs", "id=?", arrayOf(second.id.toString()))
-        writeContent(this, first.id, merged, hidden = first.hidden && second.hidden)
-        refreshTitle(this, first.noteId)
-        EditResult.Saved(paragraphsIn(this, "id=?", listOf(firstId.toString())))
+        unindexParagraph(first.id)
+        delete("paragraphs", "id=?", arrayOf(first.id.toString()))
+        writeContent(this, second.id, merged, hidden = first.hidden && second.hidden)
+        refreshTitle(this, second.noteId)
+        EditResult.Saved(paragraphsIn(this, "id=?", listOf(secondId.toString())))
     }
 
     private fun Paragraph.content() = ParagraphContent(text, sourceText, sourceWords(), startMs, endMs, edited)

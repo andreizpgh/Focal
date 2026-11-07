@@ -17,6 +17,7 @@ import app.focal.data.TextMatch
 import app.focal.ui.state.EditOutcome
 import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.PlaybackSession
+import app.focal.ui.state.WriteQueue
 
 /** Playback as the note page uses it: the activity's player, or a fake in the gallery. */
 @Stable
@@ -51,8 +52,11 @@ class NoteActions(
     val find: suspend (String) -> List<TextMatch> = { emptyList() },
     val replaceAll: suspend (query: String, replacement: String) -> EditOutcome = { _, _ -> EditOutcome.NotEditable },
     val undoReplace: suspend () -> EditOutcome = { EditOutcome.Stale },
-    /** Runs a write that must finish even if the page goes away (the note's view model's scope): a draft's last save. */
-    val persist: (suspend () -> Unit) -> Unit = {},
+    /**
+     * Edit's writes, in order, in the note's view model's scope: a sequence running when the page goes (an undo, then
+     * the draft's last save) still finishes. Null: the page's own queue, which ends with it (the gallery, tests).
+     */
+    val writes: WriteQueue? = null,
 )
 
 /** The paragraph holding the caret in Edit: its field's text and focus. */
@@ -114,6 +118,9 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
     /** The running Edit session's log, read when the page's state is saved (set by the page). */
     internal var editLog: () -> EditLog? = { restoredLog }
 
+    /** The id the focused field's paragraph is stored under, for the saved state (set by the page). */
+    internal var storedId: (Long) -> Long = { it }
+
     /** The log a recreated page's Edit session goes on with, once the note has loaded (then null). */
     internal var restoredLog: EditLog? = null
 
@@ -128,7 +135,7 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
             save = { page ->
                 val field = page.field
                 listOf(
-                    page.editing, field?.id, field?.text?.text?.toString(), field?.text?.selection?.start, field?.text?.selection?.end,
+                    page.editing, field?.id?.let(page.storedId), field?.text?.text?.toString(), field?.text?.selection?.start, field?.text?.selection?.end,
                     page.find.open, page.find.fromEdit, page.find.query.text.toString(), page.find.replacement.text.toString(),
                     page.renaming, page.hitShown, page.editLog()?.encode(),
                 )
