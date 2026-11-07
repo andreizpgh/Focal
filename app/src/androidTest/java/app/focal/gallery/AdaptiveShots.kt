@@ -19,6 +19,8 @@ import app.focal.ui.state.NoteUiState
  */
 object AdaptiveShots {
     private val Landscape = DpSize(915.dp, 412.dp)
+    /** A smaller phone in landscape (360 x 780 dp upright): too narrow for the find rows side by side. */
+    private val NarrowLandscape = DpSize(780.dp, 360.dp)
     private val Tablet = DpSize(800.dp, 1280.dp)
     private val Wide = DpSize(1280.dp, 800.dp)
 
@@ -38,6 +40,11 @@ object AdaptiveShots {
         add(sized("land-find", Landscape, dark = false) { Note(design(), find = "screen" to "page", nextMatch = true) })
         // The rows ride a landscape keyboard (the query takes focus, so the keyboard opens).
         add(sized("land-find-keyboard", Landscape, dark = false) { Note(design(), find = "screen" to "page", states = PageStates(focus = true)) })
+        // Narrower, the rows make one row: the find field, the replace field, the count, ∧ ∨ and Replace all.
+        addAll(sized("land-find-narrow", NarrowLandscape) { Note(design(), find = "screen" to "page", nextMatch = true) })
+        add(sized("land-find-narrow-keyboard", NarrowLandscape, dark = false) {
+            Note(design(), find = "screen" to "page", states = PageStates(focus = true))
+        })
         add(sized("land-search", Landscape, dark = false) { Library(idleModel(), search = searchResults()) })
         add(sized("land-undo", Landscape, dark = false) { Library(idleModel(), feedback = true) })
         add(sized("land-settings", Landscape, dark = false) { Strip(1f) })

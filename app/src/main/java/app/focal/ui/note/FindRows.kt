@@ -16,11 +16,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -98,6 +100,40 @@ object FindMetrics {
     /** Side by side (a short window), each row is at most a phone's bottom column, and its field at least 180 dp. */
     val phoneColumn = 364.dp
     val minSideField = 180.dp
+    /**
+     * In one row (a short window too narrow for the pair), each field keeps at least its lead and one 48 dp target's
+     * worth of text.
+     */
+    val minSingleField = 96.dp
+}
+
+/** How the find rows stand in the window (spec 4.9.2, 5.8, 5.14). */
+internal sealed interface FindArrangement {
+    /** The find row over the replace row: portrait, tablets, and a short window too narrow for one row. */
+    data object Stacked : FindArrangement
+    /** A short window: the two rows side by side, each at most a phone's bottom column, [width] in all. */
+    data class Paired(val width: Dp) : FindArrangement
+    /**
+     * A short window too narrow for the pair: one row of [width], the find field, the replace field, the count, ∧ ∨
+     * and Replace all, so a landscape keyboard still leaves the note's text above it.
+     */
+    data class Single(val width: Dp) : FindArrangement
+
+    companion object {
+        /**
+         * The arrangement for [room] (the content's width beside the rail, inside the gutters and side insets) in a
+         * short window ([rail]), with the count's widest form [count] wide.
+         */
+        fun of(rail: Boolean, room: Dp, count: Dp): FindArrangement {
+            if (!rail) return Stacked
+            val gap = KeyboardRowMetrics.columnGap
+            val controls = KeyboardRowMetrics.controls
+            val row = (room - gap) / 2
+            if (row - gap - controls >= FindMetrics.minSideField) return Paired(minOf(room, FindMetrics.phoneColumn * 2 + gap))
+            val field = (room - controls * 2 - count - gap * 4) / 2
+            return if (field >= FindMetrics.minSingleField) Single(room) else Stacked
+        }
+    }
 }
 
 /** What the find rows do. */
@@ -112,7 +148,8 @@ internal class FindActions(
  * The two find rows riding the keyboard (spec 4.9.2, 5.8): the find field with "2 of 4" and the ∧ ∨ pill, then the
  * replace field and "Replace all (N)". Search on the keyboard moves to the next match; Done in the replace field
  * hides the keyboard and the rows drop to the dock's place. When a cell grows (a stacked count, a wrapped "Replace
- * all" at large font sizes), both cells of its row take the row's height (spec 8.4).
+ * all" at large font sizes), both cells of its row take the row's height (spec 8.4). In a short window the rows stand
+ * side by side, or, too narrow for that, make one row ([FindArrangement]).
  */
 @Composable
 internal fun ColumnScope.FindRows(find: FindState, actions: FindActions) {
@@ -131,53 +168,97 @@ internal fun ColumnScope.FindRows(find: FindState, actions: FindActions) {
             modifier = modifier,
         )
     }
-    val pair = sideBySideWidth()
-    if (pair != null) {
+    val countReserve = countReserve()
+    when (val arrangement = findArrangement(countReserve)) {
         // A short window: the two rows stand side by side, each as wide as a phone's bottom column, so a landscape
         // keyboard leaves room above them for the current match (spec 5.8, 5.14). Centred on the column, wider than it.
-        Row(Modifier.requiredWidth(pair), horizontalArrangement = Arrangement.spacedBy(KeyboardRowMetrics.columnGap)) {
+        is FindArrangement.Paired -> Row(
+            Modifier.requiredWidth(arrangement.width), horizontalArrangement = Arrangement.spacedBy(KeyboardRowMetrics.columnGap),
+        ) {
             findRow(Modifier.weight(1f))
             replaceRow(Modifier.weight(1f))
         }
-        return
+        // Narrower: one row, the count moved out of the find field to stand before ∧ ∨, as wide as its widest form.
+        is FindArrangement.Single -> Row(
+            Modifier.requiredWidth(arrangement.width).height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(KeyboardRowMetrics.columnGap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FindField(find, actions, withCount = false)
+            ReplaceField(find.replacement)
+            Box(Modifier.width(countReserve).fillMaxHeight(), contentAlignment = Alignment.Center) { FindCount(find) }
+            Row(Modifier.width(KeyboardRowMetrics.controls).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+                NavPill(enabled = count > 0, actions)
+            }
+            Row(Modifier.width(KeyboardRowMetrics.controls).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+                ReplaceAll(count = count, enabled = find.query.text.isNotEmpty() && count > 0, onClick = actions.replaceAll)
+            }
+        }
+        FindArrangement.Stacked -> {
+            findRow(Modifier.fillMaxWidth())
+            replaceRow(Modifier.fillMaxWidth())
+        }
     }
-    findRow(Modifier.fillMaxWidth())
-    replaceRow(Modifier.fillMaxWidth())
 }
 
 /**
- * In a short window (the dock in the rail), the width of the two rows side by side: two 364 dp bottom columns and the
- * 8 dp gap between them, or what the window has beside the rail; null when that leaves a find field under 180 dp.
+ * The arrangement for this window: in a short window (the dock in the rail), the room is what the window has beside
+ * the rail, inside the gutters and the side insets.
  */
 @Composable
-private fun sideBySideWidth(): Dp? {
+private fun findArrangement(count: Dp): FindArrangement {
     val layout = LocalWindowLayout.current
-    if (!layout.rail) return null
+    if (!layout.rail) return FindArrangement.Stacked
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
     val sides = WindowInsets.safeDrawing
     val insets = with(density) { (sides.getLeft(this, direction) + sides.getRight(this, direction)).toDp() }
-    val room = layout.width - WindowLayout.railWidth - FocalLayout.gutter * 2 - insets
-    val row = (room - KeyboardRowMetrics.columnGap) / 2
-    if (row - KeyboardRowMetrics.columnGap - KeyboardRowMetrics.controls < FindMetrics.minSideField) return null
-    return minOf(room, FindMetrics.phoneColumn * 2 + KeyboardRowMetrics.columnGap)
+    return FindArrangement.of(rail = true, room = layout.width - WindowLayout.railWidth - FocalLayout.gutter * 2 - insets, count = count)
+}
+
+/** The width of the count's widest form ("No matches") at this font size: the row keeps it while the count changes. */
+@Composable
+private fun countReserve(): Dp {
+    val measurer = rememberTextMeasurer()
+    val none = stringResource(R.string.find_none)
+    val style = FocalType.meta.tabular()
+    val density = LocalDensity.current
+    return remember(none, style, measurer, density) {
+        with(density) { measurer.measure(none, style, maxLines = 1, softWrap = false).size.width.toDp() }
+    }
+}
+
+/** "2 of 4" or "No matches" once the query has been matched; nothing before. Announced politely as it changes. */
+@Composable
+private fun FindCount(find: FindState) {
+    val count = countText(find) ?: return
+    Text(
+        count, style = FocalType.meta.tabular(), color = FocalTheme.colors.recede, maxLines = 1,
+        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+    )
 }
 
 @Composable
-private fun RowScope.FindField(find: FindState, actions: FindActions) {
+private fun countText(find: FindState): String? = when {
+    find.matchedQuery.isEmpty() || find.query.text.isEmpty() -> null
+    find.matches.isEmpty() -> stringResource(R.string.find_none)
+    else -> stringResource(R.string.find_count, find.current + 1, find.matches.size)
+}
+
+/** ← and the query; with [withCount], the count at the field's end (spec 4.9.2), else it stands outside (one row). */
+@Composable
+private fun RowScope.FindField(find: FindState, actions: FindActions, withCount: Boolean = true) {
     val colors = FocalTheme.colors
     val hint = stringResource(R.string.find_hint)
-    val count = when {
-        find.matchedQuery.isEmpty() || find.query.text.isEmpty() -> null
-        find.matches.isEmpty() -> stringResource(R.string.find_none)
-        else -> stringResource(R.string.find_count, find.current + 1, find.matches.size)
-    }
+    val count = countText(find)
     // Whether the count stacks is decided by its widest form at this font size, never by what is typed: the row keeps
     // its height while the query and its count change (spec 4.9.2). A query longer than its room scrolls under its fade.
     val measurer = rememberTextMeasurer()
     val none = stringResource(R.string.find_none)
     val countStyle = FocalType.meta.tabular()
-    val reserve = remember(none, countStyle, measurer) { measurer.measure(none, countStyle, maxLines = 1, softWrap = false).size }
+    val reserve = remember(none, countStyle, measurer, withCount) {
+        if (withCount) measurer.measure(none, countStyle, maxLines = 1, softWrap = false).size else IntSize.Zero
+    }
     val scroll = rememberScrollState()
     Row(
         Modifier.weight(1f).fillMaxHeight().heightIn(min = KeyboardRowMetrics.row).background(colors.s1, FocalShapes.pill),
@@ -217,7 +298,7 @@ private fun RowScope.FindField(find: FindState, actions: FindActions) {
                 )
             },
             count = {
-                if (count != null) Text(
+                if (withCount && count != null) Text(
                     count, style = countStyle, color = colors.recede, maxLines = 1,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
@@ -241,7 +322,8 @@ private fun QueryAndCount(reserve: IntSize, query: @Composable () -> Unit, count
 }
 
 private class QueryCountPolicy(private val reserve: IntSize) : MultiContentMeasurePolicy {
-    private fun Density.stacked(width: Int): Boolean =
+    // Without a count (one row: it stands outside the field) the query never stacks.
+    private fun Density.stacked(width: Int): Boolean = reserve != IntSize.Zero &&
         width - FindMetrics.caret.roundToPx() - FindMetrics.countGap.roundToPx() - reserve.width < FindMetrics.minQuery.roundToPx()
 
     private fun Density.inlineQueryWidth(width: Int, countWidth: Int?): Int =
