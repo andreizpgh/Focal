@@ -66,6 +66,10 @@ object NoteShots {
         addAll(themed("transcribing") { Note(saturdayNote(NotePhase.TRANSCRIBING)) })
         add(Shot("waiting-light", dark = false) { Note(saturdayNote(NotePhase.WAITING), captureElsewhere = true) })
         add(Shot("model-failed-light", dark = false) { Note(saturdayNote(NotePhase.WAITING).copy(waitingReason = WaitingReason.Memory, canRetry = true)) })
+        // The other reasons a waiting note gives (spec 5.4), each with Try again.
+        addAll(themed("waiting-failures") { Note(saturdayNote(NotePhase.WAITING).copy(waitingReason = WaitingReason.Failures, canRetry = true)) })
+        add(Shot("waiting-storage-light", dark = false) { Note(saturdayNote(NotePhase.WAITING).copy(waitingReason = WaitingReason.Storage(850_000_000), canRetry = true)) })
+        add(Shot("waiting-install-light", dark = false) { Note(saturdayNote(NotePhase.WAITING).copy(waitingReason = WaitingReason.Install, canRetry = true)) })
         addAll(themed("partial") { Note(partial()) })
         add(Shot("no-speech-light", dark = false) { Note(noSpeech()) })
         add(Shot("text-only-light", dark = false) { Note(design().copy(audioPresent = false, canPlay = false, canRemoveAudio = false)) })

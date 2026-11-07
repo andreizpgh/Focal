@@ -41,6 +41,10 @@ object CoverageShots {
         addAll(scaled("find-replaced") { Note(design(replaced = true), find = "screen" to "page", replaced = true) })
         addAll(scaled("home-rows") { Library(rowsModel()) })
         addAll(themed("stage-model-failed") { Library(modelFailedModel()) })
+        // The other reasons a waiting note gives (spec 5.4): repeated failures, storage for the model, a failed copy.
+        add(Shot("stage-waiting-failures-light", dark = false) { Library(modelFailedModel(WaitingReason.Failures)) })
+        add(Shot("stage-waiting-storage-light", dark = false) { Library(modelFailedModel(WaitingReason.Storage(850_000_000))) })
+        addAll(scaled("stage-waiting-install") { Library(modelFailedModel(WaitingReason.Install)) })
         addAll(themed("stage-partial") { Library(partialModel()) })
         addAll(themed("rename-stage") { Library(idleModel(), rename = "note-0") })
         addAll(themed("rename-row") { Library(idleModel(), rename = "note-1") })
@@ -154,8 +158,8 @@ private fun rtlTitleModel(): LibraryModel {
     return LibraryModel(loaded = true, stage = StageUi.Note(all.first(), fresh = false), days = days(all.drop(1)))
 }
 
-private fun modelFailedModel(): LibraryModel {
-    val note = saturday.copy(phase = NotePhase.WAITING, waitingReason = WaitingReason.Memory)
+private fun modelFailedModel(reason: WaitingReason = WaitingReason.Memory): LibraryModel {
+    val note = saturday.copy(phase = NotePhase.WAITING, waitingReason = reason)
     return LibraryModel(loaded = true, stage = StageUi.Note(note, fresh = false), days = days(rows()))
 }
 
