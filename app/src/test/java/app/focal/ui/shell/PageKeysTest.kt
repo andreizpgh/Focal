@@ -70,20 +70,67 @@ class PageKeysTest {
         assertEquals(listOf(PageKey.PlayPause), taken)
     }
 
-    @Test fun anAreaIsTypingWhileOneOfItsFieldsHasFocus() {
-        val typing = TypingFocus()
+    @Test fun aFocusedControlKeepsTheKeysItAnswersItself() {
+        val focused = FocusedKeys()
         val search = Any()
         val rename = Any()
-        assertFalse(typing.active)
-        typing.update(search, true)
+        assertFalse(focused.owns(PageKey.PlayPause))
+        focused.update(search, true) { FocusedKeys.Typing }
         // Focus moves from one field to the other: the new one reports before or after the old one lets go.
-        typing.update(rename, true)
-        typing.update(search, false)
-        assertTrue(typing.active)
-        typing.update(rename, false)
-        assertFalse(typing.active)
+        focused.update(rename, true) { FocusedKeys.Typing }
+        focused.update(search, false) { emptySet() }
+        assertTrue(PageKey.entries.all { focused.owns(it) })
+        focused.update(rename, false) { emptySet() }
+        assertFalse(PageKey.entries.any { focused.owns(it) })
         // A field that leaves twice changes nothing.
-        typing.update(rename, false)
-        assertFalse(typing.active)
+        focused.update(rename, false) { emptySet() }
+        assertFalse(focused.owns(PageKey.Copy))
+        // A control's own keys are read when a key arrives: the stage turns from live to a note while focused.
+        val stage = Any()
+        var live = true
+        focused.update(stage, true) { if (live) setOf(PageKey.PlayPause) else setOf(PageKey.Copy) }
+        assertTrue(focused.owns(PageKey.PlayPause))
+        assertFalse(focused.owns(PageKey.Copy))
+        live = false
+        assertFalse(focused.owns(PageKey.PlayPause))
+        assertTrue(focused.owns(PageKey.Copy))
+    }
+
+    /**
+     * The two-pane library hands an open note its shortcuts (spec 8.5) except the keys the focused control answers:
+     * Space on the live stage expands it, Ctrl+C on a stage holding a note copies that note, a rename types them all.
+     */
+    @Test fun theLibraryPaneLeavesAFocusedControlItsOwnKeys() {
+        val focused = FocusedKeys()
+        val taken = mutableListOf<PageKey>()
+        val keys = ShortcutKeys(focused.leaving { key -> taken += key; true })
+        fun down(code: Int, repeat: Int = 0, ctrl: Boolean = false) = keys.down(code, repeat, !ctrl, ctrl, shift = false)
+
+        // A row (or a button) answers none of them: the note takes Space and Ctrl+C.
+        assertTrue(down(KeyEvent.KEYCODE_SPACE))
+        assertTrue(down(KeyEvent.KEYCODE_C, ctrl = true))
+        assertEquals(listOf(PageKey.PlayPause, PageKey.Copy), taken)
+        // The live stage: Space and its repeats are its own (it expands); the Ctrl shortcuts still reach the note.
+        taken.clear()
+        val stage = Any()
+        focused.update(stage, true) { setOf(PageKey.PlayPause) }
+        assertFalse(down(KeyEvent.KEYCODE_SPACE))
+        assertFalse(down(KeyEvent.KEYCODE_SPACE, repeat = 1))
+        assertTrue(down(KeyEvent.KEYCODE_F, ctrl = true))
+        assertTrue(down(KeyEvent.KEYCODE_C, ctrl = true))
+        assertEquals(listOf(PageKey.Find, PageKey.Copy), taken)
+        // A stage holding a note: Ctrl+C copies its own note; Space plays the open one.
+        taken.clear()
+        focused.update(stage, true) { setOf(PageKey.Copy) }
+        assertFalse(down(KeyEvent.KEYCODE_C, ctrl = true))
+        assertTrue(down(KeyEvent.KEYCODE_SPACE))
+        assertEquals(listOf(PageKey.PlayPause), taken)
+        // A rename types every key.
+        taken.clear()
+        focused.update(stage, false) { emptySet() }
+        focused.update(Any(), true) { FocusedKeys.Typing }
+        assertFalse(down(KeyEvent.KEYCODE_SPACE))
+        assertFalse(down(KeyEvent.KEYCODE_Z, ctrl = true))
+        assertEquals(emptyList<PageKey>(), taken)
     }
 }

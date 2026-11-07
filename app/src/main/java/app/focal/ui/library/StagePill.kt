@@ -17,7 +17,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -118,6 +120,8 @@ object StagePillMetrics {
  * 100%" and the track to the copy glyph and "Copy" (`fade`), all from the same frame; `Confirm` fires on that frame
  * and [onReadyMoment] starts the card's one shimmer. Off screen, or a second time, the pill simply shows the white
  * Copy. Copy confirms with the check and "Copied" for 1600 ms, then relaxes to glass (the note is no longer fresh).
+ * Each new count of [copyRequests] (Ctrl+C on the focused stage, spec 8.5) is a tap on Copy, and does nothing where a
+ * tap would do nothing.
  */
 @Composable
 fun StagePill(
@@ -127,6 +131,7 @@ fun StagePill(
     onReadyMoment: () -> Unit,
     modifier: Modifier = Modifier,
     shown: () -> Boolean = { true },
+    copyRequests: () -> Int = { 0 },
 ) {
     val density = LocalDensity.current
     val reduced = LocalReducedMotion.current
@@ -226,6 +231,16 @@ fun StagePill(
                 copied = true
                 delay(FocalTiming.COPIED_HOLD_MS)
                 copied = false
+            }
+        }
+    }
+    val keyCopy by rememberUpdatedState<(() -> Unit)?>(if (enabled && !copied) { { copyNow() } } else null)
+    LaunchedEffect(Unit) {
+        var seen = copyRequests()
+        snapshotFlow { copyRequests() }.collect { count ->
+            if (count != seen) {
+                seen = count
+                keyCopy?.invoke()
             }
         }
     }

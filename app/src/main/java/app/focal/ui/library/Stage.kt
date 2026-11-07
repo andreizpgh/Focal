@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -35,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -45,6 +47,16 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.FirstBaseline
@@ -108,7 +120,9 @@ import app.focal.ui.scene.TranscriptInks
 import app.focal.ui.scene.rememberTimerStyles
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.Origin
+import app.focal.ui.shell.PageKey
 import app.focal.ui.shell.pageOrigin
+import app.focal.ui.shell.rememberFocusReport
 import app.focal.ui.shell.rememberStageOrigin
 import app.focal.ui.shell.stageText
 import app.focal.ui.state.NotePhase
@@ -229,6 +243,16 @@ fun StageCard(
     val description = if (stage is StageUi.Live) null else stageDescription(stage, dates, today)
     val note = (stage as? StageUi.Note)?.row
     val clickLabel = stringResource(if (note != null) R.string.a11y_open_note else R.string.a11y_expand_recording)
+    // The keys the focused card answers itself (spec 8.5), which the two-pane library leaves to it: Space on the live
+    // stage expands it, as Enter does (both through the card's click); Ctrl+C on a stage holding a note copies that
+    // note through its pill, so it confirms as a tap does (and does nothing where a tap would do nothing).
+    val ownKeys = when {
+        stage is StageUi.Live -> LiveStageKeys
+        note != null && title == null -> NoteStageKeys
+        else -> emptySet()
+    }
+    val focusReport = rememberFocusReport { ownKeys }
+    val copyRequests = remember { mutableIntStateOf(0) }
     val large = LocalDensity.current.fontScale >= StageMetrics.LARGE_FONT
     val origin = rememberStageOrigin(
         note?.id, if (large) StageMetrics.TITLE_LINES_LARGE else StageMetrics.TITLE_LINES,
@@ -250,6 +274,12 @@ fun StageCard(
             }
             .pressScale(source)
             .focusRing(FocalShapes.sheet)
+            .onFocusChanged { focusReport(it.hasFocus) }
+            .onKeyEvent { event ->
+                if (PageKey.Copy !in ownKeys || !event.isCopy()) return@onKeyEvent false
+                if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) copyRequests.intValue++
+                true
+            }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -272,7 +302,7 @@ fun StageCard(
         when (stage) {
             is StageUi.Live -> RecordedStage { LiveStage(stage, meter, seconds) }
             is StageUi.Note -> RecordedStage { NoteStage(
-                stage, dates, today, actions, title, origin, shown,
+                stage, dates, today, actions, title, origin, shown, copyRequests = { copyRequests.intValue },
                 onReadyMoment = {
                     if (!reduced) scope.launch {
                         delay(FocalTiming.READY_SHIMMER_DELAY_MS)
@@ -365,6 +395,13 @@ private fun stageDescription(stage: StageUi, dates: LibraryDates, today: LocalDa
 }
 
 private const val MS_PER_S = 1000L
+
+/** The keys a focused stage answers itself (spec 8.5): live, Space expands it; holding a note, Ctrl+C copies it. */
+private val LiveStageKeys = setOf(PageKey.PlayPause)
+private val NoteStageKeys = setOf(PageKey.Copy)
+
+/** Ctrl+C alone: no Shift, Alt or Meta with it. */
+private fun KeyEvent.isCopy(): Boolean = key == Key.C && isCtrlPressed && !isShiftPressed && !isAltPressed && !isMetaPressed
 
 /** "4 minutes 16 seconds": each part omitted when 0 (spec 7.8 `a11y_duration`). */
 @Composable
@@ -567,6 +604,7 @@ private fun NoteStage(
     renameField: (@Composable () -> Unit)?,
     origin: Origin,
     shown: () -> Boolean,
+    copyRequests: () -> Int,
     onReadyMoment: () -> Unit,
 ) {
     val colors = FocalTheme.colors
@@ -612,7 +650,12 @@ private fun NoteStage(
             },
             { Box(Modifier.clearAndSetSemantics { }.stageText(origin)) { StageText(row, noSpeech) } },
             { Box(Modifier.graphicsLayer { alpha = lengthYields.value }) { StageLength(row.durationMs) } },
-            { StagePill(pill, row.id, onCopy = { actions.copy(row) }, onReadyMoment = onReadyMoment, Modifier.testTag(STAGE_PILL_TAG), shown = shown) },
+            {
+                StagePill(
+                    pill, row.id, onCopy = { actions.copy(row) }, onReadyMoment = onReadyMoment, Modifier.testTag(STAGE_PILL_TAG),
+                    shown = shown, copyRequests = copyRequests,
+                )
+            },
         ),
     ) { (titles, times, texts, lengths, pills), constraints ->
         val width = constraints.maxWidth

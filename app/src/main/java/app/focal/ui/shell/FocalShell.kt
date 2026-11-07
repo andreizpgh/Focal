@@ -357,17 +357,19 @@ private fun PageEntry(key: Destination, shell: ShellState, twoPane: Boolean, pap
  *
  * With a note open beside it, the note's shortcuts (spec 8.5: Space, Ctrl+F, Ctrl+C, Ctrl+Z) go to the note even while
  * focus is in this pane: after a touch the first hardware key leaves touch mode and puts focus on this pane's first
- * control by itself, so Space would otherwise press a library control instead of playing the note. While the note is
+ * control by itself, so Space would otherwise press a row or a button instead of playing the note. While the note is
  * read, Space is its own even with nothing to play; a key the note declines (Space in Edit or Find, no Edit to undo)
- * stays with the focused control, and Enter always does. While a text field here has focus (a rename), every key is
- * typing. Search's field sits in the bottom column, outside this pane, so its keys never pass here.
+ * stays with the focused control, and Enter always does. A focused control keeps the keys it answers itself
+ * ([FocusedKeys]): a text field here (a rename) every key, the live stage Space (it expands), a stage holding a note
+ * Ctrl+C (it copies its own note). Search's field sits in the bottom column, outside this pane, so its keys never pass
+ * here.
  */
 @Composable
 private fun ListPane(shell: ShellState, destination: @Composable (Destination) -> Unit) {
     val pages = shell.pages
     val pageKeys = LocalPageKeys.current
-    val shortcuts = remember(pageKeys) { ShortcutKeys(pageKeys::dispatch) }
-    val typing = remember { TypingFocus() }
+    val focused = remember { FocusedKeys() }
+    val shortcuts = remember(pageKeys) { ShortcutKeys(focused.leaving(pageKeys::dispatch)) }
     Box(
         Modifier
             .fillMaxSize()
@@ -375,8 +377,8 @@ private fun ListPane(shell: ShellState, destination: @Composable (Destination) -
                 val change = pages.change
                 if (change != null && change.document == Destination.Licenses) alpha = pages.look(Destination.Library).alpha
             }
-            .shortcutKeys(shortcuts) { shell.current is Destination.Note && !typing.active },
-    ) { CompositionLocalProvider(LocalTypingFocus provides typing) { destination(Destination.Library) } }
+            .shortcutKeys(shortcuts) { shell.current is Destination.Note },
+    ) { CompositionLocalProvider(LocalFocusedKeys provides focused) { destination(Destination.Library) } }
 }
 
 /**

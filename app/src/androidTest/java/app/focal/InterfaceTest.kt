@@ -14,6 +14,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -689,6 +690,80 @@ class InterfaceTest {
         assertFalse("Not playing", playing())
         back()
         awaitGone("the rename field", rename)
+    }
+
+    /**
+     * Two panes and a hardware keyboard (spec 8.5): a focused stage keeps the keys it answers itself while a note is
+     * open beside the library. Space on the focused live stage expands it instead of going to the note. Skipped on a
+     * display that does not change panes when turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun spaceOnTheFocusedLiveStageExpandsItBesideAnOpenNote() {
+        assumeTurnChangesPanes()
+        val title = "Live stage keys fixture $tag"
+        val words = listOf("A synthetic paragraph open beside a recording.")
+        longNote(title, words)
+        val id = app.store.create().also { created += it }
+        app.store.state(id, NoteState.PAUSED)
+        // Synthetic presentation state (paused, so nothing draws every frame); the service is tested on its own.
+        RecordingState.live.value = LiveSession(noteId = id, paused = true, duration = 73_000)
+        launch()
+        turn(landscape = true)
+        val row = hasText(title) and hasClickAction() and !isHeading()
+        await("the note's row", row)
+        compose.onNode(row).performClick()
+        await("the note beside the library", hasText(words[0]))
+        val stage = hasContentDescription("Paused, 1 minute 13 seconds.", substring = true) and hasClickAction()
+        await("the live stage", stage)
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
+        compose.onNode(stage).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNode(stage and isFocused()).assertIsDisplayed()
+        press(KeyEvent.KEYCODE_SPACE)
+        await("the scene", hasContentDescription("Collapse. Recording continues"))
+        assertFalse("The open note does not play", playing())
+    }
+
+    /**
+     * Two panes and a hardware keyboard (spec 8.5): Ctrl+C on a focused stage copies the stage's note and confirms on
+     * its pill, while the note open beside the library is left alone. Skipped on a display that does not change panes
+     * when turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun ctrlCOnTheFocusedStageCopiesItsOwnNoteBesideAnOpenNote() {
+        assumeTurnChangesPanes()
+        val openTitle = "Open copy fixture $tag"
+        val openWords = listOf("The open note's synthetic paragraph.")
+        val stageTitle = "Stage copy fixture $tag"
+        val stageWords = listOf("The stage's own synthetic paragraph.", "And its second one.")
+        // The open note is a minute older, so the stage holds the other one.
+        app.store.insertNoteForTests(openWords, title = openTitle, created = System.currentTimeMillis() - 60_000).also {
+            created += it
+            app.store.audioFile(it).writeBytes(ByteArray(BYTES_PER_SECOND))
+        }
+        note(stageTitle, stageWords)
+        launch()
+        turn(landscape = true)
+        val row = hasText(openTitle) and hasClickAction() and !isHeading()
+        await("the open note's row", row)
+        compose.onNode(row).performClick()
+        await("the note beside the library", hasText(openWords[0]))
+        val stage = hasContentDescription("Latest note. $stageTitle.", substring = true)
+        await("the stage", stage)
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
+        compose.onNode(stage).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNode(stage and isFocused()).assertIsDisplayed()
+        press(KeyEvent.KEYCODE_C, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val clipboard = app.getSystemService(ClipboardManager::class.java)
+        var text: String? = null
+        try {
+            compose.waitUntil(TIMEOUT_MS) {
+                scenario!!.onActivity { text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() }
+                text == stageWords.joinToString("\n\n")
+            }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("The clipboard holds \"$text\", not the stage's note", timeout)
+        }
+        // Through the stage's pill, which confirms as a tap does; the open note's Copy did not run.
+        await("Copied on the stage", hasContentDescription("Copied") and hasAnyAncestor(stage))
+        compose.onAllNodes(hasContentDescription("Copied")).assertCountEquals(1)
     }
 
     /** A tablet turned with library search open (spec 5.2, 5.14): search stays open, its query and results with it. */

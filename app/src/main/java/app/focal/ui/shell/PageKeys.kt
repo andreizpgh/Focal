@@ -93,27 +93,43 @@ internal fun rememberShortcutKeys(take: (PageKey) -> Boolean): ShortcutKeys {
 }
 
 /**
- * The text fields of one area that have focus. While one does, the area's keys are typing (a space in the query,
- * Ctrl+C on its selection), never the page's shortcuts. Main thread only.
+ * The keys the focused controls of one area answer themselves (spec 8.5). A text field answers every key while it has
+ * focus (a space in the query, Ctrl+C on its selection); the live stage answers Space (it expands, as Enter does) and
+ * a stage holding a note Ctrl+C (it copies that note). The area's shortcuts leave those keys to the control and take
+ * the rest, which a row or a button would otherwise press. Main thread only.
  */
-class TypingFocus {
-    private val focused = HashSet<Any>()
+class FocusedKeys {
+    private val focused = HashMap<Any, () -> Set<PageKey>>()
 
-    val active: Boolean get() = focused.isNotEmpty()
+    /** True when a control that has focus answers [key] itself. */
+    fun owns(key: PageKey): Boolean = focused.values.any { key in it() }
 
-    internal fun update(field: Any, hasFocus: Boolean) {
-        if (hasFocus) focused += field else focused -= field
+    /** [take] for the keys no focused control answers; a key one does answer is declined, so it goes on to it. */
+    fun leaving(take: (PageKey) -> Boolean): (PageKey) -> Boolean = { key -> !owns(key) && take(key) }
+
+    /** [control] has focus or not; while it does, [keys] (read when a key arrives) are its own. */
+    internal fun update(control: Any, hasFocus: Boolean, keys: () -> Set<PageKey>) {
+        if (hasFocus) focused[control] = keys else focused -= control
+    }
+
+    companion object {
+        /** What a text field answers: everything is typing. */
+        val Typing: Set<PageKey> = PageKey.entries.toSet()
     }
 }
 
-/** The [TypingFocus] of the area a text field sits in; null where no area asks. */
-val LocalTypingFocus = staticCompositionLocalOf<TypingFocus?> { null }
+/** The [FocusedKeys] of the area a control sits in; null where no area asks. */
+val LocalFocusedKeys = staticCompositionLocalOf<FocusedKeys?> { null }
 
-/** Reports a text field's focus to its area's [TypingFocus]; the field counts as unfocused once it leaves. */
+/**
+ * Reports a control's focus to its area's [FocusedKeys], with the keys it answers itself while it has focus ([keys],
+ * read when a key arrives; a text field's are [FocusedKeys.Typing]). The control counts as unfocused once it leaves.
+ */
 @Composable
-fun rememberTypingReport(): (Boolean) -> Unit {
-    val typing = LocalTypingFocus.current
-    val field = remember { Any() }
-    DisposableEffect(typing) { onDispose { typing?.update(field, false) } }
-    return remember(typing) { { focused -> typing?.update(field, focused) } }
+fun rememberFocusReport(keys: () -> Set<PageKey> = { FocusedKeys.Typing }): (Boolean) -> Unit {
+    val area = LocalFocusedKeys.current
+    val control = remember { Any() }
+    val current by rememberUpdatedState(keys)
+    DisposableEffect(area) { onDispose { area?.update(control, false) { emptySet() } } }
+    return remember(area) { { hasFocus -> area?.update(control, hasFocus) { current() } } }
 }
