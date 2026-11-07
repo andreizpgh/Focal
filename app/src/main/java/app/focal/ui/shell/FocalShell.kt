@@ -505,7 +505,11 @@ private const val DETAIL_Z = 1f
 /** The pages behind the morph darken (spec 2.8.2 `libraryDim`). */
 private const val PAGES_DIM = 0.30f
 
-/** Runs the activity's keyboard shortcuts: Ctrl+, opens settings from the library while the scene is folded. */
+/**
+ * Runs the activity's keyboard shortcuts: Ctrl+, opens settings from the library while the scene is folded and the
+ * library is at rest (4.23.6). In two panes a note open beside the library leaves it on screen, so Ctrl+, opens
+ * settings there too, as the swipe does (the whole window slides).
+ */
 @Composable
 fun ShellCommands(shell: ShellState, commands: Flow<ShellCommand>) {
     val scope = rememberCoroutineScope()
@@ -513,8 +517,9 @@ fun ShellCommands(shell: ShellState, commands: Flow<ShellCommand>) {
     LaunchedEffect(commands) {
         commands.collect { command ->
             when (command) {
-                ShellCommand.OpenSettings -> if (shell.current == Destination.Library && !shell.live.visible && shell.settings.armed) {
-                    scope.launch { shell.settings.open(reduced) }
+                ShellCommand.OpenSettings -> {
+                    val onLibrary = shell.current == Destination.Library || shell.twoPane && shell.current is Destination.Note
+                    if (onLibrary && !shell.live.visible && shell.settings.armed) scope.launch { shell.settings.open(reduced) }
                 }
             }
         }

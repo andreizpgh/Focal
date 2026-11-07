@@ -766,6 +766,30 @@ class InterfaceTest {
         compose.onAllNodes(hasContentDescription("Copied")).assertCountEquals(1)
     }
 
+    /**
+     * Two panes (spec 4.23.6, 5.14): Ctrl+, opens settings with a note open beside the library, as it does from the
+     * library alone, and Back returns to the note. Skipped on a display that does not change panes when turned (run it
+     * with `adb shell wm size 1600x2560`).
+     */
+    @Test fun ctrlCommaOpensSettingsBesideAnOpenNote() {
+        assumeTurnChangesPanes()
+        val title = "Two-pane settings key fixture $tag"
+        val words = listOf("A synthetic paragraph open beside the library.")
+        note(title, words)
+        launch()
+        turn(landscape = true)
+        val listed = hasContentDescription("Latest note. $title.", substring = true) or (hasText(title) and hasClickAction() and !isHeading())
+        await("the note in the library", listed)
+        compose.onAllNodes(listed)[0].performClick()
+        await("the note beside the library", hasText(words[0]))
+        press(KeyEvent.KEYCODE_COMMA, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val heading = hasText("Settings") and isHeading()
+        await("the settings page", heading)
+        back()
+        awaitGone("the settings page", heading)
+        compose.onNode(hasText(words[0])).assertIsDisplayed()
+    }
+
     /** A tablet turned with library search open (spec 5.2, 5.14): search stays open, its query and results with it. */
     @Test fun librarySearchStaysOpenAcrossATurnBetweenPanes() {
         assumeTurnChangesPanes()
