@@ -121,46 +121,39 @@ to end, so before publishing a release is checked on emulators in three parts:
 
 For 0.2.0, on x86_64 emulators only. No build has run on a phone.
 
-**Instrumented suite (debug build).** At 8999953, the commit the 0.2.0 APK was
-built from, the full suite passed on an API 36 emulator after `pm clear`, with
-the model bundled: 132 tests, 125 passed, 7 skipped, none failed. The skipped
-tests need a tablet-size display (four) or render adaptive gallery stages
-(three). On an API 33 emulator the full suite last ran at 00130f9, an earlier
-commit: 126 tests, 120 passed, 6 skipped, none failed. Later commits have run
-targeted suites only.
+**Instrumented suite (debug build).** At 523bdd2, the commit the 0.2.0 APK was
+built from, the full suite ran after `pm clear` with the model bundled, on API 36
+and on API 33: 156 tests each, 144 passed, 12 skipped, none failed. Nine of the
+skipped tests need a wide display and three are adaptive gallery stages; at
+1600 × 2560 the interface tests passed 28 of 28 on both emulators. The gallery
+(341 shots, both themes, 1.3× and 2× font, RTL, landscape, tablet and a
+simulated hinge) was reviewed against the design specification.
 
-**Minified code (emulator QA build).** The QA build of e13c2f1 ran end to end on
-API 36, with the public JFK fixture streamed into the emulator's microphone
-through its gRPC audio injection, so live decoding ran in the minified build.
-Model install, permissions, live text, Pause and Resume, Finish, playback, Edit,
-Find and Replace all, Copy, Delete with Undo and rotation worked; so did recovery
-after a force-stop during capture or transcription, and the engine guard after
-two simulated crashes. Its `classes.dex`, `resources.arsc` and manifest were
-byte-identical to the arm64 release of e13c2f1. The 0.2.0 APK has the same
-resources and manifest, but its code adds six later fixes, so its own minified
-code has not run end to end.
+**Minified code (emulator QA build).** The x86_64 QA build of the same commit
+(`-Pfocal.emulatorRelease=true`, version suffix `-emulator-qa`, never published)
+ran end to end on API 36, with the public JFK fixture streamed into the
+emulator's microphone through its gRPC audio injection, so live decoding ran in
+minified code. Model install, live text, Pause and Resume, Finish, playback,
+Edit with split, join and undo, Find and Replace all, Copy, Delete with Undo and
+rotation worked; a force-stop during transcription recovered to Ready, and two
+kills inside a speech stage stopped automatic transcription until Try again.
 
-**The 0.2.0 APK** (SHA-256
-`8ebf7344a84d5c80292a7e2f7b1dca2b906060a69e867f2ee8eee23db3d6c613`, from a clean
-tree at 8999953). apksigner verifies its v2 and v3 signatures: one signer, the
-Android debug key (certificate SHA-256 `3e407a18…a3bc`). It was signed by hand
-with apksigner's defaults, so it also carries a JAR signature, which Android 7
-and later ignore. aapt2 reads `app.focal` 0.2.0 (versionCode 10), `zipalign -c
--P 16 4` passes, `lib/` holds arm64-v8a only and the four ONNX files are stored;
-the release script's checks pass on it. On API 36, through the arm64
-translation, it installs, cold-launches to the library and stays up for five
-minutes with no fatal log entry. It cannot record there.
-
-**Upgrades.** Installing over the exact Alpha 9 APK kept every note, paragraph,
-edit, custom title and audio file (byte for byte): on API 35 and 36 with earlier
-builds of the rebuild, where a recording interrupted mid-capture was also
-transcribed after the upgrade, and on API 36 with the arm64 release of 00130f9
-through the translation.
+**The 0.2.0 APK** (`Focal-0.2.0.apk`, 700,492,030 bytes, SHA-256
+`8ee0a0b5a2eadc36a90fbf5eb92a353ee48db7268ab51570413c340d924b7226`, from a clean
+tree at 523bdd2). Two release builds of that commit produced the same unsigned
+APK. `scripts/release.py` signed it (v2 and v3, one signer, the Android debug key,
+certificate SHA-256 `3e407a18…a3bc`) and checked it: `app.focal` 0.2.0
+(versionCode 10), 16 KB alignment, arm64-v8a only in `lib/`, every model file
+byte for byte with the four ONNX files stored. On API 36, through the arm64
+translation, it installed over the exact Alpha 9 APK's data, kept the notes, a
+custom title, an edited passage and the audio files (byte for byte), launched to
+the library and opened a note. It cannot record there: ONNX Runtime crashes inside
+the emulator's arm64 translation, which is why the QA build above exists.
 
 **Behavior.** Recording, Pause, Resume, Finish, process death during capture and
-the recovery that follows behaved as designed with emulator audio. The
-screenshot gallery was compared by eye with the design renders, in both themes
-and at large font scales.
+transcription and the recovery that follows behaved as designed with emulator
+audio. Speech quality figures come from host experiments on read speech; see
+[speech quality](speech-quality.md).
 
 ## Phone validation
 
