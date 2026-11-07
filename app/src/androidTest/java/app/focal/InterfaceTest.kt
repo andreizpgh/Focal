@@ -269,6 +269,35 @@ class InterfaceTest {
     }
 
     /**
+     * A note with nothing to play (its audio removed, spec 5.9): Space is still the page's while it is read, so it never
+     * presses the control the first key after a touch focused by itself (Back, in one pane); Enter still does.
+     */
+    @Test fun spaceOnANoteWithoutAudioPressesNoFocusedControl() {
+        val title = "Text-only Space fixture $tag"
+        val words = listOf("A synthetic paragraph whose audio was removed.", "And this one, after a blank line.")
+        // A migrated note: its text needs no windows, so its audio can be removed at once.
+        val id = app.store.insertNoteForTests(words, title = title, legacy = true).also { created += it }
+        app.store.audioFile(id).writeBytes(ByteArray(words.size * BYTES_PER_SECOND))
+        app.store.removeAudio(id)
+        launch()
+        openFromLibrary(title, words[0])
+        val heading = hasText(title) and isHeading()
+        await("the title", heading)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.setInTouchMode(false)
+        val back = hasContentDescription("Back") and hasClickAction()
+        compose.onNode(back).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNode(back and isFocused()).assertExists()
+        press(KeyEvent.KEYCODE_SPACE)
+        compose.waitForIdle()
+        compose.onNode(heading).assertIsDisplayed()
+        compose.onNode(back and isFocused()).assertExists()
+        press(KeyEvent.KEYCODE_ENTER)
+        awaitGone("the note page", heading)
+        await("the library", inLibrary(title))
+    }
+
+    /**
      * Lets the page catch up with the player, as a person's pace would: the test drives Compose's clock, which moves
      * only while the test waits on Compose, and the player strip draws every frame, so Compose never idles. [block]
      * reads the page after the frames.

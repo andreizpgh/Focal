@@ -357,9 +357,10 @@ private fun PageEntry(key: Destination, shell: ShellState, twoPane: Boolean, pap
  *
  * With a note open beside it, the note's shortcuts (spec 8.5: Space, Ctrl+F, Ctrl+C, Ctrl+Z) go to the note even while
  * focus is in this pane: after a touch the first hardware key leaves touch mode and puts focus on this pane's first
- * control by itself, so Space would otherwise press a library control instead of playing the note. A key the note
- * declines (nothing to play, no Edit to undo) stays with the focused control; while a text field here has focus (a
- * rename), every key is typing. Search's field sits in the bottom column, outside this pane, so its keys never pass here.
+ * control by itself, so Space would otherwise press a library control instead of playing the note. While the note is
+ * read, Space is its own even with nothing to play; a key the note declines (Space in Edit or Find, no Edit to undo)
+ * stays with the focused control, and Enter always does. While a text field here has focus (a rename), every key is
+ * typing. Search's field sits in the bottom column, outside this pane, so its keys never pass here.
  */
 @Composable
 private fun ListPane(shell: ShellState, destination: @Composable (Destination) -> Unit) {

@@ -763,7 +763,9 @@ fun NotePage(
             PageKey.Undo -> page.editing.also { if (it) undo() }
             PageKey.Redo -> page.editing.also { if (it) redo() }
             PageKey.Find -> (!find.open).also { if (it) openFind() }
-            PageKey.PlayPause -> (reading && canPlay).also { if (it) { if (playingHere && audio.playing) playback.toggle() else dockActions.play() } }
+            // While reading, Space is the page's even with nothing to play (text only, or a capture holds the
+            // audio): left to a control that the first key after a touch focused by itself, it would press it.
+            PageKey.PlayPause -> reading.also { if (it && canPlay) { if (playingHere && audio.playing) playback.toggle() else dockActions.play() } }
             // Through the dock's Copy, so it confirms as a tap does (spec 5.5).
             PageKey.Copy -> (reading && selection.selectedTexts.none { it.isNotEmpty() } && dockState.pill is NotePill.Copy).also {
                 if (it) bottom.dock.copy()
