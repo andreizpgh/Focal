@@ -169,8 +169,10 @@ fun LibraryPage(
         focusManager.clearFocus()
         scope.launch { searchState.close { query.clearText() } }
     }
-    BackHandler(enabled = searchState.open, onBack = closeSearch)
-    BackHandler(enabled = renaming != null) { renaming = null }
+    // Not under the licences, whose Back comes first (two panes keep this page composed beneath them).
+    val covered = shell.current == Destination.Licenses
+    BackHandler(enabled = searchState.open && !covered, onBack = closeSearch)
+    BackHandler(enabled = renaming != null && !covered) { renaming = null }
     // A menu closes when the list scrolls (spec 4.15).
     LaunchedEffect(listState) { snapshotFlow { listState.isScrollInProgress }.collect { if (it) menu = null } }
     // Settings may open only from the library at rest (spec 4.23.3).

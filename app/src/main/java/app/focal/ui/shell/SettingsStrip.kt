@@ -125,7 +125,11 @@ fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, se
     val springBack = remember { PendingJob() }
     // The gesture's own previews move s's target below 1; the handler stays with the gesture it started.
     var backing by remember { mutableStateOf(false) }
-    PredictiveBackHandler(enabled = state.isOpen || backing) { events ->
+    // The licences pushed from settings cover the strip, which stays open beneath them (4.23.4). In two panes the
+    // library's pane stays composed under them and its handlers come after the display's, so Back would close the
+    // hidden strip and leave the licences on screen: Back is theirs.
+    val covered = LocalShell.current.current == Destination.Licenses
+    PredictiveBackHandler(enabled = (state.isOpen || backing) && !covered) { events ->
         springBack.cancel()
         backing = true
         // From where s is (1 at rest; less while an opening swipe still settles), so a back never snaps the page in.

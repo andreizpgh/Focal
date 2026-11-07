@@ -278,7 +278,8 @@ private fun Shell(
             // Every change is a bare swap; each page draws its own part from the upper page's progress, and the
             // container transforms draw above both (PageTransitions). In two panes the display holds the detail
             // pane (and the licences, over the whole window) above the library's pane; it is composed first, so
-            // the library's own Back (settings, search) comes before it.
+            // the library's own Back (settings, search) comes before it, except under the licences, which cover
+            // the library's pane and whose Back the library leaves to the display.
             NavDisplay(
                 backStack = shell.backStack,
                 modifier = if (twoPane) Modifier.zIndex(DETAIL_Z) else Modifier,

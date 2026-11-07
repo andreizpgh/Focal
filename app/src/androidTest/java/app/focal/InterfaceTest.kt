@@ -255,6 +255,35 @@ class InterfaceTest {
         compose.onNode(hasContentDescription("Record")).assertIsDisplayed()
     }
 
+    /**
+     * Two panes (spec 5.14, 4.23.4): the licences cover the whole window with the library's pane composed beneath
+     * them, and Back returns to settings, the next Back to the library. Skipped on a display that is never 840 dp wide
+     * (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun theLicencesReturnToSettingsInTwoPanes() {
+        val config = app.resources.configuration
+        assumeTrue("Needs a display at least 840 dp wide turned", maxOf(config.screenWidthDp, config.screenHeightDp) >= 840)
+        note("Two-pane settings fixture $tag", listOf("A note, so the library dock carries Record."))
+        launch()
+        turn(landscape = true)
+        var width = 0
+        scenario!!.onActivity { width = it.resources.configuration.screenWidthDp }
+        assumeTrue("Needs two panes turned", width >= 840)
+        await("Record", hasContentDescription("Record"))
+        press(KeyEvent.KEYCODE_COMMA, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+        val heading = hasText("Settings") and isHeading()
+        await("the settings page", heading)
+        compose.onNodeWithText("Open-source licenses").performClick()
+        val licences = hasText("Parakeet Ultra speech model")
+        await("the licences", licences)
+        back()
+        awaitGone("the licences after Back", licences)
+        await("settings again", heading)
+        back()
+        awaitGone("the settings page", heading)
+        compose.onNode(hasContentDescription("Record")).assertIsDisplayed()
+    }
+
     @Test fun aRecordingShowsItsControlsInTheDock() {
         val id = app.store.create().also { created += it }
         app.store.state(id, NoteState.PAUSED)
