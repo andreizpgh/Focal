@@ -33,9 +33,16 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.NoteState
+import app.focal.data.NoteStore
+import app.focal.data.StoredWindow
 import app.focal.recording.LiveSession
+import app.focal.recording.RecordingDecoder
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
+import app.focal.recording.ServiceNotifications
+import app.focal.recording.SessionOperations
+import app.focal.speech.EngineGuard
+import app.focal.speech.EngineStage
 import app.focal.ui.state.PlaybackViewModel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -681,6 +688,47 @@ class InterfaceTest {
         }
         walk(root)
         return all
+    }
+
+    /**
+     * Spec 5.4 "Model couldn't load": once the speech work killed the process or failed to load twice (the engine
+     * guard), a waiting note says why and offers Try again, which forgets the failures and transcribes it.
+     */
+    @Test fun aStoppedSpeechEngineOffersTryAgainOnAWaitingNote() {
+        val id = app.store.create().also { created += it }
+        // A recording a process death left waiting: saved near-silence (one step of noise, so it is kept), no text yet.
+        app.store.audioFile(id).writeBytes(ByteArray(2 * BYTES_PER_SECOND) { if (it % 4 == 2) 1 else 0 })
+        app.store.duration(id, 2_000)
+        app.store.state(id, NoteState.INTERRUPTED)
+        repeat(EngineGuard.MAX_DEATHS) { app.engineGuard.failed(EngineStage.RECOGNIZER) }
+        // Silence needs no decode; this one only keeps the real recognizer from loading.
+        RecordingService.decoderFactoryForTests = {
+            object : RecordingDecoder {
+                override suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int) = error("Silence is never decoded")
+                override fun cancel() = Unit
+                override fun close() = Unit
+            }
+        }
+        try {
+            launch(Intent(app, MainActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra(RecordingService.NOTE, id))
+            val reason = hasText("Not enough free memory to transcribe right now.")
+            await("the reason", reason)
+            val tryAgain = hasContentDescription("Try again") and hasClickAction()
+            compose.onNode(tryAgain).assertIsDisplayed()
+            compose.onNode(tryAgain).performClick()
+            // Try again reaches the service, which forgets the failures before it transcribes.
+            compose.waitUntil(TIMEOUT_MS) { app.engineGuard.allows() }
+            await("the transcribed note", hasText("No speech was recognized."))
+            awaitGone("the reason", reason)
+            compose.waitUntil(TIMEOUT_MS) {
+                app.store.note(id)?.state == NoteState.READY && !SessionOperations.matchesSession(false, id) &&
+                    RecordingState.live.value.noteId == null
+            }
+        } finally {
+            app.engineGuard.reset()
+            RecordingService.decoderFactoryForTests = null
+            ServiceNotifications.cancelReady(app, id)
+        }
     }
 
     @Test fun aNotificationOpensItsNote() {

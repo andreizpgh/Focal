@@ -12,7 +12,6 @@ import app.focal.data.SearchText
 import app.focal.recording.LiveSession
 import app.focal.recording.RecordingState
 import app.focal.recording.SpeechAvailability
-import app.focal.speech.ModelStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -66,13 +65,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         .map { LiveRows(it.noteId, it.capturing, it.paused, it.processing, it.progress?.let { p -> (p * 100).toInt() }, it.speech) }
         .distinctUntilChanged()
 
-    private val speech: Flow<SpeechAvailability> = app.models.status.map {
-        when (it) {
-            ModelStatus.Checking, is ModelStatus.Installing -> SpeechAvailability.PREPARING
-            is ModelStatus.Ready -> SpeechAvailability.READY
-            else -> SpeechAvailability.UNAVAILABLE
-        }
-    }.distinctUntilChanged()
+    private val modelState: Flow<ModelState> = app.modelStates()
 
     private val notes: Flow<List<Note>?> = combine(store.changes, refresh) { _, _ -> }.mapLatest {
         try {
@@ -85,13 +78,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }.flowOn(Dispatchers.IO)
 
-    val state: StateFlow<LibraryUiState> = combine(notes, live, speech, loadError, UndoableActions.audioRemovalsPending) {
+    val state: StateFlow<LibraryUiState> = combine(notes, live, modelState, loadError, UndoableActions.audioRemovalsPending) {
             list, liveRows, model, error, removals ->
         if (list == null) return@combine LibraryUiState(loaded = true, error = error)
         val session = RecordingState.live.value
         val liveId = liveRows.noteId?.takeIf { liveRows.capturing }
         val zone = ZoneId.systemDefault()
-        val days = list.asSequence().filter { it.id != liveId }.map { row(it, session, model, removals) }
+        val days = list.asSequence().filter { it.id != liveId }.map { row(it, session, model.availability, removals, model.stopped) }
             .groupBy { Instant.ofEpochMilli(it.created).atZone(zone).toLocalDate().toEpochDay() }
             .map { (day, rows) -> LibraryDay(day, rows) }
         LibraryUiState(loaded = true, error = error, days = days, liveNoteId = liveId, empty = list.isEmpty() && liveId == null)
@@ -105,7 +98,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 emptyList()
             }
         },
-        live, speech, query, UndoableActions.audioRemovalsPending,
+        live, modelState, query, UndoableActions.audioRemovalsPending,
     ) { (resultsQuery, results), _, model, typed, removals ->
         val session = RecordingState.live.value
         val terms = SearchText.terms(resultsQuery)
@@ -167,7 +160,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         const val SEARCH_DEBOUNCE_MS = 120L
         private const val MAX_QUERY_CHARS = 200
 
-        internal fun row(note: Note, live: LiveSession, speech: SpeechAvailability, removals: Set<String> = emptySet()): NoteRow {
+        internal fun row(
+            note: Note, live: LiveSession, speech: SpeechAvailability, removals: Set<String> = emptySet(), engineStopped: Boolean = false,
+        ): NoteRow {
             val phase = NotePhases.of(note, live, speech)
             // A removal waiting for its Undo snackbar already shows the note as text only.
             val audio = note.audioPresent && note.id !in removals
@@ -177,13 +172,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 progress = live.progress.takeIf { live.noteId == note.id && phase == NotePhase.TRANSCRIBING },
                 audioPresent = audio, failedParts = note.failedWindows,
                 canRemoveAudio = audio && note.state == NoteState.READY && phase == NotePhase.READY,
-                waitingReason = waitingReason(note, phase),
+                waitingReason = waitingReason(note, phase, engineStopped),
             )
         }
 
         /** A result's row; every word of its snippet that the query's [terms] match is a hit (spec 5.2). */
-        private fun searchRow(result: SearchResult, terms: List<String>, live: LiveSession, speech: SpeechAvailability, removals: Set<String>) = SearchRow(
-            row = row(result.note, live, speech, removals), paragraphId = result.paragraphId,
+        private fun searchRow(result: SearchResult, terms: List<String>, live: LiveSession, model: ModelState, removals: Set<String>) = SearchRow(
+            row = row(result.note, live, model.availability, removals, model.stopped), paragraphId = result.paragraphId,
             hitStart = result.hitStart, hitEnd = result.hitEnd, snippet = result.snippet,
             snippetHits = if (result.snippetHitStart < 0) emptyList() else SearchText.hits(result.snippet, terms),
         )

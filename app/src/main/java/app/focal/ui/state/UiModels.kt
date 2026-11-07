@@ -1,6 +1,7 @@
 package app.focal.ui.state
 
 import androidx.compose.runtime.Immutable
+import app.focal.FocalApplication
 import app.focal.core.Alignment
 import app.focal.core.Doubt
 import app.focal.core.TextWords
@@ -10,6 +11,11 @@ import app.focal.data.NoteState
 import app.focal.data.Paragraph
 import app.focal.recording.LiveSession
 import app.focal.recording.SpeechAvailability
+import app.focal.speech.ENGINE_STOPPED
+import app.focal.speech.ModelStatus
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * Where a note stands, as the UI names it. Derived from the stored note, the service's [LiveSession] and
@@ -69,11 +75,31 @@ enum class EndReason {
 }
 
 /**
- * Why a waiting note is not being transcribed: the store's error, except on an interrupted recording, whose message
- * only says its saved audio is still waiting (it is not a failure to show).
+ * Why a waiting note is not being transcribed: the speech work that stopped after killing the process or failing to
+ * load twice ([engineStopped], spec 5.4 "Model couldn't load", until Try again), else the store's error, except on an
+ * interrupted recording, whose message only says its saved audio is still waiting (it is not a failure to show).
  */
-fun waitingReason(note: Note, phase: NotePhase): String? =
-    note.error.takeIf { phase == NotePhase.WAITING && note.state != NoteState.INTERRUPTED && it.isNotBlank() }
+fun waitingReason(note: Note, phase: NotePhase, engineStopped: Boolean = false): String? = when {
+    phase != NotePhase.WAITING -> null
+    engineStopped && note.audioPresent -> ENGINE_STOPPED
+    else -> note.error.takeIf { note.state != NoteState.INTERRUPTED && it.isNotBlank() }
+}
+
+/**
+ * The speech model as notes see it: whether it can transcribe ([availability]), and whether the speech work [stopped]
+ * because it killed the process or failed to load twice in a row (the app's engine guard, until Try again).
+ */
+data class ModelState(val availability: SpeechAvailability, val stopped: Boolean = false)
+
+/** [ModelState] from the model install and the engine guard, changing only when one of them does. */
+fun FocalApplication.modelStates(): Flow<ModelState> = combine(models.status, engineGuard.blocked) { status, blocked ->
+    val availability = when (status) {
+        ModelStatus.Checking, is ModelStatus.Installing -> SpeechAvailability.PREPARING
+        is ModelStatus.Ready -> SpeechAvailability.READY
+        else -> SpeechAvailability.UNAVAILABLE
+    }
+    ModelState(availability, blocked)
+}.distinctUntilChanged()
 
 object NotePhases {
     fun of(note: Note, live: LiveSession, speech: SpeechAvailability): NotePhase = when {

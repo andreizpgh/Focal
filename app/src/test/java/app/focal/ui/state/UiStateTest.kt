@@ -94,6 +94,21 @@ class NotePhasesTest {
         assertEquals(NotePhase.ERROR, NotePhases.of(note(NoteState.ERROR), LiveSession(), ready))
     }
 
+    @Test fun aStoppedEngineIsTheReasonEveryWaitingNoteWaits() {
+        val interrupted = note(NoteState.INTERRUPTED).copy(error = "Recording was interrupted. Saved audio can still be transcribed.")
+        // An interrupted note's own message is not a failure to show.
+        assertNull(waitingReason(interrupted, NotePhase.WAITING))
+        // Once the speech work killed the process twice, every waiting note says why and offers Try again (spec 5.4).
+        assertTrue(waitingReason(interrupted, NotePhase.WAITING, engineStopped = true) != null)
+        assertTrue(waitingReason(note(NoteState.PROCESSING), NotePhase.WAITING, engineStopped = true) != null)
+        // Without audio there is nothing to transcribe again; a note that is not waiting has no reason.
+        assertNull(waitingReason(interrupted.copy(audioPresent = false), NotePhase.WAITING, engineStopped = true))
+        assertNull(waitingReason(note(NoteState.READY), NotePhase.READY, engineStopped = true))
+        assertNull(waitingReason(note(NoteState.PROCESSING), NotePhase.TRANSCRIBING, engineStopped = true))
+        // A stored failure on a note that is not merely interrupted still shows.
+        assertEquals("Out of memory", waitingReason(note(NoteState.PROCESSING).copy(error = "Out of memory"), NotePhase.WAITING))
+    }
+
     @Test fun reasonsMapFromTheStore() {
         assertEquals(PauseReason.CALL, PauseReason.of(CaptureReason.CALL))
         assertEquals(PauseReason.SILENCED, PauseReason.of(CaptureReason.MICROPHONE))

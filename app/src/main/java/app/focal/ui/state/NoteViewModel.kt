@@ -18,7 +18,6 @@ import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
 import app.focal.recording.SessionOperations
 import app.focal.recording.SpeechAvailability
-import app.focal.speech.ModelStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -91,13 +90,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         LiveKey(it.noteId, it.capturing, it.paused, it.processing, it.progress?.let { p -> (p * 100).toInt() }, it.speech)
     }.distinctUntilChanged()
 
-    private val speech: Flow<SpeechAvailability> = app.models.status.map {
-        when (it) {
-            ModelStatus.Checking, is ModelStatus.Installing -> SpeechAvailability.PREPARING
-            is ModelStatus.Ready -> SpeechAvailability.READY
-            else -> SpeechAvailability.UNAVAILABLE
-        }
-    }.distinctUntilChanged()
+    private val modelState: Flow<ModelState> = app.modelStates()
 
     private data class Loaded(val note: app.focal.data.Note?, val paragraphs: List<ParagraphUi>, val gaps: List<GapUi>,
                               val remainingMs: Long, val error: String?)
@@ -125,11 +118,11 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         }
     }.flowOn(Dispatchers.IO)
 
-    val state: StateFlow<NoteUiState> = combine(loaded, live, speech, UndoableActions.audioRemovalsPending) { data, liveKey, model, removals ->
+    val state: StateFlow<NoteUiState> = combine(loaded, live, modelState, UndoableActions.audioRemovalsPending) { data, liveKey, model, removals ->
         val note = data.note
         if (note == null) return@combine NoteUiState(noteId, loaded = true, missing = data.error == null, error = data.error)
         val session = RecordingState.live.value
-        val phase = NotePhases.of(note, session, model)
+        val phase = NotePhases.of(note, session, model.availability)
         val progress = when {
             phase == NotePhase.READY || phase == NotePhase.PARTIAL_FAILURE -> null
             liveKey.noteId == noteId && liveKey.processing -> session.progress
@@ -139,8 +132,8 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         val audio = note.audioPresent && noteId !in removals
         NoteUiState(
             noteId = noteId, loaded = true, title = note.title, titleIsCustom = note.titleIsCustom, created = note.created,
-            durationMs = note.duration, phase = phase, progress = progress, speech = if (liveKey.noteId == noteId) liveKey.speech else model,
-            waitingReason = waitingReason(note, phase),
+            durationMs = note.duration, phase = phase, progress = progress, speech = if (liveKey.noteId == noteId) liveKey.speech else model.availability,
+            waitingReason = waitingReason(note, phase, model.stopped),
             audioPresent = audio,
             canPlay = audio && !liveKey.capturing,
             editable = note.state == NoteState.READY && (phase == NotePhase.READY || phase == NotePhase.PARTIAL_FAILURE),
