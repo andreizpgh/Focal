@@ -1100,10 +1100,14 @@ private fun titleWake(title: FlightText, feather: Float): TitlePath? {
     return if (bottom <= top) null else TitlePath(top, bottom, feather, softBelow = true)
 }
 
-/** Folding into a row: the rows from the sinking title down to the row it lands on. */
+/**
+ * Folding into a row: the rows from the sinking title down to the line it lands on. The row it lands in is not
+ * ahead of it: the title stops on its own line, beside the duration and above the preview, so that row returns
+ * whole (its duration with its preview) with the other rows' `fadeFast`.
+ */
 private fun titleAhead(title: FlightText, feather: Float): TitlePath? {
     val top = title.flight.topLeft.y
-    val bottom = title.flight.originBottom
+    val bottom = title.flight.originTop
     return if (bottom <= top) null else TitlePath(top, bottom, feather, softBelow = false)
 }
 
@@ -1114,8 +1118,8 @@ private class OverlayPlacement {
 
 /**
  * The flying title in one frame. [pageTop] is the top of the page's own title, where the page's text begins (null
- * while the page has not laid it out: the title still holds at its origin); [originBottom] the bottom of the title
- * at its origin.
+ * while the page has not laid it out: the title still holds at its origin); [originTop] the top of the title at its
+ * origin, the line a folding title lands on.
  */
 private class Flight(
     val text: String,
@@ -1125,7 +1129,7 @@ private class Flight(
     val width: Float,
     val lines: Int,
     val pageTop: Float?,
-    val originBottom: Float,
+    val originTop: Float,
 )
 
 /** The rect of [of] in [into]'s space, unclipped. */
@@ -1190,7 +1194,7 @@ private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: La
         return Flight(
             text = originSlot.titleText, style = originStyle.copy(lineBreak = LineBreak.Heading),
             color = lerp(pageInkFor(muted), originInkFor(muted), if (row) 1f else f.material),
-            topLeft = from.topLeft, width = from.width, lines = originSlot.titleLines, pageTop = null, originBottom = from.bottom,
+            topLeft = from.topLeft, width = from.width, lines = originSlot.titleLines, pageTop = null, originTop = from.top,
         )
     }
     var to = overlay.rectOf(pageCoordinates)
@@ -1221,7 +1225,7 @@ private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: La
         width = lerp(to.width, from.width, p),
         lines = if (p < PageTransitions.HALF) pageTitle.lines else originSlot.titleLines,
         pageTop = to.top,
-        originBottom = from.bottom,
+        originTop = from.top,
     )
 }
 
