@@ -237,9 +237,12 @@ class ParserTest(unittest.TestCase):
         with self.assertRaisesRegex(release.ReleaseError, "no '## Phone validation'"):
             release.pending_phone_checks("# Testing\n")
 
-    def test_the_committed_testing_guide_lists_pending_phone_checks(self):
-        pending = release.pending_phone_checks((ROOT / "docs/testing.md").read_text(encoding="utf-8"))
-        self.assertGreater(len(pending), 5)
+    def test_a_validated_guide_needs_the_explicit_flag(self):
+        self.assertEqual(release.pending_phone_checks("## Phone validation\n\n- [x] Done.\n", allow_none=True), [])
+
+    def test_the_committed_testing_guide_parses(self):
+        pending = release.pending_phone_checks((ROOT / "docs/testing.md").read_text(encoding="utf-8"),
+                                               allow_none=True)
         self.assertTrue(all(":" in item and "\n" not in item and "  " not in item for item in pending))
 
 
@@ -342,8 +345,12 @@ class ArgumentTest(unittest.TestCase):
 
     def test_the_signed_apk_mode_needs_no_signing_material(self):
         with mock.patch.dict(release.os.environ, {}, clear=True):
-            args = release.parse_arguments(["--signed-apk", "x.apk", "--expected-cert", CERT.upper()])
+            args = release.parse_arguments(["--signed-apk", "x.apk", "--source-commit", "HEAD",
+                                            "--expected-cert", CERT.upper()])
         self.assertEqual(args.expected_cert, CERT)
+
+    def test_a_signed_apk_needs_its_source_commit(self):
+        self.assertIn("--signed-apk needs --source-commit", self.parse(["--expected-cert", CERT, "--signed-apk", "x.apk"], {}))
 
 
 if __name__ == "__main__":

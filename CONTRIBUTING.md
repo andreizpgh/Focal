@@ -147,7 +147,10 @@ key marks a testing build, not a store release; it never enters Git.
    read from the environment (`env:NAME`) or a file (`file:PATH`), never from the
    command line. `--skip-build` signs an APK already built from the same commit;
    `--signed-apk FILE --source-commit SHA` describes an APK that was signed and
-   tested earlier, without re-signing it.
+   tested earlier, without re-signing it. apksigner, aapt2 and zipalign come from
+   Android build-tools 35 or newer (`zipalign -P 16`); `--build-tools DIR` picks a
+   specific version. Once every phone check passes, `--phone-validated` records an
+   empty `not_established` list instead of refusing.
 3. Check it on emulators ([release checks](docs/testing.md#release-checks)):
    run the instrumented suite on the same commit, which tests that commit's
    debug build, not the release APK; run an emulator QA build of the commit

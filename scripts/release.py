@@ -215,7 +215,7 @@ def check_apk(path, model_lock):
             "model_files": sorted(locked)}
 
 
-def pending_phone_checks(markdown):
+def pending_phone_checks(markdown, allow_none=False):
     """The unchecked items of the '## Phone validation' section, prefixed with their group."""
     section = re.search(r"^## Phone validation\s*$(.*?)(?=^## |\Z)", markdown, re.MULTILINE | re.DOTALL)
     if not section:
@@ -240,8 +240,9 @@ def pending_phone_checks(markdown):
         elif current is not None:
             current.append(line.strip())
     close()
-    if not items:
-        raise ReleaseError("docs/testing.md lists no pending phone checks; refusing to claim none remain")
+    if not items and not allow_none:
+        raise ReleaseError("docs/testing.md lists no pending phone checks; pass --phone-validated "
+                           "only if every phone check really passed on the release APK")
     return items
 
 
@@ -397,9 +398,14 @@ def parse_arguments(argv):
     parser.add_argument("--build-tools", type=Path, metavar="DIR", help="Android build-tools directory to use")
     parser.add_argument("--out", type=Path, metavar="DIR", help="output directory, which must not exist "
                                                                "(default: build/release/vX.Y.Z)")
+    parser.add_argument("--phone-validated", action="store_true",
+                        help="every phone check in docs/testing.md is ticked for this APK: record an empty "
+                             "not_established list instead of refusing")
     parser.add_argument("--allow-dirty", action="store_true",
                         help="rehearse on a modified tree; the provenance then says clean: false. Never publish it")
     args = parser.parse_args(argv)
+    if args.signed_apk and not args.source_commit:
+        parser.error("--signed-apk needs --source-commit: name the commit the APK was built from")
     if args.source_commit and not (args.skip_build or args.signed_apk):
         parser.error("--source-commit needs --skip-build or --signed-apk: a fresh build is always of HEAD")
     if args.unsigned_apk and not args.skip_build:
@@ -511,7 +517,8 @@ def release(args):
             build={"by_script": built, "command": " ".join(GRADLE_COMMAND) if built else None,
                    "toolchain": toolchain(build_tools)},
             checks=checks,
-            not_established=pending_phone_checks((ROOT / "docs/testing.md").read_text(encoding="utf-8")),
+            not_established=pending_phone_checks((ROOT / "docs/testing.md").read_text(encoding="utf-8"),
+                                                 allow_none=args.phone_validated),
             created=datetime.now(timezone.utc),
         )
         (staging / provenance_name).write_text(json.dumps(provenance, indent=2, ensure_ascii=False) + "\n",
