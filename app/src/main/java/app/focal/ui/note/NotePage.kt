@@ -417,7 +417,11 @@ fun NotePage(
         }
     }
     DisposableEffect(page, session) {
-        page.editLog = { session.log() ?: page.restoredLog }
+        // With the focused field's draft: its last save (below) is still on its way when the state is saved.
+        page.editLog = {
+            val current = page.field?.takeIf { page.editing }
+            session.log(current?.id, current?.text?.text?.toString()) ?: page.restoredLog
+        }
         onDispose { page.editLog = { page.restoredLog } }
     }
     // The draft's last save outlives the page: when the activity stops (recreation included) and when the page goes,

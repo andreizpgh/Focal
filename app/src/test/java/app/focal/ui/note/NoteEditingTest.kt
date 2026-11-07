@@ -7,6 +7,9 @@ import app.focal.ui.library.LibraryDates
 import app.focal.ui.library.SpokenDateline
 import app.focal.ui.state.EditOutcome
 import app.focal.ui.state.ParagraphUi
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -271,6 +274,45 @@ class EditSessionTest {
         again.undo()
         assertEquals(listOf("Alpha.", "Beta."), again.shown(store))
         assertFalse(again.canUndo)
+    }
+
+    @Test fun aDraftStillBeingSavedIsTheSavedLogsNewestStep() = runBlocking {
+        val store = FakeStore("Alpha.", "Beta.")
+        var gate: CompletableDeferred<Unit>? = null
+        // The draft's last save as the page stops: its write has not returned when the state is saved.
+        val slow = object : EditBackend by store {
+            override suspend fun edit(id: Long, revision: Long, text: String): EditOutcome {
+                gate?.await()
+                return store.edit(id, revision, text)
+            }
+        }
+        val edit = EditSession(slow).also { it.begin(store.visible()) }
+        edit.save(1, "Alpha, typed.")
+        edit.save(1, "Alpha, typed twice.")
+        edit.undo()
+        assertTrue(edit.canRedo)
+        gate = CompletableDeferred()
+        val last = launch(start = CoroutineStart.UNDISPATCHED) { edit.save(1, " Alpha, typed later. ") }
+        val saved = edit.log(1, " Alpha, typed later. ")!!
+        val steps = listOf(EditStep.Text(1, "Alpha.", "Alpha, typed."), EditStep.Text(1, "Alpha, typed.", "Alpha, typed later."))
+        assertEquals(steps, saved.undo)
+        // A new step clears redo, as the save does.
+        assertEquals(emptyList<EditStep>(), saved.redo)
+        gate.complete(Unit)
+        last.join()
+        // Once the write has returned the save has logged it itself, and only once.
+        assertEquals(saved, edit.log(1, " Alpha, typed later. "))
+        // The recreated page finds the draft stored and logs nothing for it; Undo takes it back first, Redo returns it.
+        val again = EditSession(store).also { it.begin(store.visible(), EditLog.decode(ArrayList<Any?>(saved.encode()))) }
+        assertTrue(again.save(1, "Alpha, typed later."))
+        again.undo()
+        assertEquals(listOf("Alpha, typed.", "Beta."), again.shown(store))
+        again.undo()
+        assertEquals(listOf("Alpha.", "Beta."), again.shown(store))
+        again.redo()
+        again.redo()
+        assertEquals(listOf("Alpha, typed later.", "Beta."), again.shown(store))
+        assertFalse(again.canRedo)
     }
 
     @Test fun theSavedLogKeepsEveryKindOfStepAndOnlyTheNewestThatFit() {

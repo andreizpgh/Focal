@@ -182,8 +182,22 @@ class EditSession(private val backend: EditBackend) {
         failures = 0
     }
 
-    /** The running session's log, for the page's saved state. */
-    fun log(): EditLog? = if (started) EditLog(undoSteps.toList(), redoSteps.toList(), HashMap(alias)) else null
+    /**
+     * The running session's log, for the page's saved state. [draft], the focused field's text for paragraph
+     * [draftId], joins it as its newest step when the session has not stored it yet: the draft's last save starts as
+     * the page stops, and its step is logged only once the write returns, after the state has been saved. The
+     * restored page then finds that text already stored and logs nothing for it.
+     */
+    fun log(draftId: Long? = null, draft: String? = null): EditLog? {
+        if (!started) return null
+        // Read on the main thread, where every write's result is applied and logged in one go.
+        val stored = draftId?.let { paragraphLocked(it) }
+        val text = draft?.trim()
+        val pending = if (stored != null && text != null && text != stored.text) EditStep.Text(stored.id, stored.text, text) else null
+        // A new step clears redo, as the save will.
+        return if (pending == null) EditLog(undoSteps.toList(), redoSteps.toList(), HashMap(alias))
+        else EditLog(undoSteps.toList() + pending, emptyList(), HashMap(alias))
+    }
 
     /** Edit ended: the log goes; saved paragraphs stay laid over the state until it catches up ([sync]). */
     fun end() {
