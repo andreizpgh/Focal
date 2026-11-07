@@ -207,6 +207,7 @@ fun NotePage(
     val writes = actions.writes ?: ownWrites
     val life = remember { PageLife() }
     DisposableEffect(life) { onDispose { life.gone = true } }
+    val latestNote by rememberUpdatedState(note)
     val focus = page.focus
     val find = page.find
     val listFade = remember { Animatable(1f) }
@@ -399,6 +400,8 @@ fun NotePage(
         }
         focus.editingId = id
     }
+    // Edit starts in turn too: a Replace all still writing outside Edit lands first, and the field starts from its
+    // result, never from the words it replaced.
     fun enterEdit(at: CaretAt?) {
         if (!note.editable || page.editing) return
         val playingAt = focus.playingId?.takeIf { playingHere }?.let { id ->
@@ -410,9 +413,12 @@ fun NotePage(
             page.playerDismissed = true
         }
         page.menu = false
-        session.begin(paragraphs)
-        page.editing = true
-        (at ?: playingAt)?.let { focusField(it) }
+        write {
+            if (!latestNote.editable || page.editing) return@write
+            session.begin(session.paragraphs(latestNote.paragraphs).filter { it.text.isNotBlank() })
+            page.editing = true
+            (at ?: playingAt)?.let { focusField(it) }
+        }
     }
     fun exitEdit() {
         page.editing = false
@@ -426,10 +432,19 @@ fun NotePage(
     val saveFailed = stringResource(R.string.feedback_save_failed)
     // Done, Esc and Back store everything shown, as the writes before them left it: an undo or redo still writing (a
     // busy database holds it) reseeds the field first, so its text is never saved back over the undo as a new step.
+    // What is typed while Done's own write runs is stored too: Edit ends once a save finds the field as it started.
     fun done() {
         write {
-            if (session.save()) exitEdit()
-            else if (session.failures >= 2) scope.launch { bottom.feedback.show(saveFailed) }
+            while (true) {
+                val before = session.field()
+                if (!session.save()) {
+                    if (session.failures >= 2) scope.launch { bottom.feedback.show(saveFailed) }
+                    return@write
+                }
+                if (life.gone) return@write
+                if (session.field() == before) break
+            }
+            exitEdit()
         }
     }
     // Writes that changed the stored text under the field (Replace all, its Undo): the field takes the stored text
@@ -597,10 +612,12 @@ fun NotePage(
         }
         find.open(fromEdit = page.editing)
     }
+    // Back to Edit, the field shows what it held: Replace all and its Undo gave it the stored text in their own writes
+    // when nothing was typed since, and Find kept it from being typed in.
     fun closeFind() {
         val back = find.fromEdit
         find.close()
-        if (back) reseedField() else {
+        if (!back) {
             keyboard?.hide()
             focusManager.clearFocus()
         }

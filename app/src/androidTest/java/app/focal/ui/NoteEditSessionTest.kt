@@ -258,6 +258,27 @@ class NoteEditSessionTest {
         rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
     }
 
+    /**
+     * P5: Find opened from Edit while the store is busy, then closed before the draft's save could run: the field keeps
+     * the draft (it is not reseeded from the stored text), and the save stores it.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun closingFindWhileTheDraftIsStillSavingKeepsTheDraft() {
+        val store = EditStore(listOf(FIRST, SECOND))
+        rule.setContent { FocalTheme(dark = false) { Note(store, fieldId = 1, caret = FIRST.length) } }
+        connection()
+        val gate = CompletableDeferred<Unit>()
+        store.hold = gate
+        field().performTextReplacement(REVISED)
+        field().performKeyInput { keyDown(Key.CtrlLeft); pressKey(Key.F); keyUp(Key.CtrlLeft) }
+        press("Close find")
+        awaitField(REVISED)
+        release(store, gate)
+        awaitStore(store, listOf(REVISED, SECOND))
+        rule.waitForIdle()
+        awaitField(REVISED)
+    }
+
     /** S4: Undo of Enter pressed inside a word gives the word back, not its two parts joined with a space. */
     @OptIn(ExperimentalTestApi::class)
     @Test fun undoingEnterInsideAWordGivesTheWordBack() {
