@@ -62,6 +62,34 @@ class EngineGuardTest {
         dieInside(EngineStage.DECODE, crash = crash)
     }
 
+    /**
+     * The crash record names an out-of-memory however deep in the causes it is, and stops at a cycle of causes: it
+     * walks them in place (an ending process may have no memory left to allocate a sequence).
+     */
+    @Test fun theCrashRecordFindsAnOutOfMemoryAmongTheCausesWithoutLooping() {
+        val first = legacy()
+        val deep = (1..5).fold<Int, Throwable>(OutOfMemoryError("Failed to allocate")) { cause, level -> RuntimeException("Level $level", cause) }
+        first.dieInside(EngineStage.SEGMENT)
+        first.crashed(deep)
+        assertEquals(EngineStage.SEGMENT to EngineFault.MEMORY, legacy().lastFault())
+        val a = RuntimeException("A")
+        val b = IllegalStateException("B", a)
+        a.initCause(b)
+        val second = legacy()
+        second.dieInside(EngineStage.SEGMENT)
+        second.crashed(a)
+        assertEquals(EngineStage.SEGMENT to EngineFault.OTHER, legacy().lastFault())
+    }
+
+    /** A crash outside every stage is not the speech work's: nothing is recorded. */
+    @Test fun aCrashOutsideEveryStageRecordsNothing() {
+        val first = legacy()
+        first.enter(EngineStage.DECODE)
+        first.leave(EngineStage.DECODE)
+        first.crashed(OutOfMemoryError("Elsewhere"))
+        assertEquals(1, crashRecord.readLines().size)
+    }
+
     @Test fun aProcessThatDiedInsideAStageCountsOneDeathThere() {
         process().dieInside(EngineStage.DECODE)
         val next = process()

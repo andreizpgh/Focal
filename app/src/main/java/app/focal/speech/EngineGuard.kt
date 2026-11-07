@@ -298,12 +298,23 @@ class EngineGuard @VisibleForTesting internal constructor(
 
     /**
      * An uncaught exception is ending this process (the default handler [open] installs): recorded while a stage runs,
-     * with whether it was an OutOfMemoryError. Writes bytes allocated in advance to the record opened in advance.
+     * with whether it was an OutOfMemoryError. Allocates nothing (the process may be out of memory): it walks the causes
+     * in place and writes bytes allocated in advance to the record opened in advance.
      */
     internal fun crashed(error: Throwable) {
         val out = crashOut ?: return
         if (!marked) return
-        val memory = generateSequence(error) { it.cause }.take(MAX_CAUSES).any { it is OutOfMemoryError }
+        var memory = false
+        var cause: Throwable? = error
+        var depth = 0
+        while (cause != null && depth < MAX_CAUSES) {
+            if (cause is OutOfMemoryError) {
+                memory = true
+                break
+            }
+            cause = cause.cause
+            depth++
+        }
         try {
             out.write(if (memory) OOM_LINE else JAVA_LINE)
         } catch (_: IOException) {

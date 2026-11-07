@@ -947,7 +947,7 @@ class RecordingService : Service() {
                         // and the guard counts a confirmed out-of-memory, as a load that failed.
                         Log.w(TAG, "Window ${window.index} ran out of memory", error)
                         runCatching { store.cancelDecode(window.id) }
-                        engine.outOfMemory()
+                        engine.outOfMemory(EngineStage.DECODE)
                         continue
                     } catch (error: Exception) {
                         if (error is CancellationException) { runCatching { store.cancelDecode(window.id) }; throw error }
@@ -969,7 +969,17 @@ class RecordingService : Service() {
                     continue
                 }
                 // Silero VAD's calls are a guarded stage too, marked only when a pass reaches the detector.
-                val planned = try { feed.advance(note.duration, finished = !live, legacy = note.legacy) } finally { engine.segmented() }
+                val planned = try { feed.advance(note.duration, finished = !live, legacy = note.legacy) }
+                catch (error: OutOfMemoryError) {
+                    // The bridge turns the runtime's bad_alloc into this, and it is no Exception: left to fly, it would
+                    // end the process after the stage was cleared, and nothing would count the death that the next
+                    // foreground start repeats. Counted as a confirmed out-of-memory instead, as a decode's is; the
+                    // recognizer goes to give the memory back. The pass is planned again from its last saved window.
+                    Log.w(TAG, "Segmentation ran out of memory", error)
+                    engine.outOfMemory(EngineStage.SEGMENT)
+                    if (live) throw IllegalStateException("Segmentation ran out of memory.", error)
+                    return Outcome.Blocked(engine.failure ?: "Saved audio can be transcribed later.", engine.cause)
+                } finally { engine.segmented() }
                 if (planned) continue
                 if (!live && feed.complete) {
                     if (pending != null) return Outcome.Blocked(engine.failure ?: "Saved audio can be transcribed later.", engine.cause)
@@ -1187,9 +1197,12 @@ class RecordingService : Service() {
             guard.completed(EngineStage.DECODE)
         }
 
-        /** A decode ran out of memory: the recognizer is released and the guard counts it (until Try again or a restart). */
-        fun outOfMemory() {
-            guard.failed(EngineStage.DECODE, EngineFault.MEMORY)
+        /**
+         * A decode or the speech detector at [stage] ran out of memory: the recognizer is released and the guard counts
+         * it (until Try again or a restart).
+         */
+        fun outOfMemory(stage: EngineStage) {
+            guard.failed(stage, EngineFault.MEMORY)
             failure = "Not enough free memory to transcribe right now."
             runCatching { decoder?.close() }
             decoder = null
