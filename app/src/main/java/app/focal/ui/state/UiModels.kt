@@ -112,11 +112,15 @@ fun waitingReason(note: Note, phase: NotePhase, model: ModelState = ModelState(S
         EngineFault.OTHER -> return WaitingReason.Failures
         null -> Unit
     }
-    if (model.availability == SpeechAvailability.READY) return null
     val stored = WaitCause.decode(note.error).takeIf { note.state == NoteState.INTERRUPTED }
+    val ready = model.availability == SpeechAvailability.READY
+    // The install failing now, then the cause the note stored (until it is tried again: a start clears it).
     return when (val cause = model.failure ?: stored) {
-        is WaitCause.ModelStorage -> WaitingReason.Storage(cause.shortBytes)
-        WaitCause.ModelInstall -> WaitingReason.Install
+        is WaitCause.ModelStorage -> WaitingReason.Storage(cause.shortBytes).takeUnless { ready }
+        WaitCause.ModelInstall -> WaitingReason.Install.takeUnless { ready }
+        // The speech work failed with the model ready: why, so the note offers Try again at once.
+        WaitCause.OutOfMemory -> WaitingReason.Memory
+        WaitCause.EngineFailed -> WaitingReason.Failures
         // The guard no longer stops the work (model.stop is null): the note resumes.
         WaitCause.EngineStopped, null -> null
     }

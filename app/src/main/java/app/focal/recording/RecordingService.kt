@@ -1186,6 +1186,8 @@ class RecordingService : Service() {
                     is OutOfMemoryError -> "Not enough free memory to transcribe right now."
                     else -> error.message ?: "The speech model could not load."
                 }
+                // A confirmed out-of-memory is named, and offers Try again, while the guard still allows the work.
+                if (error is OutOfMemoryError) cause = WaitCause.OutOfMemory
             } finally {
                 decoderAwake.set(processingNote != null); reconcileWake()
             }
@@ -1199,11 +1201,12 @@ class RecordingService : Service() {
 
         /**
          * A decode or the speech detector at [stage] ran out of memory: the recognizer is released and the guard counts
-         * it (until Try again or a restart).
+         * it (until Try again or a restart). The notes left waiting say so and offer Try again ([WaitCause.OutOfMemory]).
          */
         fun outOfMemory(stage: EngineStage) {
             guard.failed(stage, EngineFault.MEMORY)
             failure = "Not enough free memory to transcribe right now."
+            cause = WaitCause.OutOfMemory
             runCatching { decoder?.close() }
             decoder = null
         }
@@ -1217,6 +1220,8 @@ class RecordingService : Service() {
             lastFailedWindow = windowId
             if (++consecutiveFailures < BROKEN_AFTER_FAILURES) return
             failure = error.message ?: "Transcription failed."
+            // The notes left waiting say why and offer Try again, which loads the recognizer again.
+            cause = WaitCause.EngineFailed
             runCatching { decoder?.close() }
             decoder = null
         }

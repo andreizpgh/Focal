@@ -60,15 +60,29 @@ sealed interface WaitCause {
     /** The engine guard stopped the speech work after it killed the process or failed to load repeatedly. */
     data object EngineStopped : WaitCause
 
+    /**
+     * The recognizer or the speech detector ran out of memory while the guard still allows the work (one confirmed
+     * out-of-memory, not yet the guard's second): the recognizer was let go, and the note waits for Try again or the
+     * next foreground start.
+     */
+    data object OutOfMemory : WaitCause
+
+    /** Different windows failed one after another, so the recognizer was let go as broken; likewise. */
+    data object EngineFailed : WaitCause
+
     companion object {
         private const val STORAGE = "wait:model-storage:"
         private const val INSTALL = "wait:model-install"
         private const val ENGINE = "wait:engine-stopped"
+        private const val MEMORY = "wait:out-of-memory"
+        private const val FAILED = "wait:engine-failed"
 
         fun encode(cause: WaitCause): String = when (cause) {
             is ModelStorage -> STORAGE + cause.shortBytes.coerceAtLeast(0)
             ModelInstall -> INSTALL
             EngineStopped -> ENGINE
+            OutOfMemory -> MEMORY
+            EngineFailed -> FAILED
         }
 
         /** The cause [error] names, or null for a plain interruption (or any other text). */
@@ -77,6 +91,8 @@ sealed interface WaitCause {
             error.startsWith(STORAGE) -> error.removePrefix(STORAGE).toLongOrNull()?.takeIf { it >= 0 }?.let(::ModelStorage)
             error == INSTALL -> ModelInstall
             error == ENGINE -> EngineStopped
+            error == MEMORY -> OutOfMemory
+            error == FAILED -> EngineFailed
             else -> null
         }
     }

@@ -137,8 +137,27 @@ class NotePhasesTest {
         assertNull(waitingReason(interrupted.copy(audioPresent = false), NotePhase.WAITING, failedStorage))
     }
 
+    /**
+     * The recognizer let go with the model ready (one confirmed out-of-memory, or different windows failing in a row,
+     * before the guard stops anything): the note says why and offers Try again at once, until it is tried again.
+     */
+    @Test fun aWaitingNoteSaysWhyTheRecognizerWasLetGoWithTheModelReady() {
+        val ready = ModelState(SpeechAvailability.READY)
+        val memory = note(NoteState.INTERRUPTED).copy(error = WaitCause.encode(WaitCause.OutOfMemory))
+        val failed = note(NoteState.INTERRUPTED).copy(error = WaitCause.encode(WaitCause.EngineFailed))
+        assertEquals(WaitingReason.Memory, waitingReason(memory, NotePhase.WAITING, ready))
+        assertEquals(WaitingReason.Failures, waitingReason(failed, NotePhase.WAITING, ready))
+        // A start clears the stored cause (the note is PROCESSING, its error empty): nothing is said then.
+        assertNull(waitingReason(note(NoteState.PROCESSING), NotePhase.WAITING, ready))
+        // The guard's stop and an install failing now come first.
+        assertEquals(WaitingReason.Failures, waitingReason(memory, NotePhase.WAITING, ModelState(SpeechAvailability.READY, stop = EngineFault.OTHER)))
+        assertEquals(WaitingReason.Install, waitingReason(memory, NotePhase.WAITING,
+            ModelState(SpeechAvailability.UNAVAILABLE, failure = WaitCause.ModelInstall)))
+    }
+
     @Test fun waitCausesRoundTripThroughTheStore() {
-        for (cause in listOf(WaitCause.ModelStorage(0), WaitCause.ModelStorage(1_234_567_890_123), WaitCause.ModelInstall, WaitCause.EngineStopped))
+        for (cause in listOf(WaitCause.ModelStorage(0), WaitCause.ModelStorage(1_234_567_890_123), WaitCause.ModelInstall,
+            WaitCause.EngineStopped, WaitCause.OutOfMemory, WaitCause.EngineFailed))
             assertEquals(cause, WaitCause.decode(WaitCause.encode(cause)))
         // What older builds stored, and damaged values, are plain interruptions.
         for (text in listOf(null, "", "Saved audio needs transcription. Open the note to continue.", "wait:model-storage:",
