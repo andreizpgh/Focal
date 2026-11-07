@@ -290,9 +290,13 @@ private fun Shell(
                     shell.pages.beginPredictive(shell.current, edge)
                     pageSwap()
                 },
+                // One entry content for both layouts: a rememberSaveable is found again only at the place in the
+                // tree that saved it, so a page keeps its state across a turn between one pane and two only if it
+                // sits at the same place in both.
                 entryProvider = { key ->
-                    if (!twoPane) NavEntry(key, contentKey = key.toString()) { PageFrame(key, shell.pages) { destination(key) } }
-                    else NavEntry(key, contentKey = DetailKey.of(key)) { DetailEntry(key, shell, colors.paper, destination) }
+                    NavEntry(key, contentKey = if (twoPane) DetailKey.of(key) else key.toString()) {
+                        PageEntry(key, shell, twoPane, colors.paper, destination)
+                    }
                 },
             )
             if (twoPane) pageStates.SaveableStateProvider(Destination.Library.toString()) { ListPane(shell, destination) }
@@ -312,38 +316,37 @@ private object DetailKey {
 }
 
 /**
- * One entry of the two-pane display: a note in the detail pane, moving with the settings strip as the rest of the
- * window does (spec 4.23.7: the whole window slides) and rounding its seam-side corners with the library's; the
- * licences on paper over the whole window; nothing for the library itself, whose page is in its own pane.
+ * One entry of the display, the same composable in both layouts (see the display's entry provider). In one pane the
+ * page as it is. In two: a note in the detail pane, moving with the settings strip as the rest of the window does
+ * (spec 4.23.7: the whole window slides) and rounding its seam-side corners with the library's; the licences on paper
+ * over the whole window; nothing for the library itself, whose page is in its own pane.
  */
 @Composable
-private fun DetailEntry(key: Destination, shell: ShellState, paper: Color, destination: @Composable (Destination) -> Unit) {
-    when (key) {
-        Destination.Library -> Unit
-        Destination.Licenses -> Box(Modifier.fillMaxSize().background(paper)) { PageFrame(key, shell.pages) { destination(key) } }
-        is Destination.Note -> {
-            val strip = shell.settings
-            val behindSettings by remember(strip) { derivedStateOf { strip.progress.value >= 1f } }
-            val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-            val reduced = LocalReducedMotion.current
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(start = WindowLayout.listPane)
-                    .inert(behindSettings)
-                    .graphicsLayer {
-                        val s = strip.progress.value
-                        if (reduced) alpha = 1 - smoothstep(0f, HALF, s) else {
-                            // The window's travel: this pane's right edge is the window's, as the library layer's is.
-                            val window = size.width + WindowLayout.listPane.toPx()
-                            translationX = (if (rtl) 1 else -1) * s * settingsTravel(window, this)
-                            clip = s > 0f && s < 1f
-                            shape = if (clip) SeamSideShape(FocalShapes.sheetRadius, seamAtEnd = true) else RectangleShape
-                        }
-                    },
-            ) { PageFrame(key, shell.pages) { destination(key) } }
-        }
+private fun PageEntry(key: Destination, shell: ShellState, twoPane: Boolean, paper: Color, destination: @Composable (Destination) -> Unit) {
+    if (twoPane && key == Destination.Library) return
+    val strip = shell.settings
+    val behindSettings by remember(strip) { derivedStateOf { strip.progress.value >= 1f } }
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val reduced = LocalReducedMotion.current
+    val frame = when {
+        !twoPane -> Modifier
+        key is Destination.Note -> Modifier
+            .fillMaxSize()
+            .padding(start = WindowLayout.listPane)
+            .inert(behindSettings)
+            .graphicsLayer {
+                val s = strip.progress.value
+                if (reduced) alpha = 1 - smoothstep(0f, HALF, s) else {
+                    // The window's travel: this pane's right edge is the window's, as the library layer's is.
+                    val window = size.width + WindowLayout.listPane.toPx()
+                    translationX = (if (rtl) 1 else -1) * s * settingsTravel(window, this)
+                    clip = s > 0f && s < 1f
+                    shape = if (clip) SeamSideShape(FocalShapes.sheetRadius, seamAtEnd = true) else RectangleShape
+                }
+            }
+        else -> Modifier.fillMaxSize().background(paper)
     }
+    Box(frame) { PageFrame(key, shell.pages) { destination(key) } }
 }
 
 /**
