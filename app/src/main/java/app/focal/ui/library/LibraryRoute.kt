@@ -8,8 +8,11 @@ import android.content.Intent
 import android.os.Build
 import android.os.PersistableBundle
 import android.text.format.Formatter
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -40,11 +43,35 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
+ * The library page's saved state: its list's place, search's, the search results' place and an inline rename. The app
+ * keeps it above the shell's layout ([rememberLibraryPageStates]): one pane composes the library in the back stack's
+ * display, two panes in a pane of its own, and a rememberSaveable is found again only at the place in the tree that
+ * saved it, so state remembered inside the page would not survive a turn between the two (spec 5.14).
+ */
+@Stable
+class LibraryPageStates internal constructor(
+    val list: LazyListState,
+    val searchList: LazyListState,
+    val search: LibrarySearchState,
+    val rename: LibraryRenameState,
+)
+
+@Composable
+fun rememberLibraryPageStates(): LibraryPageStates {
+    val list = rememberLazyListState()
+    val searchList = rememberLazyListState()
+    val search = rememberLibrarySearchState()
+    val rename = rememberLibraryRenameState()
+    return remember(list, searchList, search, rename) { LibraryPageStates(list, searchList, search, rename) }
+}
+
+/**
  * The Library destination: the library page and the settings page beside it, from the activity's view models.
- * [record] runs Record's permission flow; [sheetOpen] (the rationale sheet) keeps the peek away.
+ * [record] runs Record's permission flow; [sheetOpen] (the rationale sheet) keeps the peek away; [states] is the
+ * page's saved state.
  */
 @Composable
-fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
+fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, states: LibraryPageStates = rememberLibraryPageStates()) {
     val shell = LocalShell.current
     val context = LocalContext.current
     val application = context.applicationContext as FocalApplication
@@ -140,7 +167,12 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter) {
         capturing = model.live != null,
         blocked = sheetOpen,
         layer = layer,
-        library = { LibraryPage(model, search, meter, dates, today, actions, stageFocus = stageFocus, liveSeconds = { liveSeconds.value }) },
+        library = {
+            LibraryPage(
+                model, search, meter, dates, today, actions, listState = states.list, searchState = states.search,
+                stageFocus = stageFocus, liveSeconds = { liveSeconds.value }, rename = states.rename, searchList = states.searchList,
+            )
+        },
         settings = {
             SettingsRoute(
                 onBack = { scope.launch { shell.settings.close(reduced) } },

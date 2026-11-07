@@ -15,6 +15,7 @@ import app.focal.ui.components.LiveMeter
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.library.LibraryRoute
+import app.focal.ui.library.rememberLibraryPageStates
 import app.focal.ui.note.NoteRoute
 import app.focal.ui.scene.SceneEffects
 import app.focal.ui.scene.SceneRoute
@@ -56,6 +57,9 @@ private fun FocalAppContent(preferences: Preferences, commands: Flow<ShellComman
             recording.record()
             if (!running && !shell.live.visible) scope.launch { shell.record(fromEmpty = library.state.value.empty, reduced) }
         }
+        // The library's saved state lives here, above the layout: one pane and two compose the library at different
+        // places in the tree, and a rememberSaveable is found again only where it was saved.
+        val libraryStates = rememberLibraryPageStates()
         SystemBarsEffect(shell.bars, dark)
         ShellCommands(shell, commands)
         AppEffects(shell, library, recording, recordFlow::record)
@@ -64,7 +68,7 @@ private fun FocalAppContent(preferences: Preferences, commands: Flow<ShellComman
             shell,
             destination = { destination ->
                 when (destination) {
-                    Destination.Library -> LibraryRoute(recordFlow::record, sheetOpen = recordFlow.sheet != null, meter = meter)
+                    Destination.Library -> LibraryRoute(recordFlow::record, sheetOpen = recordFlow.sheet != null, meter = meter, states = libraryStates)
                     is Destination.Note -> NoteRoute(
                         destination, scope,
                         // The page develops under the settling scene (T7) or out of the live stage (T7b).

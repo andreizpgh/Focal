@@ -37,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -56,6 +57,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.focal.R
@@ -149,6 +152,7 @@ fun LibraryPage(
     /** The live recording's whole seconds, read only by the live stage's timer (null: the model's own). */
     liveSeconds: (() -> Long)? = null,
     rename: LibraryRenameState = rememberLibraryRenameState(),
+    searchList: LazyListState = rememberLazyListState(),
 ) {
     val shell = LocalShell.current
     val bottom = shell.bottom
@@ -158,7 +162,6 @@ fun LibraryPage(
     var renaming by rename::noteId
     val renameBounds = remember { RenameBounds() }
     val imeVisible = WindowInsets.isImeVisible
-    val searchList = rememberLazyListState()
     val density = LocalDensity.current
 
     SyncQuery(query, actions.query)
@@ -228,6 +231,9 @@ fun LibraryPage(
         CompositionLocalProvider(LocalTextSelectionColors provides selection) {
             RenameField(
                 initial = row.title,
+                // Kept with the rename's state, above the list (a row's own saved state stays with its place).
+                draft = rename.draft,
+                onDraft = { rename.draft = it },
                 style = if (onStage) FocalType.headline else FocalType.rowTitle,
                 color = if (onStage) colors.stageInk else colors.ink,
                 caret = if (onStage) colors.stageInk else colors.ink,
@@ -527,13 +533,33 @@ private fun Modifier.blockTouches(): Modifier = pointerInput(Unit) {
     }
 }
 
-/** Which note's title is renamed in place (the stage's or a row's), if any; kept across recreation. */
+/**
+ * Which note's title is renamed in place (the stage's or a row's), if any, and what its field holds so far; kept
+ * across recreation.
+ */
 @Stable
-class LibraryRenameState internal constructor(noteId: String?) {
-    var noteId by mutableStateOf(noteId)
+class LibraryRenameState internal constructor(noteId: String?, draft: TextFieldValue? = null) {
+    private var renamed by mutableStateOf(noteId)
+
+    /** A rename of another note (or none) starts again from the title. */
+    var noteId: String?
+        get() = renamed
+        set(value) {
+            if (value != renamed) draft = null
+            renamed = value
+        }
+
+    /** The rename's text and selection so far; null until it is first edited (the title, all selected). */
+    var draft by mutableStateOf(draft)
 
     companion object {
-        val Saver: Saver<LibraryRenameState, String> = Saver(save = { it.noteId }, restore = { LibraryRenameState(it) })
+        val Saver: Saver<LibraryRenameState, Any> = listSaver(
+            save = { listOf(it.noteId, it.draft?.text, it.draft?.selection?.start, it.draft?.selection?.end) },
+            restore = { saved ->
+                val text = saved[1] as String?
+                LibraryRenameState(saved[0] as String?, text?.let { TextFieldValue(it, TextRange(saved[2] as Int, saved[3] as Int)) })
+            },
+        )
     }
 }
 

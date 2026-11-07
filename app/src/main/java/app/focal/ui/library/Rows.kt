@@ -331,9 +331,12 @@ fun RenameField(
     onCommit: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: (@Composable () -> Unit)? = null,
+    /** Where the caller keeps the field's text instead of this field's own saved state ([onDraft] hears each change). */
+    draft: TextFieldValue? = null,
+    onDraft: (TextFieldValue) -> Unit = {},
 ) {
     var value by rememberSaveable(stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(TextFieldValue(initial, selection = TextRange(0, initial.length)))
+        mutableStateOf(draft ?: TextFieldValue(initial, selection = TextRange(0, initial.length)))
     }
     val focus = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
@@ -346,7 +349,10 @@ fun RenameField(
     LaunchedEffect(Unit) { focus.requestFocus() }
     BasicTextField(
         value = value,
-        onValueChange = { value = it.copy(text = it.text.replace('\n', ' ')) },
+        onValueChange = {
+            value = it.copy(text = it.text.replace('\n', ' '))
+            onDraft(value)
+        },
         textStyle = style.copy(color = color),
         cursorBrush = SolidColor(caret),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
