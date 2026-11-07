@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -42,6 +43,7 @@ import app.focal.data.Preferences
 import app.focal.ui.design.FocalFullMotion
 import app.focal.ui.design.FocalGestures
 import app.focal.ui.design.FocalGrid
+import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
@@ -350,7 +352,9 @@ private fun SettingsPeek(
 
 /**
  * The reduced-motion peek: the seam and the settings page's leading 32 dp at the window's end edge, faded in place
- * (the library does not move).
+ * (the library does not move). The library's text runs to 24 dp from that edge, so the seam would cut its last
+ * glyphs ("8 mi"): over the 24 dp before the seam the library fades to paper with it, and its ink ends on a soft edge
+ * where the moving peek's library ends (H1: never a clipped glyph).
  */
 @Composable
 private fun EdgePeek(alpha: Animatable<Float, *>) {
@@ -364,6 +368,14 @@ private fun EdgePeek(alpha: Animatable<Float, *>) {
             val seam = SettingsStripState.seam.toPx()
             val radius = FocalShapes.sheetRadius.toPx()
             val left = if (rtl) 0f else size.width - reach
+            val soft = FocalLayout.gutter.toPx()
+            val clear = colors.paper.copy(alpha = 0f)
+            val edge = if (rtl) {
+                Brush.horizontalGradient(0f to colors.paper, 1f to clear, startX = reach, endX = reach + soft)
+            } else {
+                Brush.horizontalGradient(0f to clear, 1f to colors.paper, startX = left - soft, endX = left)
+            }
+            drawRect(edge, Offset(if (rtl) reach else left - soft, 0f), Size(soft, size.height), alpha = a)
             drawRect(colors.s2, Offset(left, 0f), Size(reach, size.height), alpha = a)
             val pageLeft = if (rtl) -radius else left + seam
             drawRoundRect(colors.paper, Offset(pageLeft, 0f), Size(reach - seam + radius, size.height), CornerRadius(radius), alpha = a)
