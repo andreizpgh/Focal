@@ -63,7 +63,6 @@ import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -117,7 +116,7 @@ import app.focal.ui.design.lineScale
 import app.focal.ui.scene.StageTranscript
 import app.focal.ui.scene.TimerText
 import app.focal.ui.scene.TranscriptInks
-import app.focal.ui.scene.rememberTimerStyles
+import app.focal.ui.scene.rememberSceneTimerStyles
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.Origin
 import app.focal.ui.shell.PageKey
@@ -487,7 +486,7 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter, seconds: () -> Long
     val density = LocalDensity.current
     // The scene's timer at the stage's size (spec 4.22.7), with the same reserved widths (R5): the morph scales one
     // into the other.
-    val timers = rememberTimerStyles(LocalWindowInfo.current.containerSize.width.toFloat())
+    val timers = rememberSceneTimerStyles()
     val timerColor = remember { ColorAnimatable(if (stage.paused) colors.stageRecede else Scene.hi) }
     LaunchedEffect(stage.paused, colors.stageRecede) { timerColor.animateTo(if (stage.paused) colors.stageRecede else Scene.hi, FocalMotion.develop()) }
     val badge = remember { Animatable(if (stage.paused) 1f else 0f) }

@@ -196,7 +196,7 @@ fun RecordingSurface(
     val window = LocalWindowInfo.current.containerSize
     val statusTop = WindowInsets.statusBars.getTop(density).toFloat()
     val navigationBottom = WindowInsets.navigationBars.getBottom(density).toFloat()
-    val timers = rememberTimerStyles(window.width.toFloat())
+    val timers = rememberSceneTimerStyles()
     val compact = density.fontScale >= SceneMetrics.COMPACT_FONT
     // The page area the scene's column keeps (spec 5.14: beside the rail; the whole window over two panes) and the one
     // Finish settles into.

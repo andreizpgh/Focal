@@ -421,11 +421,15 @@ private fun rememberDockAreas(shell: ShellState, layout: WindowLayout): DockArea
         // The list pane from the window's start edge (412 dp, or up to a hinge); the detail pane the rest after it.
         fun pane(width: Int, density: Density, detail: Float): ClosedFloatingPointRange<Float> =
             layout.paneSpan(width.toFloat(), page(width, density), detail, rtl, density)
+        // What the scene takes over two panes: the whole page area, or the detail pane beside a hinge that splits it,
+        // so its column and Pause | Finish never lie under the hinge.
+        fun whole(width: Int, density: Density): ClosedFloatingPointRange<Float> =
+            if (layout.split != null) pane(width, density, detail = 1f) else page(width, density)
         val landing = BottomArea { width, density -> pane(width, density, detail = 1f) }
-        val scene = BottomArea { width, density -> page(width, density) }
+        val scene = BottomArea { width, density -> whole(width, density) }
         val dock = BottomArea { width, density ->
             if (!layout.twoPane) return@BottomArea page(width, density)
-            val window = page(width, density)
+            val window = whole(width, density)
             val p = when {
                 live.landingNote != null -> 1 - live.landing.value
                 live.spatial -> live.expansion.value

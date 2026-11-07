@@ -14,7 +14,7 @@ import app.focal.ui.design.WindowLayout
 
 /** Which part of the window a page takes (spec 5.14). */
 enum class PageArea {
-    /** Settings and the licences: the whole window. */
+    /** Settings and the licences: the whole window, or the detail pane's side of a hinge that splits it. */
     Window,
 
     /** The library: beside the landscape rail; in two panes, the list pane at the start. */
@@ -27,7 +27,8 @@ enum class PageArea {
 /**
  * The side insets of a page's [area] (spec 5.14): the display cutout and a side navigation bar on either side, the
  * landscape rail on the end side of a page with a dock, and in two panes everything beside the library's pane (a
- * hinge and the detail pane after it). A page pads its content with them; the window's paper still runs under them.
+ * hinge and the detail pane after it). A page that takes the whole window keeps to the side after a hinge that splits
+ * it ([WindowLayout.windowStart]). A page pads its content with them; the window's paper still runs under them.
  */
 @Composable
 fun pageInsets(area: PageArea): WindowInsets {
@@ -48,6 +49,10 @@ fun pageInsets(area: PageArea): WindowInsets {
         area == PageArea.Library && layout.twoPane -> layout.width - layout.listPane
         layout.rail -> WindowLayout.railWidth
         else -> 0.dp
+    }
+    if (area == PageArea.Window && layout.windowStart > 0.dp) {
+        // The list pane's side and the hinge are left out; the window's edge is kept on the detail pane's side only.
+        return sides.only(end).add(if (rtl) WindowInsets(right = layout.windowStart) else WindowInsets(left = layout.windowStart))
     }
     if (beside <= 0.dp) return edges
     return edges.add(if (rtl) WindowInsets(left = beside) else WindowInsets(right = beside))

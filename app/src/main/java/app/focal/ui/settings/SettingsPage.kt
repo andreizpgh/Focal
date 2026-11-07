@@ -182,7 +182,8 @@ fun SettingsPage(
 
 /**
  * The bar of the settings and licences pages (spec 4.1.4): ← "Back" at x 12-60 only; the page title collapses into
- * it (`rowTitle`, fading on `fade`) once the content title has scrolled under the bar.
+ * it (`rowTitle`, fading on `fade`) once the content title has scrolled under the bar. Beside a hinge that splits the
+ * window it keeps to the page's side, after the hinge ([app.focal.ui.design.WindowLayout.windowStart]).
  */
 @Composable
 fun TopBar(title: String, onBack: () -> Unit, collapsed: () -> Boolean) {
@@ -194,6 +195,7 @@ fun TopBar(title: String, onBack: () -> Unit, collapsed: () -> Boolean) {
         Modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(start = LocalWindowLayout.current.windowStart)
             .height(LocalWindowLayout.current.topBar),
         contentAlignment = Alignment.CenterStart,
     ) {

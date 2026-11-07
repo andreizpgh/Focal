@@ -72,7 +72,9 @@ data class Hinge(val start: Dp, val end: Dp) {
  * the dock in a 96 dp rail at the end edge, the top bar at 48 dp and the recording scene in two columns. From 840 dp
  * wide (and not short) the library and a note sit side by side: the list pane takes the window's first 412 dp, or, on
  * a [hinge] that leaves both sides at least [MIN_PANE], everything up to the hinge, with the note after it, so neither
- * pane lies across it. Every content column is at most 600 dp, centred.
+ * pane lies across it. What takes the whole window (settings, the licences, the recording scene and its dock) then
+ * keeps to the detail pane's side ([windowStart]), so no text or control lies under the hinge either. Every content
+ * column is at most 600 dp, centred.
  */
 @Immutable
 data class WindowLayout(val width: Dp, val height: Dp, val hinge: Hinge? = null) {
@@ -84,8 +86,15 @@ data class WindowLayout(val width: Dp, val height: Dp, val hinge: Hinge? = null)
     val topBar: Dp get() = if (rail) FocalGrid.x48 else FocalLayout.topBar
 
     /** The hinge the two panes split at, if they do and it leaves each of them room. */
-    private val split: Hinge?
+    val split: Hinge?
         get() = hinge?.takeIf { twoPane && it.start <= it.end && it.start >= MIN_PANE && width - it.end >= MIN_PANE }
+
+    /**
+     * Where a page that takes the whole window (settings, the licences, the recording scene) starts, from the window's
+     * start edge: after a hinge that splits the panes (the detail pane's side; a column centred in the whole window
+     * would lie across the hinge), else at the edge.
+     */
+    val windowStart: Dp get() = split?.end ?: 0.dp
 
     /** The list pane's width from the window's start edge (two panes). */
     val listPane: Dp get() = split?.start ?: LIST_PANE

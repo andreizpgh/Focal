@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -88,6 +89,11 @@ object AdaptiveShots {
         addAll(sized("wide-hinge-note", Wide) { TwoPanes(note = design(), hinge = HingeWidth) })
         add(sized("wide-hinge-library", Wide, dark = false) { TwoPanes(note = null, hinge = HingeWidth) })
         add(sized("wide-hinge-note-rtl", Wide, dark = false) { Rtl { TwoPanes(note = design(), hinge = HingeWidth) } })
+        // What takes the whole window keeps to the note's side of the hinge: the scene's column and Pause | Finish, and
+        // settings.
+        add(sized("wide-hinge-scene", Wide, dark = false) { TwoPanes(note = null, scene = live(), hinge = HingeWidth) })
+        add(sized("wide-hinge-settings", Wide, dark = false) { TwoPanes(note = design(), settings = true, hinge = HingeWidth) })
+        add(sized("wide-hinge-scene-rtl", Wide, dark = false) { Rtl { TwoPanes(note = null, scene = live(), hinge = HingeWidth) } })
     }
 }
 
@@ -119,7 +125,8 @@ private fun TwoPanes(note: NoteUiState?, scene: SceneUi? = null, settings: Boole
             }
         }
         TwoPanesShell(note, scene, settings, features)
-        Box(Modifier.absoluteOffset(x = (maxWidth - hinge) / 2).width(hinge).fillMaxHeight().background(Color.Black))
+        // From the left edge in either direction: the reported hinge is in the window's own pixels.
+        Box(Modifier.align(AbsoluteAlignment.TopLeft).absoluteOffset(x = (maxWidth - hinge) / 2).width(hinge).fillMaxHeight().background(Color.Black))
     }
 }
 

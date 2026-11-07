@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -24,6 +25,7 @@ import app.focal.ui.components.Mark
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalType
+import app.focal.ui.design.LocalWindowLayout
 import app.focal.ui.library.Lengths
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -88,7 +90,18 @@ class TimerStyles(
     fun stageWidth(seconds: Long): Float = stageWidths[TimerMetrics.template(seconds)]
 }
 
-/** The timer styles for the current density and font scale, the scene's sized to the window's text column. */
+/**
+ * The timer styles for the scene's column: the window's, or the detail pane's beside a hinge that splits two panes
+ * (where the scene keeps to that side). The stage and the scene measure the same, so the timer morphs between them.
+ */
+@Composable
+fun rememberSceneTimerStyles(): TimerStyles {
+    val window = LocalWindowInfo.current.containerSize.width.toFloat()
+    val start = with(LocalDensity.current) { LocalWindowLayout.current.windowStart.toPx() }
+    return rememberTimerStyles(window - start)
+}
+
+/** The timer styles for the current density and font scale, the scene's sized to the text column of [windowWidth]. */
 @Composable
 fun rememberTimerStyles(windowWidth: Float): TimerStyles {
     val density = LocalDensity.current

@@ -62,6 +62,18 @@ class WindowLayoutTest {
         assertEquals(Hinge(580.dp, 604.dp), Hinge.of(500.dp, 524.dp, 1104.dp, rtl = true))
     }
 
+    /** What takes the whole window keeps to the detail pane's side of a hinge that splits the panes (spec 5.14). */
+    @Test fun wholeWindowPagesKeepToOneSideOfAHinge() {
+        val book = WindowLayout(1104.dp, 800.dp, Hinge(540.dp, 564.dp))
+        assertEquals(564.dp, book.windowStart)
+        assertEquals(book.detailStart, book.windowStart)
+        // No hinge, a hinge the panes do not split at, one pane: the whole window.
+        assertEquals(0.dp, WindowLayout(1280.dp, 800.dp).windowStart)
+        assertEquals(0.dp, WindowLayout(1000.dp, 800.dp, Hinge(300.dp, 300.dp)).windowStart)
+        assertEquals(0.dp, WindowLayout(800.dp, 900.dp, Hinge(400.dp, 400.dp)).windowStart)
+        assertEquals(0.dp, WindowLayout(1104.dp, 470.dp, Hinge(540.dp, 564.dp)).windowStart)
+    }
+
     /** Where the bottom column stands in each pane (spec 5.14), and between them while it crosses. */
     @Test fun thePanesSpansFollowTheHinge() {
         val density = Density(1f)
