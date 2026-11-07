@@ -150,7 +150,8 @@ class EngineGuardServiceTest {
         assertEquals(mapOf(EngineStage.DECODE to 1), guard.deaths())
         assertFalse("One death after Try again stops the work again", guard.allows())
 
-        // The person's Try again forgets the deaths and transcribes the note.
+        // The person's Try again forgets the deaths and transcribes the note, then every other note that waited
+        // while the work was stopped (the recording made meanwhile), with no foreground start to send DRAIN.
         dying = false
         send(RecordingService.RECOVER, waiting, retryFailed = true)
         await("Ready after Try again", 60_000) {
@@ -159,6 +160,10 @@ class EngineGuardServiceTest {
         assertTrue(guard.allows())
         assertEquals(emptyMap<EngineStage, Int>(), guard.deaths())
         assertTrue(store.paragraphs(waiting).isNotEmpty())
+        await("The other waiting note ready after Try again", 60_000) {
+            store.note(recording)?.state == NoteState.READY && !SessionOperations.matchesSession(false, recording)
+        }
+        assertTrue(store.paragraphs(recording).isNotEmpty())
     }
 
     /**

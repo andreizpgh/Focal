@@ -197,13 +197,16 @@ class EngineGuard @VisibleForTesting internal constructor(
      * The person's Try again: every count is forgotten and the speech work may start again, for one attempt. Until a
      * decode completes, one death or failed load blocks the guard again at once. A crash that happens every time then
      * costs one process per Try again: the next launch stays blocked instead of resuming the work and crashing again.
+     * True when the guard was blocked: the work it held back, every waiting note's, may go on.
      */
-    fun reset() = synchronized(lock) {
-        if (deaths.isEmpty()) return@synchronized
+    fun reset(): Boolean = synchronized(lock) {
+        val wasBlocked = blockedState.value
+        if (deaths.isEmpty()) return@synchronized wasBlocked
         if (blocking() > 0) retried = true
         deaths.clear()
         write()
         publish()
+        wasBlocked
     }
 
     /** Device tests: forgets every count and any Try again, as on a fresh install. */

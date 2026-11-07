@@ -223,7 +223,7 @@ class RecordingService : Service() {
             }
             // The user's Retry forgets the speech work's deaths and failed loads, then tries a failed model install
             // again, before the worker looks at either.
-            app.engineGuard.reset()
+            val unblocked = app.engineGuard.reset()
             app.models.retry()
             engineRetry = true
             notifications.cancelTimedOut()
@@ -234,7 +234,13 @@ class RecordingService : Service() {
                 } catch (error: Exception) { Log.w(TAG, "Could not reset failed windows", error) }
                 finally {
                     // Queued only now, so the worker never sees the note before its failed windows are pending.
-                    synchronized(workLock) { requested += noteId; pendingRequests-- }
+                    synchronized(workLock) {
+                        requested += noteId; pendingRequests--
+                        // Try again lifted the guard's block, which had kept every waiting note from resuming (the
+                        // foreground start sent no DRAIN): they follow this one, also those it set aside meanwhile.
+                        // RECOVER comes only from the visible app, as DRAIN must.
+                        if (unblocked) { skipped.clear(); drainWaiting = true; drainRequested = true }
+                    }
                 }
                 ensureWorker()
             }
