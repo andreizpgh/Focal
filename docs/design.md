@@ -1,9 +1,12 @@
 # Design
 
 Focal's interface is built around one job: speak, see the text, copy it. This
-page condenses the design system. The tokens live in code under
-`app/src/main/java/app/focal/ui/design`, which is the source of truth when the two
-differ.
+page condenses the approved [design specification](design-spec.md), which holds
+every measurement, state, transition and string, and which code comments cite
+by section ("spec 4.22.4"). The tokens live in code under
+`app/src/main/java/app/focal/ui/design`, which is the source of truth when this
+summary and the code differ. Where the app departs from the specification, the
+difference is listed under [Known deviations](#known-deviations).
 
 ## Principles
 
@@ -228,3 +231,47 @@ shown inverted and scrolled into view. Replace all is one undoable step.
   and the find rows wrap, and the scene's instrument becomes compact so live text
   stays visible.
 - **Reduced motion** is respected as described above.
+
+## Known deviations
+
+The current app departs from the specification in these known ways. The accepted
+ones stand in for amendments to the specification.
+
+**Accepted**
+
+- **Landscape and large screens** (spec 5.14). Paused, the landscape rail keeps a
+  labelled Resume. In a short window the find rows sit side by side, or in one
+  row on a narrower phone. An empty landscape bottom column ends in a 16 dp fade.
+  The landscape stage shows whole lines by 4.22.4's rule, so two under a
+  one-line title, not 4.22.1's one. Two panes split at a separating vertical
+  hinge, with settings and the scene on the detail side.
+- **Live text in the scene** starts at the top of its region and is
+  bottom-anchored once it overflows (6.4 says bottom-anchored). While "↓ Latest"
+  shows, the text fades out 8 dp above it.
+- **Page transitions** (T16, T16′). The page's text appears only once the flying
+  title has passed it, the page's chrome leaves before the stage's own text
+  returns, and paper covers the library under the clip. The live stage's top
+  mask grows with the font size.
+- **Copy** centres "Copy" in its pill; "Copied" starts at the same place, so it
+  sits up to 6.5 dp right of centre while it shows (4.5.1 reserves the wider
+  label's slot instead).
+- **The menu divider** in the dark theme is `#303030`: the specified `line`
+  color is the menu's own `#222222` (2.1).
+- **Right to left.** Text takes its direction from its content, so English
+  interface text reads left to right in a mirrored layout, and a note's title and
+  meta follow the transcript (8.5).
+- **Waiting notes** give more reasons than 5.4's memory sentence: repeated
+  failures, too little storage to prepare the speech model, a model that could
+  not be prepared, and a damaged model, which asks to reinstall Focal and offers
+  no Try again.
+- **Licenses** also list Focal itself and the Silero VAD model (5.10).
+- **The launcher shortcut** opens a private `ShortcutActivity` rather than
+  `MainActivity`, so no other app can start the microphone (5.13).
+- **The peek's flags** are kept in SharedPreferences, not DataStore (4.23.5). The
+  first-text hint shows while the library holds fewer than three notes, because
+  no recording count is stored (2.8.3).
+
+**Not resolved**
+
+- Under reduced motion, page changes snap, including stage ↔ page (T16′) and
+  Finish from the library dock (T7b), where 2.8.4 asks for a 150 ms crossfade.
