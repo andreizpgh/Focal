@@ -45,6 +45,7 @@ import androidx.compose.ui.zIndex
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import androidx.window.layout.DisplayFeature
 import app.focal.ui.components.BottomArea
 import app.focal.ui.components.BottomColumn
 import app.focal.ui.components.BottomColumnState
@@ -215,13 +216,15 @@ fun SceneBottom(dock: DockState, actions: DockActions) {
  * window's centre, a black dim of 0.30 p, spec 6.4); behind the open scene they are inert.
  *
  * The window's size picks the layout (spec 5.14, [WindowLayout]): a short window puts the dock in a rail beside the
- * pages; from 840 dp wide the library stays in its pane at the start and the back stack's note shows beside it.
+ * pages; from 840 dp wide the library stays in its pane at the start and the back stack's note shows beside it, split
+ * at a separating vertical fold or hinge among the window's [displayFeatures] (androidx.window) when there is one.
  */
 @Composable
 fun FocalShell(
     shell: ShellState,
     destination: @Composable (Destination) -> Unit,
     modifier: Modifier = Modifier,
+    displayFeatures: List<DisplayFeature> = emptyList(),
     scene: @Composable () -> Unit = {},
 ) {
     val colors = FocalTheme.colors
@@ -235,7 +238,9 @@ fun FocalShell(
     // between one pane and two).
     val pageStates = rememberSaveableStateHolder()
     BoxWithConstraints(modifier.fillMaxSize().background(colors.paper)) {
-        val layout = WindowLayout(maxWidth, maxHeight)
+        val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+        val hinge = remember(displayFeatures, maxWidth, density, rtl) { separatingHinge(displayFeatures, maxWidth, density, rtl) }
+        val layout = WindowLayout(maxWidth, maxHeight, hinge)
         SideEffect { shell.twoPane = layout.twoPane }
         CompositionLocalProvider(LocalShell provides shell, LocalWindowLayout provides layout, LocalDockAreas provides rememberDockAreas(shell, layout)) {
             Shell(shell, layout, pageStates, destination, scene)
@@ -329,17 +334,19 @@ private fun PageEntry(key: Destination, shell: ShellState, twoPane: Boolean, pap
     val behindSettings by remember(strip) { derivedStateOf { strip.progress.value >= 1f } }
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val reduced = LocalReducedMotion.current
+    // After the list pane, or after the hinge that ends it.
+    val detailStart = LocalWindowLayout.current.detailStart
     val frame = when {
         !twoPane -> Modifier
         key is Destination.Note -> Modifier
             .fillMaxSize()
-            .padding(start = WindowLayout.listPane)
+            .padding(start = detailStart)
             .inert(behindSettings)
             .graphicsLayer {
                 val s = strip.progress.value
                 if (reduced) alpha = 1 - smoothstep(0f, HALF, s) else {
                     // The window's travel: this pane's right edge is the window's, as the library layer's is.
-                    val window = size.width + WindowLayout.listPane.toPx()
+                    val window = size.width + detailStart.toPx()
                     translationX = (if (rtl) 1 else -1) * s * settingsTravel(window, this)
                     clip = s > 0f && s < 1f
                     shape = if (clip) SeamSideShape(FocalShapes.sheetRadius, seamAtEnd = true) else RectangleShape
@@ -411,15 +418,9 @@ private fun rememberDockAreas(shell: ShellState, layout: WindowLayout): DockArea
             val rail = if (layout.rail) WindowLayout.railWidth.toPx() else 0f
             if (rtl) (left + rail)..right else left..(right - rail)
         }
-        // The list pane is the window's first 412 dp from its start edge; the detail pane the rest.
-        fun pane(width: Int, density: Density, detail: Float): ClosedFloatingPointRange<Float> = with(density) {
-            val area = page(width, density)
-            if (!layout.twoPane) return area
-            val list = WindowLayout.listPane.toPx()
-            val listSpan = if (rtl) (width - list)..area.endInclusive else area.start..list
-            val detailSpan = if (rtl) area.start..(width - list) else list..area.endInclusive
-            lerp(listSpan.start, detailSpan.start, detail)..lerp(listSpan.endInclusive, detailSpan.endInclusive, detail)
-        }
+        // The list pane from the window's start edge (412 dp, or up to a hinge); the detail pane the rest after it.
+        fun pane(width: Int, density: Density, detail: Float): ClosedFloatingPointRange<Float> =
+            layout.paneSpan(width.toFloat(), page(width, density), detail, rtl, density)
         val landing = BottomArea { width, density -> pane(width, density, detail = 1f) }
         val scene = BottomArea { width, density -> page(width, density) }
         val dock = BottomArea { width, density ->

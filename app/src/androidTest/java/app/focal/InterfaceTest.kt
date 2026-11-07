@@ -4,6 +4,7 @@ import android.app.UiAutomation
 import android.content.ClipboardManager
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Rect
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.KeyEvent
@@ -14,6 +15,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -29,11 +31,16 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.window.layout.FoldingFeature
+import androidx.window.testing.layout.FoldingFeature
+import androidx.window.testing.layout.TestWindowLayoutInfo
+import androidx.window.testing.layout.WindowLayoutInfoPublisherRule
 import app.focal.data.NoteState
 import app.focal.data.NoteStore
 import app.focal.data.StoredWindow
@@ -76,6 +83,8 @@ import java.util.UUID
 @RunWith(AndroidJUnit4::class)
 class InterfaceTest {
     @get:Rule val compose = createEmptyComposeRule()
+    /** Stands in for the device's folds and hinges (androidx.window): none, unless a test publishes one. */
+    @get:Rule val folds = WindowLayoutInfoPublisherRule()
 
     private lateinit var app: FocalApplication
     private var scenario: ActivityScenario<MainActivity>? = null
@@ -790,6 +799,65 @@ class InterfaceTest {
         compose.onNode(hasText(words[0])).assertIsDisplayed()
     }
 
+    /**
+     * A foldable (spec 5.14): with a separating vertical hinge across a two-pane window, the library's pane ends at the
+     * hinge and the note, its dock with it, starts after it; a horizontal fold (tabletop) leaves the panes as the
+     * window's size has them. The hinge is simulated (androidx.window's testing publisher). Skipped on a display that
+     * does not change panes when turned (run it with `adb shell wm size 1600x2560`).
+     */
+    @Test fun aSeparatingHingeSplitsTheTwoPanesAtItself() {
+        assumeTurnChangesPanes()
+        val title = "Hinge fixture $tag"
+        val words = listOf("A synthetic paragraph beside a hinge.")
+        note(title, words)
+        launch()
+        turn(landscape = true)
+        val listed = hasContentDescription("Latest note. $title.", substring = true) or (hasText(title) and hasClickAction() and !isHeading())
+        await("the note in the library", listed)
+        compose.onAllNodes(listed)[0].performClick()
+        val heading = hasText(title) and isHeading()
+        await("the note beside the library", heading)
+        val copy = hasContentDescription("Copy") and hasClickAction()
+        await("the note's Copy", copy)
+        // No fold: the list pane is the window's first 412 dp, the note after it.
+        val unfolded = compose.onNode(heading).getBoundsInRoot().left
+        assertTrue("The note starts after 412 dp", unfolded >= 412.dp)
+        assertTrue("The library ends by 412 dp", compose.onAllNodes(listed)[0].getBoundsInRoot().right <= 412.dp)
+        // A 32 dp hinge across the window's middle, as the activity's window would report it.
+        var window = Rect()
+        var hinge: FoldingFeature? = null
+        scenario!!.onActivity { activity ->
+            val size = (HINGE_DP * activity.resources.displayMetrics.density).toInt()
+            hinge = FoldingFeature(activity, size = size, state = FoldingFeature.State.FLAT, orientation = FoldingFeature.Orientation.VERTICAL)
+            window = Rect(0, 0, activity.window.decorView.width, activity.window.decorView.height)
+        }
+        val feature = hinge!!
+        assertTrue("A hinge with a width separates", feature.isSeparating)
+        val density = app.resources.displayMetrics.density
+        val hingeStart = (feature.bounds.left / density).dp
+        val hingeEnd = (feature.bounds.right / density).dp
+        assumeTrue("Both sides of the hinge leave 360 dp", hingeStart >= 360.dp && (window.width() / density).dp - hingeEnd >= 360.dp)
+        val split = TestWindowLayoutInfo(listOf(feature))
+        compose.waitUntil(TIMEOUT_MS) {
+            // The publisher keeps nothing for a collector that starts later: publish until the layout follows.
+            folds.overrideWindowLayoutInfo(split)
+            compose.onNode(heading).getBoundsInRoot().left >= hingeEnd
+        }
+        val library = compose.onAllNodes(listed)[0].getBoundsInRoot()
+        assertTrue("The library ends before the hinge (${library.right} > $hingeStart)", library.right <= hingeStart)
+        assertTrue("The library widens up to the hinge (${library.right})", library.right > 412.dp || hingeStart <= 412.dp + 24.dp)
+        assertTrue("The note's dock starts after the hinge", compose.onNode(copy).getBoundsInRoot().left >= hingeEnd)
+        // A fold across the window (tabletop) changes nothing: the panes are as the window's size has them.
+        val tabletop = TestWindowLayoutInfo(
+            listOf(FoldingFeature(window, state = FoldingFeature.State.HALF_OPENED, orientation = FoldingFeature.Orientation.HORIZONTAL)),
+        )
+        compose.waitUntil(TIMEOUT_MS) {
+            folds.overrideWindowLayoutInfo(tabletop)
+            compose.onNode(heading).getBoundsInRoot().left < hingeStart
+        }
+        assertEquals(unfolded.value, compose.onNode(heading).getBoundsInRoot().left.value, 0.5f)
+    }
+
     /** A tablet turned with library search open (spec 5.2, 5.14): search stays open, its query and results with it. */
     @Test fun librarySearchStaysOpenAcrossATurnBetweenPanes() {
         assumeTurnChangesPanes()
@@ -991,5 +1059,7 @@ class InterfaceTest {
         const val REVISED = "The paragraph after a synthetic edit."
         const val DRAFT = "The paragraph after a synthetic edit, typed on."
         const val PARENT_STEPS = 3
+        /** The simulated hinge's width. */
+        const val HINGE_DP = 32
     }
 }

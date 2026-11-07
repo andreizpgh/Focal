@@ -169,6 +169,7 @@ dependencies {
     implementation(libs.navigation3.runtime)
     implementation(libs.navigation3.ui)
     implementation(libs.core.splashscreen)
+    implementation(libs.window)
     implementation(libs.coroutines.android)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
@@ -177,6 +178,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.window.testing)
 }
 
 val verifyUltraModel = tasks.register("verifyUltraModel") {

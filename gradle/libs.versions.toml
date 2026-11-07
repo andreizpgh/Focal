@@ -11,6 +11,8 @@ core-ktx = "1.19.1"
 coroutines = "1.11.0"
 navigation3 = "1.2.1"
 splashscreen = "1.2.0"
+# Added later for the two-pane split at a fold or hinge; its latest stable release.
+window = "1.5.1"
 junit = "4.13.2"
 androidx-test-runner = "1.7.0"
 androidx-test-ext = "1.3.0"
@@ -29,6 +31,8 @@ lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel
 navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "navigation3" }
 navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
 core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "splashscreen" }
+window = { module = "androidx.window:window", version.ref = "window" }
+window-testing = { module = "androidx.window:window-testing", version.ref = "window" }
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }

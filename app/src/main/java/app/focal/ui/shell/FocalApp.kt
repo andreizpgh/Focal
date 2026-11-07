@@ -77,6 +77,8 @@ private fun FocalAppContent(preferences: Preferences, commands: Flow<ShellComman
                     Destination.Licenses -> LicensesPage(onBack = shell::back)
                 }
             },
+            // A separating vertical fold or hinge splits two panes at itself (spec 5.14).
+            displayFeatures = rememberDisplayFeatures(),
             scene = { SceneRoute(shell, recording, library, meter, scope) },
         )
         RecordFlowSheet(recordFlow)

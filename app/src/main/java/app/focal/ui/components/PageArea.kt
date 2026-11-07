@@ -26,8 +26,8 @@ enum class PageArea {
 
 /**
  * The side insets of a page's [area] (spec 5.14): the display cutout and a side navigation bar on either side, the
- * landscape rail on the end side of a page with a dock, and in two panes everything beside the library's pane. A
- * page pads its content with them; the window's paper still runs under them.
+ * landscape rail on the end side of a page with a dock, and in two panes everything beside the library's pane (a
+ * hinge and the detail pane after it). A page pads its content with them; the window's paper still runs under them.
  */
 @Composable
 fun pageInsets(area: PageArea): WindowInsets {
@@ -45,7 +45,7 @@ fun pageInsets(area: PageArea): WindowInsets {
     }
     val beside = when {
         area == PageArea.Window -> 0.dp
-        area == PageArea.Library && layout.twoPane -> layout.width - WindowLayout.listPane
+        area == PageArea.Library && layout.twoPane -> layout.width - layout.listPane
         layout.rail -> WindowLayout.railWidth
         else -> 0.dp
     }
