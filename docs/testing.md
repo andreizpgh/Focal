@@ -24,8 +24,9 @@ python3 -m unittest discover -s scripts/tests
   state's generations, model install bookkeeping, transcript JSON, the edit
   session's undo log, motion springs, library formatting, the settings gesture
   rules and the bundled license list.
-- **Script tests** cover the model fetcher (against synthetic lock files) and the
-  word-error scorer.
+- **Script tests** cover the model fetcher (against synthetic lock files), the
+  word-error scorer and the release script's checks (synthetic APKs, apksigner
+  and aapt2 output, provenance).
 
 These need the speech runtime AAR but not the model:
 `python3 scripts/fetch-model.py --runtime-only` is enough.
@@ -82,6 +83,27 @@ Each test method renders one group (`foundation`, `library`, `scene`, `note`,
 `-Pandroid.testInstrumentationRunnerArguments.shots=<prefixes>` to re-render a few
 shots. Some groups repeat shots at 1.3× and 2.0× font scale.
 
+### Release checks
+
+`scripts/release.py` builds, signs and checks a testing release (see
+[Releases](../CONTRIBUTING.md#releases)). Beyond the JVM tests and lint above it
+verifies the signed APK itself: apksigner with one signer and the expected
+certificate, `zipalign -c -P 16 4`, the package and version in aapt2's badging,
+`lib/` holding arm64-v8a only with the speech libraries stored, and every file
+of `models/parakeet-ultra.json` in `assets/` byte for byte, the ONNX files stored.
+Its provenance copies the unticked items under [Phone validation](#phone-validation)
+into `not_established`, so tick an item there only once it has been done on a
+phone.
+
+The script does not run device tests. Before publishing, run the instrumented
+suite on the release commit and install the signed APK over the previous release
+on an emulator. The arm64-only APK installs and starts on an x86_64 emulator
+through its arm64 translation, but cannot record there: ONNX Runtime crashes
+under the translation. `-Pfocal.emulatorRelease=true` (command line only) adds
+the x86_64 libraries to a release build so the minified code can be exercised
+end to end on an emulator; such a build says `-emulator-qa` in its version and
+is never published.
+
 ### Emulator notes
 
 - Debug builds include x86_64 libraries for emulators; release builds are ARM64
@@ -95,8 +117,8 @@ shots. Some groups repeat shots at 1.3× and 2.0× font scale.
 
 On x86_64 emulators only (API 35 and 36):
 
-- The instrumented suite passed on API 36 during the rebuild. Rerun it on the
-  exact release APK before publishing.
+- The instrumented suite passed on API 36 with the debug build of the commit the
+  0.2.0 APK was built from: 132 tests, 125 passed, 7 skipped, none failed.
 - Installing over the exact Alpha 9 APK kept every note, paragraph, edit, custom
   title and audio file (byte for byte) on API 35 and API 36. A recording that had
   been interrupted mid-capture was transcribed after the upgrade.
@@ -104,8 +126,12 @@ On x86_64 emulators only (API 35 and 36):
   recovery that follows behaved as designed with emulator audio.
 - The screenshot gallery was compared by eye with the design renders, in both
   themes and at large font scales.
+- The signed 0.2.0 APK installed on API 36 through the arm64 translation,
+  started to the library and stayed up for five minutes. The minified code was
+  exercised end to end in an x86_64 emulator build (`-Pfocal.emulatorRelease=true`)
+  of an earlier commit of the rebuild.
 
-The release APK has not been run on any device.
+The release APK has not been run on a phone.
 
 ## Phone validation
 

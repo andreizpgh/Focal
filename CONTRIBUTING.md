@@ -63,11 +63,11 @@ app/                    Android app: Compose UI, recording service, store, speec
   src/androidTest/      instrumented tests and the screenshot gallery
 core/                   pure Kotlin: segmentation, formatting, alignment, tuning constants
 models/                 lock files for the speech model and runtime (no weights)
-scripts/                fetch-model.py, subset-inter.py (Inter font subset), score-wer.py
+scripts/                fetch-model.py, release.py, subset-inter.py (Inter font subset), score-wer.py
 design/brand/           the logo and launcher icon sources and their generator
 docs/                   architecture, design, speech quality, testing, install guide
 releases/               manifests of published alphas (historical, read-only)
-.github/workflows/      CI build and tests, secret scan, disabled release workflow
+.github/workflows/      CI build and tests, secret scan
 ```
 
 ## Product boundaries
@@ -111,21 +111,57 @@ a secret is exposed.
 
 ## Releases
 
-Testing releases are published as GitHub pre-releases with a `vX.Y.Z` tag and an
-APK named `Focal-X.Y.Z.apk`.
+Testing releases are GitHub pre-releases tagged `vX.Y.Z`, each with three assets:
+`Focal-X.Y.Z.apk`, `SHA256SUMS` and `Focal-X.Y.Z-provenance.json`. CI cannot build
+them, because it has no speech model, so `scripts/release.py` builds, signs and
+verifies them on a machine that has it.
 
-1. Build the release APK from a clean checkout of the release commit, with the
-   verified model in place.
-2. Run the checks above and the instrumented suite against that exact APK.
-3. Sign it outside Git with the development key used since Alpha 2, and check
-   that the APK's signing-certificate SHA-256 matches the one recorded in
-   `releases/stt-alpha-9.json`. Only then does it install over earlier alphas in
-   place and keep their notes.
-4. Record the commit, APK and signing-certificate SHA-256, model and runtime hashes,
-   the checks run and what remains unverified, and attach that with checksums.
-5. Create a draft pre-release with notes from [CHANGELOG.md](CHANGELOG.md), check
-   the uploaded asset's digest, then publish.
+They are signed with the Android SDK debug key that signed Alpha 2 to Alpha 9, so
+they install over those alphas in place and keep their notes. Its certificate
+SHA-256, the `--expected-cert` below, is the one recorded in
+`releases/stt-alpha-9.json`. The key marks a testing build, not a store release;
+it never enters Git.
 
-Never rebuild or re-sign between verification and upload, and never overwrite a
-published asset. The automated release workflow is disabled until it is rebuilt
-for the single-engine app.
+1. Check out the release commit with a clean tree and the verified model
+   (`python3 scripts/fetch-model.py`), and give the version a section in
+   [CHANGELOG.md](CHANGELOG.md).
+2. Build, sign and verify:
+
+   ```sh
+   export FOCAL_KEYSTORE=~/.android/debug.keystore FOCAL_KEY_ALIAS=androiddebugkey
+   export FOCAL_KEYSTORE_PASS=android  # the SDK's fixed debug-key password
+   python3 scripts/release.py \
+     --expected-cert 3e407a18880c9277982d6ad6222b39738484a3b768e4d268415eb795709aa3bc
+   ```
+
+   The script runs the JVM tests, lint and `:app:assembleRelease
+   -Pfocal.requireModel=true`, signs with apksigner and checks the result: one
+   signer with the expected certificate, 16 KB alignment, the package and version,
+   arm64-v8a only in `lib/`, and every model file byte for byte with the ONNX files
+   stored. A failed check stops it and leaves no output. On success
+   `build/release/vX.Y.Z/` holds the three assets. The provenance (schema
+   `focal-release/1`) records the source commit and clean flag, the APK's size and
+   SHA-256, the signing schemes and certificate, the model and runtime lock hashes,
+   the build command, toolchain versions, the checks run and, as `not_established`,
+   the pending [phone checks](docs/testing.md#phone-validation). Passwords are
+   read from the environment (`env:NAME`) or a file (`file:PATH`), never from the
+   command line. `--skip-build` signs an APK already built from the same commit;
+   `--signed-apk FILE --source-commit SHA` describes an APK that was signed and
+   tested earlier, without re-signing it.
+3. On an emulator, run the instrumented suite on the same commit and install the
+   release APK over the previous release: it must start and keep the notes
+   ([testing](docs/testing.md#release-checks)).
+4. Create a draft pre-release at the provenance's `tag_commit`, with notes from the
+   changelog and the checks you ran:
+
+   ```sh
+   gh release create vX.Y.Z --draft --prerelease --target COMMIT \
+     --title "Focal X.Y.Z" --notes-file NOTES.md build/release/vX.Y.Z/*
+   ```
+
+5. Download the draft's assets, check them with `sha256sum -c SHA256SUMS`, then
+   publish (`gh release edit vX.Y.Z --draft=false`).
+
+Never rebuild or re-sign between verification and upload, and never overwrite or
+replace a published asset: a fix is a new version. The manifests in `releases/`
+describe assets already published; they are history and are never edited.
