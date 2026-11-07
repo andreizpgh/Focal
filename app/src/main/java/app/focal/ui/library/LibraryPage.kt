@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
@@ -235,7 +236,6 @@ fun LibraryPage(
                 initial = row.title,
                 // Kept with the rename's state, above the list (a row's own saved state stays with its place).
                 draft = rename.draft,
-                onDraft = { rename.draft = it },
                 style = if (onStage) FocalType.headline else FocalType.rowTitle,
                 color = if (onStage) colors.stageInk else colors.ink,
                 caret = if (onStage) colors.stageInk else colors.ink,
@@ -547,16 +547,19 @@ class LibraryRenameState internal constructor(noteId: String?, draft: TextFieldV
     var noteId: String?
         get() = renamed
         set(value) {
-            if (value != renamed) draft = null
+            if (value != renamed) draft.value = null
             renamed = value
         }
 
     /** The rename's text and selection so far; null until it is first edited (the title, all selected). */
-    var draft by mutableStateOf(draft)
+    val draft: MutableState<TextFieldValue?> = mutableStateOf(draft)
 
     companion object {
         val Saver: Saver<LibraryRenameState, Any> = listSaver(
-            save = { listOf(it.noteId, it.draft?.text, it.draft?.selection?.start, it.draft?.selection?.end) },
+            save = { state ->
+                val draft = state.draft.value
+                listOf(state.noteId, draft?.text, draft?.selection?.start, draft?.selection?.end)
+            },
             restore = { saved ->
                 val text = saved[1] as String?
                 LibraryRenameState(saved[0] as String?, text?.let { TextFieldValue(it, TextRange(saved[2] as Int, saved[3] as Int)) })

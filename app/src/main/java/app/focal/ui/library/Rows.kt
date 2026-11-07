@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -331,27 +332,31 @@ fun RenameField(
     onCommit: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: (@Composable () -> Unit)? = null,
-    /** Where the caller keeps the field's text instead of this field's own saved state ([onDraft] hears each change). */
-    draft: TextFieldValue? = null,
-    onDraft: (TextFieldValue) -> Unit = {},
+    /**
+     * Where a caller that keeps the field's text itself holds it (null until the first change: the title, all
+     * selected); the field's own saved state is then left alone.
+     */
+    draft: MutableState<TextFieldValue?>? = null,
 ) {
-    var value by rememberSaveable(stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(draft ?: TextFieldValue(initial, selection = TextRange(0, initial.length)))
+    val saved = rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(initial, selection = TextRange(0, initial.length)))
     }
+    // Read where it is used, so a commit right after a change has the change.
+    fun value(): TextFieldValue = if (draft == null) saved.value else draft.value ?: TextFieldValue(initial, selection = TextRange(0, initial.length))
     val focus = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
     var committed by remember { mutableStateOf(false) }
     fun commit() {
         if (committed) return
         committed = true
-        onCommit(value.text.trim())
+        onCommit(value().text.trim())
     }
     LaunchedEffect(Unit) { focus.requestFocus() }
     BasicTextField(
-        value = value,
+        value = value(),
         onValueChange = {
-            value = it.copy(text = it.text.replace('\n', ' '))
-            onDraft(value)
+            val next = it.copy(text = it.text.replace('\n', ' '))
+            if (draft == null) saved.value = next else draft.value = next
         },
         textStyle = style.copy(color = color),
         cursorBrush = SolidColor(caret),
@@ -368,7 +373,7 @@ fun RenameField(
         decorationBox = { field ->
             Box {
                 // While it is empty the title it falls back to shows faintly (spec 5.5).
-                if (value.text.isEmpty()) placeholder?.invoke()
+                if (value().text.isEmpty()) placeholder?.invoke()
                 field()
             }
         },

@@ -59,7 +59,7 @@ private fun FocalAppContent(preferences: Preferences, commands: Flow<ShellComman
         }
         // The library's saved state lives here, above the layout: one pane and two compose the library at different
         // places in the tree, and a rememberSaveable is found again only where it was saved.
-        val libraryStates = rememberLibraryPageStates()
+        val libraryStates = rememberLibraryPageStates(query = { library.search.value.query })
         SystemBarsEffect(shell.bars, dark)
         ShellCommands(shell, commands)
         AppEffects(shell, library, recording, recordFlow::record)

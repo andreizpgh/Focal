@@ -2,6 +2,8 @@ package app.focal.ui.settings
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +32,7 @@ fun SettingsRoute(
     modifier: Modifier = Modifier,
     headingFocus: FocusRequester = remember { FocusRequester() },
     visible: () -> Boolean = { true },
+    scroll: ScrollState = rememberScrollState(),
 ) {
     val settings: SettingsViewModel = viewModel()
     val shown by rememberUpdatedState(visible)
@@ -49,5 +52,5 @@ fun SettingsRoute(
             licenses = { licenses() },
         )
     }
-    SettingsPage(state, actions, modifier, headingFocus)
+    SettingsPage(state, actions, modifier, headingFocus, scroll)
 }

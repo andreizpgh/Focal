@@ -8,8 +8,11 @@ import android.content.Intent
 import android.os.Build
 import android.os.PersistableBundle
 import android.text.format.Formatter
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -17,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.InputMode
@@ -43,26 +47,34 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
- * The library page's saved state: its list's place, search's, the search results' place and an inline rename. The app
- * keeps it above the shell's layout ([rememberLibraryPageStates]): one pane composes the library in the back stack's
- * display, two panes in a pane of its own, and a rememberSaveable is found again only at the place in the tree that
- * saved it, so state remembered inside the page would not survive a turn between the two (spec 5.14).
+ * The library page's saved state: its list's place, search (open, its query, its results' place), an inline rename and
+ * the settings page's place beside it. The app keeps it above the shell's layout ([rememberLibraryPageStates]): one
+ * pane composes the library in the back stack's display, two panes in a pane of its own, and a rememberSaveable finds
+ * a value again only at the place in the tree that saved it. State remembered inside the page would not survive a
+ * turn between the two, and a turn back would find the value the other layout saved before (spec 5.14).
  */
 @Stable
 class LibraryPageStates internal constructor(
     val list: LazyListState,
     val searchList: LazyListState,
     val search: LibrarySearchState,
+    val query: TextFieldState,
     val rename: LibraryRenameState,
+    val settingsScroll: ScrollState,
 )
 
+/** [query] gives search's query to start with (the library view model's), read once. */
 @Composable
-fun rememberLibraryPageStates(): LibraryPageStates {
+fun rememberLibraryPageStates(query: () -> String = { "" }): LibraryPageStates {
     val list = rememberLazyListState()
     val searchList = rememberLazyListState()
     val search = rememberLibrarySearchState()
+    val text = rememberSaveable(saver = TextFieldState.Saver) { TextFieldState(query()) }
     val rename = rememberLibraryRenameState()
-    return remember(list, searchList, search, rename) { LibraryPageStates(list, searchList, search, rename) }
+    val settingsScroll = rememberScrollState()
+    return remember(list, searchList, search, text, rename, settingsScroll) {
+        LibraryPageStates(list, searchList, search, text, rename, settingsScroll)
+    }
 }
 
 /**
@@ -169,7 +181,7 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
         layer = layer,
         library = {
             LibraryPage(
-                model, search, meter, dates, today, actions, listState = states.list, searchState = states.search,
+                model, search, meter, dates, today, actions, listState = states.list, searchState = states.search, query = states.query,
                 stageFocus = stageFocus, liveSeconds = { liveSeconds.value }, rename = states.rename, searchList = states.searchList,
             )
         },
@@ -179,6 +191,7 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
                 onLicenses = { shell.open(Destination.Licenses) },
                 headingFocus = headingFocus,
                 visible = { shell.settings.progress.value > 0f },
+                scroll = states.settingsScroll,
             )
         },
     )
