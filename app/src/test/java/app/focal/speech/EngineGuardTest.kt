@@ -24,20 +24,42 @@ class EngineGuardTest {
     private var nextPid = 100
     private var now = 1_000L
 
-    /** The guard of a newly started process. */
-    private fun process(): EngineGuard {
+    /** The guard of a newly started process; before API 30 ([exitRecords] false) Android records no exits. */
+    private fun process(exitRecords: Boolean = true): EngineGuard {
         val pid = nextPid++
         return EngineGuard(file, ProcessIdentity("process-$pid", pid), { dead, since ->
             exits[dead]?.takeIf { (_, at) -> at >= since }?.first
-        }, clock = { now }).also { pids[it] = pid }
+        }, clock = { now }, exitRecords = exitRecords).also { pids[it] = pid }
     }
 
-    /** This process dies inside [stage]: the marker is on disk and nothing clears it; Android records [exit]. */
-    private fun EngineGuard.dieInside(stage: EngineStage, exit: ProcessExit? = null) {
+    /** Before API 30. */
+    private fun legacy() = process(exitRecords = false)
+
+    private val crashRecord get() = File(file.path + ".crash")
+
+    /**
+     * This process dies inside [stage]: the marker is on disk and nothing clears it; Android records [exit], and the
+     * process records [crash] as it dies (the native bridge's signal handler, or the Java uncaught exception handler).
+     */
+    private fun EngineGuard.dieInside(stage: EngineStage, exit: ProcessExit? = null, crash: Crash? = null) {
         enter(stage)
         assertEquals(stage, markedOnDisk())
+        when (crash) {
+            Crash.NATIVE -> crashRecord.appendText("native 11\n")
+            Crash.JAVA -> crashed(IllegalStateException("A Java crash"))
+            Crash.OUT_OF_MEMORY -> crashed(RuntimeException("Wrapped", OutOfMemoryError("Failed to allocate")))
+            null -> Unit
+        }
         now += 1_000
         exit?.let { exits[pids.getValue(this)] = it to now }
+    }
+
+    /** This process resumes waiting notes by itself (the foreground start's DRAIN) and dies inside a decode [after] it. */
+    private fun EngineGuard.dieResumingAutomatically(after: Long = 5_000, crash: Crash? = null) {
+        resumedAutomatically()
+        working(automatic = true)
+        now += after
+        dieInside(EngineStage.DECODE, crash = crash)
     }
 
     @Test fun aProcessThatDiedInsideAStageCountsOneDeathThere() {
@@ -214,6 +236,123 @@ class EngineGuardTest {
         process().dieInside(EngineStage.DECODE)
         process().dieInside(EngineStage.INSTALL, ProcessExit(ApplicationExitInfo.REASON_LOW_MEMORY, RunningAppProcessInfo.IMPORTANCE_FOREGROUND))
         assertEquals(EngineStage.DECODE to EngineFault.OTHER, process().lastFault())
+    }
+
+    @Test fun theDecisionTableBeforeApi30() {
+        // A crash the process recorded counts, quick or not; a quick one carries the run of quick deaths on.
+        assertEquals(LegacyDeaths.Verdict(true, 0), LegacyDeaths.judge(Crash.NATIVE, quick = false, quickInARow = 1))
+        assertEquals(LegacyDeaths.Verdict(true, 1), LegacyDeaths.judge(Crash.OUT_OF_MEMORY, quick = true, quickInARow = 0))
+        assertEquals(LegacyDeaths.Verdict(true, 3), LegacyDeaths.judge(Crash.JAVA, quick = true, quickInARow = 2))
+        // Without a crash, a death that is not quick never counts and ends the run.
+        assertEquals(LegacyDeaths.Verdict(false, 0), LegacyDeaths.judge(null, quick = false, quickInARow = 0))
+        assertEquals(LegacyDeaths.Verdict(false, 0), LegacyDeaths.judge(null, quick = false, quickInARow = 5))
+        // A quick one counts from the second in a row.
+        assertEquals(LegacyDeaths.Verdict(false, 1), LegacyDeaths.judge(null, quick = true, quickInARow = 0))
+        assertEquals(LegacyDeaths.Verdict(true, 2), LegacyDeaths.judge(null, quick = true, quickInARow = 1))
+        assertEquals(LegacyDeaths.Verdict(true, 3), LegacyDeaths.judge(null, quick = true, quickInARow = 2))
+    }
+
+    @Test fun beforeApi30AKillFromOutsideDoesNotCount() {
+        // Two swipe-aways from Recents (or Force stop, or a reboot) during a decode: Android kept no record of either.
+        legacy().dieInside(EngineStage.DECODE)
+        legacy().dieInside(EngineStage.DECODE)
+        val next = legacy()
+        assertEquals(emptyMap<EngineStage, Int>(), next.deaths())
+        assertNull(next.lastDeath)
+        assertTrue(next.allows())
+        // The marker was the dead process's: it is consumed all the same.
+        assertNull(next.markedOnDisk())
+        // Also during the recognizer's load and the model install.
+        next.dieInside(EngineStage.RECOGNIZER)
+        legacy().dieInside(EngineStage.INSTALL)
+        assertTrue(legacy().allows())
+    }
+
+    @Test fun beforeApi30ACrashTheProcessRecordedCounts() {
+        legacy().dieInside(EngineStage.RECOGNIZER, crash = Crash.NATIVE)
+        val crashed = legacy()
+        assertEquals(mapOf(EngineStage.RECOGNIZER to 1), crashed.deaths())
+        assertEquals(EngineStage.RECOGNIZER to EngineFault.OTHER, crashed.lastFault())
+        crashed.dieInside(EngineStage.DECODE, crash = Crash.JAVA)
+        val blocked = legacy()
+        assertFalse(blocked.allows())
+        assertEquals(EngineFault.OTHER, blocked.stop.value)
+        // An uncaught OutOfMemoryError (here wrapped) is a confirmed out-of-memory.
+        blocked.reset()
+        blocked.dieInside(EngineStage.DECODE, crash = Crash.OUT_OF_MEMORY)
+        assertEquals(EngineFault.MEMORY, legacy().stop.value)
+    }
+
+    @Test fun aCrashRecordedByAnotherProcessIsNotThisDeath() {
+        // The previous process crashed natively, but outside any stage: no marker, nothing counted.
+        val first = legacy()
+        first.inside(EngineStage.DECODE) { }
+        crashRecord.appendText("native 11\n")
+        val second = legacy()
+        assertEquals(emptyMap<EngineStage, Int>(), second.deaths())
+        // This one is killed from outside inside a stage; the earlier crash in the record is not its own.
+        second.dieInside(EngineStage.DECODE)
+        assertEquals("The record restarts with the process that enters a stage", "process-${pids.getValue(second)}", crashRecord.readLines().first())
+        val third = legacy()
+        assertEquals(emptyMap<EngineStage, Int>(), third.deaths())
+        // A record whose token is another process's names nothing.
+        third.enter(EngineStage.DECODE)
+        crashRecord.writeText("process-0\nnative 11\n")
+        assertEquals(emptyMap<EngineStage, Int>(), legacy().deaths())
+        // A Java crash while no stage runs is not recorded.
+        val idle = legacy()
+        idle.inside(EngineStage.DECODE) { }
+        idle.crashed(IllegalStateException("Outside the speech work"))
+        assertEquals(1, crashRecord.readLines().size)
+    }
+
+    @Test fun beforeApi30QuickDeathsAfterAnAutomaticResumeCountFromTheSecondInARow() {
+        // A low-memory kill that comes back at every launch: each foreground start resumes the note and dies soon after.
+        legacy().dieResumingAutomatically()
+        val second = legacy()
+        assertEquals("The first quick death does not count", emptyMap<EngineStage, Int>(), second.deaths())
+        second.dieResumingAutomatically()
+        val third = legacy()
+        assertEquals(mapOf(EngineStage.DECODE to 1), third.deaths())
+        assertEquals("Not confirmed as memory", EngineFault.OTHER, third.lastFault()?.second)
+        third.dieResumingAutomatically()
+        assertFalse("The next one blocks", legacy().allows())
+    }
+
+    @Test fun beforeApi30ARunOfQuickDeathsBreaks() {
+        // Not quick: the stage began more than a minute after the automatic resume.
+        legacy().dieResumingAutomatically()
+        legacy().dieResumingAutomatically(after = LegacyDeaths.QUICK_MS + 1)
+        legacy().dieResumingAutomatically()
+        assertEquals(emptyMap<EngineStage, Int>(), legacy().deaths())
+        // The person's own work (Record, Finish, Try again) is never quick, even right after a resume.
+        legacy().dieResumingAutomatically()
+        legacy().apply { resumedAutomatically(); working(automatic = false) }.dieInside(EngineStage.DECODE)
+        legacy().dieResumingAutomatically()
+        assertEquals(emptyMap<EngineStage, Int>(), legacy().deaths())
+        // A process that ended outside the speech work between them.
+        legacy().dieResumingAutomatically()
+        legacy()
+        legacy().dieResumingAutomatically()
+        assertEquals(emptyMap<EngineStage, Int>(), legacy().deaths())
+        // A decode that completed between them.
+        legacy().dieResumingAutomatically()
+        legacy().apply { inside(EngineStage.DECODE) { }; completed(EngineStage.DECODE) }.dieResumingAutomatically()
+        assertEquals(emptyMap<EngineStage, Int>(), legacy().deaths())
+    }
+
+    @Test fun fromApi30TheExitRecordDecidesAndTheCrashRecordNamesMemory() {
+        // A Java crash Android records as REASON_CRASH: memory only because the process recorded an OutOfMemoryError.
+        process().dieInside(EngineStage.DECODE, ProcessExit(ApplicationExitInfo.REASON_CRASH, RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE), Crash.OUT_OF_MEMORY)
+        val next = process()
+        assertEquals(EngineStage.DECODE to EngineFault.MEMORY, next.lastFault())
+        // The person's Force stop does not count, crash record or not; nor do quick deaths without a record decide.
+        next.dieInside(EngineStage.DECODE, ProcessExit(ApplicationExitInfo.REASON_USER_REQUESTED, RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE), Crash.NATIVE)
+        val after = process()
+        assertEquals(mapOf(EngineStage.DECODE to 1), after.deaths())
+        // A death Android has no record of still counts from API 30, as before.
+        after.dieInside(EngineStage.DECODE)
+        assertEquals(mapOf(EngineStage.DECODE to 2), process().deaths())
     }
 
     @Test fun theMarkerIsOnDiskOnlyWhileTheStageRuns() {

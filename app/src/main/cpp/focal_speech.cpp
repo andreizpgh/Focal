@@ -15,10 +15,22 @@
 //   match the model makes sherpa-onnx 2.0.1 call exit() (SHERPA_ONNX_EXIT).
 // - Strings from the runtime cross as UTF-8 bytes, never through NewStringUTF, so a malformed
 //   token cannot abort the VM; Kotlin decodes them with replacement characters.
+//
+// Crash record: before API 30 Android keeps no exit record, so the engine guard cannot tell a
+// native crash in the speech runtime from a swipe-away. installCrashHandlers opens the guard's
+// crash record once and installs handlers for the fatal signals that append one line to it (with
+// write(2) on the pre-opened descriptor: async-signal-safe), then hand the signal to the handler
+// that was there before (ART's chain, debuggerd's tombstone) or, with none, re-raise it with the
+// previous action, so the process still dies as it would have.
 
+#include <fcntl.h>
 #include <jni.h>
+#include <unistd.h>
 
+#include <atomic>
+#include <csignal>
 #include <cstdint>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <limits>
@@ -178,6 +190,64 @@ struct Vad {
   const SherpaOnnxVoiceActivityDetector *detector;
   std::vector<float> window;
 };
+
+// The fatal signals whose death the engine guard must count (see the header comment).
+constexpr int kCrashSignals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT};
+constexpr size_t kCrashSignalCount = sizeof(kCrashSignals) / sizeof(kCrashSignals[0]);
+struct sigaction g_previous_actions[kCrashSignalCount];
+std::atomic<int> g_crash_record{-1};
+std::atomic<bool> g_crash_handlers{false};
+static_assert(std::atomic<int>::is_always_lock_free, "The crash record is read inside a signal handler.");
+
+// Async-signal-safe: lock-free atomics, write(2), sigaction(2) and raise(3) only.
+void OnCrashSignal(int signal, siginfo_t *info, void *context) {
+  // Taken once: a second crashing thread, or the signal coming back, writes nothing more.
+  const int record = g_crash_record.exchange(-1);
+  if (record >= 0) {
+    char line[] = "native 00\n";
+    line[7] = static_cast<char>('0' + (signal / 10) % 10);
+    line[8] = static_cast<char>('0' + signal % 10);
+    const ssize_t written = write(record, line, sizeof(line) - 1);
+    static_cast<void>(written);
+  }
+  for (size_t i = 0; i < kCrashSignalCount; ++i) {
+    if (kCrashSignals[i] != signal) continue;
+    const struct sigaction &previous = g_previous_actions[i];
+    if ((previous.sa_flags & SA_SIGINFO) != 0) {
+      if (previous.sa_sigaction != nullptr) {
+        previous.sa_sigaction(signal, info, context);
+        return;
+      }
+    } else if (previous.sa_handler != SIG_DFL && previous.sa_handler != SIG_IGN && previous.sa_handler != nullptr) {
+      previous.sa_handler(signal);
+      return;
+    }
+    // The default action (or ignoring it) as before Focal's handler: delivered once this handler returns.
+    sigaction(signal, &previous, nullptr);
+    raise(signal);
+    return;
+  }
+}
+
+// Opens the crash record at path for appending and, once per process, installs the handlers.
+bool InstallCrashHandlers(const char *path) {
+  const int record = open(path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0600);
+  if (record < 0) return false;
+  const int previous = g_crash_record.exchange(record);
+  if (previous >= 0) close(previous);
+  bool installed = false;
+  if (!g_crash_handlers.compare_exchange_strong(installed, true)) return true;
+  bool all = true;
+  for (size_t i = 0; i < kCrashSignalCount; ++i) {
+    struct sigaction action;
+    std::memset(&action, 0, sizeof(action));
+    action.sa_sigaction = OnCrashSignal;
+    action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&action.sa_mask);
+    if (sigaction(kCrashSignals[i], &action, &g_previous_actions[i]) != 0) all = false;
+  }
+  return all;
+}
 
 }  // namespace
 
@@ -451,6 +521,23 @@ JNIEXPORT void JNICALL Java_app_focal_speech_SherpaBridge_vadReset(JNIEnv *env, 
     ThrowState(env, "The speech runtime failed while resetting the voice activity detector.");
   }
 }
+
+JNIEXPORT jboolean JNICALL Java_app_focal_speech_SherpaBridge_installCrashHandlers(JNIEnv *env, jclass,
+                                                                                  jstring path) {
+  JavaUtf record_path(env, path);
+  if (env->ExceptionCheck() || !record_path.nonEmpty()) return JNI_FALSE;
+  return InstallCrashHandlers(record_path.get()) ? JNI_TRUE : JNI_FALSE;
+}
+
+#ifdef FOCAL_TEST_HOOKS
+// Debug builds only (device tests): a native crash as the speech runtime would have it. 0 writes
+// through a null pointer (SIGSEGV), 1 aborts (SIGABRT).
+JNIEXPORT void JNICALL Java_app_focal_speech_NativeCrashHook_crash(JNIEnv *, jclass, jint kind) {
+  if (kind == 1) std::abort();
+  volatile int *nowhere = nullptr;
+  *nowhere = 1;
+}
+#endif
 
 JNIEXPORT void JNICALL Java_app_focal_speech_SherpaBridge_destroyVad(JNIEnv *env, jclass, jlong handle) {
   try {

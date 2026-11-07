@@ -27,6 +27,10 @@ endforeach()
 add_library(focal_speech SHARED focal_speech.cpp)
 target_include_directories(focal_speech PRIVATE third_party)
 target_compile_options(focal_speech PRIVATE -Wall -Wextra -Werror -fvisibility=hidden)
+# Device tests' native crash (NativeCrashHook): debug builds only, never in a release library.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  target_compile_definitions(focal_speech PRIVATE FOCAL_TEST_HOOKS=1)
+endif()
 target_link_libraries(focal_speech PRIVATE sherpa-onnx-c-api onnxruntime)
 # 16 KB pages (Android 15+ devices); every undefined symbol must resolve against the runtime.
 target_link_options(focal_speech PRIVATE "-Wl,-z,max-page-size=16384" "-Wl,--no-undefined")

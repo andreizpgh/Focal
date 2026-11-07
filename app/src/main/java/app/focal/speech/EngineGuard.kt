@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
@@ -51,6 +52,36 @@ enum class EngineFault {
     OTHER,
 }
 
+/** What a dying process left in its crash record ([EngineGuard]): the crash that ended it, as it ended. */
+enum class Crash(internal val line: String) {
+    /** A fatal signal in native code (the bridge's handlers: SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT). */
+    NATIVE("native"),
+    /** An uncaught Java exception. */
+    JAVA("java"),
+    /** An uncaught OutOfMemoryError: a confirmed out-of-memory. */
+    OUT_OF_MEMORY("oom"),
+}
+
+/**
+ * How a death inside a stage counts before API 30, where Android keeps no exit record and a swipe-away from Recents,
+ * Force stop or a reboot looks like any other death. A [Crash] the process recorded as it died counts. A death without
+ * one counts only from the second in a row that is quick (its stage began within [QUICK_MS] of the foreground start's
+ * automatic resume), the shape of a low-memory kill that comes back at every launch; the person rarely swipes Focal
+ * away that fast that often.
+ */
+internal object LegacyDeaths {
+    const val QUICK_MS = 60_000L
+    const val QUICK_IN_A_ROW = 2
+
+    /** Whether the death [counts], and the quick deaths in a row it leaves ([quickInARow]). */
+    data class Verdict(val counts: Boolean, val quickInARow: Int)
+
+    fun judge(crash: Crash?, quick: Boolean, quickInARow: Int): Verdict {
+        val row = if (quick) quickInARow + 1 else 0
+        return Verdict(crash != null || row >= QUICK_IN_A_ROW, row)
+    }
+}
+
 /** This process, as the guard's marker names it: [token] tells it from any earlier process with the same [pid]. */
 data class ProcessIdentity(val token: String, val pid: Int) {
     companion object {
@@ -79,6 +110,8 @@ data class ProcessExit(val reason: Int, val importance: Int) {
     }
 
     /** Android ended the process to reclaim memory. */
+    // Only ever reported by the Android versions that define it.
+    @get:SuppressLint("InlinedApi")
     val lowMemory: Boolean get() = reason == ApplicationExitInfo.REASON_LOW_MEMORY
 }
 
@@ -107,6 +140,12 @@ data class ProcessExit(val reason: Int, val importance: Int) {
  * The guard keeps what the last counted death or failure was ([EngineFault], with its stage) while the counts last, so
  * the interface can say "Not enough free memory" for a confirmed out-of-memory and a neutral sentence otherwise.
  *
+ * Each process also keeps a crash record next to the file, armed at its first stage: its token, then one line per crash
+ * as it dies, from the native bridge's signal handlers ([SherpaBridge.installCrashHandlers]) and the Java uncaught
+ * exception handler ([open] installs both). From API 30 Android's exit record decides whether a death counts and the
+ * crash record can only add that it was an OutOfMemoryError; before API 30 there is no exit record, and
+ * [LegacyDeaths] decides from the crash record and how soon the death came after an automatic resume.
+ *
  * The file is replaced by a rename and never synced: it must survive the process, not the device. Thread-safe.
  */
 class EngineGuard @VisibleForTesting internal constructor(
@@ -115,7 +154,12 @@ class EngineGuard @VisibleForTesting internal constructor(
     /** Android's record of how the process [pid] ended, at or after [since] (epoch ms); null when unknown. */
     private val exitOf: (pid: Int, since: Long) -> ProcessExit?,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Android keeps exit records (API 30+): they decide. Before, [LegacyDeaths] does. */
+    private val exitRecords: Boolean = true,
+    /** Arms the native bridge's crash handlers on this record, at the first stage that runs native code. */
+    private val nativeCrashes: ((record: File) -> Unit)? = null,
 ) {
+    private val crashRecord = File(file.path + ".crash")
     private val lock = Any()
     /** The stages running in this process, in the order they began (a stage may run on two threads at once). */
     private val active = ArrayList<EngineStage>()
@@ -126,6 +170,17 @@ class EngineGuard @VisibleForTesting internal constructor(
     /** The last counted death or failure, kept while the counts last. */
     private var fault: EngineFault? = null
     private var faultStage: EngineStage? = null
+    /** Quick deaths without a crash in a row, before API 30 ([LegacyDeaths]). */
+    private var quickInARow = 0
+    /** When the foreground start's automatic resume began in this process (epoch ms), or 0. */
+    private var resumedAt = 0L
+    /** The work running now resumes waiting notes by itself, rather than for the person or a recording. */
+    private var automaticWork = false
+    /** This process's crash record, open for appending once its first stage armed it. */
+    @Volatile private var crashOut: FileOutputStream? = null
+    private var nativeArmed = false
+    /** Some stage runs now: a Java crash is worth recording. */
+    @Volatile private var marked = false
     private val blockedState = MutableStateFlow(false)
     private val stopState = MutableStateFlow<EngineFault?>(null)
 
@@ -154,23 +209,111 @@ class EngineGuard @VisibleForTesting internal constructor(
         retried = saved.getProperty(RETRIED) == "true"
         fault = saved.getProperty(FAULT)?.let { name -> EngineFault.entries.firstOrNull { it.name == name } }
         faultStage = saved.getProperty(FAULT_STAGE)?.let { name -> EngineStage.entries.firstOrNull { it.name == name } }
+        quickInARow = saved.getProperty(QUICK)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
         val inside = saved.getProperty(INSIDE)?.let { name -> EngineStage.entries.firstOrNull { it.name == name } }
+        val token = saved.getProperty(PROCESS)
         lastDeath = null
-        if (inside != null && saved.getProperty(PROCESS) != process.token) {
+        if (inside != null && token != process.token) {
             val pid = saved.getProperty(PID)?.toIntOrNull()
             val at = saved.getProperty(SINCE)?.toLongOrNull() ?: 0L
-            val exit = pid?.let { runCatching { exitOf(it, at) }.getOrNull() }
-            if (exit?.counts() != false) {
-                count(inside, if (exit?.lowMemory == true) EngineFault.MEMORY else EngineFault.OTHER)
+            val crash = crashOf(token)
+            val resumed = saved.getProperty(RESUMED)?.toLongOrNull()
+            val quick = resumed != null && at - resumed in 0..LegacyDeaths.QUICK_MS
+            val exit = if (exitRecords) pid?.let { runCatching { exitOf(it, at) }.getOrNull() } else null
+            val counts = if (exitRecords) {
+                exit?.counts() != false
+            } else {
+                val verdict = LegacyDeaths.judge(crash, quick, quickInARow)
+                quickInARow = verdict.quickInARow
+                verdict.counts
+            }
+            if (counts) {
+                count(inside, if (exit?.lowMemory == true || crash == Crash.OUT_OF_MEMORY) EngineFault.MEMORY else EngineFault.OTHER)
                 lastDeath = inside
             }
-            log("The previous process ended inside $inside (${exit?.let { "reason ${it.reason}, importance ${it.importance}" } ?: "no exit record"})")
+            val record = if (exitRecords) exit?.let { "reason ${it.reason}, importance ${it.importance}" } ?: "no exit record"
+                else "before API 30, ${if (quick) "quick" else "not quick"}"
+            log("The previous process ended inside $inside ($record, ${crash ?: "no crash recorded"}): ${if (counts) "counted" else "not counted"}")
             write()
         } else if (inside != null) {
             // Written by this very process: nothing to count (only a test restarts the guard in one process).
             write()
+        } else if (quickInARow > 0) {
+            // The previous process ended outside the speech work: the quick deaths were not in a row.
+            quickInARow = 0
+            write()
         }
         publish()
+    }
+
+    /** What the crash record says ended the process [token], or null when it recorded no crash (or is another's). */
+    private fun crashOf(token: String?): Crash? {
+        if (token == null) return null
+        val lines = try {
+            if (crashRecord.isFile && crashRecord.length() <= MAX_RECORD_BYTES) crashRecord.readLines() else return null
+        } catch (error: Exception) {
+            log("Could not read the crash record", error)
+            return null
+        }
+        if (lines.firstOrNull() != token) return null
+        val crashes = lines.drop(1).mapNotNull { line -> Crash.entries.firstOrNull { line.startsWith(it.line) } }.toSet()
+        return when {
+            Crash.OUT_OF_MEMORY in crashes -> Crash.OUT_OF_MEMORY
+            Crash.JAVA in crashes -> Crash.JAVA
+            Crash.NATIVE in crashes -> Crash.NATIVE
+            else -> null
+        }
+    }
+
+    /**
+     * Starts this process's crash record (its token, so the next process knows whose it is) at the first stage, and arms
+     * the native handlers on it at the first stage that may run native code. Nothing here may keep the stage from running.
+     */
+    private fun armCrashRecord(stage: EngineStage) {
+        if (crashOut == null) {
+            try {
+                FileOutputStream(crashRecord).use { it.write("${process.token}\n".toByteArray()) }
+                crashOut = FileOutputStream(crashRecord, true)
+            } catch (error: IOException) {
+                log("Could not start the crash record", error)
+                return
+            }
+        }
+        if (nativeArmed || stage == EngineStage.INSTALL) return
+        nativeArmed = true
+        val arm = nativeCrashes ?: return
+        try {
+            arm(crashRecord)
+        } catch (error: LinkageError) {
+            log("Native crashes are not recorded", error)
+        } catch (error: RuntimeException) {
+            log("Native crashes are not recorded", error)
+        }
+    }
+
+    /**
+     * An uncaught exception is ending this process (the default handler [open] installs): recorded while a stage runs,
+     * with whether it was an OutOfMemoryError. Writes bytes allocated in advance to the record opened in advance.
+     */
+    internal fun crashed(error: Throwable) {
+        val out = crashOut ?: return
+        if (!marked) return
+        val memory = generateSequence(error) { it.cause }.take(MAX_CAUSES).any { it is OutOfMemoryError }
+        try {
+            out.write(if (memory) OOM_LINE else JAVA_LINE)
+        } catch (_: IOException) {
+            // Nothing more can be done for a process that is ending.
+        }
+    }
+
+    /** The foreground start's automatic resume of waiting notes began (DRAIN): a stage that dies soon after is quick. */
+    fun resumedAutomatically() = synchronized(lock) { resumedAt = clock() }
+
+    /** The work about to run resumes waiting notes by itself ([automatic]), or is the person's or a recording's. */
+    fun working(automatic: Boolean) = synchronized(lock) {
+        if (automaticWork == automatic) return@synchronized
+        automaticWork = automatic
+        if (active.isNotEmpty()) write()
     }
 
     /** Whether the speech work may start by itself. */
@@ -188,14 +331,17 @@ class EngineGuard @VisibleForTesting internal constructor(
 
     /** Marks [stage] as running in this process, on disk, before the call that may kill the process. */
     fun enter(stage: EngineStage) = synchronized(lock) {
+        armCrashRecord(stage)
         if (active.isEmpty()) since = clock()
         active += stage
+        marked = true
         write()
     }
 
     /** [stage] returned or threw: it no longer runs here. */
     fun leave(stage: EngineStage) = synchronized(lock) {
         if (!active.remove(stage)) return@synchronized
+        marked = active.isNotEmpty()
         write()
     }
 
@@ -205,7 +351,9 @@ class EngineGuard @VisibleForTesting internal constructor(
      */
     fun completed(stage: EngineStage) = synchronized(lock) {
         val changed = when (stage) {
-            EngineStage.DECODE -> (deaths.isNotEmpty() || retried).also { deaths.clear(); retried = false; forgetFault() }
+            EngineStage.DECODE -> (deaths.isNotEmpty() || retried || quickInARow > 0).also {
+                deaths.clear(); retried = false; quickInARow = 0; forgetFault()
+            }
             EngineStage.INSTALL -> deaths.remove(EngineStage.INSTALL) != null
             else -> false
         }
@@ -256,6 +404,7 @@ class EngineGuard @VisibleForTesting internal constructor(
     fun clearForTests() = synchronized(lock) {
         deaths.clear()
         retried = false
+        quickInARow = 0
         forgetFault()
         write()
         publish()
@@ -272,15 +421,27 @@ class EngineGuard @VisibleForTesting internal constructor(
 
     /**
      * Device tests: this guard starts again as the next process would, as [identity], so a marker left on disk by this
-     * one (restored from a copy taken inside a stage) is a death of "the previous process".
+     * one (restored from a copy taken inside a stage) is a death of "the previous process", which ended with [crash]
+     * (as its crash record says: a native crash by default, so the death counts before API 30 as well).
      */
     @VisibleForTesting
-    fun restartForTests(identity: ProcessIdentity = ProcessIdentity(UUID.randomUUID().toString(), -1)) {
+    fun restartForTests(identity: ProcessIdentity = ProcessIdentity(UUID.randomUUID().toString(), -1), crash: Crash? = Crash.NATIVE) {
         synchronized(lock) {
+            closeCrashRecord()
+            crashRecord.writeText(process.token + "\n" + (crash?.let { it.line + "\n" } ?: ""))
             active.clear()
+            marked = false
+            nativeArmed = false
+            automaticWork = false
+            resumedAt = 0
             process = identity
         }
         start()
+    }
+
+    private fun closeCrashRecord() {
+        runCatching { crashOut?.close() }
+        crashOut = null
     }
 
     /** The deaths and failures that can block: every stage's but the install's. */
@@ -315,11 +476,13 @@ class EngineGuard @VisibleForTesting internal constructor(
         if (retried) state.setProperty(RETRIED, "true")
         fault?.let { state.setProperty(FAULT, it.name) }
         faultStage?.let { state.setProperty(FAULT_STAGE, it.name) }
+        if (quickInARow > 0) state.setProperty(QUICK, quickInARow.toString())
         active.lastOrNull()?.let { stage ->
             state.setProperty(INSIDE, stage.name)
             state.setProperty(PROCESS, process.token)
             state.setProperty(PID, process.pid.toString())
             state.setProperty(SINCE, since.toString())
+            if (automaticWork && resumedAt > 0) state.setProperty(RESUMED, resumedAt.toString())
         }
         try {
             val partial = File(file.path + ".partial")
@@ -343,6 +506,13 @@ class EngineGuard @VisibleForTesting internal constructor(
         private const val RETRIED = "retried"
         private const val FAULT = "fault"
         private const val FAULT_STAGE = "fault.stage"
+        private const val QUICK = "quick"
+        private const val RESUMED = "resumed"
+        /** A crash record is a token and a few lines: anything larger is not one. */
+        private const val MAX_RECORD_BYTES = 4_096L
+        private const val MAX_CAUSES = 8
+        private val JAVA_LINE = (Crash.JAVA.line + "\n").toByteArray()
+        private val OOM_LINE = (Crash.OUT_OF_MEMORY.line + "\n").toByteArray()
         private const val INSIDE = "inside"
         private const val PROCESS = "process"
         private const val PID = "pid"
@@ -350,7 +520,28 @@ class EngineGuard @VisibleForTesting internal constructor(
 
         /** The app's guard, in no-backup storage: its counts belong to this device's runtime, not to a backup. */
         fun open(context: Context): EngineGuard =
-            EngineGuard(File(context.noBackupFilesDir, "speech-guard"), ProcessIdentity.current(), exits(context))
+            opened(File(context.noBackupFilesDir, "speech-guard"), exits(context), exitRecords = Build.VERSION.SDK_INT >= 30)
+
+        /**
+         * This process's guard over [file], recording the native and Java crashes that end the process. The app opens
+         * one ([open]); a device test's probe process opens its own over a file of its own.
+         */
+        internal fun opened(file: File, exitOf: (pid: Int, since: Long) -> ProcessExit?, exitRecords: Boolean): EngineGuard =
+            EngineGuard(file, ProcessIdentity.current(), exitOf, exitRecords = exitRecords,
+                nativeCrashes = { record -> SherpaBridge.installCrashHandlers(record.path) }).also { guard ->
+                val previous = Thread.getDefaultUncaughtExceptionHandler()
+                Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+                    try {
+                        guard.crashed(error)
+                    } catch (_: Throwable) {
+                        // The process ends either way; the handler before this one must still run.
+                    }
+                    previous?.uncaughtException(thread, error)
+                }
+            }
+
+        /** Android's exit records (API 30+) of the app's processes, as [EngineGuard] reads them. */
+        fun exitRecordsOf(context: Context): (pid: Int, since: Long) -> ProcessExit? = exits(context)
 
         private fun exits(context: Context): (Int, Long) -> ProcessExit? = { pid, since ->
             if (Build.VERSION.SDK_INT >= 30) exitRecord(context, pid, since) else null

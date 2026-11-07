@@ -249,6 +249,8 @@ class RecordingService : Service() {
                 ensureWorker()
             }
         } else {
+            // The foreground start's automatic resume: a stage that dies soon after it counts as quick before API 30.
+            app.engineGuard.resumedAutomatically()
             synchronized(workLock) { drainWaiting = true; drainRequested = true }
             notifications.cancelTimedOut()
             ensureWorker()
@@ -779,7 +781,8 @@ class RecordingService : Service() {
         stopSelfResult(lastStartId)
     }
 
-    private class Target(val noteId: String, val live: Boolean)
+    /** A note to transcribe; [automatic] when the drain picked it, not the person or a recording. */
+    private class Target(val noteId: String, val live: Boolean, val automatic: Boolean = false)
 
     /** The live recording, then the finished one, then retries, then (from the visible app) waiting notes. */
     private fun nextTarget(): Target? {
@@ -796,7 +799,7 @@ class RecordingService : Service() {
             drainRequested = false
         }
         val waiting = try { store.waitingNotes() } catch (_: Exception) { emptyList() }
-        return synchronized(workLock) { waiting.firstOrNull { it !in skipped && it !in owned }?.let { Target(it, live = false) } }
+        return synchronized(workLock) { waiting.firstOrNull { it !in skipped && it !in owned }?.let { Target(it, live = false, automatic = true) } }
     }
 
     private fun dequeue(id: String) = synchronized(workLock) {
@@ -826,6 +829,7 @@ class RecordingService : Service() {
                 currentCoroutineContext().ensureActive()
                 val target = nextTarget() ?: break
                 if (target.noteId.isEmpty()) { delay(50); continue } // a capture is opening its note
+                app.engineGuard.working(target.automatic)
                 if (feedNote != target.noteId) {
                     feedNote = target.noteId
                     feed = WindowFeed(store, target.noteId) { engine.detector() }

@@ -2,6 +2,7 @@ package app.focal
 
 import android.app.Activity
 import android.app.Application
+import android.os.Build
 import android.util.Log
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.Lifecycle
@@ -15,6 +16,7 @@ import app.focal.recording.ServiceNotifications
 import app.focal.speech.EngineGuard
 import app.focal.speech.SpeechModels
 import kotlinx.coroutines.*
+import java.io.File
 
 class FocalApplication : Application() {
     lateinit var store: NoteStore
@@ -38,6 +40,8 @@ class FocalApplication : Application() {
         private set
     override fun onCreate() {
         super.onCreate()
+        // Debug builds' engine guard probe (device tests) runs in a process of its own: it must touch none of the app.
+        if (BuildConfig.DEBUG && processName().endsWith(PROBE_PROCESS)) return
         store = NoteStore(this); preferences = Preferences(this)
         // First, before anything can enter the speech work: a marker left by the previous process is its death.
         engineGuard = EngineGuard.open(this)
@@ -50,6 +54,10 @@ class FocalApplication : Application() {
         // Recording never waits for this copy; transcription catches up once it is done.
         models.ensureStarted()
     }
+
+    private fun processName(): String =
+        if (Build.VERSION.SDK_INT >= 28) getProcessName()
+        else runCatching { File("/proc/self/cmdline").readText().substringBefore('\u0000') }.getOrDefault("")
 
     /** Retry only a failed recovery; never run recovery over an active recording. */
     @Synchronized fun retryStorage() {
@@ -90,5 +98,10 @@ class FocalApplication : Application() {
                 Log.w("Focal", "Could not resume waiting transcription", error)
             }
         }
+    }
+
+    private companion object {
+        /** The debug manifest's process for the engine guard probe. */
+        const val PROBE_PROCESS = ":guardprobe"
     }
 }

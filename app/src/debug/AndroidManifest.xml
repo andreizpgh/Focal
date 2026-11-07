@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: the device tests' probe of the speech engine guard, in a process of its own. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <service
+            android:name=".speech.GuardProbeService"
+            android:exported="false"
+            android:process=":guardprobe" />
+    </application>
+</manifest>

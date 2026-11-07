@@ -43,6 +43,13 @@ internal object SherpaBridge {
 
     @JvmStatic external fun destroyVad(handle: Long)
 
+    /**
+     * Opens the engine guard's crash record at [path] for appending and installs handlers for the fatal signals
+     * (SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT) that append one line to it before the previous handler runs. False
+     * when the record could not be opened or a handler not installed.
+     */
+    @JvmStatic external fun installCrashHandlers(path: String): Boolean
+
     // Decode result layout, shared with focal_speech.cpp.
     const val RESULT_TEXT = 0
     const val RESULT_TOKEN_BYTES = 1
