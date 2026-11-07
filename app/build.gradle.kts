@@ -81,6 +81,19 @@ if (!modelPresent) logger.lifecycle(
     "Speech model not found in ${ultraModelDirectory.path}: debug APKs will record but not transcribe. " +
         "Run python3 scripts/fetch-model.py for a complete build."
 )
+// Local QA only, never for a published APK: -Pfocal.emulatorRelease=true adds the x86_64 runtime to the
+// minified release, so R8, resource shrinking and the bridge's by-name JNI binding can be exercised end to
+// end on an x86_64 emulator. The arm64 release cannot record there: ONNX Runtime crashes under the
+// emulator's arm64 translation. Without the property every release, the published one included, is
+// arm64-only.
+val emulatorRelease = when (val value = providers.gradleProperty("focal.emulatorRelease").orNull) {
+    null, "false" -> false
+    "true" -> true
+    else -> error("focal.emulatorRelease must be true or false, not $value")
+}
+if (emulatorRelease) logger.warn(
+    "focal.emulatorRelease=true: this release APK also carries x86_64 libraries for emulator QA. Do not publish it."
+)
 
 android {
     namespace = "app.focal"
@@ -119,8 +132,9 @@ android {
         // x86_64 serves the emulator for debug builds and device tests.
         debug { ndk { abiFilters += listOf("arm64-v8a", "x86_64") } }
         release {
-            // Phones are arm64; the release APK carries no x86_64 runtime libraries.
-            ndk { abiFilters += "arm64-v8a" }
+            // Phones are arm64: a published release carries no x86_64 runtime libraries (emulatorRelease adds
+            // them for local emulator QA only).
+            ndk { abiFilters += if (emulatorRelease) listOf("arm64-v8a", "x86_64") else listOf("arm64-v8a") }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
