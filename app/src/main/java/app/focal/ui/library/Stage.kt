@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -63,6 +64,7 @@ import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -250,7 +252,14 @@ fun StageCard(
         note != null && title == null -> NoteStageKeys
         else -> emptySet()
     }
-    val focusReport = rememberFocusReport { ownKeys }
+    // Only while the person put focus here. The first key after a touch leaves touch mode and the framework puts focus
+    // on the library's first control by itself, the stage: the note open beside it keeps its keys then (Space plays
+    // it, Ctrl+C copies it); Tab or the arrows back to the stage give the stage its own. Focus that arrives while the
+    // input mode the card last saw is still touch arrived by itself.
+    val inputMode = LocalInputModeManager.current.inputMode
+    val focusOrigin = remember { StageFocus() }
+    SideEffect { focusOrigin.modeSeen = inputMode }
+    val focusReport = rememberFocusReport { if (focusOrigin.byItself) emptySet() else ownKeys }
     val copyRequests = remember { mutableIntStateOf(0) }
     val large = LocalDensity.current.fontScale >= StageMetrics.LARGE_FONT
     val origin = rememberStageOrigin(
@@ -273,7 +282,11 @@ fun StageCard(
             }
             .pressScale(source)
             .focusRing(FocalShapes.sheet)
-            .onFocusChanged { focusReport(it.hasFocus) }
+            .onFocusChanged {
+                if (it.hasFocus && !focusOrigin.focused) focusOrigin.byItself = focusOrigin.modeSeen == InputMode.Touch
+                focusOrigin.focused = it.hasFocus
+                focusReport(it.hasFocus)
+            }
             .onKeyEvent { event ->
                 if (PageKey.Copy !in ownKeys || !event.isCopy()) return@onKeyEvent false
                 if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) copyRequests.intValue++
@@ -394,6 +407,13 @@ private fun stageDescription(stage: StageUi, dates: LibraryDates, today: LocalDa
 }
 
 private const val MS_PER_S = 1000L
+
+/** How the stage got focus: the input mode last seen in composition, and whether focus came by itself (touch). */
+private class StageFocus {
+    var modeSeen: InputMode = InputMode.Touch
+    var focused = false
+    var byItself = false
+}
 
 /** The keys a focused stage answers itself (spec 8.5): live, Space expands it; holding a note, Ctrl+C copies it. */
 private val LiveStageKeys = setOf(PageKey.PlayPause)

@@ -10,6 +10,8 @@ import android.provider.Settings
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
@@ -724,6 +726,8 @@ class InterfaceTest {
         val stage = hasContentDescription("Paused, 1 minute 13 seconds.", substring = true) and hasClickAction()
         await("the live stage", stage)
         InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
+        // Put there on purpose: leaving touch mode puts focus on the stage by itself, which leaves the note its keys.
+        compose.onNode(row).performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNode(stage).performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNode(stage and isFocused()).assertIsDisplayed()
         press(KeyEvent.KEYCODE_SPACE)
@@ -757,6 +761,8 @@ class InterfaceTest {
         val stage = hasContentDescription("Latest note. $stageTitle.", substring = true)
         await("the stage", stage)
         InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
+        // Put there on purpose: leaving touch mode puts focus on the stage by itself, which leaves the note its keys.
+        compose.onNode(row).performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNode(stage).performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNode(stage and isFocused()).assertIsDisplayed()
         press(KeyEvent.KEYCODE_C, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
@@ -773,6 +779,80 @@ class InterfaceTest {
         // Through the stage's pill, which confirms as a tap does; the open note's Copy did not run.
         await("Copied on the stage", hasContentDescription("Copied") and hasAnyAncestor(stage))
         compose.onAllNodes(hasContentDescription("Copied")).assertCountEquals(1)
+    }
+
+    /**
+     * Two panes and a hardware keyboard (spec 8.5): the first key after a touch leaves touch mode and puts focus where
+     * the framework chooses, by itself: the stage. A stage that gets it that way takes none of the open note's keys:
+     * beside a stage holding another note Space plays and pauses the note opened from its row; beside a live stage
+     * (the recording holds the audio, so nothing plays) Space does not expand the scene; and Ctrl+C copies the open
+     * note. Skipped on a display that does not change panes when turned (run it with
+     * `adb shell wm size 1600x2560`).
+     */
+    @Test fun keysAfterATouchGoToTheOpenNoteBesideAStage() {
+        assumeTurnChangesPanes()
+        val clipboard = app.getSystemService(ClipboardManager::class.java)
+        for (live in listOf(false, true)) {
+            InstrumentationRegistry.getInstrumentation().setInTouchMode(true)
+            val openTitle = "Touch keys fixture ${if (live) "live" else "note"} $tag"
+            val openWords = listOf("The open note's synthetic paragraph, which Space plays.")
+            // Older than the stage's note, so the stage holds that one.
+            app.store.insertNoteForTests(openWords, durationMs = LONG_AUDIO_SECONDS * 1_000L, title = openTitle,
+                created = System.currentTimeMillis() - 60_000).also {
+                created += it
+                app.store.audioFile(it).writeBytes(ByteArray(LONG_AUDIO_SECONDS * BYTES_PER_SECOND))
+            }
+            if (live) {
+                val id = app.store.create().also { created += it }
+                app.store.state(id, NoteState.PAUSED)
+                RecordingState.live.value = LiveSession(noteId = id, paused = true, duration = 73_000)
+            } else note("Stage beside it $tag", listOf("The stage's own synthetic paragraph."))
+            launch()
+            turn(landscape = true)
+            val row = hasText(openTitle) and hasClickAction() and !isHeading()
+            await("the open note's row", row)
+            compose.onNode(row).performClick()
+            await("the note beside the library", hasText(openWords[0]))
+            // A recording holds the audio: the open note cannot play, and Space while reading does nothing then.
+            if (!live) await("Play", hasContentDescription("Play") and hasClickAction())
+            // Out of touch mode as the first key leaves it: the framework puts focus on the stage by itself.
+            InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
+            var focusedBefore = emptyList<String>()
+            frames { focusedBefore = focusedNodes() }
+            press(KeyEvent.KEYCODE_SPACE)
+            if (!live) poll("the open note playing") { playing() }
+            press(KeyEvent.KEYCODE_SPACE)
+            if (!live) poll("the open note paused") { !playing() }
+            // Without syncing with Compose, which is never idle while the player strip moves.
+            frames { compose.onAllNodes(hasContentDescription("Collapse. Recording continues")).assertCountEquals(0) }
+            press(KeyEvent.KEYCODE_C, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+            var text: String? = null
+            try {
+                // Advancing Compose's clock, which runs the dock's copy.
+                compose.waitUntil(TIMEOUT_MS) {
+                    scenario!!.onActivity { text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() }
+                    text == openWords[0]
+                }
+            } catch (missing: ComposeTimeoutException) {
+                var focusedAfter = emptyList<String>()
+                var copied = 0
+                frames {
+                    focusedAfter = focusedNodes()
+                    copied = compose.onAllNodes(hasContentDescription("Copied")).fetchSemanticsNodes().size
+                }
+                throw AssertionError("The clipboard holds \"$text\", not the open note (live stage: $live; focused before the keys " +
+                    "$focusedBefore, after $focusedAfter; Copied shown $copied)", missing)
+            }
+            scenario?.close()
+            scenario = null
+            RecordingState.live.value = LiveSession()
+        }
+    }
+
+    /** What has focus, by its description or text, for a failure's message. */
+    private fun focusedNodes(): List<String> = compose.onAllNodes(isFocused(), useUnmergedTree = true).fetchSemanticsNodes().map { node ->
+        node.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
+            ?: node.config.getOrNull(SemanticsProperties.Text)?.joinToString() ?: "a node without a label"
     }
 
     /**
