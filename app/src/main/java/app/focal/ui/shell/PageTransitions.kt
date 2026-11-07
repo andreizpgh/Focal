@@ -170,6 +170,8 @@ internal data class ChangeStart(val v: Float, val body: Float, val rows: Float, 
 internal class Origin {
     var card: LayoutCoordinates? = null
     var title: LayoutCoordinates? = null
+    /** The stage's text under its title, which waits for the flying title to clear it (T16′). */
+    var text: LayoutCoordinates? = null
     /** The note the stage holds (null while it is live); a row's own note. */
     var noteId: String? = null
     var titleLines: Int = 2
@@ -1003,7 +1005,19 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                     val f = frame() ?: return@drawBehind
                     if (change.motion == PageMotion.Row) return@drawBehind
                     val layer = live.stageNote ?: return@drawBehind
-                    translate(f.clip.left, f.clip.top) { drawLayer(layer) }
+                    // The title flies at its own pace and the content rides the clip: the stage's text waits until
+                    // the title has cleared its line, so the shrinking title never touches it (T16′).
+                    val text = titleInFlight(f)?.let { stageTextHeld(pages.stage, it, f) }
+                    if (text == null) {
+                        translate(f.clip.left, f.clip.top) { drawLayer(layer) }
+                        return@drawBehind
+                    }
+                    drawIntoCanvas { canvas ->
+                        canvas.saveLayer(Rect(Offset.Zero, size), Paint())
+                        translate(f.clip.left, f.clip.top) { drawLayer(layer) }
+                        drawRect(Color.Black, text.first.topLeft, text.first.size, alpha = text.second, blendMode = BlendMode.DstOut)
+                        canvas.restore()
+                    }
                 },
         )
         // The title, a shared element between the origin and the page.
@@ -1092,6 +1106,29 @@ private val LABEL_CLEARANCE = 24.dp
 
 /** Reports where a library day label sits, for T16's fold (see [coverLabelsAbove]). */
 internal fun Modifier.foldLabel(pages: PageTransitions, key: String): Modifier = onPlaced { pages.labels[key] = it }
+
+/**
+ * T16′: where the stage's text is drawn this frame (it rides the clip) and how much of it the flying title holds
+ * back (0 to 1), or null when none. The text waits while the title's last line box reaches into its first (their
+ * glyphs would touch) and fades in as the boxes part by [STAGE_CLEARANCE], when the title's descenders are some 7 dp
+ * above the text's capitals (at the stage the boxes are 8 dp apart). The whole text waits, never a slice of a line;
+ * the time and the footer arrive on their own.
+ */
+private fun DrawScope.stageTextHeld(stage: Origin, title: FlightText, f: TransformFrame): Pair<Rect, Float>? {
+    val card = stage.card?.takeIf { it.isAttached } ?: return null
+    val text = stage.text?.takeIf { it.isAttached } ?: return null
+    val layout = title.layout
+    if (layout.lineCount == 0) return null
+    val local = card.localBoundingBoxOf(text, clipBounds = false)
+    val rect = local.translate(f.clip.topLeft)
+    val titleBottom = title.flight.topLeft.y + layout.getLineBottom(layout.lineCount - 1)
+    val clearance = STAGE_CLEARANCE.toPx()
+    val held = 1 - ((rect.top - titleBottom) / clearance).coerceIn(0f, 1f)
+    return if (held <= 0f) null else rect to held
+}
+
+/** Over how much of a gap below the flying title's last line the stage's text fades in (T16′). */
+private val STAGE_CLEARANCE = 4.dp
 
 /** Opening: the page's text from its title's line down to the rising title. */
 private fun titleWake(title: FlightText, feather: Float): TitlePath? {
@@ -1233,6 +1270,9 @@ private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: La
 internal fun Modifier.pageOrigin(origin: Origin, title: Boolean = false): Modifier = onPlaced {
     if (title) origin.title = it else origin.card = it
 }
+
+/** Reports where the stage's text sits, which waits for a flying title to clear it (T16′). */
+internal fun Modifier.stageText(origin: Origin): Modifier = onPlaced { origin.text = it }
 
 /**
  * The stage's origin (one per library): which note it holds, its title and how many lines that may take, and the

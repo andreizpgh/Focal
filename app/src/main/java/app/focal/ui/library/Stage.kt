@@ -109,6 +109,7 @@ import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.Origin
 import app.focal.ui.shell.pageOrigin
 import app.focal.ui.shell.rememberStageOrigin
+import app.focal.ui.shell.stageText
 import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.PauseReason
@@ -601,7 +602,7 @@ private fun NoteStage(
                     modifier = Modifier.clearAndSetSemantics { },
                 )
             },
-            { Box(Modifier.clearAndSetSemantics { }) { StageText(row, noSpeech) } },
+            { Box(Modifier.clearAndSetSemantics { }.stageText(origin)) { StageText(row, noSpeech) } },
             { Box(Modifier.graphicsLayer { alpha = lengthYields.value }) { StageLength(row.durationMs) } },
             { StagePill(pill, row.id, onCopy = { actions.copy(row) }, onReadyMoment = onReadyMoment, Modifier.testTag(STAGE_PILL_TAG), shown = shown) },
         ),
