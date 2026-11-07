@@ -5,7 +5,7 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
-## [0.2.0] - 2026-11-06
+## [0.2.0] - 2026-11-07
 
 A rebuilt app around one offline speech engine and a new interface. Installing
 it over Alpha 9 kept every note in emulator tests. Alpha 2–8 share Alpha 9's

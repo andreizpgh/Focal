@@ -15,13 +15,13 @@
 <br>
 
 <p align="center">
-  <img src="docs/screenshots/library-light.png" width="200" alt="The library in the light theme: the latest note on a dark card with its length and a Copy button, earlier notes listed below by day, and the Record button">
+  <img src="docs/screenshots/library-light.png" width="180" alt="The library in the light theme: the latest note on a dark card with its length and a Copy button, earlier notes listed below by day, and the Record button">
   &nbsp;
-  <img src="docs/screenshots/recording-live.png" width="200" alt="The full-screen recording view: a waveform, the elapsed time 4:16, the text transcribed so far with the newest paragraph brightest, and Pause and Finish buttons">
+  <img src="docs/screenshots/recording-live.png" width="180" alt="The full-screen recording view: a waveform, the elapsed time 4:16, the text transcribed so far with the newest paragraph brightest, and Pause and Finish buttons">
   &nbsp;
-  <img src="docs/screenshots/note-playing-dark.png" width="200" alt="A finished note in the dark theme playing back its recording: the current paragraph is bright, the spoken word is highlighted, and a progress bar sits above the Copy button">
+  <img src="docs/screenshots/note-playing-dark.png" width="180" alt="A finished note in the dark theme playing back its recording: the current paragraph is bright, the spoken word is highlighted, and a progress bar sits above the Copy button">
   &nbsp;
-  <img src="docs/screenshots/find-replace-light.png" width="200" alt="Find and replace in a note, light theme: four matches of “screen” highlighted, the second selected, with “page” as the replacement and a Replace all (4) button">
+  <img src="docs/screenshots/find-replace-light.png" width="180" alt="Find and replace in a note, light theme: four matches of “screen” highlighted, the second selected, with “page” as the replacement and a Replace all (4) button">
 </p>
 
 Tap **Record** and talk. Text appears after each pause while you keep speaking.
