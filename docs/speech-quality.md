@@ -196,8 +196,10 @@ unchanged.
   punctuation closes at the longest recent pause when a paragraph reaches 160
   words. These thresholds still need calibration on real dictation.
 - **Title.** The first sentence, extended by the next if it is shorter than 12
-  characters, clipped at a word boundary to 48 characters. Abbreviations and
-  ordinals ("Dr.", "3.") do not end the title's sentence.
+  characters, at most 36 characters. A longer first sentence is shortened to
+  whole words at a clause, never to a dangling function word, and carries no
+  ellipsis. Abbreviations and ordinals ("Dr.", "3.") do not end the title's
+  sentence.
 
 ## Threads and memory
 
@@ -254,6 +256,35 @@ before evaluation on unseen audio:
 
 An enabled correction would also need the original recognizer text kept beside
 it, a visible mark on every changed span, and one-step undo.
+
+## Titles and summaries by a language model (not shipped)
+
+A language model could also name a note or summarize it, without touching its
+words. A small screen on the host says it is not worth its cost yet. Eight
+synthetic notes (five Russian, two English, one two-word fragment) were given to
+two local models through Ollama on four CPU threads, at temperature 0, asking
+for a title of two to six words and a summary of at most three points:
+
+| Model | File | Usable titles | Summaries with a wrong fact | Time per title | Time per summary |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Qwen3 0.6B (Q4_K_M) | 397 MB | 3 of 8 | 2 of 6 | 1–3 s | 2–4 s |
+| Qwen3.5 2B (Q4_K_M) | 1,281 MB | 6 of 8 | 2 of 6 | 3–8 s | 9–15 s |
+
+The smaller model mostly repeated the first sentence, as the deterministic title
+already does, got a month wrong ("в июле поездка в Грузию" for a trip moved to
+September) and titled the fragment "voice note: uh so". The larger one wrote
+titles such as "Планируем ремонт до пятницы" and "отпуск в сентябре", but also
+"Речевой голос зашел в облако", and its summaries turned "README" into "Reddit"
+and a July trip that was only considered into one that "was cancelled". The
+judgments are the author's reading of sixteen outputs, not a scored benchmark,
+and the times are a desktop CPU's: a phone would be several times slower.
+
+**Decision:** titles stay deterministic and no summary is offered. A model small
+enough to bundle (the app already carries 670 MB) does not beat the first
+sentence, and one that does would double the download, take seconds per note on
+a desktop and still invent facts. It can be looked at again when a model under
+about 500 MB names Russian and English notes correctly on a held-out set, with
+no invented names, numbers or dates.
 
 ## Known limitations
 

@@ -3,11 +3,11 @@
   <h1>Focal</h1>
   <p>Offline voice notes for Android. Speak, and it’s written down.</p>
   <p>
-    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/v0.2.0/Focal-0.2.0.apk">Download Focal 0.2.0</a></strong>
+    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/v0.3.0/Focal-0.3.0.apk">Download Focal 0.3.0</a></strong>
     &nbsp; · &nbsp;
     <a href="docs/install.md">Install guide</a>
     &nbsp; · &nbsp;
-    <a href="https://github.com/andreizpgh/Focal/releases/tag/v0.2.0">Release notes</a>
+    <a href="https://github.com/andreizpgh/Focal/releases/tag/v0.3.0">Release notes</a>
   </p>
   <sub>Android 8.0+ · ARM64 · about 0.7 GB · testing release</sub>
 </div>
@@ -34,14 +34,18 @@ Tap **Finish**, then **Copy**.
 - **No language picker.** The speech model detects the language on its own. It is
   published for 25 European languages; Focal has measured seven on read speech:
   English, Russian, German, French, Spanish, Italian and Portuguese.
-- **Hear any word.** Tap a word to play the recording from just before it. Words
-  the recognizer was unsure of carry a faint dotted underline.
-- **Fix it in place.** Edit paragraphs where they are, find and replace across a
-  note, and restore a paragraph’s original text.
+- **Fix a word in one tap.** Tap a word and type: it is replaced. A long press
+  sweeps a phrase the same way, and ▶ plays just those words to check them
+  against what you said. Words the recognizer was unsure of carry a faint dotted
+  underline.
+- **Add to a note later.** Open a note and record on: the new text follows the
+  old in the same note.
+- **Edit like a document.** Paragraphs are edited where they are, with undo, find
+  and replace, and a way back to a paragraph’s original text.
 - **Keep the receipt.** The original audio stays with the note until you remove
   it. Copy gives you clean paragraphs, nothing else.
 
-Version 0.2.0 installs over Alpha 9 and keeps your notes.
+Version 0.3.0 installs over 0.2.0 and keeps your notes.
 
 **Status:** a testing release. It has been checked on Android emulators, not yet
 on phones: speed, memory, battery, heat, long background recordings and natural

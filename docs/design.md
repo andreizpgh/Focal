@@ -26,6 +26,8 @@ difference is listed under [Known deviations](#known-deviations).
   search field and the find rows.
 - **Nothing to configure.** No language or model picker, no modes beyond Edit,
   and a settings page with only theme, storage and About.
+- **Nothing moves by itself.** Text stays where it is while it is edited, pages
+  shift only under a finger, and what leaves fades where it stands.
 - **Honest states.** Progress is real, failures say what happened and what is
   kept, and nothing pretends to be finished before it is.
 
@@ -67,7 +69,7 @@ tabular.
 | `title` | 28 / 34 | 600 (display) | Note titles |
 | `headline` | 22 / 28 | 600 (display) | Page headings |
 | `sceneText` | 20 / 30 | 420 | Live text in the scene |
-| `body` | 18 / 28 | 400 | Paragraphs |
+| `body` | 18 / 28 | 400 | Paragraphs (lines break one after another, so typing never moves the lines above the caret) |
 | `rowTitle`, `stageText`, `field` | 17 / 24 | 600, 400, 400 | Library rows, the stage, inputs |
 | `label` | 16 / 20 | 600 | Buttons |
 | `action`, `dateline`, `meta`, `secondary` | 15 / 20–22 | 600, 500, 400, 400 | Pill labels, datelines, metadata |
@@ -104,8 +106,10 @@ They match Material 3's standard motion scheme value for value.
 | `develop` | 1.0, 300 | 533 ms | Text color: faint to ink, ink to muted |
 
 The only tweens: a 150 ms linear crossfade that replaces the expand, fold and
-settle under reduced motion; the 1.2 s sweep of the writing head; and the single
-720 ms band of light when a note becomes ready.
+settle under reduced motion, and wherever the scene has no origin on screen (it
+fades in over a note's page when that note goes on recording); the 1.2 s sweep
+of the writing head; and the single 720 ms band of light when a note becomes
+ready.
 
 New text **develops**: it fades in from a faint color to ink over about half a
 second, and the text before it recedes 140 ms later. There are no double-tap
@@ -117,7 +121,7 @@ everything else snaps. The live meter keeps updating, because it is information.
 
 ## Haptics
 
-Four moments and no others, all through Compose's haptic feedback (no vibration
+Five moments and no others, all through Compose's haptic feedback (no vibration
 permission):
 
 | Moment | Feedback |
@@ -126,8 +130,9 @@ permission):
 | Finish, after the service accepts it | Confirm |
 | A note becomes ready on screen (once per note, skipped within 1.5 s of another tick) | Confirm |
 | Copy, after the clipboard accepted the text | Confirm |
+| A long press takes hold: a note is selected, a word in a note | Long press |
 
-Pause, Resume, expand and collapse, the settings swipe, playback, editing,
+Pause, Resume, expand and collapse, the settings swipe, playback, typing,
 deleting, Undo and errors are silent. Focal plays no sounds.
 
 ## Components and interactions
@@ -158,20 +163,52 @@ Pause and Finish sit in the dock.
 Settings is the page beside the library, not a screen on top of it. Swiping the
 library from right to left slides it in under the finger; a release past 35% of
 the width, or a fast fling, completes it. Touches that start within 32 dp of
-either edge are left to the system Back gesture. Twice in the app's life, after
-the library has been idle for a while, the library peeks 32 dp to the left to
-hint at the gesture; never after settings has been opened.
+either edge are left to the system Back gesture.
+
+Nothing on the library shows that a page lies beside it, so it is said once, in
+words: after the library has been at rest for a moment the feedback pill reads
+"Swipe left for settings" with **Open**, which opens the page with the swipe's
+own motion. The hint shows at most twice, only once the library holds a note,
+and never after settings has been opened. Nothing moves by itself.
+
+The page has its name beside the back arrow and three groups under small labels.
+A row is one line: what it is, then its value or the glyph of where it leads.
+What needs a sentence is a short note under its group. That Focal works offline
+is not a setting, so it closes the page under the mark.
 
 Every input has another path: an "Open settings" accessibility action, Ctrl+, on
 a keyboard, and App info's settings link.
 
+### The library
+
+Under the stage, notes are listed by day. A row is its title, its length flush
+right, and two lines of the text that follows the title. It carries one piece of
+metadata in one place: the length, or what is happening to the note while it is
+not ready ("42%", "Waiting"). The day is the label above it and the time of day
+is on the note's page. Search results show the day where the length was.
+
+A long press selects a note, the stage's note included; while notes are selected
+a tap adds or removes one, the dock is ✕ and "Delete N notes", and Back ends it.
+Deleting several notes offers one Undo. A note that is being transcribed cannot
+be selected.
+
+Search keeps the library on screen until something is typed; the results then
+take the page, growing upward from the field. A tap on the library under an empty
+field closes search.
+
 ### The dock
 
-At most two controls, a 56 dp circle and a 56 dp pill, whose meaning changes and
-whose position never does: Search and Record in the library; Pause and Finish
-while recording (Resume becomes a labeled pill while paused); Play and
-Transcribing, then Play and Copy, on a note. When transcription finishes, the
-progress pill turns into Copy once, with a single band of light and one tick.
+At most three controls, whose meaning changes and whose position never does:
+Search and Record in the library; Pause and Finish while recording (Resume
+becomes a labeled pill while paused); ✕ and Delete while notes are selected;
+Play, ● and Copy on a note. ● continues the recording into that note: the scene
+comes in over the page, its timer goes on from the note's length, and Finish
+settles it back. In a short window, where the dock stands in a side rail, there
+is no room for ●: **Continue recording** in the note's menu does the same. When transcription finishes, the progress pill turns into Copy
+once, with a single band of light and one tick.
+
+The dock fades where it stands when a keyboard or a row takes its place. It never
+slides.
 
 ### The feedback pill
 
@@ -182,28 +219,41 @@ region, and stays until dismissed while TalkBack is on.
 
 ### The document
 
-The note page: title, dateline and paragraphs on paper.
+The note page: title, dateline and paragraphs on paper. The text is edited where
+it is read.
 
-- **Tap a word** to play from half a second before it. The playing paragraph stays
-  in ink, a soft lens follows the word, a player strip appears above the dock and
-  the text follows playback within the middle third of the screen.
-- **Long-press** selects text with the system toolbar.
+- **Tap a word** to replace it: Edit opens with that word selected, so the next
+  key replaces it. Between words, the caret goes there.
+- **Long-press** to sweep a phrase: the word under the finger, growing word by
+  word as the finger moves; lifting it opens Edit with the phrase selected.
+- **▶ in the dock** plays the note. The playing paragraph stays in ink, a soft
+  lens follows the word, a player strip appears above the dock and the text
+  follows playback within the middle third of the screen.
 - **Tap the title** to rename it.
-- Doubtful words have a row of faint dots under them; nothing else changes.
+- Doubtful words have a row of faint dots under them; a tap selects them like any
+  other word.
 - **Delete** is hidden while a note is being transcribed or waits for the speech
   model; if it is reached another way, the pill asks to finish first.
 - **Copy and Share** refuse a note longer than 200,000 characters; the pill asks
-  you to select the part you need.
+  you to copy the part you need.
+- A note that cannot be edited yet (it is still being transcribed) plays from the
+  tapped word instead.
 
 ### Edit
 
-Entered only by the pencil. Paragraphs become text fields in place, with the same
-typography, so nothing moves. The focused paragraph sits on a light sheet; the
+Paragraphs become text fields in place, with the same typography and the same
+line breaks, so nothing moves. The focused paragraph sits on a light sheet; the
 rest recede. Enter splits a paragraph and Backspace at its start joins it to the
 one before; one undo and redo history covers the session. Changes save 600 ms
-after typing stops. An edited paragraph shows "Edited · Restore original". Done
-or Back leaves Edit; nothing is discarded and there is no dialog. Entering Edit
-from playback places the caret before the playing word.
+after typing stops. ▶ in the edit bar plays just the audio of the selected words,
+or of the words around the caret, and stops: a word is checked against what was
+said without leaving it. **Restore original** for an edited paragraph is in the
+edit menu. Done or Back leaves Edit; nothing is discarded and there is no dialog.
+**Edit** in the note's menu is the way in without a pointer: the caret goes
+before the playing word, or to the start of the first paragraph on screen.
+
+While a caret stays in view the page does not scroll, and nothing is added under
+a paragraph while it is edited: text never moves under the fingers.
 
 ### Find and replace
 
@@ -217,8 +267,9 @@ shown inverted and scrolled into view. Replace all is one undoable step.
 - **TalkBack.** Each note paragraph is one node with actions: Play from here,
   Edit, Copy paragraph, Restore original, and Play unclear word when a word is
   doubtful. There are no word-level nodes, so a long note never becomes
-  thousands of targets. The stage and each library row are merged nodes with the
-  row's menu as actions. Recording state is spoken ("Recording, 4 minutes 16
+  thousands of targets. The stage and each library row are merged nodes that say
+  whether they are selected and offer Copy text, Share, Rename, Remove audio and
+  Delete as actions. Recording state is spoken ("Recording, 4 minutes 16
   seconds"); seconds are not announced as they tick; pauses are announced.
 - **Every gesture has an alternative.** Expanding the scene, opening settings and
   every swipe have a tap, key or accessibility action.
@@ -267,9 +318,19 @@ ones stand in for amendments to the specification.
 - **Licenses** also list Focal itself and the Silero VAD model (5.10).
 - **The launcher shortcut** opens a private `ShortcutActivity` rather than
   `MainActivity`, so no other app can start the microphone (5.13).
-- **The peek's flags** are kept in SharedPreferences, not DataStore (4.23.5). The
-  first-text hint shows while the library holds fewer than three notes, because
-  no recording count is stored (2.8.3).
+- **The settings hint's flags** are kept in SharedPreferences, not DataStore
+  (4.23.5). The first-text hint shows while the library holds fewer than three
+  notes, because no recording count is stored (2.8.3).
+- **After the first week on a phone** (November 2026) these parts of the
+  specification were replaced, as described above: a tap on a word edits instead
+  of playing, and the pencil is gone (5.5, 5.7); the provenance line under an
+  edited paragraph is gone (4.14); the row's time run-in and the row menu are
+  gone, and a long press selects (4.12, 4.15); the settings peek is a hint in
+  the feedback pill (4.23.5); the settings and licences titles sit in the bar
+  (4.1.4, 5.10); the dock fades instead of sliding and may hold a third control
+  (4.3); search keeps the library until a query is typed (5.2); body text breaks
+  line by line, not as a whole paragraph (2.3); derived titles are at most 36
+  characters and are never cut with an ellipsis (4.22.4).
 
 **Not resolved**
 

@@ -53,8 +53,8 @@ directory, so a phone with real notes is the wrong place.
 
 | Area | Tests |
 | --- | --- |
-| Storage | `NoteStoreTest` (schema 5, edits, search index, trash, crash-loop guard), `LegacyDatabaseUpgradeTest` (migration from schemas 1–4) |
-| Recording and transcription | `RecordingServiceTest`, `WindowFeedTest`, `SpeechWorkflowTest`, `UltraServiceTest`, `NotificationsTest` |
+| Storage | `NoteStoreTest` (schema 6 and its upgrade from 5, edits, search index, trash, crash-loop guard, reopening a ready note for more recording, previews), `LegacyDatabaseUpgradeTest` (migration from schemas 1–4) |
+| Recording and transcription | `RecordingServiceTest` (capture durability, pauses, the hold while another app has the microphone and its automatic return, continuing a ready note), `WindowFeedTest`, `SpeechWorkflowTest`, `UltraServiceTest`, `NotificationsTest` |
 | Speech | `OfflineRecognizerTest` and `UltraTranscriberTest` (decode the public JFK fixture), `SileroVadTest`, `UltraModelTest` (install, storage checks, damaged and interrupted copies) |
 | Playback | `SpeechPlayerTest` |
 | Interface | `InterfaceTest` (record to copy, end to end), `ui/CopyFeedbackTest`, `ui/NoteEditTest`, `ui/UiMotionTest`, `gallery/SceneGestureTest` |
@@ -155,6 +155,26 @@ transcription and the recovery that follows behaved as designed with emulator
 audio. Speech quality figures come from host experiments on read speech; see
 [speech quality](speech-quality.md).
 
+**After 0.2.0 (unreleased, the working tree of 13 November 2026).** The changes
+listed under Unreleased in the [changelog](../CHANGELOG.md) were checked on the
+API 36 x86_64 emulator only, in the debug build with the model bundled:
+
+- The JVM tests passed (255), lint reported no errors, both APKs built and the
+  script tests passed (58).
+- The instrumented suite ran after `pm clear` on an 824 × 1830 display: 163 tests,
+  none failed. Tests that need a wide display skip themselves there, and the
+  landscape, tablet and two-pane gallery stages were not rendered.
+- By hand, with notes seeded through the store and the emulator's silent
+  microphone: a tap on a word opened Edit with the word selected and typing
+  replaced it; several notes were selected and deleted with one Undo; a note
+  was continued from its page (the timer went on from its length, Finish
+  settled back, the edit made before was kept); search opened and closed; the
+  settings hint showed and **Open** opened settings.
+- Not checked: any of it on a phone; continuing a note with real speech through
+  the microphone (the store and service tests use synthetic audio and a
+  scripted recognizer); another app actually taking the microphone (the hold is
+  tested with a scripted input); frame pacing of any animation.
+
 ## Phone validation
 
 Pending. Use the exact release APK, on at least one phone with 6 GB of RAM or
@@ -184,8 +204,14 @@ temperature before each run.
       its foreground type), and Android 15's processing time limit: the
       "Transcription paused" notification and the automatic continuation when
       Focal is opened again.
-- [ ] Automatic pause for a phone call, another app taking the microphone and
-      low storage, then Resume.
+- [ ] A phone call and another app taking the microphone during a recording
+      (a voice message in a messenger, voice typing, a video call): the note
+      shows as paused, nothing is written meanwhile, and recording goes on by
+      itself afterwards without losing its first words. Low storage pauses and
+      waits for Resume.
+- [ ] Continue recording into a note: with real speech, after edits, after a
+      restart, and twice in a row. The new text follows the old; playback and
+      Edit's ▶ land on the right words on both sides of the join.
 - [ ] Force-stop during a recording, then reopen: the note shows where it stopped
       and its audio is transcribed.
 
@@ -202,9 +228,13 @@ temperature before each run.
 
 **Interface**
 
-- [ ] Edit with Gboard and one other keyboard: Enter splits, Backspace at the
-      start of a paragraph joins it, the caret stays above the keyboard, and the
-      find and search rows ride the keyboard on Android 8–10.
+- [ ] Edit with Gboard and one other keyboard: a tap on a word selects it and
+      typing replaces it, a long press sweeps a phrase, Enter splits, Backspace
+      at the start of a paragraph joins it, the caret stays above the keyboard,
+      the text does not move while typing, and the find and search rows ride
+      the keyboard on Android 8–10.
+- [ ] Opening and closing search, selecting notes and the settings hint: nothing
+      arrives from two directions at once, and nothing moves by itself.
 - [ ] Predictive back on Android 14 and later: pages, the recording scene,
       settings and the player strip.
 - [ ] The Live Update recording notification on Android 16 QPR2.
