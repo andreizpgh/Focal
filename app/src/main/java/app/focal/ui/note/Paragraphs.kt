@@ -10,6 +10,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
@@ -45,6 +46,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalDensity
@@ -72,6 +74,7 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.design.rememberFocalHaptics
 import app.focal.ui.shell.LocalPageReveal
 import app.focal.ui.state.ParagraphUi
 import kotlinx.coroutines.coroutineScope
@@ -93,6 +96,8 @@ object ParagraphMetrics {
     val dotRadius = 0.75.dp
     val dotPitch = FocalGrid.x4
     val dotDrop = 3.dp
+    /** A tap or a long press this close beside a word's letters still means the word. */
+    val wordSlop = FocalGrid.x4
     /** The edit sheet is drawn this far outside the text box (x 12-400 for a 24-388 paragraph). */
     val sheetOutsetX = FocalGrid.x12
     val sheetOutsetY = FocalGrid.x8
@@ -117,6 +122,14 @@ private fun TextLayoutResult.boxes(range: IntRange, outset: Float, inset: Float)
     }
     return out
 }
+
+/**
+ * The word drawn under [position], as chars ([wordAt] names the word at a char offset), or null on bare paper: past a
+ * line's last word, on punctuation alone. A text layout resolves any position to its nearest offset, which past a
+ * line's end is the end of its last word, so the word's own boxes decide. [slop] forgives a finger just beside them.
+ */
+private fun TextLayoutResult.wordUnder(position: Offset, wordAt: (Int) -> IntRange?, slop: Float): IntRange? =
+    wordAt(getOffsetForPosition(position))?.takeIf { word -> boxes(word, slop, 0f).any { it.contains(position) } }
 
 /** The playing-word lens (spec 2.8.1): it glides within a line on `press`, and across lines fades out, jumps, fades in. */
 private class Lens {
@@ -155,8 +168,10 @@ private class Lens {
 /**
  * A paragraph in reading, playing and find (spec 4.13): one `body` text whose state is colour and drawn shapes only,
  * so its lines break on the same words in every state. Its ink and its receded step are a draw-phase colour; the
- * lens, find matches, the search-arrival mark and doubt dots are drawn behind the glyphs. A tap resolves to a
- * character offset ([onTap]); long-press is left to the system selection around the list.
+ * lens, find matches, the search-arrival mark, a swept selection and doubt dots are drawn behind the glyphs. A tap
+ * resolves to a character offset and the word under the finger, null on bare paper ([onTap]). A long press on a word
+ * sweeps a selection ([onSweep]): that word, growing word by word as the finger moves inside the paragraph, handed
+ * over when it lifts (the caller opens Edit with the swept chars selected, so the next key replaces them).
  *
  * [arrival] develops new text (2.8.1): a new paragraph rises 8 dp, fades in and inks from `faint`, from +60 ms; an
  * extended one inks its new range only. [entrance] is T7's: the paragraph fades in (`fadeSlow`) that many ms after
@@ -170,8 +185,8 @@ internal fun ParagraphText(
     layouts: ParagraphLayouts,
     arrival: Arrivals.Arrival?,
     entrance: Long?,
-    onTap: ((Int) -> Unit)?,
-    tapBlocked: () -> Boolean,
+    onTap: ((offset: Int, word: IntRange?) -> Unit)?,
+    onSweep: ((IntRange) -> Unit)?,
     actions: List<CustomAccessibilityAction>,
     unclear: String?,
     modifier: Modifier = Modifier,
@@ -252,6 +267,12 @@ internal fun ParagraphText(
         lens.show(target, reduced)
     }
     val tap by rememberUpdatedState(onTap)
+    val sweep by rememberUpdatedState(onSweep)
+    val wordAt by rememberUpdatedState(paragraph::wordAt)
+    // The chars a long press has swept so far (drawn as a selection until the finger lifts).
+    var swept by remember { mutableStateOf<IntRange?>(null) }
+    val selectionColor = LocalTextSelectionColors.current.backgroundColor
+    val haptics = rememberFocalHaptics()
     val color = ColorProducer {
         val ink = if (whole) lerp(colors.faint, colors.ink, developed.value) else colors.ink
         lerp(ink, colors.recede, receded.value)
@@ -278,12 +299,14 @@ internal fun ParagraphText(
                 val matchBoxes = if (result == null) emptyList() else matches.flatMap { result.boxes(it, matchOutset, inset) }
                 val currentBoxes = if (result == null) emptyList() else current?.let { result.boxes(it, matchOutset, inset) }.orEmpty()
                 val hitBoxes = if (result == null) emptyList() else hit?.let { result.boxes(it, matchOutset, inset) }.orEmpty()
+                val sweptBoxes = if (result == null) emptyList() else swept?.let { result.boxes(it, 0f, 0f) }.orEmpty()
                 val dots = if (result == null || !SpeechTuning.DOUBT_ENABLED) emptyList() else doubtDots(result, paragraph, this)
                 val radius = CornerRadius(FocalShapes.markRadius.toPx())
                 val dotRadius = ParagraphMetrics.dotRadius.toPx()
                 onDrawBehind {
                     val hitAlpha = focus.hitAlpha.value
                     if (hitAlpha > 0f) hitBoxes.forEach { drawRoundRect(colors.s2, it.topLeft, it.size, radius, alpha = hitAlpha) }
+                    sweptBoxes.forEach { drawRect(selectionColor, it.topLeft, it.size) }
                     matchBoxes.forEach { drawRoundRect(colors.s2, it.topLeft, it.size, radius) }
                     currentBoxes.forEach { drawRoundRect(colors.inv, it.topLeft, it.size, radius) }
                     val lensAlpha = lens.alpha.value
@@ -298,17 +321,50 @@ internal fun ParagraphText(
                 }
             }
             .pointerInput(Unit) {
+                val slop = ParagraphMetrics.wordSlop.toPx()
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     // A touch that stops a fling: the list consumed its down on the Initial pass. It only stops the list.
                     if (down.isConsumed) return@awaitEachGesture
-                    // Taps fire on pointer-up; a long-press belongs to the system selection (spec 2.8.3, 5.5).
-                    val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation() }
-                        ?: return@awaitEachGesture
-                    val handler = tap ?: return@awaitEachGesture
-                    if (tapBlocked()) return@awaitEachGesture
+                    // Taps fire on pointer-up (spec 2.8.3); a press held past the long-press time sweeps a selection.
+                    var held = false
+                    val up = try {
+                        withTimeout(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation() }
+                    } catch (_: PointerEventTimeoutCancellationException) {
+                        held = true
+                        null
+                    }
                     val result = layout ?: return@awaitEachGesture
-                    handler(result.getOffsetForPosition(up.position))
+                    if (!held) {
+                        // Lifted in time: a tap, unless the list took the gesture for a scroll.
+                        if (up != null) tap?.invoke(result.getOffsetForPosition(up.position), result.wordUnder(up.position, wordAt, slop))
+                        return@awaitEachGesture
+                    }
+                    val handler = sweep ?: return@awaitEachGesture
+                    val anchor = result.wordUnder(down.position, wordAt, slop) ?: return@awaitEachGesture
+                    haptics.selected()
+                    var range = anchor
+                    swept = range
+                    try {
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) {
+                                change.consume()
+                                handler(range)
+                                break
+                            }
+                            // The sweep keeps the stream: the list under it does not scroll.
+                            change.consume()
+                            val word = wordAt(result.getOffsetForPosition(change.position)) ?: continue
+                            val next = minOf(anchor.first, word.first)..maxOf(anchor.last, word.last)
+                            if (next != range) {
+                                range = next
+                                swept = range
+                            }
+                        }
+                    } finally {
+                        swept = null
+                    }
                 }
             }
             .semantics {
@@ -353,10 +409,11 @@ internal fun Modifier.editSheet(color: Color, alpha: () -> Float): Modifier = dr
 
 /**
  * The focused paragraph in Edit (spec 4.14): a text field with the reading text's exact style and box, so the swap
- * moves nothing. Enter splits at the caret: the field keeps the text after it, caret at its start, in the same edit
- * as the key, and [onEnter] gets the field's text from before the key and the caret, to show the text before the
- * caret as a new paragraph above (the line break itself is never inserted). Backspace at the very start joins the paragraph before ([onJoin]), from a
- * hardware key or a soft keyboard ([JoinAtStart]); pasted line breaks become spaces.
+ * moves nothing. Enter splits at the caret (a selection goes first): the field keeps the text after it, caret at its
+ * start, in the same edit as the key, and [onEnter] gets the field's text without the line break and the caret, to
+ * show the text before the caret as a new paragraph above (the line break itself is never inserted). Backspace at the
+ * very start joins the paragraph before ([onJoin]), from a hardware key or a soft keyboard ([JoinAtStart]); pasted
+ * line breaks become spaces.
  */
 @Composable
 internal fun ParagraphField(
@@ -449,10 +506,11 @@ private class ParagraphInput(private val onEnter: (full: String, at: Int) -> Uni
     override fun TextFieldBuffer.transformInput() {
         if (changes.changeCount == 1) {
             val range = changes.getRange(0)
-            val original = changes.getOriginalRange(0)
-            if (original.collapsed && range.length == 1 && asCharSequence()[range.start] == '\n') {
+            if (range.length == 1 && asCharSequence()[range.start] == '\n') {
                 val at = range.start
-                revertAllChanges()
+                // The text without the line break: words that were selected go with the key, as with any other key,
+                // and the paragraph splits where they were.
+                replace(at, at + 1, "")
                 val full = asCharSequence().toString()
                 replace(0, length, EditSession.splitTexts(full, at).second)
                 selection = TextRange.Zero

@@ -354,9 +354,9 @@ class InterfaceTest {
         val id = note(title, words)
         launch()
         openFromLibrary(title, words[0])
-        compose.onNodeWithContentDescription("Edit").performClick()
-        await("the edit bar", hasContentDescription("Done"))
+        // A tap on the text opens Edit there (spec 5.7): there is no Edit button.
         compose.onNodeWithText(words[0]).performClick()
+        await("the edit bar", hasContentDescription("Done"))
         await("the paragraph's field", hasSetTextAction())
         compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
         compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
@@ -392,19 +392,18 @@ class InterfaceTest {
         val id = note(title, words)
         launch()
         openFromLibrary(title, words[0])
-        compose.onNodeWithContentDescription("Edit").performClick()
-        await("the edit bar", hasContentDescription("Done"))
+        // A tap on a word opens Edit with that word selected, so the next key replaces it (spec 5.7).
         compose.onNodeWithText(words[0]).performClick()
+        await("the edit bar", hasContentDescription("Done"))
         await("the paragraph's field", hasSetTextAction())
+        val selection = compose.onNode(hasSetTextAction()).fetchSemanticsNode().config[SemanticsProperties.TextSelectionRange]
+        assertFalse("The tapped word is selected", selection.collapsed)
         compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
-        // While the text differs from the recognizer's, the field says so (spec 4.14).
-        await("the provenance line", hasText("Edited"))
         compose.onNode(hasContentDescription("Done")).performClick()
         awaitGone("the field", hasSetTextAction())
         compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
         assertEquals(listOf(REVISED, words[1]), app.store.paragraphs(id).filterNot { it.hidden }.map { it.text })
         await("the saved paragraph", hasText(REVISED))
-        awaitGone("a badge outside Edit", hasText("Edited"))
     }
 
     @Test fun searchOpensANoteAtItsParagraph() {
@@ -544,16 +543,14 @@ class InterfaceTest {
         val id = note(title, words)
         launch()
         openFromLibrary(title, words[0])
-        compose.onNodeWithContentDescription("Edit").performClick()
-        await("the edit bar", hasContentDescription("Done"))
         compose.onNodeWithText(words[0]).performClick()
+        await("the edit bar", hasContentDescription("Done"))
         await("the paragraph's field", hasSetTextAction())
         compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
         turn(landscape = true)
-        // Still in Edit, the same paragraph's field holding the draft, its provenance shown (spec 4.14).
+        // Still in Edit, the same paragraph's field holding the draft.
         await("the edit bar after the turn", hasContentDescription("Done"))
         await("the draft after the turn", hasSetTextAction() and hasText(REVISED))
-        await("the provenance line", hasText("Edited"))
         turn(landscape = false)
         await("the draft turned back", hasSetTextAction() and hasText(REVISED))
         compose.onNode(hasContentDescription("Done")).performClick()
@@ -604,9 +601,9 @@ class InterfaceTest {
         turn(landscape = false)
         openFromLibrary(title, words[0])
         // Edit: one saved step (Undo on), then a draft typed just before the turn.
-        compose.onNodeWithContentDescription("Edit").performClick()
-        await("the edit bar", hasContentDescription("Done"))
+        // A tap on the text opens Edit there (spec 5.7): there is no Edit button.
         compose.onNodeWithText(words[0]).performClick()
+        await("the edit bar", hasContentDescription("Done"))
         await("the paragraph's field", hasSetTextAction())
         compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
         compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }

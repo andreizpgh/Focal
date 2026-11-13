@@ -55,6 +55,12 @@ sealed interface ServiceEvent {
      * refusal, also when the shortfall (and so the published session) did not change.
      */
     data class ResumeRefused(val storageShortBytes: Long) : ServiceEvent
+
+    /**
+     * A recording ended by itself: its audio could not be written any further. What was saved is kept and goes on to
+     * transcription like any finished recording.
+     */
+    data object Interrupted : ServiceEvent
 }
 
 enum class StartFailure { STORAGE, MICROPHONE, PERMISSION, OTHER }

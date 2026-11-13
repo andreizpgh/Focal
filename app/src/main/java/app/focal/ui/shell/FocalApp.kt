@@ -52,25 +52,38 @@ private fun FocalAppContent(preferences: Preferences, commands: Flow<ShellComman
         val meter = remember { LiveMeter { AudioLevel.current } }
         // Record (spec 5.3.1): capture starts at once; the scene grows out of the stage (T1′) or, in the empty
         // library, out of the resting instrument (T1′e), in parallel. Only after the microphone is granted.
-        val recordFlow = rememberRecordFlow {
+        // A note's own ● continues that note (spec 5.5): the same capture, into the note on screen; the scene comes in
+        // over its page, where there is no stage to grow out of.
+        val recordFlow = rememberRecordFlow { appendTo, fromMs ->
             val running = recording.state.value.live
-            recording.record()
-            if (!running && !shell.live.visible) scope.launch { shell.record(fromEmpty = library.state.value.empty, reduced) }
+            recording.record(appendTo, fromMs)
+            // Only a start that was accepted opens the scene: a refusal says why on the page it was asked from.
+            if (recording.starting && !running && !shell.live.visible) scope.launch {
+                if (appendTo == null) shell.record(fromEmpty = library.state.value.empty, reduced) else shell.recordMore(reduced)
+            }
         }
         // The library's saved state lives here, above the layout: one pane and two compose the library at different
         // places in the tree, and a rememberSaveable is found again only where it was saved.
         val libraryStates = rememberLibraryPageStates(query = { library.search.value.query })
         SystemBarsEffect(shell.bars, dark)
         ShellCommands(shell, commands)
-        AppEffects(shell, library, recording, recordFlow::record)
+        AppEffects(
+            shell, library, recording,
+            // "Try again" repeats what failed: Resume while a recording waits for the microphone (a held recording says
+            // the microphone is busy too), else the same Record, so a note that was to continue is not started as a new one.
+            retry = {
+                if (recording.state.value.live) recording.resume()
+                else recording.lastRequest.let { (note, fromMs) -> recordFlow.record(note, fromMs) }
+            },
+        ) { recordFlow.record() }
         SceneEffects(shell, recording, scope)
         FocalShell(
             shell,
             destination = { destination ->
                 when (destination) {
-                    Destination.Library -> LibraryRoute(recordFlow::record, sheetOpen = recordFlow.sheet != null, meter = meter, states = libraryStates)
+                    Destination.Library -> LibraryRoute({ recordFlow.record() }, sheetOpen = recordFlow.sheet != null, meter = meter, states = libraryStates)
                     is Destination.Note -> NoteRoute(
-                        destination, scope,
+                        destination, scope, recordMore = { fromMs -> recordFlow.record(destination.id, fromMs) },
                         // The page develops under the settling scene (T7) or out of the live stage (T7b).
                         landing = remember(destination) { shell.live.landingNote == destination.id || shell.pages.develops(destination) },
                     )

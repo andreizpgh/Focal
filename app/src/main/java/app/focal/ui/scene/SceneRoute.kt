@@ -90,7 +90,7 @@ fun SceneRoute(shell: ShellState, recording: RecordingViewModel, library: Librar
             togglePause = { if (isPaused) recording.resume() else recording.pause() },
         )
     }
-    RecordingSurface(live, scene, meter, actions, onLibrary = shell.current == Destination.Library, bars = shell.bars)
+    RecordingSurface(live, scene, meter, actions, bars = shell.bars)
 }
 
 /**

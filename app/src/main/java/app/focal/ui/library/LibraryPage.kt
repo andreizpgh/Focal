@@ -34,15 +34,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -60,17 +62,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
 import app.focal.R
 import app.focal.ui.components.BottomFade
 import app.focal.ui.components.DayLabel
 import app.focal.ui.components.DockActions
-import app.focal.ui.components.FocalMenu
-import app.focal.ui.components.FocalMenuDivider
-import app.focal.ui.components.FocalMenuItem
+import app.focal.ui.components.DockState
 import app.focal.ui.components.LibraryTopFade
-import app.focal.ui.components.MenuAnchor
 import app.focal.ui.components.PageArea
 import app.focal.ui.components.StickyLabelOverlay
 import app.focal.ui.components.WaveMeter
@@ -87,6 +86,7 @@ import app.focal.ui.design.FocalType
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.Stage
 import app.focal.ui.design.columnInset
+import app.focal.ui.design.smoothstep
 import app.focal.ui.scene.ExpandDrag
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.DestinationBottom
@@ -110,14 +110,14 @@ class LibraryActions(
     val expand: () -> Unit = {},
     /** The stage's Copy: copies the note and returns whether the clipboard took it. */
     val copy: suspend (NoteRow) -> Boolean = { false },
-    /** The row menu's "Copy text". */
+    /** A row's "Copy text" (an accessibility action since rows have no menu). */
     val copyText: (NoteRow) -> Unit = {},
     val share: (NoteRow) -> Unit = {},
     val rename: (NoteRow, String) -> Unit = { _, _ -> },
     val removeAudio: (NoteRow) -> Unit = {},
     val delete: (NoteRow) -> Unit = {},
-    /** The size the note's audio takes, for "Remove audio · 9 MB"; null while unknown. */
-    val audioSize: suspend (NoteRow) -> String? = { null },
+    /** "Delete N": the selected notes go to the trash together, with one Undo. */
+    val deleteAll: (List<NoteRow>) -> Unit = { rows -> rows.forEach(delete) },
     val query: (String) -> Unit = {},
     val record: () -> Unit = {},
     val pause: () -> Unit = {},
@@ -126,9 +126,6 @@ class LibraryActions(
     val openSettings: () -> Unit = {},
 )
 
-/** The note a row menu is open for, and where it was pressed (inside the row or the stage). */
-private data class MenuTarget(val noteId: String, val at: IntOffset)
-
 /** The bounds of a field being renamed, so a tap anywhere else commits it. */
 private class RenameBounds { var rect: androidx.compose.ui.geometry.Rect? = null }
 
@@ -136,6 +133,10 @@ private class RenameBounds { var rect: androidx.compose.ui.geometry.Rect? = null
  * The library (spec 5.1): the stage, then the notes by day under small labels that pin only once the list scrolls,
  * the dock, and search riding the keyboard. The empty library shows the instrument at rest instead. Everything is
  * drawn from [model] and [search], immutable state; [meter] is the live wave's level, read in the draw phase.
+ *
+ * A long press on a note (a row, or the stage holding one) selects it; while notes are selected ([selection]) a tap
+ * adds or removes one, the dock is ✕ | "Delete N", and Back or ✕ ends it. A note that is being transcribed cannot be
+ * deleted, so it cannot be selected.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -154,12 +155,12 @@ fun LibraryPage(
     liveSeconds: (() -> Long)? = null,
     rename: LibraryRenameState = rememberLibraryRenameState(),
     searchList: LazyListState = rememberLazyListState(),
+    selection: LibrarySelectionState = rememberLibrarySelectionState(),
 ) {
     val shell = LocalShell.current
     val bottom = shell.bottom
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
-    var menu by remember { mutableStateOf<MenuTarget?>(null) }
     var renaming by rename::noteId
     val renameBounds = remember { RenameBounds() }
     val imeVisible = WindowInsets.isImeVisible
@@ -170,26 +171,46 @@ fun LibraryPage(
         focusManager.clearFocus()
         scope.launch { searchState.close { query.clearText() } }
     }
+    // The results take the page once there is a query; until then the library stays under the open field.
+    val querying = searchState.open && search.query.isNotBlank()
+    LaunchedEffect(querying) { searchState.showResults(querying) }
     // Not under the licences, whose Back comes first (two panes keep this page composed beneath them).
     val covered = shell.current == Destination.Licenses
     BackHandler(enabled = searchState.open && !covered, onBack = closeSearch)
     BackHandler(enabled = renaming != null && !covered) { renaming = null }
-    // A menu closes when the list scrolls (spec 4.15).
-    LaunchedEffect(listState) { snapshotFlow { listState.isScrollInProgress }.collect { if (it) menu = null } }
+    // The notes that can be selected now, by id: a selected note that left (deleted elsewhere, or now recording or
+    // being transcribed) leaves the selection with it.
+    val selectable = remember(model) {
+        buildMap {
+            (model.stage as? StageUi.Note)?.row?.let { put(it.id, it) }
+            model.days.forEach { day -> day.rows.forEach { put(it.id, it) } }
+        }.filterValues { it.phase !in LibraryModels.BUSY }
+    }
+    // Only once the notes are known: a selection restored with the page must not be emptied by a library still loading.
+    LaunchedEffect(selectable, model.loaded) { if (model.loaded) selection.retain(selectable.keys) }
+    val selecting = selection.active
+    BackHandler(enabled = selecting && !covered) { selection.clear() }
     // Settings may open only from the library at rest (spec 4.23.3).
-    val armed = !searchState.open && menu == null && renaming == null && !imeVisible
+    val armed = !searchState.open && renaming == null && !imeVisible && !selecting
     SideEffect { shell.settings.armed = armed }
 
     if (model.loaded) {
-        val dockActions = remember(actions, searchState) {
+        val currentSelectable by rememberUpdatedState(selectable)
+        val dockActions = remember(actions, searchState, selection) {
             DockActions(
                 search = { scope.launch { searchState.open() } },
                 record = actions.record, pause = actions.pause, resume = actions.resume, finish = actions.finish,
                 openSettings = actions.openSettings,
+                closeSelection = { selection.clear() },
+                deleteSelected = {
+                    val rows = selection.ids.mapNotNull { currentSelectable[it] }
+                    selection.clear()
+                    if (rows.isNotEmpty()) actions.deleteAll(rows)
+                },
             )
         }
         DestinationBottom(
-            Destination.Library, model.dock, dockActions,
+            Destination.Library, if (selecting && model.live == null) DockState.Selecting(selection.count) else model.dock, dockActions,
             rows = if (searchState.fieldShown) { { SearchField(searchState, query, onClose = closeSearch) } } else null,
             dockHidden = searchState.dockHidden || renaming != null,
         )
@@ -205,26 +226,31 @@ fun LibraryPage(
     val menuActions = remember(actions) {
         NoteMenuActions(
             copyText = actions.copyText, share = actions.share, rename = { renaming = it.id },
-            removeAudio = actions.removeAudio, delete = actions.delete, audioSize = actions.audioSize,
+            removeAudio = actions.removeAudio, delete = actions.delete,
         )
     }
-    val rowActions = remember(actions, menuLabels) {
+    // A long press selects; a tap opens, or toggles while notes are selected. A note that cannot be deleted now (it is
+    // being transcribed) is not selectable: a long press on it does nothing, a tap still opens it. Nor does a selection
+    // begin where its dock (✕ | "Delete N") cannot stand: while a recording runs (the dock is the recording's), or
+    // beside an open note in two panes (the dock is the note's). It would be a mode with no way to act in it.
+    val canBegin by rememberUpdatedState(model.live == null && shell.current == Destination.Library)
+    val select: (NoteRow) -> Unit = { row ->
+        if (row.phase !in LibraryModels.BUSY && renaming == null && (selection.active || canBegin)) selection.toggle(row.id)
+    }
+    val rowActions = remember(actions, menuLabels, selection) {
         RowActions(
-            open = actions.open,
-            menu = { row, at -> menu = MenuTarget(row.id, at) },
+            open = { row -> if (selection.active) select(row) else actions.open(row) },
+            select = select,
             menuActions = { row -> menuItems(row).map { item -> CustomAccessibilityAction(menuLabels.of(item)) { menuActions.run(item, row); true } } },
         )
     }
-    val stageActions = remember(actions, rowActions) {
+    val stageActions = remember(actions, rowActions, selection) {
         StageActions(
-            open = actions.openStage, expand = actions.expand, copy = actions.copy, openSettings = actions.openSettings,
-            menu = { row, at -> menu = MenuTarget(row.id, at) },
+            open = { row -> if (selection.active) select(row) else actions.openStage(row) },
+            expand = actions.expand, copy = actions.copy, openSettings = actions.openSettings,
+            select = select,
             menuActions = rowActions.menuActions,
         )
-    }
-    val noteMenu: @Composable (NoteRow) -> Unit = { row ->
-        val target = menu?.takeIf { it.noteId == row.id }
-        NoteMenu(row, expanded = target != null, at = target?.at ?: IntOffset.Zero, labels = menuLabels, actions = menuActions) { menu = null }
     }
     val renameField: @Composable (NoteRow, onStage: Boolean) -> Unit = { row, onStage ->
         val colors = FocalTheme.colors
@@ -270,17 +296,20 @@ fun LibraryPage(
             // Beside the landscape rail, in the list pane of two panes, inside the side insets (spec 5.14).
             .windowInsetsPadding(pageInsets(PageArea.Library)),
     ) {
-        // The library layer fades out under search (T17) and is then neither touchable nor read.
+        // The library layer fades out under the results (T17). Under open search it is neither touchable nor read: a
+        // tap on it, while it still shows under an empty field, closes search (a tap outside the field).
         val behindSearch = searchState.open
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer { alpha = 1 - searchState.content.value }
+                // A fade-through with the results: one leaves before the other arrives, so two typesettings are
+                // never drawn over each other.
+                .graphicsLayer { alpha = 1 - smoothstep(0f, HALF, searchState.content.value) }
                 .inert(behindSearch)
-                .then(if (behindSearch) Modifier.blockTouches() else Modifier),
+                .then(if (behindSearch) Modifier.tapsOnly { if (!querying) closeSearch() } else Modifier),
         ) {
             if (model.loaded) LibraryContent(
-                model, dates, today, meter, listState, stageActions, rowActions, noteMenu,
+                model, dates, today, meter, listState, stageActions, rowActions, selection,
                 renaming = renaming, renameField = renameField, imePadded = renaming != null,
                 openSettings = actions.openSettings, stageFocus = stageFocus, liveSeconds = liveSeconds,
                 // The library itself is on screen: no settings page, search or scene over it.
@@ -288,7 +317,7 @@ fun LibraryPage(
             )
         }
         if (searchState.open || searchState.content.value > 0f) {
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = searchState.content.value }) {
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = smoothstep(HALF, 1f, searchState.content.value) }) {
                 SearchResults(search, bottom, dates, today, onOpen = { result ->
                     focusManager.clearFocus()
                     actions.openResult(result)
@@ -298,7 +327,8 @@ fun LibraryPage(
         }
         BottomFade(
             bottom, Modifier.fillMaxSize(), keyboard = searchState.open,
-            alpha = { if (searchState.open) searchFadeAlpha(searchList, density) else 1f },
+            // Over the library it is whole; over the results it waits for the first row to scroll under it.
+            alpha = { lerp(1f, searchFadeAlpha(searchList, density), smoothstep(HALF, 1f, searchState.content.value)) },
         )
     }
 }
@@ -313,7 +343,7 @@ private fun LibraryContent(
     listState: LazyListState,
     stageActions: StageActions,
     rowActions: RowActions,
-    noteMenu: @Composable (NoteRow) -> Unit,
+    selection: LibrarySelectionState,
     renaming: String?,
     renameField: @Composable (NoteRow, Boolean) -> Unit,
     imePadded: Boolean,
@@ -341,7 +371,7 @@ private fun LibraryContent(
     if (!empty || listAlpha.value > 0f) {
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = listAlpha.value }) {
             LibraryList(
-                model, dates, today, meter, listState, stageActions, rowActions, noteMenu, renaming, renameField, imePadded, stageFocus,
+                model, dates, today, meter, listState, stageActions, rowActions, selection, renaming, renameField, imePadded, stageFocus,
                 liveSeconds, onScreen,
             )
         }
@@ -362,7 +392,7 @@ private fun LibraryList(
     listState: LazyListState,
     stageActions: StageActions,
     rowActions: RowActions,
-    noteMenu: @Composable (NoteRow) -> Unit,
+    selection: LibrarySelectionState,
     renaming: String?,
     renameField: @Composable (NoteRow, Boolean) -> Unit,
     imePadded: Boolean,
@@ -479,10 +509,10 @@ private fun LibraryList(
                                     }
                                 },
                             ),
-                        menu = { if (row != null) noteMenu(row) },
                         title = if (row != null && renaming == row.id) { { renameField(row, true) } } else null,
                         shown = stageShown,
                         liveSeconds = liveSeconds,
+                        selected = row != null && selection.contains(row.id),
                     )
                 }
             }
@@ -504,9 +534,9 @@ private fun LibraryList(
                     NoteRowItem(
                         row, dates, rowActions,
                         modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
-                        menu = { noteMenu(row) },
                         title = if (renaming == row.id) { { renameField(row, false) } } else null,
                         capturing = model.live != null,
+                        selected = selection.contains(row.id),
                     )
                 }
             }
@@ -516,6 +546,7 @@ private fun LibraryList(
     }
 }
 
+private const val HALF = 0.5f
 private const val STAGE_KEY = "stage"
 private const val DAY_TYPE = "day"
 private const val ROW_TYPE = "row"
@@ -528,10 +559,28 @@ private val SECTION_GAP = FocalGrid.x36 - RowMetrics.hitPad
 /** 16 dp from a label to the next title, less the row's 12 dp hit area above it. */
 private val LABEL_TO_TITLE = FocalGrid.x16 - RowMetrics.hitPad
 
-/** A layer that takes every touch, so nothing under a faded layer can be pressed. */
-private fun Modifier.blockTouches(): Modifier = pointerInput(Unit) {
-    awaitPointerEventScope {
-        while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+/**
+ * A layer that takes every touch before what is under it, so nothing there can be pressed or scrolled; a touch that
+ * lifts where it came down (within the slop) is a tap ([onTap]).
+ */
+private fun Modifier.tapsOnly(onTap: () -> Unit): Modifier = composed {
+    val tap by rememberUpdatedState(onTap)
+    pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            down.consume()
+            var moved = false
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                event.changes.forEach { it.consume() }
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                if (!change.pressed) {
+                    if (!moved) tap()
+                    break
+                }
+            }
+        }
     }
 }
 
@@ -568,6 +617,39 @@ class LibraryRenameState internal constructor(noteId: String?, draft: TextFieldV
     }
 }
 
+/** The notes selected in the library (spec 5.1.7), by id, in the order they were selected; kept across recreation. */
+@Stable
+class LibrarySelectionState internal constructor(ids: List<String> = emptyList()) {
+    private val selected = mutableStateListOf<String>().apply { addAll(ids) }
+
+    val ids: List<String> get() = selected.toList()
+    val count: Int get() = selected.size
+    /** Notes are selected: taps toggle, the dock is ✕ | "Delete N". */
+    val active: Boolean get() = selected.isNotEmpty()
+
+    fun contains(id: String): Boolean = id in selected
+
+    /** Adds [id] to the selection, or takes it out; taking out the last one ends the selection. */
+    fun toggle(id: String) {
+        if (!selected.remove(id)) selected += id
+    }
+
+    fun clear() = selected.clear()
+
+    /** Drops the selected notes that are not among [existing] any more. */
+    fun retain(existing: Set<String>) {
+        selected.removeAll { it !in existing }
+    }
+
+    companion object {
+        val Saver: Saver<LibrarySelectionState, Any> = listSaver(save = { it.ids }, restore = { LibrarySelectionState(it) })
+    }
+}
+
+@Composable
+fun rememberLibrarySelectionState(ids: List<String> = emptyList()): LibrarySelectionState =
+    rememberSaveable(saver = LibrarySelectionState.Saver) { LibrarySelectionState(ids) }
+
 @Composable
 fun rememberLibraryRenameState(noteId: String? = null): LibraryRenameState =
     rememberSaveable(saver = LibraryRenameState.Saver) { LibraryRenameState(noteId) }
@@ -590,7 +672,6 @@ private class NoteMenuActions(
     val rename: (NoteRow) -> Unit,
     val removeAudio: (NoteRow) -> Unit,
     val delete: (NoteRow) -> Unit,
-    val audioSize: suspend (NoteRow) -> String?,
 ) {
     fun run(item: MenuItem, row: NoteRow) = when (item) {
         MenuItem.CopyText -> copyText(row)
@@ -601,25 +682,5 @@ private class NoteMenuActions(
     }
 }
 
-/** The row menu at the touch point (spec 4.15), with the divider before Remove audio and its size. */
-@Composable
-private fun NoteMenu(row: NoteRow, expanded: Boolean, at: IntOffset, labels: MenuLabels, actions: NoteMenuActions, onDismiss: () -> Unit) {
-    var size by remember(row.id) { mutableStateOf<String?>(null) }
-    LaunchedEffect(expanded, row.id) { if (expanded && row.canRemoveAudio) size = actions.audioSize(row) }
-    FocalMenu(expanded, onDismiss, MenuAnchor.At(at)) {
-        for (item in menuItems(row)) {
-            if (item == MenuItem.RemoveAudio) FocalMenuDivider()
-            FocalMenuItem(
-                labels.of(item),
-                onClick = {
-                    onDismiss()
-                    actions.run(item, row)
-                },
-                trailing = if (item == MenuItem.RemoveAudio) size else null,
-            )
-        }
-    }
-}
-
-/** API 32 and below show no system clipboard preview, so the row menu's Copy text confirms in the pill (5.1.6). */
+/** API 32 and below show no system clipboard preview, so a row's Copy text confirms in the pill (5.1.6). */
 val confirmsCopyInApp: Boolean get() = Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2

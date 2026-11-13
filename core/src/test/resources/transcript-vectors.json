@@ -1,6 +1,6 @@
 {
  "version": 2,
- "generated_by": "Python reference implementation of the Focal speech experiments (2026-11-05) with the corrections of their audit and the rebuild decisions applied",
+ "generated_by": "Python reference implementation of the Focal speech experiments (2026-11-05) with the corrections of their audit and the rebuild decisions applied; the titles of sentences longer than TITLE_MAX follow the 2026-11-13 rule of Title.derive (whole words, the last clause that fills half of the room, no dangling function word, no ellipsis)",
  "license_note": "All sentences are synthetic and written for these tests; no corpus text.",
  "conventions": {
   "token_times": "start_s/dur_s as returned by sherpa-onnx (seconds, 80 ms grid); ms = floor(s*1000+0.5)",
@@ -22,7 +22,7 @@
   "MAX_WORDS": 80,
   "CAP_WORDS": 160,
   "CAP_LOOKBACK_WORDS": 40,
-  "TITLE_MAX": 48,
+  "TITLE_MAX": 36,
   "MIN_TITLE_CHARS": 12,
   "FLAG_THRESHOLD": 0.5,
   "MIN_WORD_END_MS": 40,
@@ -484,7 +484,7 @@
       6
      ]
     ],
-    "title": "Встреча перенесена на завтра, в десять",
+    "title": "Встреча перенесена на завтра",
     "flagged_word_indices": [],
     "copy_text": "Встреча перенесена на завтра, в десять."
    }
@@ -625,7 +625,7 @@
       6
      ]
     ],
-    "title": "Bitte den Wochenbericht bis Freitag schicken",
+    "title": "Bitte den Wochenbericht bis Freitag",
     "flagged_word_indices": [],
     "copy_text": "Bitte den Wochenbericht bis Freitag schicken."
    }
@@ -1736,7 +1736,7 @@
       8
      ]
     ],
-    "title": "Restart all the servers now please and wait",
+    "title": "Restart all the servers now please",
     "flagged_word_indices": [],
     "copy_text": "Restart all the servers now please and wait."
    }
@@ -2349,7 +2349,7 @@
       9
      ]
     ],
-    "title": "Wir prüfen zuerst die Daten und danach den…",
+    "title": "Wir prüfen zuerst die Daten",
     "flagged_word_indices": [],
     "copy_text": "Wir prüfen zuerst die Daten und danach den Bericht."
    }
@@ -2522,7 +2522,7 @@
       7
      ]
     ],
-    "title": "Мы обсудили план и решили отложить запуск",
+    "title": "Мы обсудили план и решили отложить",
     "flagged_word_indices": [],
     "copy_text": "Мы обсудили план и решили отложить запуск."
    }
@@ -2759,7 +2759,7 @@
       11
      ]
     ],
-    "title": "We looked at the cache and then at the network…",
+    "title": "We looked at the cache",
     "flagged_word_indices": [],
     "copy_text": "We looked at the cache and then at the network logs."
    }
@@ -3151,7 +3151,7 @@
       10
      ]
     ],
-    "title": "If the build fails, The release waits for the…",
+    "title": "If the build fails",
     "flagged_word_indices": [],
     "copy_text": "If the build fails, The release waits for the fix."
    }
@@ -4367,7 +4367,7 @@
       7
      ]
     ],
-    "title": "He wrote «done» and closed the ticket",
+    "title": "He wrote «done» and closed",
     "flagged_word_indices": [],
     "copy_text": "He wrote «done» and closed the ticket."
    }
@@ -7242,7 +7242,7 @@
       98
      ]
     ],
-    "title": "Sentence number 0 has exactly seven words",
+    "title": "Sentence number 0 has exactly seven",
     "flagged_word_indices": [],
     "copy_text": "Sentence number 0 has exactly seven words. Sentence number 1 has exactly seven words. Sentence number 2 has exactly seven words. Sentence number 3 has exactly seven words. Sentence number 4 has exactly seven words. Sentence number 5 has exactly seven words. Sentence number 6 has exactly seven words. Sentence number 7 has exactly seven words. Sentence number 8 has exactly seven words. Sentence number 9 has exactly seven words. Sentence number 10 has exactly seven words. Sentence number 11 has exactly seven words.\n\nSentence number 12 has exactly seven words. Sentence number 13 has exactly seven words."
    }
@@ -7688,7 +7688,7 @@
       12
      ]
     ],
-    "title": "Remember to call the insurance company about…",
+    "title": "Remember to call the insurance",
     "flagged_word_indices": [],
     "copy_text": "Remember to call the insurance company about the broken window tomorrow morning."
    }
@@ -7948,7 +7948,7 @@
       1
      ]
     ],
-    "title": "Donaudampfschifffahrtsgesellschaftskapitänsmütz…",
+    "title": "Donaudampfschifffahrtsgesellschafts…",
     "flagged_word_indices": [],
     "copy_text": "Donaudampfschifffahrtsgesellschaftskapitänsmützenhalterung."
    }
@@ -8422,7 +8422,7 @@
       10
      ]
     ],
-    "title": "Нужно не забыть позвонить в страховую компанию…",
+    "title": "Нужно не забыть позвонить",
     "flagged_word_indices": [],
     "copy_text": "Нужно не забыть позвонить в страховую компанию насчёт разбитого окна."
    }
@@ -8614,7 +8614,7 @@
       8
      ]
     ],
-    "title": "We bought pens, paper, etc. and a stapler",
+    "title": "We bought pens, paper",
     "flagged_word_indices": [],
     "copy_text": "We bought pens, paper, etc. and a stapler."
    }
@@ -9140,7 +9140,7 @@
       7
      ]
     ],
-    "title": "Wir brauchen Stifte, Papier usw. und Tinte",
+    "title": "Wir brauchen Stifte",
     "flagged_word_indices": [],
     "copy_text": "Wir brauchen Stifte, Papier usw. und Tinte."
    }
@@ -9361,7 +9361,7 @@
       10
      ]
     ],
-    "title": "We looked at the cache and then at the logs",
+    "title": "We looked at the cache",
     "flagged_word_indices": [],
     "copy_text": "We looked at the cache and then at the logs."
    }
@@ -9816,7 +9816,7 @@
       6
      ]
     ],
-    "title": "Okay. Call the plumber tomorrow morning",
+    "title": "Okay. Call the plumber tomorrow",
     "flagged_word_indices": [],
     "copy_text": "Okay. Call the plumber tomorrow morning."
    }
@@ -17670,7 +17670,7 @@
       200
      ]
     ],
-    "title": "so we keep going over the numbers and the plan…",
+    "title": "so we keep going over the numbers",
     "flagged_word_indices": [],
     "copy_text": "so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room\n\nso we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room"
    }
@@ -20427,7 +20427,7 @@
       170
      ]
     ],
-    "title": "so we keep going over the numbers and the plan…",
+    "title": "so we keep going over the numbers",
     "flagged_word_indices": [],
     "copy_text": "so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room\n\nso we keep going over the numbers and the plan"
    }
@@ -23365,7 +23365,7 @@
       180
      ]
     ],
-    "title": "so we keep going over the numbers and the plan…",
+    "title": "so we keep going over the numbers",
     "flagged_word_indices": [],
     "copy_text": "so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone\n\nlistens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room so we keep going over the numbers and the plan for next week while everyone listens quietly in the room"
    }

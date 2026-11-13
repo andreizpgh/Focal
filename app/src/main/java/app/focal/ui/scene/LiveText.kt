@@ -248,7 +248,9 @@ private fun visibleOnly(text: String, run: IntRange): AnnotatedString = buildAnn
 @Composable
 private fun Arriving(opens: Boolean, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val reduced = LocalReducedMotion.current
-    val start = opens && !reduced
+    // Decided once, when the paragraph arrives: text that grows a moment later makes it a known paragraph, and the
+    // opening that had begun must still run to its end.
+    val start = remember { opens && !reduced }
     val height = remember { Animatable(if (start) 0f else 1f) }
     val alpha = remember { Animatable(if (start) 0f else 1f) }
     val rise = remember { Animatable(if (start) ARRIVAL_RISE else 0f) }

@@ -29,6 +29,7 @@ import app.focal.core.LevelMeter
 import app.focal.core.MeterMath
 import app.focal.core.SpeechDetector
 import app.focal.data.CaptureReason
+import app.focal.data.MAX_DECODE_ATTEMPTS
 import app.focal.data.NoteState
 import app.focal.data.NoteStore
 import app.focal.data.StoredWindow
@@ -63,6 +64,7 @@ import kotlinx.coroutines.withContext
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -89,9 +91,10 @@ internal interface RecordingDecoder : AutoCloseable {
  *
  * Capture (one microphone session at a time) writes 16 kHz PCM to the note's file on its own thread at
  * audio priority, syncs it every second and never waits for SQLite, the model or the UI. Pause, an
- * automatic pause (a call or another app silenced the microphone, storage nearly full) and Resume keep the
- * microphone foreground-service type; each pause is recorded as a break where segmentation closes the
- * open window.
+ * automatic pause (storage nearly full, a microphone that stopped delivering audio), a hold (a call or
+ * another app silenced the microphone: capture waits with it open and goes on by itself) and Resume keep
+ * the microphone foreground-service type; each of them is recorded as a break where segmentation closes
+ * the open window.
  *
  * One speech worker transcribes sequentially: the live recording first (windows planned by Silero VAD over
  * the synced audio, each persisted before it is decoded), then the recording that just finished, notes the
@@ -157,7 +160,7 @@ class RecordingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         lastStartId = startId
         when (intent?.action) {
-            START -> startCapture(intent.getStringExtra(OPERATION), startId)
+            START -> startCapture(intent.getStringExtra(OPERATION), intent.getStringExtra(NOTE)?.takeIf { it.isNotBlank() }, startId)
             RECOVER -> {
                 val id = intent.getStringExtra(NOTE)
                 if (id.isNullOrBlank()) {
@@ -179,7 +182,8 @@ class RecordingService : Service() {
 
     // ------------------------------------------------------------------ commands
 
-    private fun startCapture(token: String?, startId: Int) {
+    /** Starts a recording; with [appendTo], it continues that ready note instead of making a new one. */
+    private fun startCapture(token: String?, appendTo: String?, startId: Int) {
         // Every foreground-service start must be promoted before it can be rejected.
         try { promote(microphoneType(), capture?.let { recordingNotification(it) } ?: notifications.starting()) }
         catch (error: RuntimeException) {
@@ -197,7 +201,7 @@ class RecordingService : Service() {
             restoreForeground()
             stopIfIdle(startId); return
         }
-        val session = Capture(claim)
+        val session = Capture(claim, appendTo)
         synchronized(workLock) { capture = session }
         // A finishing recording may have promoted transcription since the promotion above: the microphone
         // type and notification of this capture win now that it is current.
@@ -317,7 +321,7 @@ class RecordingService : Service() {
     }
 
     private fun recordingNotification(session: Capture): Notification =
-        notifications.recording(session.noteId, session.elapsedMs, session.paused.get(), session.pauseReason)
+        notifications.recording(session.noteId, session.elapsedMs, session.waiting, session.pauseReason)
 
     private fun transcribingNotification(): Notification {
         val live = RecordingState.live.value
@@ -358,8 +362,11 @@ class RecordingService : Service() {
         data class Break(val sample: Long) : CaptureEvent
     }
 
-    /** One microphone session: its claim, controls and the state the worker and notifications read. */
-    private inner class Capture(val claim: SessionOperations.SessionClaim) {
+    /**
+     * One microphone session: its claim, controls and the state the worker and notifications read. [appendTo] is the
+     * ready note it continues, if any: the session then records into that note instead of a new one.
+     */
+    private inner class Capture(val claim: SessionOperations.SessionClaim, val appendTo: String? = null) {
         @Volatile var noteId: String? = null
         val stopping = AtomicBoolean(false)
         val paused = AtomicBoolean(false)
@@ -374,6 +381,14 @@ class RecordingService : Service() {
         @Volatile var endReason: String? = null
         @Volatile var elapsedMs = 0L
         @Volatile var deviceFailed = false
+        /**
+         * Android delivers silence to this recording because a call or another app has the microphone: nothing is
+         * written, the note shows as paused with the reason, and the microphone stays open so that capture goes on by
+         * itself the moment the audio comes back ([runCapture]). Not a pause: the user never asked for one.
+         */
+        @Volatile var held = false
+        /** Paused or held: what the notification and the published session show as paused. */
+        val waiting: Boolean get() = paused.get() || held
         var job: Job? = null
         private val inputLock = Any()
         private var input: RecordingInput? = null
@@ -399,7 +414,8 @@ class RecordingService : Service() {
         }
 
         fun requestResume() {
-            if (ended || stopping.get() || !paused.get()) return
+            // While held, Resume asks capture to look again now instead of waiting for its own check.
+            if (ended || stopping.get() || !(paused.get() || held)) return
             resumeRequested.set(true)
         }
 
@@ -408,7 +424,7 @@ class RecordingService : Service() {
             stopInput()
         }
 
-        /** Pauses on its own (call, silenced microphone, storage); the user resumes when ready. */
+        /** Pauses on its own (storage, a failed microphone, a hold that lasted too long); the user resumes when ready. */
         fun pauseAutomatically(reason: String) {
             if (ended || stopping.get()) return
             pauseReason = reason
@@ -464,12 +480,12 @@ class RecordingService : Service() {
             @Suppress("UsableSpace")
             val short = StorageReserve.shortfall(filesDir.usableSpace, StorageReserve.START_BYTES)
             if (short > 0) {
-                fail(session, ServiceEvent.StartFailed(StartFailure.STORAGE,
+                fail(ServiceEvent.StartFailed(StartFailure.STORAGE,
                     getString(R.string.feedback_storage, Formatter.formatShortFileSize(this, short)), short))
                 return
             }
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                fail(session, ServiceEvent.StartFailed(StartFailure.PERMISSION, getString(R.string.perm_title)))
+                fail(ServiceEvent.StartFailed(StartFailure.PERMISSION, getString(R.string.perm_title)))
                 return
             }
             // The microphone is opened before a note exists: a busy microphone creates no note.
@@ -477,28 +493,52 @@ class RecordingService : Service() {
             if (device == null || !device.initialized) {
                 runCatching { device?.close() }
                 device = null
-                fail(session, ServiceEvent.StartFailed(StartFailure.MICROPHONE, getString(R.string.feedback_mic_busy)))
+                fail(ServiceEvent.StartFailed(StartFailure.MICROPHONE, getString(R.string.feedback_mic_busy)))
                 return
             }
-            val id = store.create()
+            // A new note, or the ready note this recording continues: its file's whole samples are where the new
+            // audio starts (an odd trailing byte, which no capture writes, would shift every sample after it).
+            val target = session.appendTo
+            val existing = if (target == null) 0L else continuedSamples(target)
+            if (target != null && (existing < 0 || !store.reopen(target, existing))) {
+                runCatching { device.close() }
+                device = null
+                fail(ServiceEvent.StartFailed(StartFailure.OTHER, getString(R.string.error_append)))
+                return
+            }
+            val id = target ?: store.create()
             session.noteId = id
             session.claim.bindNote(id)
-            val started = LiveSession(id, speech = speechAvailability())
+            session.elapsedMs = existing / 16
+            val started = LiveSession(id, speech = speechAvailability(), duration = existing / 16)
             updateLive { started }
             val opened = device
             device = null
-            captureAudio(session, id, opened)
+            captureAudio(session, id, opened, existing)
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             runCatching { device?.close() }
-            if (session.noteId == null) fail(session, ServiceEvent.StartFailed(StartFailure.OTHER, getString(R.string.error_start)))
+            if (session.noteId == null) fail(ServiceEvent.StartFailed(StartFailure.OTHER, getString(R.string.error_start)))
             else session.failure = session.failure ?: (error.message ?: "Could not start recording.")
         } finally {
             withContext(NonCancellable + Dispatchers.IO) { finishCapture(session) }
         }
     }
 
-    private fun fail(session: Capture, event: ServiceEvent.StartFailed) {
+    /**
+     * The whole samples [noteId]'s audio file holds, where a continued recording goes on; an odd last byte is cut off
+     * first. -1 when the file is missing or cannot be prepared: the note cannot continue.
+     */
+    private fun continuedSamples(noteId: String): Long = try {
+        val file = store.audioFile(noteId)
+        if (!file.isFile) -1L else {
+            val bytes = file.length()
+            if (bytes % 2 == 1L) RandomAccessFile(file, "rw").use { it.setLength(bytes - 1); it.fd.sync() }
+            file.length() / 2
+        }
+    } catch (_: Exception) { -1L }
+
+    private fun fail(event: ServiceEvent.StartFailed) {
         RecordingState.events.tryEmit(event)
     }
 
@@ -513,22 +553,28 @@ class RecordingService : Service() {
     }
 
     @Suppress("MissingPermission", "UsableSpace")
-    private suspend fun captureAudio(session: Capture, id: String, first: RecordingInput) {
+    private suspend fun captureAudio(session: Capture, id: String, first: RecordingInput, existingSamples: Long = 0) {
         var device: RecordingInput? = first
         var stream: BufferedOutputStream? = null
         var fileStream: FileOutputStream? = null
-        var samplesWritten = 0L
+        // A continued note's audio goes on after what its file holds; the position counts the whole file.
+        var samplesWritten = existingSamples
         val frame = ShortArray(LevelMeter.FRAME_SAMPLES)
         // The speech worker frames the complete synced original; the meter only feeds the UI.
         val meter = LevelMeter()
         val metadata = CaptureMetadata(session, id)
         try {
-            val raw = FileOutputStream(store.audioFile(id))
+            val raw = FileOutputStream(store.audioFile(id), existingSamples > 0)
             fileStream = raw
             val buffered = BufferedOutputStream(raw, 16384)
             stream = buffered
             session.attach(first)
             var acknowledgedPause = false
+            // While held (see Capture.held): when the hold began, and the audio that has come back since, kept until it
+            // has lasted long enough to count as the microphone's return. Bounded: half a second and one read.
+            var heldSince = 0L
+            var clearSamples = 0
+            val returned = ShortArray(HOLD_CLEAR_SAMPLES + frame.size)
             var lastUi = 0L
             var lastSync = SystemClock.elapsedRealtime()
             val bytes = ByteArray(frame.size * 2)
@@ -543,8 +589,53 @@ class RecordingService : Service() {
                 }
                 refreshNotification()
             }
+            /** Android silenced the microphone: stop writing at this sample and wait, with the microphone open. */
+            fun hold(reason: String) {
+                session.pauseReason = reason
+                session.held = true
+                heldSince = SystemClock.elapsedRealtime()
+                clearSamples = 0
+                syncAudio()
+                // The audio on either side of the hold is not continuous: segmentation closes its window here.
+                if (samplesWritten > 0) metadata.enqueue(CaptureEvent.Break(samplesWritten))
+                metadata.enqueue(CaptureEvent.AutoPause(reason))
+                AudioLevel.publish(0f)
+                publishPaused()
+                notifications.alertAutoPause(id, samplesWritten / 16, reason)
+            }
+            /**
+             * The audio is back: capture goes on where it stopped, starting with the audio that proved it (what came
+             * back while capture made sure it would stay is part of the recording, not thrown away).
+             */
+            fun release() {
+                var at = 0
+                while (at < clearSamples) {
+                    val count = minOf(frame.size, clearSamples - at)
+                    repeat(count) { index ->
+                        val sample = returned[at + index].toInt()
+                        bytes[index * 2] = sample.toByte(); bytes[index * 2 + 1] = (sample shr 8).toByte()
+                    }
+                    buffered.write(bytes, 0, count * 2)
+                    at += count
+                }
+                samplesWritten += clearSamples
+                session.elapsedMs = samplesWritten / 16
+                clearSamples = 0
+                session.held = false
+                session.pauseReason = null
+                notifications.cancelAutoPause()
+                metadata.enqueue(CaptureEvent.State(NoteState.RECORDING))
+                updateLive {
+                    if (it.noteId == id) it.copy(paused = false, pauseReason = null, storageShortBytes = 0, duration = samplesWritten / 16) else it
+                }
+                refreshNotification()
+            }
             while (currentCoroutineContext().isActive && !session.stopping.get()) {
                 if (session.paused.get()) {
+                    // A Pause during a hold (or a hold that lasted too long) is a pause like any other. Audio that had
+                    // come back but not yet for long enough is not part of the recording: the note showed as waiting.
+                    session.held = false
+                    clearSamples = 0
                     if (!acknowledgedPause) {
                         session.stopInput()
                         syncAudio()
@@ -595,7 +686,15 @@ class RecordingService : Service() {
                     continue
                 }
                 if (!session.inputRunning) {
-                    if (!session.startInput()) continue
+                    val running = try { session.startInput() } catch (_: RuntimeException) {
+                        // A microphone that will not start (another app has it, its route went away) is one that
+                        // stopped delivering audio: pause with the reason, keep what is saved, reopen on Resume.
+                        session.deviceFailed = true
+                        session.pauseAutomatically(CaptureReason.MICROPHONE)
+                        acknowledgedPause = false
+                        false
+                    }
+                    if (!running) continue
                     captureAwake.set(true); reconcileWake()
                     acknowledgedPause = false
                     session.started = true
@@ -605,13 +704,35 @@ class RecordingService : Service() {
                     }
                     refreshNotification()
                 }
-                if (current.silenced) { session.pauseAutomatically(silencedReason()); continue }
+                val silencedBefore = current.silenced
+                if (!session.held && silencedBefore) hold(silencedReason())
                 val count = current.read(frame, 0, frame.size)
                 if (count <= 0) {
                     if (session.stopping.get() || session.paused.get() || !session.inputRunning) continue
                     // The microphone stopped delivering audio: pause, keep what is saved, reopen on Resume.
                     session.deviceFailed = true
                     session.pauseAutomatically(CaptureReason.MICROPHONE)
+                    continue
+                }
+                if (session.held) {
+                    // What arrives while silenced is Android's silence, not the recording: none of it is written.
+                    // Capture goes on once real audio has come back for HOLD_CLEAR_SAMPLES in a row (a moment's
+                    // flicker does not restart it), or at once when the user asks and the microphone is free. A read
+                    // is real audio only if the microphone was free before it and after it.
+                    val silenced = silencedBefore || current.silenced
+                    if (silenced) clearSamples = 0 else {
+                        val room = minOf(count, returned.size - clearSamples)
+                        System.arraycopy(frame, 0, returned, clearSamples, room)
+                        clearSamples += room
+                    }
+                    val asked = session.resumeRequested.getAndSet(false)
+                    when {
+                        !silenced && (asked || clearSamples >= HOLD_CLEAR_SAMPLES) -> release()
+                        asked -> RecordingState.events.tryEmit(
+                            ServiceEvent.StartFailed(StartFailure.MICROPHONE, getString(R.string.feedback_mic_busy)))
+                        // Held for too long: the microphone is let go and the recording stays paused for the user.
+                        SystemClock.elapsedRealtime() - heldSince >= HOLD_LIMIT_MS -> session.pauseAutomatically(session.pauseReason ?: CaptureReason.MICROPHONE)
+                    }
                     continue
                 }
                 check(count <= frame.size) { "The microphone returned an invalid audio buffer." }
@@ -625,8 +746,8 @@ class RecordingService : Service() {
                 meter.accept(frame, count)
                 AudioLevel.publish(MeterMath.normalized(meter.rms))
                 // A successful read belongs to the original, even if Android silenced
-                // the microphone while that read was in flight. It is written before pausing.
-                if (current.silenced) session.pauseAutomatically(silencedReason())
+                // the microphone while that read was in flight. It is written before the hold.
+                if (current.silenced) hold(silencedReason())
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastUi >= 100) {
                     updateLive { if (it.noteId == id) it.copy(duration = samplesWritten / 16) else it }
@@ -686,6 +807,10 @@ class RecordingService : Service() {
                     store.state(id, NoteState.PROCESSING, session.failure.orEmpty())
                     updateLive { if (it.noteId == id) it.copy(duration = duration) else it }
                     queued = true
+                    // Capture stopped by itself (the audio could not be written, its metadata could not keep up):
+                    // the note has what was saved, and the user is told why the recording ended. A removed
+                    // permission is told on the note itself, through its end reason.
+                    if (session.failure != null && session.endReason == null) RecordingState.events.tryEmit(ServiceEvent.Interrupted)
                 }
             }
         } catch (error: Exception) {
@@ -711,6 +836,10 @@ class RecordingService : Service() {
                 synchronized(workLock) { finishing.remove(id); owned.remove(id)?.release() }
                 runCatching { store.state(id!!, NoteState.INTERRUPTED, "Saved audio needs transcription. Open the note to continue.") }
             }
+        } else {
+            // Nothing was queued (the start failed, nothing was recorded): transcription that goes on gets its own
+            // foreground type back instead of the microphone's.
+            runCatching { restoreForeground() }
         }
         ensureWorker()
     }
@@ -719,24 +848,42 @@ class RecordingService : Service() {
     private inner class DeviceInput : RecordingInput {
         private val recorder: AudioRecord
         private var callback: AudioManager.AudioRecordingCallback? = null
-        @Volatile private var closed = false
+        @Volatile private var silencedNow = false
+        @Volatile private var silencedAsked = 0L
         override val initialized get() = recorder.state == AudioRecord.STATE_INITIALIZED
-        override val silenced get() = Build.VERSION.SDK_INT >= 29 && recorder.activeRecordingConfiguration?.isClientSilenced == true
+        /**
+         * Whether Android is silencing this recorder (a call or another app has the microphone; API 29 and up).
+         * Capture asks around every 20 ms read and the answer is a call into the audio service, so it is fetched at
+         * most every [SILENCED_POLL_MS]; the recording callback brings a change sooner.
+         */
+        override val silenced: Boolean get() {
+            if (Build.VERSION.SDK_INT < 29) return false
+            val now = SystemClock.elapsedRealtime()
+            if (now - silencedAsked >= SILENCED_POLL_MS) {
+                silencedNow = recorder.activeRecordingConfiguration?.isClientSilenced == true
+                silencedAsked = now
+            }
+            return silencedNow
+        }
         init {
             val minimum = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             check(minimum in 1..65536) { "This device cannot record 16 kHz audio." }
             recorder = AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
                 .setAudioFormat(AudioFormat.Builder().setSampleRate(16000).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_IN_MONO).build())
-                .setBufferSizeInBytes(maxOf(16000, (minimum * 4).coerceAtMost(65536))).build()
+                // Room for two seconds: capture syncs the file every second and asks the audio service about the
+                // microphone, and a slow one of those must not make Android drop samples of the original.
+                .setBufferSizeInBytes(maxOf(RECORDER_BUFFER_BYTES, minimum * 2)).build()
             if (recorder.state != AudioRecord.STATE_INITIALIZED) {
                 recorder.release()
                 error("The microphone is unavailable. Close other recording apps and try again.")
             }
             if (Build.VERSION.SDK_INT >= 29) {
+                // The callback gets this recorder's own configuration when it changes: the silenced flag follows it
+                // at once, between two polls. Capture itself decides what a silenced microphone means.
                 callback = object : AudioManager.AudioRecordingCallback() {
                     override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>) {
-                        if (!closed && configs.any { it.isClientSilenced } && recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING)
-                            capture?.pauseAutomatically(silencedReason())
+                        silencedNow = configs.any { it.isClientSilenced }
+                        silencedAsked = SystemClock.elapsedRealtime()
                     }
                 }.also {
                     try { recorder.registerAudioRecordingCallback(mainExecutor, it) }
@@ -748,7 +895,6 @@ class RecordingService : Service() {
         override fun stop() { if (recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) recorder.stop() }
         override fun read(samples: ShortArray, offset: Int, count: Int) = recorder.read(samples, offset, count, AudioRecord.READ_BLOCKING)
         override fun close() {
-            closed = true
             try { if (Build.VERSION.SDK_INT >= 29) callback?.let { recorder.unregisterAudioRecordingCallback(it) } }
             finally { recorder.release() }
         }
@@ -928,7 +1074,7 @@ class RecordingService : Service() {
                 if (!live || session?.started == true) engine.load()
                 publishSpeech(id, engine.availability)
                 val note = store.note(id) ?: return Outcome.Done
-                val pending = store.pendingWindows(id).firstOrNull()
+                val pending = store.nextPendingWindow(id)
                 val decoder = engine.decoder
                 if (pending != null && decoder != null) {
                     if (Build.VERSION.SDK_INT >= 29 && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
@@ -1240,6 +1386,9 @@ class RecordingService : Service() {
     override fun onTimeout(startId: Int, fgsType: Int) {
         // Android's background-processing quota ran out (Android 15+, 6 h per day): pause the queue. The
         // note waits; the next foreground start of Focal continues it. Must stop within seconds.
+        // A recording that started while this callback was on its way keeps the service: it runs under the
+        // microphone type, which has no such limit.
+        if (capture?.ended == false) return
         val id = processingNote ?: RecordingState.live.value.noteId
         transcriber?.cancel()
         synchronized(workLock) { worker?.cancel() }
@@ -1306,9 +1455,15 @@ class RecordingService : Service() {
         private const val RETRY_FAILED = "retryFailed"
         private const val TAG = "FocalService"
         private const val METADATA_CAPACITY = 64
+        /** A held recording goes on once this much unsilenced audio has come back in a row: half a second. */
+        private const val HOLD_CLEAR_SAMPLES = 8_000
+        /** A hold that lasts this long becomes a pause: the microphone and the wake lock are let go. */
+        private const val HOLD_LIMIT_MS = 10 * 60_000L
+        /** How old the microphone's silenced flag may be before capture asks the audio service again. */
+        private const val SILENCED_POLL_MS = 100L
+        /** The recorder's own buffer: two seconds of 16 kHz PCM16. */
+        private const val RECORDER_BUFFER_BYTES = 64_000
         private const val LIVE_POLL_MS = 200L
-        /** Matches the store's crash-loop guard. */
-        private const val MAX_DECODE_ATTEMPTS = 2
         /** Consecutive failed windows after which the recognizer is treated as broken. */
         private const val BROKEN_AFTER_FAILURES = 2
         @Volatile internal var inputFactoryForTests: (() -> RecordingInput)? = null

@@ -13,7 +13,7 @@ class SettingsGestureTest {
         assertEquals(0f, SettingsGesture.release(0f, 0.9f, -1000f))
         assertEquals(0f, SettingsGesture.release(1f, 0.64f, 0f))
         assertEquals(1f, SettingsGesture.release(1f, 0.66f, 0f))
-        // A peek caught at 32/420 and barely moved goes back to the end nearer to where it was caught.
+        // A settle caught at 32/420 and barely moved goes back to the end nearer to where it was caught.
         assertEquals(0f, SettingsGesture.release(32f / 420f, 0.2f, 0f))
         assertEquals(1f, SettingsGesture.release(32f / 420f, 0.5f, 0f))
     }
@@ -29,13 +29,16 @@ class SettingsGestureTest {
         assertTrue(SettingsGesture.locks(20f, 0f, 0f, 1f))
     }
 
-    @Test fun thePeekPlaysAtMostTwiceAndNeverAfterSettingsOpened() {
-        assertTrue(PeekRules.allowed(opened = false, peeks = 0, hasNotes = false, visit = 1, firstPeekVisit = null))
-        assertFalse(PeekRules.allowed(opened = false, peeks = 1, hasNotes = false, visit = 2, firstPeekVisit = 1))
-        assertFalse(PeekRules.allowed(opened = false, peeks = 1, hasNotes = true, visit = 1, firstPeekVisit = 1))
-        assertTrue(PeekRules.allowed(opened = false, peeks = 1, hasNotes = true, visit = 2, firstPeekVisit = 1))
-        assertTrue(PeekRules.allowed(opened = false, peeks = 1, hasNotes = true, visit = 1, firstPeekVisit = null))
-        assertFalse(PeekRules.allowed(opened = false, peeks = 2, hasNotes = true, visit = 5, firstPeekVisit = 1))
-        assertFalse(PeekRules.allowed(opened = true, peeks = 0, hasNotes = true, visit = 1, firstPeekVisit = null))
+    @Test fun theHintShowsAtMostTwiceOnlyWithNotesAndNeverAfterSettingsOpened() {
+        // An empty library invites to record; it says nothing about settings.
+        assertFalse(HintRules.allowed(opened = false, shown = 0, hasNotes = false, visit = 1, firstHintVisit = null))
+        assertTrue(HintRules.allowed(opened = false, shown = 0, hasNotes = true, visit = 1, firstHintVisit = null))
+        // The second time only in a later visit than the first.
+        assertFalse(HintRules.allowed(opened = false, shown = 1, hasNotes = true, visit = 1, firstHintVisit = 1))
+        assertTrue(HintRules.allowed(opened = false, shown = 1, hasNotes = true, visit = 2, firstHintVisit = 1))
+        assertTrue(HintRules.allowed(opened = false, shown = 1, hasNotes = true, visit = 1, firstHintVisit = null))
+        assertFalse(HintRules.allowed(opened = false, shown = 1, hasNotes = false, visit = 2, firstHintVisit = 1))
+        assertFalse(HintRules.allowed(opened = false, shown = 2, hasNotes = true, visit = 5, firstHintVisit = 1))
+        assertFalse(HintRules.allowed(opened = true, shown = 0, hasNotes = true, visit = 1, firstHintVisit = null))
     }
 }

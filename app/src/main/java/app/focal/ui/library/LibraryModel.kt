@@ -80,8 +80,19 @@ data class LibraryModel(
  * The dock of a note's page (spec 4.3): ▶ (‖ while it plays there; a faint ▶ while a recording holds the microphone;
  * nothing for a note without audio) and the progress pill, or Copy once the note is ready.
  */
-fun noteDock(audioPresent: Boolean, canPlay: Boolean, playing: Boolean, phase: NotePhase, progress: Float?, copyEnabled: Boolean): DockState.Note =
+fun noteDock(
+    audioPresent: Boolean,
+    canPlay: Boolean,
+    playing: Boolean,
+    phase: NotePhase,
+    progress: Float?,
+    copyEnabled: Boolean,
+    append: Boolean = false,
+    noteId: String? = null,
+): DockState.Note =
     DockState.Note(
+        append = append,
+        noteId = noteId,
         circle = when {
             !audioPresent -> PlayCircle.None
             !canPlay -> PlayCircle.Unavailable
@@ -100,6 +111,7 @@ fun noteDock(audioPresent: Boolean, canPlay: Boolean, playing: Boolean, phase: N
 fun pageDock(row: NoteRow, capturing: Boolean): DockState.Note = noteDock(
     audioPresent = row.audioPresent, canPlay = row.audioPresent && !capturing, playing = false,
     phase = row.phase, progress = row.progress, copyEnabled = row.preview.isNotBlank(),
+    append = row.canAppend && !capturing, noteId = row.id,
 )
 
 /** The dock of the note Finish opens from the live stage (T7b): its audio is there and it starts transcribing. */
@@ -157,11 +169,11 @@ object LibraryModels {
     val BUSY = setOf(NotePhase.TRANSCRIBING, NotePhase.PREPARING_MODEL)
 }
 
-/** The row menu's items (spec 4.15). */
+/** What a row offers beyond opening and selecting it: its accessibility actions (once the row menu's items, spec 4.15). */
 enum class MenuItem { CopyText, Share, Rename, RemoveAudio, Delete }
 
 /**
- * Row menu = Copy text, Share, Rename, divider, Remove audio, Delete; a note that is not ready yet offers Rename and
+ * A row's actions = Copy text, Share, Rename, Remove audio, Delete; a note that is not ready yet offers Rename and
  * Delete only, and only Rename while it is being transcribed. Items that do not apply are hidden, not disabled.
  */
 fun menuItems(row: NoteRow): List<MenuItem> {

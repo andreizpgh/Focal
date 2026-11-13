@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -61,13 +62,17 @@ import kotlinx.coroutines.launch
  * undoes after the page changes, and commits when that scope ends with the activity (a rotation included).
  */
 @Composable
-fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: RecordingViewModel, record: () -> Unit) {
+fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: RecordingViewModel, retry: () -> Unit, record: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptics = rememberFocalHaptics()
     val feedback = shell.bottom.feedback
     val reduced by rememberUpdatedState(LocalReducedMotion.current)
     val onRecord by rememberUpdatedState(record)
+    // What a failed start is tried again with: the same request, not a new note ([record] is the shortcut's Record).
+    val onRetry by rememberUpdatedState(retry)
+    // The current configuration's resources, for a plural counted when its message is shown.
+    val resources by rememberUpdatedState(LocalResources.current)
     // Read in composition, so a configuration change (a new locale) reaches messages shown later.
     val words by rememberUpdatedState(
         FeedbackWords(
@@ -76,6 +81,7 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
             audioRemoved = stringResource(R.string.feedback_audio_removed), tooLate = stringResource(R.string.feedback_too_late),
             nothingRecorded = stringResource(R.string.feedback_nothing_recorded), storageShort = stringResource(R.string.feedback_storage),
             storageResume = stringResource(R.string.feedback_storage_resume), micBusy = stringResource(R.string.feedback_mic_busy),
+            interrupted = stringResource(R.string.feedback_interrupted),
         ),
     )
 
@@ -84,8 +90,10 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
             scope.launch {
                 when (event) {
                     is LibraryEvent.Deleted -> feedback.showDeferred(
-                        words.deleted, FeedbackAction(words.undo, FocalIcon.Undo),
-                        undo = { library.undoDelete(event.noteId) }, commit = { library.commitDelete(event.noteId) },
+                        if (event.noteIds.size == 1) words.deleted
+                        else resources.getQuantityString(R.plurals.feedback_deleted_many, event.noteIds.size, event.noteIds.size),
+                        FeedbackAction(words.undo, FocalIcon.Undo),
+                        undo = { library.undoDelete(event.noteIds) }, commit = { library.commitDelete(event.noteIds) },
                     )
                     is LibraryEvent.AudioRemoved -> feedback.showDeferred(
                         words.audioRemoved, FeedbackAction(words.undo, FocalIcon.Undo),
@@ -110,11 +118,17 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
                             }
                         }
                         StartFailure.MICROPHONE -> {
-                            if (feedback.show(words.micBusy, FeedbackAction(words.tryAgain)) == FeedbackResult.ActionPerformed) onRecord()
+                            if (feedback.show(words.micBusy, FeedbackAction(words.tryAgain)) == FeedbackResult.ActionPerformed) onRetry()
                         }
-                        StartFailure.PERMISSION -> onRecord()
+                        // The permission went missing: ask again. With the permission in place Android refused
+                        // the microphone for another reason, and asking again would only repeat the refusal.
+                        StartFailure.PERMISSION -> {
+                            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                            if (granted) feedback.show(event.message) else onRetry()
+                        }
                         StartFailure.OTHER -> feedback.show(event.message)
                     }
+                    ServiceEvent.Interrupted -> feedback.show(words.interrupted)
                     // Resume refused for storage: say how much to free, at every refusal (spec 5.3.5).
                     is ServiceEvent.ResumeRefused -> {
                         val text = words.storageResume.format(Formatter.formatShortFileSize(context, event.storageShortBytes))
@@ -196,6 +210,7 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
 private data class FeedbackWords(
     val undo: String, val storage: String, val tryAgain: String, val deleted: String, val audioRemoved: String,
     val tooLate: String, val nothingRecorded: String, val storageShort: String, val storageResume: String, val micBusy: String,
+    val interrupted: String,
 )
 
 private fun Context.openStorageSettings() {

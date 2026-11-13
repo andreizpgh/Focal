@@ -4,7 +4,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,7 +42,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import app.focal.R
 import app.focal.ui.components.NineBars
@@ -61,7 +59,6 @@ import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.alignWith
 import app.focal.ui.library.RenameField
@@ -69,7 +66,6 @@ import app.focal.ui.shell.LocalPageReveal
 import app.focal.ui.shell.pageTitle
 import app.focal.ui.shell.rememberPageTitle
 import app.focal.ui.state.GapUi
-import kotlin.math.roundToInt
 
 /** The note's head and inline blocks (spec 4.13, 4.14, 4.16, 5.4, 5.5). */
 object NoteBlockMetrics {
@@ -89,9 +85,6 @@ object NoteBlockMetrics {
     const val GAP_MARK_ALPHA = 0.4f
     val gapMarkGap = FocalGrid.x12
     val writingHead = FocalGrid.x40
-    /** The provenance line: 16 dp under the text, 20 dp tall; its "Restore original" keeps a 48 dp target. */
-    val provenanceGap = FocalGrid.x16
-    val provenanceLine = FocalGrid.x20
 }
 
 /** A notice under the meta (spec 4.16): its first sentence in ink (or none, [quiet]), the rest `muted`. */
@@ -330,53 +323,6 @@ internal fun WritingHead(working: Boolean, modifier: Modifier = Modifier) {
         NineBars(WaveMode.Working(paused = !working), WaveDress.paper(colors), Modifier.markBox(NoteBlockMetrics.writingHead))
     }
 }
-
-/**
- * The provenance line under the edit sheet (spec 4.14): "Edited · Restore original", 16 dp under the text; the item
- * grows by 36 dp on `move` while it shows and collapses again after a restore. "Restore original" keeps a 48 dp target
- * that reaches into the gap below the line.
- */
-@Composable
-internal fun ProvenanceLine(visible: Boolean, onRestore: () -> Unit) {
-    val colors = FocalTheme.colors
-    val reduced = LocalReducedMotion.current
-    val open = remember { Animatable(if (visible) 1f else 0f) }
-    LaunchedEffect(visible, reduced) {
-        val target = if (visible) 1f else 0f
-        if (reduced) open.snapTo(target) else open.animateTo(target, FocalMotion.move())
-    }
-    if (!visible && open.value <= 0f) return
-    val restore = stringResource(R.string.menu_restore)
-    val source = remember { MutableInteractionSource() }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .layout { measurable, constraints ->
-                val full = (NoteBlockMetrics.provenanceGap + NoteBlockMetrics.provenanceLine).roundToPx()
-                val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
-                layout(placeable.width, (full * open.value).roundToInt()) {
-                    placeable.placeWithLayer(0, NoteBlockMetrics.provenanceGap.roundToPx() - (placeable.height - NoteBlockMetrics.provenanceLine.roundToPx()) / 2) {
-                        alpha = open.value
-                    }
-                }
-            },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Start,
-    ) {
-        Text(stringResource(R.string.provenance_edited), style = FocalType.meta, color = colors.recede)
-        Text(PROVENANCE_DOT, style = FocalType.meta, color = colors.recede)
-        Box(
-            Modifier
-                .heightIn(min = FocalLayout.target)
-                .semantics { role = Role.Button }
-                .focusRing(FocalShapes.pill)
-                .clickable(source, indication = PressPlate(FocalShapes.pill), enabled = visible, onClickLabel = restore, onClick = onRestore),
-            contentAlignment = Alignment.Center,
-        ) { Text(restore, style = FocalType.meta.copy(fontWeight = FocalWeight.Semibold), color = colors.ink) }
-    }
-}
-
-private const val PROVENANCE_DOT = " · "
 
 /** A ready note with sound and no words (spec 5.9): one `body` line in `muted`. */
 @Composable

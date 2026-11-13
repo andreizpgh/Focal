@@ -137,10 +137,10 @@ class ReplaceAllUndoTest {
         val (id, before) = manyMatches()
         val original = shown(id)
         open(before.first().text)
-        compose.onNode(hasContentDescription("Edit") and hasClickAction()).performClick()
-        await("the edit bar", hasContentDescription("Done"))
-        // A paragraph's field holds the caret, so its draft is live while Find replaces under it.
+        // A tap on a paragraph opens Edit with its field holding the caret, so its draft is live while Find replaces
+        // under it.
         compose.onNode(hasText(before.first().text)).performClick()
+        await("the edit bar", hasContentDescription("Done"))
         await("the paragraph's field", hasSetTextAction() and hasText(before.first().text))
         compose.onNode(hasContentDescription("More options") and hasClickAction()).performClick()
         await("the edit menu", hasText("Find and replace") and hasClickAction())

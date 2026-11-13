@@ -13,7 +13,7 @@ interface is Jetpack Compose.
 | `core` | `core/src/main/kotlin/app/focal/core` | Segmenter and window gate, word building and window merge, formatter (seams, paragraphs, title, doubtful words), alignment of edited text, meter math, thread policy and every tuning constant (`SpeechTuning`). No Android dependencies; unit-tested with shared test vectors. |
 | Recording | `app.focal.recording` | `RecordingService` (capture and the transcription queue), `WindowFeed` (synced PCM into the segmenter), `SessionOperations` (process-wide ownership), notifications and the live state the UI reads. |
 | Speech | `app.focal.speech` | The JNI bridge (`SherpaBridge`, `OfflineRecognizer`, `SileroVad`), model installation (`UltraModel`, `SpeechModels`), `UltraEngine`/`UltraTranscriber`, the device thread policy and `SpeechPlayer`. |
-| Data | `app.focal.data` | `NoteStore` (SQLite, schema 5), schema and migrations, paragraph edit rules, search folding, transcript JSON. |
+| Data | `app.focal.data` | `NoteStore` (SQLite, schema 6), schema and migrations, paragraph edit rules, search folding, transcript JSON. |
 | Interface | `app.focal.ui.*` | `state` (view models and the UI contract), `shell` (navigation, overlay, bottom column), `library`, `scene`, `note`, `settings`, `components`, `design` (tokens). |
 | Native | `app/src/main/cpp` | `focal_speech.cpp`, the only native code, plus the vendored sherpa-onnx C API header and license. |
 
@@ -48,13 +48,37 @@ Starting needs 200 MB of free storage. The service opens the microphone before i
 creates the note, so a busy microphone never leaves an empty note behind. Capture
 runs on the `focal-capture` thread at audio priority. It appends mono 16-bit PCM
 to the note's file in app-private storage through a 16 KiB buffer and syncs at
-least once per second. That is about 115 MB per recorded hour.
+least once per second. That is about 115 MB per recorded hour. The recorder's
+own buffer holds two seconds, so a slow sync does not make Android drop samples.
 
 **Pause** stops `AudioRecord`, syncs the file and records a break at the exact
 sample offset. The service keeps its microphone type while paused. Capture pauses
-on its own, and says why, when a call takes the microphone, when Android or
-another app silences it, or when free storage drops below 64 MB. Resume needs 128
-MB free.
+on its own, and says why, when free storage drops below 64 MB or the microphone
+stops delivering audio or will not start. Resume needs 128 MB free and reopens a
+microphone that failed. A recording that ends by itself because its audio can no
+longer be written keeps what was saved, goes on to transcription and says that
+it stopped early.
+
+**Hold.** When a call or another app takes the microphone, Android goes on
+delivering silence to Focal. Capture then holds: it records a break, shows the
+note as paused with the reason, and keeps the microphone open without writing
+anything. Once real audio has come back for half a second it goes on by itself,
+starting with that half second, which waits in a bounded buffer meanwhile.
+Resume during a hold only checks again. Pause turns the hold into an ordinary
+pause and Finish ends the note where the hold began: audio that was still being
+checked is not written, because the note showed as waiting. A hold that lasts
+ten minutes becomes a pause too, so the microphone and the wake lock are let go.
+Capture reads the silenced state at most every 100 ms and from the recording
+callback, not with every 20 ms read.
+
+**Continue.** A ready note that still has its audio can take more recording. The
+note is reopened (`NoteStore.reopen`): its last window becomes a break, the join
+is recorded as a break, and capture appends to the same PCM file from its whole
+samples. Nothing the note holds changes: its paragraphs are closed, so the new
+text starts new paragraphs after them and manual edits stay; raw recognizer
+output is untouched. Segmentation continues after the last window, as it does
+after process death. A note from an older version, or one whose audio was
+removed, cannot continue.
 
 **Finish** closes the microphone, syncs, and switches the service to the
 media-processing type (data sync before Android 15) to finish transcription. A
@@ -160,7 +184,8 @@ without the model record but cannot transcribe.
 
 ## Storage
 
-`NoteStore` uses SQLite (WAL, foreign keys on). Schema 5:
+`NoteStore` uses SQLite (WAL, foreign keys on). Schema 6 has schema 5's tables;
+its upgrade only derives automatic titles again under the current rule:
 
 | Table | Holds |
 | --- | --- |
@@ -236,8 +261,12 @@ would change any word's letters or digits is dropped.
   Unpunctuated speech closes at the longest recent pause at 160 words. While a
   note transcribes, its last paragraph stays open and grows; `TranscriptAssembler`
   produces the same paragraphs incrementally as the batch formatter.
-- **Title**: the first sentence (extended if shorter than 12 characters), clipped
-  at a word boundary to 48 characters. A renamed title is never replaced.
+- **Title**: the first sentence (extended if shorter than 12 characters), at most
+  36 characters. A longer sentence is shortened to whole words: to the last
+  clause that fills at least half of the room, and never left on a function word
+  or a bare number. It carries no ellipsis, because the rest of the sentence
+  follows it wherever a title is shown beside its text. A renamed title is never
+  replaced.
 - **Doubtful words**: a word whose least confident letter-bearing token is below
   probability 0.5 gets a dotted underline. Editing the word clears it. These
   thresholds are provisional ([evidence](speech-quality.md#doubtful-words)).
@@ -246,9 +275,10 @@ would change any word's letters or digits is dropped.
   overflow Android's limit for passing data between apps.
 
 When a paragraph is edited, `Alignment` maps the new text to the recognizer's
-words, so unchanged words keep their times. A tap on a word plays from 0.5 s
-before it, from the nearest earlier timed word, or from the paragraph's start.
-Times are never invented.
+words, so unchanged words keep their times. Edit's ▶ plays the audio from the
+last timed word at or before the selection to the first timed word that ends
+after it, with a short lead either side; a word changed by an edit has no time,
+so the range widens to its timed neighbours. Times are never invented.
 
 ## Playback
 
@@ -271,7 +301,8 @@ link; `ShortcutActivity` is the shortcut's trampoline.
   a search hit) and Licenses. It survives process death and is always rooted at
   the library. Predictive back is supported throughout.
 - **Settings** is not a destination: it is a second page beside the library,
-  opened by a horizontal swipe, a keyboard shortcut or an accessibility action.
+  opened by a horizontal swipe, the one-time hint's Open, a keyboard shortcut or
+  an accessibility action.
 - **Recording scene.** An overlay above the pages, driven by one expansion value
   from 0 to 1. The library's stage card grows into the full-screen scene and folds
   back; the pages scale and dim behind it and ignore input while it is open.

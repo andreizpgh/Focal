@@ -36,7 +36,10 @@ import java.time.ZoneId
 
 /** One-off library outcomes for the feedback pill. */
 sealed interface LibraryEvent {
-    data class Deleted(val noteId: String) : LibraryEvent
+    /** These notes went to the trash together (one, or a selection): "Note deleted · Undo", "3 notes deleted · Undo". */
+    data class Deleted(val noteIds: List<String>) : LibraryEvent {
+        constructor(noteId: String) : this(listOf(noteId))
+    }
     data class AudioRemoved(val noteId: String) : LibraryEvent
     /** Undo came after the deletion or removal was committed: "Too late to undo". */
     data class TooLateToUndo(val noteId: String) : LibraryEvent
@@ -114,13 +117,32 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (UndoableActions.delete(app, noteId) { eventFlow.tryEmit(LibraryEvent.Error(it)) }) eventFlow.emit(LibraryEvent.Deleted(noteId))
     }
 
+    /**
+     * Moves the selected notes to the trash and emits one [LibraryEvent.Deleted] for those that went ("3 notes deleted
+     * · Undo"). A note that cannot be deleted now stays. Its refusal is said only when nothing went: a second message
+     * would replace "N notes deleted · Undo" at once, which commits the deletion and takes its Undo away; the count and
+     * the note that is still in the list say the rest.
+     */
+    fun deleteAll(noteIds: List<String>) = launch {
+        var refusal: String? = null
+        val deleted = noteIds.filter { id -> UndoableActions.delete(app, id) { if (refusal == null) refusal = it } }
+        if (deleted.isNotEmpty()) eventFlow.emit(LibraryEvent.Deleted(deleted))
+        else refusal?.let { eventFlow.emit(LibraryEvent.Error(it)) }
+    }
+
     /** Undo on "Note deleted"; emits [LibraryEvent.TooLateToUndo] if it was already deleted for good. */
-    fun undoDelete(noteId: String) = launch {
-        if (!UndoableActions.undoDelete(app, noteId)) eventFlow.emit(LibraryEvent.TooLateToUndo(noteId))
+    fun undoDelete(noteId: String) = undoDelete(listOf(noteId))
+
+    /** Undo on "3 notes deleted": every one comes back; [LibraryEvent.TooLateToUndo] once if any was already gone. */
+    fun undoDelete(noteIds: List<String>) = launch {
+        val late = noteIds.filterNot { UndoableActions.undoDelete(app, it) }
+        late.firstOrNull()?.let { eventFlow.emit(LibraryEvent.TooLateToUndo(it)) }
     }
 
     /** The "Note deleted" snackbar closed without Undo (`SnackbarResult.Dismissed`): delete it for good now. */
     fun commitDelete(noteId: String) = UndoableActions.commitDelete(app, noteId)
+
+    fun commitDelete(noteIds: List<String>) = noteIds.forEach { UndoableActions.commitDelete(app, it) }
 
     /**
      * Schedules the audio removal; emits [LibraryEvent.AudioRemoved] for "Audio removed · Undo". Refused with
@@ -173,6 +195,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 audioPresent = audio, failedParts = note.failedWindows,
                 canRemoveAudio = audio && note.state == NoteState.READY && phase == NotePhase.READY,
                 waitingReason = waitingReason(note, phase, model),
+                canAppend = audio && !note.legacy && note.state == NoteState.READY &&
+                    (phase == NotePhase.READY || phase == NotePhase.PARTIAL_FAILURE),
             )
         }
 

@@ -1,7 +1,5 @@
 package app.focal.gallery
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
@@ -10,14 +8,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import app.focal.recording.SpeechAvailability
 import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FocalIcon
-import app.focal.ui.components.FocalMenuDivider
-import app.focal.ui.components.FocalMenuItem
-import app.focal.ui.components.MenuSurface
 import app.focal.ui.library.DatePatterns
 import app.focal.ui.library.DayWords
 import app.focal.ui.library.LibraryActions
@@ -29,6 +22,7 @@ import app.focal.ui.library.STAGE_PILL_TAG
 import app.focal.ui.library.SettingsLayerState
 import app.focal.ui.library.StageUi
 import app.focal.ui.library.rememberLibraryRenameState
+import app.focal.ui.library.rememberLibrarySelectionState
 import app.focal.ui.library.rememberLibrarySearchState
 import app.focal.ui.settings.LicensesPage
 import app.focal.ui.settings.SettingsActions
@@ -68,12 +62,13 @@ object LibraryShots {
         addAll(themed("scrolled") { Library(idleModel(), scroll = true) })
         addAll(themed("search") { Library(idleModel(), search = searchResults()) })
         add(Shot("search-none-light", dark = false) { Library(idleModel(), search = SearchUiState("boyler", "boyler")) })
-        addAll(themed("menu") { Library(idleModel(), menu = true) })
+        // Notes selected by a long press: the stage's note and a row, the dock as ✕ | "Delete 2 notes".
+        addAll(themed("select") { Library(idleModel(), selected = listOf("note-0", "note-2")) })
         addAll(themed("undo") { Library(idleModel(), feedback = true) })
+        // The one-time hint that settings are a swipe away.
+        addAll(themed("hint") { Library(idleModel(), hint = true) })
         addAll(themed("settings") { Strip(1f) })
         addAll(themed("settings-swipe-50") { Strip(0.5f) })
-        add(Shot("peek-light", dark = false) { Strip(32f / 420f) })
-        add(Shot("peek-empty-light", dark = false) { Strip(32f / 420f, LibraryModel(loaded = true)) })
         add(Shot("licenses-light", dark = false) { LicensesPage(onBack = {}) })
         add(Shot("home-light-200", dark = false, fontScale = 2f) { Library(idleModel()) })
         add(Shot("recording-light-200", dark = false, fontScale = 2f) { Library(liveModel(paused = true)) })
@@ -184,15 +179,17 @@ internal fun Library(
     model: LibraryModel,
     scroll: Boolean = false,
     search: SearchUiState? = null,
-    menu: Boolean = false,
+    selected: List<String> = emptyList(),
     feedback: Boolean = false,
     rename: String? = null,
+    hint: Boolean = false,
 ) {
     val shell = rememberShellState()
     val list = rememberLazyListState()
     if (scroll) LaunchedEffect(list) { list.scrollToItem(2, 140) }
     if (feedback) LaunchedEffect(shell) { shell.bottom.feedback.show("Note deleted", FeedbackAction("Undo", FocalIcon.Undo)) }
-    FocalShell(shell, destination = { LibraryDestination(model, list, search, menu, rename = rename) })
+    if (hint) LaunchedEffect(shell) { shell.bottom.feedback.show("Swipe left for settings", FeedbackAction("Open")) }
+    FocalShell(shell, destination = { LibraryDestination(model, list, search, selected, rename = rename) })
 }
 
 /** The Library destination (the page and the settings strip) inside whatever shell is current. */
@@ -201,7 +198,7 @@ internal fun LibraryDestination(
     model: LibraryModel,
     list: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     search: SearchUiState? = null,
-    menu: Boolean = false,
+    selected: List<String> = emptyList(),
     actions: LibraryActions = remember { LibraryActions(copy = { true }) },
     rename: String? = null,
 ) {
@@ -215,26 +212,11 @@ internal fun LibraryDestination(
                 searchState = rememberLibrarySearchState(open = search != null),
                 query = rememberTextFieldState(search?.query.orEmpty()),
                 rename = rememberLibraryRenameState(rename),
+                selection = rememberLibrarySelectionState(selected),
             )
-            if (menu) RowMenu()
         },
         settings = { Settings() },
     )
-}
-
-/** The row menu at a long-press on the second row (a popup on a phone; drawn inline here). */
-@Composable
-private fun RowMenu() {
-    Box(Modifier.fillMaxSize()) {
-        MenuSurface(Modifier.menuAt(x = 120.dp, y = 420.dp)) {
-            FocalMenuItem("Copy text", {})
-            FocalMenuItem("Share", {})
-            FocalMenuItem("Rename", {})
-            FocalMenuDivider()
-            FocalMenuItem("Remove audio", {}, trailing = "9 MB")
-            FocalMenuItem("Delete", {})
-        }
-    }
 }
 
 @Composable
@@ -247,13 +229,11 @@ private fun Settings() {
 
 /** The strip at [s]: the library and the settings page beside it. */
 @Composable
-internal fun Strip(s: Float, model: LibraryModel = idleModel(), edgePeek: Float = 0f) {
+internal fun Strip(s: Float, model: LibraryModel = idleModel()) {
     val shell = rememberShellState()
     LaunchedEffect(shell) { shell.settings.track(s) }
     val actions = remember { LibraryActions() }
-    // The reduced-motion peek at its hold: the seam and the page's edge faded in at the window's edge (spec 4.23.5).
     val layer = remember { SettingsLayerState() }
-    if (edgePeek > 0f) LaunchedEffect(layer) { layer.edgePeek.snapTo(edgePeek) }
     FocalShell(shell, destination = {
         LibraryHost(
             strip = shell.settings, preferences = null, armed = { true }, hasNotes = true, capturing = false, blocked = false,

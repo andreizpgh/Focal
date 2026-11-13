@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
@@ -38,14 +39,13 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
@@ -57,11 +57,11 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.focal.R
+import app.focal.ui.components.FocalIcon
+import app.focal.ui.components.Glyph
 import app.focal.ui.components.PressPlate
 import app.focal.ui.components.focusRing
 import app.focal.ui.design.FocalGrid
@@ -72,6 +72,7 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.alignWith
+import app.focal.ui.design.rememberFocalHaptics
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.pageOrigin
 import app.focal.ui.shell.rememberFocusReport
@@ -80,7 +81,6 @@ import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.SearchRow
 import java.time.LocalDate
-import kotlin.math.roundToInt
 
 /** Row geometry (spec 4.12). */
 object RowMetrics {
@@ -92,34 +92,36 @@ object RowMetrics {
     val previewGap = FocalGrid.x4
     val trackGap = FocalGrid.x8
     val track = 2.dp
+    /** The check of a selected row, where its length was: the size of a line of `meta`. */
+    val check = FocalGrid.x20
     const val TITLE_LINES = 2
     const val PREVIEW_LINES = 2
     /** From this font scale the duration wraps under the title. */
     const val WRAP_FONT = 1.5f
-    /** The run-in and the text are separated by an en space (U+2002). */
-    const val RUN_IN_GAP = " "
     const val PERCENT = 100
 }
 
 private val RowPlate = PressPlate(FocalShapes.block, insetX = RowMetrics.plateInset)
 
-/** Where a long-press landed, for the menu at the touch point. */
-private class TouchPoint { var at = Offset.Zero }
-
 /** What a row can do; the page provides it. */
 @Stable
 class RowActions(
+    /** A tap: the row opens its note, or, while notes are selected, joins or leaves the selection. */
     val open: (NoteRow) -> Unit,
-    val menu: (NoteRow, IntOffset) -> Unit,
-    /** The row menu's items as TalkBack custom actions (spec 4.12.2: TalkBack gets the same actions). */
+    /** A long press: the row is selected (and selection begins). */
+    val select: (NoteRow) -> Unit,
+    /** The note's actions as TalkBack custom actions (spec 4.12.2): Copy text, Share, Rename, Remove audio, Delete. */
     val menuActions: (NoteRow) -> List<CustomAccessibilityAction>,
 )
 
 /**
- * A ready row (spec 4.12.2), or a transcribing or waiting one (4.12.4): the title with the duration flush right
- * like a page number, and a preview opening with a run-in. The hit area is the full width, 12 dp above the title
- * and below the preview; the press plate spans x 8-404. Long-press opens the menu at the touch point. [capturing]: a
- * recording holds the microphone, so the row's page will open with ▶ unavailable.
+ * A ready row (spec 4.12.2), or a transcribing or waiting one (4.12.4): the title with the note's length flush right
+ * like a page number, and under it the text that follows the title, two lines. A row carries one piece of metadata, in
+ * one place: its length, or what is happening to it while it is not ready ("42%", "Waiting", "Preparing"); the day
+ * is the label above it and the time of day is on its page. The hit area is the full width, 12 dp above the title and
+ * below the preview; the press plate spans x 8-404. A long press selects the row; a [selected] row keeps its plate
+ * (`s1`) and shows a check where its length was, and is said to be selected. [capturing]: a recording holds the
+ * microphone, so the row's page will open with ▶ unavailable.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -128,22 +130,23 @@ fun NoteRowItem(
     dates: LibraryDates,
     actions: RowActions,
     modifier: Modifier = Modifier,
-    menu: @Composable () -> Unit = {},
     title: (@Composable () -> Unit)? = null,
     capturing: Boolean = false,
+    selected: Boolean = false,
 ) {
     val colors = FocalTheme.colors
     val source = remember { MutableInteractionSource() }
-    val touch = remember { TouchPoint() }
-    val runIn = when (row.phase) {
-        NotePhase.TRANSCRIBING -> stringResource(R.string.row_transcribing)
+    val haptics = rememberFocalHaptics()
+    // The plate of a selected row: it arrives and leaves on `fadeFast`, read in the draw phase.
+    val plate = remember { Animatable(if (selected) 1f else 0f) }
+    LaunchedEffect(selected) { plate.animateTo(if (selected) 1f else 0f, FocalMotion.fadeFast()) }
+    val trailing = when (row.phase) {
+        NotePhase.TRANSCRIBING -> stringResource(R.string.row_percent, ((row.progress ?: 0f) * RowMetrics.PERCENT).toInt())
         NotePhase.WAITING -> stringResource(R.string.row_waiting)
         NotePhase.PREPARING_MODEL -> stringResource(R.string.row_preparing)
-        else -> dates.time(row.created)
+        else -> durationText(row.durationMs)
     }
-    val trailing = if (row.phase == NotePhase.TRANSCRIBING) {
-        stringResource(R.string.row_percent, ((row.progress ?: 0f) * RowMetrics.PERCENT).toInt())
-    } else durationText(row.durationMs)
+    val working = row.phase == NotePhase.TRANSCRIBING || row.phase == NotePhase.WAITING || row.phase == NotePhase.PREPARING_MODEL
     val titleText = noteTitle(row, dates)
     val menuActions = actions.menuActions(row)
     val pages = LocalShell.current.pages
@@ -151,20 +154,26 @@ fun NoteRowItem(
     Box(
         modifier
             .fillMaxWidth()
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        event.changes.firstOrNull()?.takeIf { it.pressed && !it.previousPressed }?.let { touch.at = it.position }
-                    }
-                }
+            .drawBehind {
+                val a = plate.value
+                if (a <= 0f) return@drawBehind
+                val inset = RowMetrics.plateInset.toPx()
+                val radius = CornerRadius(FocalShapes.blockRadius.toPx())
+                drawRoundRect(colors.s1, Offset(inset, 0f), Size(size.width - 2 * inset, size.height), radius, alpha = a)
             }
-            // While the title is renamed the row's menu is out of reach for touch, and so for TalkBack.
-            .semantics { customActions = if (title == null) menuActions else emptyList() }
+            // While the title is renamed the row's actions are out of reach for touch, and so for TalkBack.
+            .semantics {
+                customActions = if (title == null) menuActions else emptyList()
+                // Said only of a selected row: set on every row, each would be read as "not selected".
+                if (selected) this.selected = true
+            }
             .focusRing(FocalShapes.block)
             .combinedClickable(
                 interactionSource = source, indication = RowPlate, enabled = title == null,
-                onLongClick = { actions.menu(row, IntOffset(touch.at.x.roundToInt(), touch.at.y.roundToInt())) },
+                onLongClick = {
+                    haptics.selected()
+                    actions.select(row)
+                },
                 onClick = { actions.open(row) },
             )
             .padding(horizontal = FocalLayout.gutter, vertical = RowMetrics.hitPad)
@@ -185,17 +194,16 @@ fun NoteRowItem(
                     )
                 },
                 trailing = trailing,
-                trailingInk = row.phase == NotePhase.TRANSCRIBING,
+                trailingInk = working,
                 titleText = titleText,
+                checked = { plate.value },
             )
-            Spacer(Modifier.height(RowMetrics.previewGap))
-            Preview(runIn, previewAfterTitle(row))
+            Preview(previewAfterTitle(row))
             if (row.phase == NotePhase.TRANSCRIBING) {
                 Spacer(Modifier.height(RowMetrics.trackGap))
                 RowTrack(row.progress ?: 0f)
             }
         }
-        menu()
     }
 }
 
@@ -207,11 +215,24 @@ private val RowTitleStyle = FocalType.rowTitle.copy(lineBreak = LineBreak.Headin
  * under it; a duration wrapped under it keeps to the same edge ([titleText]'s).
  */
 @Composable
-private fun TitleLine(title: @Composable () -> Unit, trailing: String, trailingInk: Boolean, titleText: String) {
+private fun TitleLine(
+    title: @Composable () -> Unit,
+    trailing: String,
+    trailingInk: Boolean,
+    titleText: String,
+    /** How far the row is selected (0..1, read in the draw phase): a check fades in over the trailing text's end. */
+    checked: () -> Float = { 0f },
+) {
     val colors = FocalTheme.colors
     val wraps = LocalDensity.current.fontScale >= RowMetrics.WRAP_FONT
     val duration: @Composable (Modifier, TextAlign?) -> Unit = { modifier, align ->
-        Text(trailing, style = FocalType.meta, color = if (trailingInk) colors.ink else colors.recede, maxLines = 1, textAlign = align, modifier = modifier)
+        Box(modifier, contentAlignment = if (align == TextAlign.Left) Alignment.CenterStart else Alignment.CenterEnd) {
+            Text(
+                trailing, style = FocalType.meta, color = if (trailingInk) colors.ink else colors.recede, maxLines = 1, textAlign = align,
+                modifier = Modifier.graphicsLayer { alpha = 1 - checked() },
+            )
+            Glyph(FocalIcon.Check, colors.ink, Modifier.graphicsLayer { alpha = checked() }, size = RowMetrics.check)
+        }
     }
     if (wraps) {
         Column {
@@ -227,31 +248,28 @@ private fun TitleLine(title: @Composable () -> Unit, trailing: String, trailingI
     }
 }
 
-/** "16:05" (or the working state) in 500 ink, an en space, then the preview, cut on a whole word (G4). */
+/**
+ * The preview: the text after the title in `secondary` `muted`, two lines, cut on a whole word (G4), 4 dp under the
+ * title. A note whose title holds all of its text has none, and its row is the title line alone.
+ */
 @Composable
-private fun Preview(runIn: String, text: String, hits: List<IntRange> = emptyList()) {
+private fun Preview(text: String, hits: List<IntRange> = emptyList()) {
+    if (text.isBlank()) return
     val colors = FocalTheme.colors
-    val annotated = remember(runIn, text, hits, colors.ink) {
+    val annotated = remember(text, hits, colors.ink) {
         buildAnnotatedString {
-            withStyle(SpanStyle(color = colors.ink, fontWeight = FocalWeight.Medium, fontFeatureSettings = TNUM)) { append(runIn) }
-            append(RowMetrics.RUN_IN_GAP)
-            val start = length
             append(text)
             // Every hit in 600 ink inside the muted snippet (spec 5.2); snippets are static, so the weight may change.
             for (hit in hits) {
                 if (hit.first >= 0 && hit.last < text.length) {
-                    addStyle(SpanStyle(color = colors.ink, fontWeight = FocalWeight.Semibold), start + hit.first, start + hit.last + 1)
+                    addStyle(SpanStyle(color = colors.ink, fontWeight = FocalWeight.Semibold), hit.first, hit.last + 1)
                 }
             }
         }
     }
-    CutText(
-        annotated, FocalType.secondaryWords, colors.recede, RowMetrics.PREVIEW_LINES,
-        Modifier.fillMaxWidth(), protectedEnd = runIn.length + RowMetrics.RUN_IN_GAP.length,
-    )
+    Spacer(Modifier.height(RowMetrics.previewGap))
+    CutText(annotated, FocalType.secondaryWords, colors.recede, RowMetrics.PREVIEW_LINES, Modifier.fillMaxWidth())
 }
-
-private const val TNUM = "tnum"
 
 /** The transcribing row's 2 dp determinate track (`lens`, `ink` fill, radius 1), moving with `move`. */
 @Composable
@@ -284,8 +302,8 @@ fun durationText(durationMs: Long): String {
 }
 
 /**
- * A search result (spec 5.2): the row's anatomy with the day as its run-in ("Today", "Mon", "3 Nov") and the snippet
- * around the first hit, the hit in 600 ink.
+ * A search result (spec 5.2): the row's anatomy with the day in place of the length ("Today", "Mon", "3 Nov": results
+ * span days and carry no day labels) and the snippet around the first hit, the hit in 600 ink.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -305,16 +323,15 @@ fun SearchResultItem(result: SearchRow, dates: LibraryDates, today: LocalDate, o
             TitleLine(
                 title = {
                     Text(
-                        title, style = FocalType.rowTitle, color = if (row.title.isBlank()) colors.recede else colors.ink,
+                        title, style = RowTitleStyle, color = if (row.title.isBlank()) colors.recede else colors.ink,
                         maxLines = RowMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(),
                     )
                 },
-                trailing = durationText(row.durationMs),
+                trailing = dates.searchDay(row.created, today),
                 trailingInk = false,
                 titleText = title,
             )
-            Spacer(Modifier.height(RowMetrics.previewGap))
-            Preview(dates.searchDay(row.created, today), result.snippet, result.snippetHits)
+            Preview(result.snippet, result.snippetHits)
         }
     }
 }

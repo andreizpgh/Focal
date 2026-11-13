@@ -45,14 +45,16 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         const val MAX_LEGACY_PASSAGE_BYTES = 16L * 1024 * 1024
         const val MAX_TITLE_CHARS = 120
         const val PREVIEW_CHARS = 300
+        const val PREVIEW_PARAGRAPHS = 4
         const val SEARCH_TEXT_CHARS = 20_000
-        /** A window whose decoding failed or was killed this many times is marked FAILED. */
-        const val MAX_DECODE_ATTEMPTS = 2
         const val INTERRUPTED_MESSAGE = "Recording was interrupted. Saved audio can still be transcribed."
         const val NOTE_COLUMNS = "n.id,n.title,n.created,n.language,n.state,n.duration,n.error,n.speech_engine," +
             "n.title_is_custom,n.legacy,n.audio_present,n.pause_reason,n.end_reason," +
-            "(SELECT substr(text,1,$PREVIEW_CHARS) FROM paragraphs p WHERE p.note_id=n.id AND p.hidden=0 " +
-            "AND trim(p.text)!='' ORDER BY p.ord LIMIT 1) AS preview," +
+            // The start of the text, across its first paragraphs: a first paragraph of one short sentence (the
+            // derived title) would otherwise leave the preview empty under it.
+            "(SELECT substr(group_concat(t,' '),1,$PREVIEW_CHARS) FROM (SELECT substr(p.text,1,$PREVIEW_CHARS) AS t " +
+            "FROM paragraphs p WHERE p.note_id=n.id AND p.hidden=0 AND trim(p.text)!='' ORDER BY p.ord " +
+            "LIMIT $PREVIEW_PARAGRAPHS)) AS preview," +
             "(SELECT count(*) FROM windows w WHERE w.note_id=n.id AND w.state='FAILED') AS failed"
         /**
          * A row must fit one cursor window (2 MB): text, source and words each come inline only up to
@@ -101,12 +103,44 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         return id
     }
 
+    /**
+     * Reopens a ready note so that its recording can continue: the same note takes more audio at the end of its file,
+     * and the text of that audio follows the text it has. True when it was reopened (it is RECORDING again); false
+     * when it cannot continue: it is not ready, has no audio left, is in the trash, or was transcribed before schema 5
+     * (its windows carry no segmentation plan to continue from).
+     *
+     * Nothing the note holds changes. Its paragraphs are closed, so new text starts new paragraphs after them and
+     * manual edits stay as they are; raw recognizer output is untouched. The window that ended the earlier recording
+     * becomes a break (the audio after it is not continuous with it), and [audioSamples], the file's length now, is
+     * recorded as a break too, so segmentation closes there whatever kind of window came last.
+     */
+    fun reopen(id: String, audioSamples: Long): Boolean {
+        val reopened = writableDatabase.transaction {
+            val ready = rawQuery(
+                "SELECT 1 FROM notes WHERE id=? AND state=? AND audio_present=1 AND legacy=0 AND deleted_at IS NULL",
+                arrayOf(id, NoteState.READY),
+            ).use { it.moveToFirst() }
+            if (!ready) return@transaction false
+            val progress = progress(id)
+            if (progress.pendingWindows > 0 || progress.gaps > 0) return@transaction false
+            execSQL("UPDATE windows SET end_kind=? WHERE note_id=? AND end_kind=?", arrayOf<Any>(EndKind.BREAK.name, id, EndKind.FINAL.name))
+            if (audioSamples > 0) insertWithOnConflict("breaks", null, ContentValues().apply {
+                put("note_id", id); put("sample", audioSamples)
+            }, SQLiteDatabase.CONFLICT_IGNORE)
+            update("notes", ContentValues().apply {
+                put("state", NoteState.RECORDING); put("error", ""); putNull("pause_reason"); putNull("end_reason")
+            }, "id=?", arrayOf(id)) == 1
+        }
+        if (reopened) changed()
+        return reopened
+    }
+
     /** A note that is not in the trash, or null. */
     fun note(id: String): Note? = readableDatabase.rawQuery(
         "SELECT $NOTE_COLUMNS FROM notes n WHERE n.id=? AND n.deleted_at IS NULL", arrayOf(id),
     ).use { if (it.moveToFirst()) note(it) else null }
 
-    /** Every note outside the trash, newest first, with a preview of its first paragraph. */
+    /** Every note outside the trash, newest first, with a preview of the start of its text. */
     fun library(): List<Note> = readableDatabase.rawQuery(
         "SELECT $NOTE_COLUMNS FROM notes n WHERE n.deleted_at IS NULL ORDER BY n.created DESC,n.seq DESC", null,
     ).use { c -> buildList { while (c.moveToNext()) add(note(c)) } }
@@ -439,7 +473,12 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         "SELECT $WINDOW_COLUMNS FROM windows WHERE note_id=? AND state='PENDING' ORDER BY idx", arrayOf(noteId),
     ).use { c -> buildList { while (c.moveToNext()) add(storedWindow(c)) } }
 
-    /** The window with the highest index: for a note recorded with schema 5, the segmenter checkpoint. */
+    /** The first window waiting to be decoded, if any. */
+    fun nextPendingWindow(noteId: String): StoredWindow? = readableDatabase.rawQuery(
+        "SELECT $WINDOW_COLUMNS FROM windows WHERE note_id=? AND state='PENDING' ORDER BY idx LIMIT 1", arrayOf(noteId),
+    ).use { if (it.moveToFirst()) storedWindow(it) else null }
+
+    /** The window with the highest index: for a note recorded since schema 5, the segmenter checkpoint. */
     fun lastWindow(noteId: String): StoredWindow? = lastWindow(readableDatabase, noteId)
     private fun lastWindow(db: SQLiteDatabase, noteId: String): StoredWindow? = db.rawQuery(
         "SELECT $WINDOW_COLUMNS FROM windows WHERE note_id=? ORDER BY idx DESC LIMIT 1", arrayOf(noteId),

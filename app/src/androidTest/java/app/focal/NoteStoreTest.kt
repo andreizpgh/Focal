@@ -60,6 +60,81 @@ class NoteStoreTest {
         return id
     }
 
+    @Test fun aReadyNoteReopensForMoreRecordingAndKeepsItsTextAndEdits() {
+        val id = transcribedNote()
+        // Nothing reopens before the note is ready.
+        assertFalse(store.reopen(id, 20_000 * 16L))
+        assertTrue(store.markReady(id))
+        val before = store.paragraphs(id)
+        val edited = store.editParagraph(before[1].id, before[1].revision, "An edited thought.")
+        assertTrue(edited is EditResult.Saved)
+        val rawBefore = store.windows(id).map { it.rawText }
+        store.endReason(id, "PROCESS_ENDED")
+
+        // The note reopens: it records again, its last window is a break now, and the join is a break in the audio.
+        assertTrue(store.reopen(id, 20_000 * 16L))
+        val reopened = store.note(id)!!
+        assertEquals(NoteState.RECORDING, reopened.state)
+        assertNull(reopened.endReason)
+        assertEquals(listOf(EndKind.PAUSE, EndKind.PAUSE, EndKind.BREAK), store.windows(id).map { it.endKind })
+        assertTrue(20_000 * 16L in store.breaks(id))
+        // A note that is recording does not reopen a second time.
+        assertFalse(store.reopen(id, 20_000 * 16L))
+
+        // More audio, and its window follows the first recording's last one.
+        savedAudio(store, id, 26_000)
+        commit(store, id, plan(3, 20_000, 26_000, EndKind.FINAL, EndKind.BREAK), speech("More words were said later.", startSec = 1.0))
+        assertTrue(store.markReady(id))
+
+        val after = store.paragraphs(id)
+        // The text it had is as it was, the edit included; the new text is a paragraph of its own after it.
+        assertEquals(before[0].text, after[0].text)
+        assertEquals("An edited thought.", after[1].text)
+        assertTrue(after[1].edited)
+        assertEquals(before[1].sourceText, after[1].sourceText)
+        assertEquals("More words were said later.", after[2].text)
+        assertEquals(3, after.size)
+        assertEquals(21_000L, after[2].startMs)
+        assertTrue(after.none { it.open })
+        // Raw recognizer output of the first recording is untouched.
+        assertEquals(rawBefore, store.windows(id).take(3).map { it.rawText })
+        assertEquals(NoteState.READY, store.note(id)!!.state)
+        assertEquals(26_000L, store.note(id)!!.duration)
+        assertSearchIndexIntact(store)
+    }
+
+    @Test fun onlyAReadyNoteWithItsAudioReopens() {
+        val id = transcribedNote()
+        assertTrue(store.markReady(id))
+        // Without its audio there is no file to continue.
+        store.removeAudio(id)
+        assertFalse(store.reopen(id, 0))
+        // A note from an older version has no segmentation plan to continue from.
+        val legacy = store.insertNoteForTests(listOf("An older note."), legacy = true)
+        assertFalse(store.reopen(legacy, 16_000))
+        // A note in the trash stays there.
+        val trashed = transcribedNote()
+        assertTrue(store.markReady(trashed))
+        assertTrue(store.deleteWithUndo(trashed))
+        assertFalse(store.reopen(trashed, 20_000 * 16L))
+        assertFalse(store.reopen("missing", 0))
+    }
+
+    @Test fun thePreviewRunsAcrossTheFirstParagraphs() {
+        val id = store.create()
+        savedAudio(store, id, 20_000)
+        // A first paragraph of one short sentence (it becomes the title), then the text after a long pause.
+        commit(store, id, plan(0, 0, 6_000, EndKind.PAUSE), speech("An idea for the article.", startSec = 0.5))
+        commit(store, id, plan(1, 6_000, 20_000, EndKind.FINAL, EndKind.PAUSE), speech("Write about local speech recognition.", startSec = 5.0))
+        assertTrue(store.markReady(id))
+        assertEquals(listOf("An idea for the article.", "Write about local speech recognition."), store.paragraphs(id).map { it.text })
+        val note = store.library().single { it.id == id }
+        assertEquals("An idea for the article", note.title)
+        assertEquals("An idea for the article. Write about local speech recognition.", note.preview)
+        // What follows the title is the note's own text, not nothing.
+        assertEquals("Write about local speech recognition.", app.focal.core.Title.remainder(note.preview))
+    }
+
     @Test fun windowsCommitRawResultsAndParagraphsTogether() {
         val id = transcribedNote()
         val windows = store.windows(id)
@@ -516,9 +591,38 @@ class NoteStoreTest {
         store.markReady(id)
         store.close()
         store = NoteStore(IsolatedContext(ApplicationProvider.getApplicationContext(), root))
-        assertEquals(5, store.readableDatabase.version)
+        assertEquals(6, store.readableDatabase.version)
         assertEquals(id, store.search("thought").single().note.id)
         assertEquals(2, store.paragraphs(id).size)
+        assertSearchIndexIntact(store)
+    }
+
+    @Test fun schemaFiveUpgradesByDerivingAutomaticTitlesAgain() {
+        val id = store.create()
+        savedAudio(store, id, 8_000)
+        commit(store, id, plan(0, 0, 8_000, EndKind.FINAL), speech("Remember to call the insurance company about the claim before Friday.", startSec = 0.5))
+        assertTrue(store.markReady(id))
+        val renamed = transcribedNote()
+        assertTrue(store.markReady(renamed))
+        store.rename(renamed, "A title of my own that is longer than a derived one would be")
+        val legacy = store.insertNoteForTests(listOf("An older note that an alpha titled by its own rule, long ago."), legacy = true)
+        // As schema 5 left them: the title its rule derived, cut with an ellipsis, and the one an alpha gave.
+        val old = "Remember to call the insurance company about…"
+        store.writableDatabase.execSQL("UPDATE notes SET title=? WHERE id=?", arrayOf<Any>(old, id))
+        store.writableDatabase.execSQL("UPDATE notes SET title=? WHERE id=?", arrayOf<Any>("An older note that an alpha…", legacy))
+        store.writableDatabase.execSQL("INSERT INTO title_fts(title_fts) VALUES('rebuild')")
+        store.writableDatabase.version = 5
+        store.close()
+
+        store = NoteStore(IsolatedContext(ApplicationProvider.getApplicationContext(), root))
+        assertEquals(6, store.readableDatabase.version)
+        // Automatic titles follow the current rule; a title the user gave is left alone.
+        assertEquals("Remember to call the insurance", store.note(id)!!.title)
+        assertEquals("A title of my own that is longer than a derived one would be", store.note(renamed)!!.title)
+        // A note from before schema 5 keeps the title it came with, as the upgrade from schema 4 leaves it.
+        assertEquals("An older note that an alpha…", store.note(legacy)!!.title)
+        assertEquals(listOf(id), store.search("insurance").map { it.note.id })
+        assertEquals(2, store.paragraphs(renamed).size)
         assertSearchIndexIntact(store)
     }
 }

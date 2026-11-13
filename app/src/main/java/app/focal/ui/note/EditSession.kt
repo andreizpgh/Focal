@@ -222,8 +222,11 @@ private fun decodeStep(read: Iterator<Any?>): EditStep = when (read.next()) {
     else -> error("Not an edit step.")
 }
 
-/** Where the caret goes after a step: paragraph [id] at [caret]. */
-data class CaretAt(val id: Long, val caret: Int)
+/**
+ * Where the caret goes after a step or a tap: paragraph [id] at [caret]; with [end] past it, the chars [caret, end)
+ * are selected instead (a tapped word, a phrase swept with a long press), so the next key replaces them.
+ */
+data class CaretAt(val id: Long, val caret: Int, val end: Int = caret)
 
 /** The focused field as a write reads it: its paragraph and the text it holds now. */
 data class FieldText(val id: Long, val text: String)

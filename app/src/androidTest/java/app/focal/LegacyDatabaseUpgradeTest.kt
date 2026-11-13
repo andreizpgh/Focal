@@ -31,7 +31,7 @@ import java.nio.file.Files
 
 /**
  * Installs over Alpha 9 and earlier must keep every saved note. Each test writes a database exactly as an
- * older schema (1 to 4) created it, then opens it through NoteStore as the app does and checks schema 5.
+ * older schema (1 to 4) created it, then opens it through NoteStore as the app does and checks the current schema.
  */
 @RunWith(AndroidJUnit4::class)
 class LegacyDatabaseUpgradeTest {
@@ -106,7 +106,7 @@ class LegacyDatabaseUpgradeTest {
                 if (version == 2) execSQL("INSERT INTO pending_audio_deletions VALUES('queued-delete')")
             }
             NoteStore(context).use { store ->
-                assertEquals(5, store.readableDatabase.version)
+                assertEquals(6, store.readableDatabase.version)
                 val note = checkNotNull(store.note("legacy"))
                 assertEquals("Saved title", note.title)
                 assertTrue("A title of unknown provenance is never replaced", note.titleIsCustom)
@@ -129,7 +129,8 @@ class LegacyDatabaseUpgradeTest {
                 assertNull("No word times are invented", edited.wordsJson)
                 assertFalse(edited.hidden || guess.hidden)
                 assertEquals("Saved manual edit\n\nSaved guess", store.transcript("legacy"))
-                assertEquals("Saved manual edit", store.library().first { it.id == "legacy" }.preview)
+                // The preview runs across the first paragraphs.
+                assertEquals("Saved manual edit Saved guess", store.library().first { it.id == "legacy" }.preview)
                 assertEquals(listOf("legacy"), store.search("guess").map { it.note.id })
                 assertEquals(listOf("legacy"), store.search("saved TITLE").map { it.note.id })
                 assertTrue(store.gaps("legacy").isEmpty())
@@ -173,7 +174,7 @@ class LegacyDatabaseUpgradeTest {
             execSQL("INSERT INTO notes VALUES('renamed','Untitled note',2,'en','READY',0,'',NULL)")
         }
         NoteStore(context).use { store ->
-            assertEquals(5, store.readableDatabase.version)
+            assertEquals(6, store.readableDatabase.version)
             val (hidden, kept) = store.paragraphs("legacy")
             assertTrue(hidden.hidden)
             assertFalse(hidden.visible)

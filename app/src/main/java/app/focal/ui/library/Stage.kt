@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,8 +59,6 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
@@ -73,21 +72,24 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.expand
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.focal.R
 import app.focal.core.Title
 import app.focal.recording.SpeechAvailability
+import app.focal.ui.components.FocalIcon
+import app.focal.ui.components.Glyph
 import app.focal.ui.components.Mark
 import app.focal.ui.components.NineBars
 import app.focal.ui.components.PauseBadge
@@ -115,6 +117,7 @@ import app.focal.ui.design.Scene
 import app.focal.ui.design.Stage
 import app.focal.ui.design.alignWith
 import app.focal.ui.design.lineScale
+import app.focal.ui.design.rememberFocalHaptics
 import app.focal.ui.scene.StageTranscript
 import app.focal.ui.scene.TimerText
 import app.focal.ui.scene.TranscriptInks
@@ -171,6 +174,8 @@ object StageMetrics {
     val groupGap = 10.dp
     /** The length yields to the pill when they would come closer than this. */
     val footerYield = FocalGrid.x12
+    /** The ring of a selected card, drawn just inside its edge. */
+    val selectedRing = 2.dp
 
     // The live state (spec 4.22.3).
     val wave = FocalGrid.x56
@@ -198,19 +203,16 @@ class StageActions(
     val expand: () -> Unit,
     val copy: suspend (NoteRow) -> Boolean,
     val openSettings: () -> Unit,
-    /** The row menu at a touch point inside the card. */
-    val menu: (NoteRow, IntOffset) -> Unit,
-    /** The row menu's items as accessibility actions, offered on a note stage before "Open settings" (spec 12). */
+    /** A long press on a note stage: its note is selected (and selection begins). */
+    val select: (NoteRow) -> Unit = {},
+    /** The note's actions as accessibility actions, offered on a note stage before "Open settings" (spec 12). */
     val menuActions: (NoteRow) -> List<CustomAccessibilityAction> = { emptyList() },
 )
 
-/** Where the last press landed, for a long-press menu at the touch point. */
-private class PressPoint { var at = Offset.Zero }
-
 /**
  * The stage (spec 4.22): one card in the instrument's material at the top of the library that holds whatever is
- * current: the live capture, or one note (transcribing, waiting, ready). [menu] draws the row menu of the stage's
- * note when it is open; [title] replaces the title while it is renamed in place. [shown] says whether the card is on
+ * current: the live capture, or one note (transcribing, waiting, ready). A long press selects its note; [selected]
+ * shows a check where its time was and rings the card. [title] replaces the title while it is renamed in place. [shown] says whether the card is on
  * screen now (the readiness moment plays only there). [liveSeconds] is the recording's time, read only where it is
  * shown and spoken, so the card does not recompose once a second (the model's own when null).
  */
@@ -223,19 +225,21 @@ fun StageCard(
     meter: WaveMeter,
     actions: StageActions,
     modifier: Modifier = Modifier,
-    menu: @Composable () -> Unit = {},
     title: (@Composable () -> Unit)? = null,
     shown: () -> Boolean = { true },
     liveSeconds: (() -> Long)? = null,
+    selected: Boolean = false,
 ) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
     val scope = rememberCoroutineScope()
+    val haptics = rememberFocalHaptics()
+    val check = remember { Animatable(if (selected) 1f else 0f) }
+    LaunchedEffect(selected) { check.animateTo(if (selected) 1f else 0f, FocalMotion.fadeFast()) }
     // The one shimmer of the readiness moment: u is its linear progress; its layer exists only while it runs.
     val shimmer = remember { Animatable(0f) }
     var shimmering by remember { mutableStateOf(false) }
     val source = remember { MutableInteractionSource() }
-    val press = remember { PressPoint() }
     val settingsLabel = stringResource(R.string.a11y_open_settings)
     // A live stage's description changes with its time: it is resolved apart, so only that part recomposes.
     val seconds = liveSeconds ?: { (stage as? StageUi.Live)?.elapsedSeconds ?: 0L }
@@ -279,6 +283,8 @@ fun StageCard(
                 val menu = if (title == null) note?.let(actions.menuActions).orEmpty() else emptyList()
                 customActions = menu + CustomAccessibilityAction(settingsLabel) { actions.openSettings(); true }
                 if (note == null) expand(clickLabel) { actions.expand(); true }
+                // Said only of a selected card, as for a row.
+                if (note != null && selected) this.selected = true
             }
             .pressScale(source)
             .focusRing(FocalShapes.sheet)
@@ -292,29 +298,39 @@ fun StageCard(
                 if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) copyRequests.intValue++
                 true
             }
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        event.changes.firstOrNull()?.takeIf { it.pressed && !it.previousPressed }?.let { press.at = it.position }
-                    }
-                }
-            }
             .combinedClickable(
                 // While its title is renamed in place, the card itself does nothing.
                 enabled = title == null,
                 interactionSource = source, indication = null, onClickLabel = clickLabel,
-                onLongClick = note?.let { row -> { actions.menu(row, IntOffset(press.at.x.roundToInt(), press.at.y.roundToInt())) } },
+                onLongClick = note?.let { row ->
+                    {
+                        haptics.selected()
+                        actions.select(row)
+                    }
+                },
                 onClick = { if (note != null) actions.open(note) else actions.expand() },
             )
             .clip(FocalShapes.sheet)
-            .sceneMaterial(FocalShapes.sheetRadius, ring = colors.stageRing),
+            .sceneMaterial(FocalShapes.sheetRadius, ring = colors.stageRing)
+            // Selected: a ring of the card's own ink just inside its edge, on `fadeFast`.
+            .drawWithContent {
+                drawContent()
+                val a = check.value
+                if (a <= 0f) return@drawWithContent
+                val width = StageMetrics.selectedRing.toPx()
+                val radius = FocalShapes.sheetRadius.toPx() - width / 2
+                drawRoundRect(
+                    colors.stageInk, Offset(width / 2, width / 2), androidx.compose.ui.geometry.Size(size.width - width, size.height - width),
+                    androidx.compose.ui.geometry.CornerRadius(radius), style = androidx.compose.ui.graphics.drawscope.Stroke(width), alpha = a,
+                )
+            },
     ) {
         if (shimmering) Spacer(Modifier.matchParentSize().shimmer { shimmer.value })
         when (stage) {
             is StageUi.Live -> RecordedStage { LiveStage(stage, meter, seconds) }
             is StageUi.Note -> RecordedStage { NoteStage(
                 stage, dates, today, actions, title, origin, shown, copyRequests = { copyRequests.intValue },
+                checked = { check.value },
                 onReadyMoment = {
                     if (!reduced) scope.launch {
                         delay(FocalTiming.READY_SHIMMER_DELAY_MS)
@@ -329,7 +345,6 @@ fun StageCard(
                 },
             ) }
         }
-        menu()
     }
 }
 
@@ -625,6 +640,7 @@ private fun NoteStage(
     shown: () -> Boolean,
     copyRequests: () -> Int,
     onReadyMoment: () -> Unit,
+    checked: () -> Float = { 0f },
 ) {
     val colors = FocalTheme.colors
     val pages = LocalShell.current.pages
@@ -647,13 +663,16 @@ private fun NoteStage(
     val titleText = noteTitle(row, dates)
     // A time on its own line keeps to the title's edge (a derived title follows the note's direction, spec 8.5).
     val titleLeft = alignWith(titleText) == TextAlign.Left
+    val titleLines = if (large) StageMetrics.TITLE_LINES_LARGE else StageMetrics.TITLE_LINES
+    val titleStyle = remember { FocalType.headline.copy(lineBreak = LineBreak.Heading) }
+    val measurer = rememberTextMeasurer()
     Layout(
         contents = listOf(
             {
                 if (renameField != null) renameField() else Text(
-                    titleText, style = FocalType.headline.copy(lineBreak = LineBreak.Heading),
+                    titleText, style = titleStyle,
                     color = if (fallback) colors.stageRecede else colors.stageInk,
-                    maxLines = if (large) StageMetrics.TITLE_LINES_LARGE else StageMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
+                    maxLines = titleLines, overflow = TextOverflow.Ellipsis,
                     // While the stage opens into its page (or folds back), a copy of the title flies between them.
                     modifier = Modifier
                         .clearAndSetSemantics { }
@@ -662,18 +681,26 @@ private fun NoteStage(
                 )
             },
             {
-                Text(
-                    dates.stageWhen(row.created, today), style = FocalType.dateline, color = colors.stageRecede, maxLines = 1,
-                    modifier = Modifier.clearAndSetSemantics { },
-                )
+                // Selected, a check takes the time's place (the row's length gives way to one the same way).
+                Box(Modifier.clearAndSetSemantics { }, contentAlignment = Alignment.CenterEnd) {
+                    Text(
+                        dates.stageWhen(row.created, today), style = FocalType.dateline, color = colors.stageRecede, maxLines = 1,
+                        modifier = Modifier.graphicsLayer { alpha = 1 - checked() },
+                    )
+                    Glyph(FocalIcon.Check, colors.stageInk, Modifier.graphicsLayer { alpha = checked() }, size = FocalGrid.x20)
+                }
             },
             { Box(Modifier.clearAndSetSemantics { }.stageText(origin)) { StageText(row, noSpeech) } },
             { Box(Modifier.graphicsLayer { alpha = lengthYields.value }) { StageLength(row.durationMs) } },
             {
-                StagePill(
-                    pill, row.id, onCopy = { actions.copy(row) }, onReadyMoment = onReadyMoment, Modifier.testTag(STAGE_PILL_TAG),
-                    shown = shown, copyRequests = copyRequests,
-                )
+                // Keyed by its note: when another note takes the stage, its pill starts from that note's state, with
+                // no readiness moment and no "Copied" left over from the one before.
+                key(row.id) {
+                    StagePill(
+                        pill, row.id, onCopy = { actions.copy(row) }, onReadyMoment = onReadyMoment, Modifier.testTag(STAGE_PILL_TAG),
+                        shown = shown, copyRequests = copyRequests,
+                    )
+                }
             },
         ),
     ) { (titles, times, texts, lengths, pills), constraints ->
@@ -681,9 +708,15 @@ private fun NoteStage(
         val inset = StageMetrics.inset.roundToPx()
         val column = width - 2 * inset
         val time = times.first().measure(Constraints(maxWidth = column))
-        // From 1.5x, or when the time is long (a date), it takes its own line under the title (spec 4.22.4, 4.22.7).
-        val timeOwnLine = large || time.width + StageMetrics.timeGap.roundToPx() > StageMetrics.TIME_SHARE * column
-        val titleWidth = if (timeOwnLine) column else column - time.width - StageMetrics.timeGap.roundToPx()
+        // From 1.5x, or when the time is long (a date), it takes its own line under the title (spec 4.22.4, 4.22.7);
+        // and whenever the title would not fit beside it: a title is never cut to make room for its date ("Notes for
+        // Thursday's desig…" beside "Yesterday").
+        val beside = column - time.width - StageMetrics.timeGap.roundToPx()
+        val cutBeside = renameField == null && beside > 0 && measurer.measure(
+            titleText, titleStyle, constraints = Constraints(maxWidth = beside), density = this, layoutDirection = layoutDirection,
+        ).lineCount > titleLines
+        val timeOwnLine = large || cutBeside || time.width + StageMetrics.timeGap.roundToPx() > StageMetrics.TIME_SHARE * column
+        val titleWidth = if (timeOwnLine) column else beside
         // The title takes its whole width, so its text aligns in its own direction over the text under it, however
         // short it is (a box as wide as its text would sit at the start edge, the right in a mirrored layout).
         val title = titles.first().measure(Constraints(minWidth = titleWidth, maxWidth = titleWidth))
@@ -742,8 +775,7 @@ private fun StageText(row: NoteRow, noSpeech: Boolean) {
     }
     val preview = remember(row.preview, row.title, row.titleIsCustom) { AnnotatedString(previewAfterTitle(row)) }
     Column {
-        // Balanced breaks, as the stage's reading text: no orphan word on its last line.
-        CutText(preview, StageTextStyle, colors.stageRecede, StageMetrics.TEXT_LINES_MAX, Modifier.weight(1f, fill = false))
+        CutText(preview, FocalType.stageWords, colors.stageRecede, StageMetrics.TEXT_LINES_MAX, Modifier.weight(1f, fill = false))
         // A partial failure or a waiting note's reason takes the text's last line (spec 4.22.4).
         val reason = row.waitingReason?.takeIf { row.phase == NotePhase.WAITING }
         val lastLine = when {
@@ -760,7 +792,6 @@ private fun StageText(row: NoteRow, noSpeech: Boolean) {
     }
 }
 
-private val StageTextStyle = FocalType.stageWords.copy(lineBreak = LineBreak.Paragraph)
 /** A reason that needs two lines splits them evenly ("Not enough free memory / to transcribe right now."), never a widow. */
 private val StageReasonStyle = FocalType.stageText.copy(lineBreak = LineBreak.Heading)
 

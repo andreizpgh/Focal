@@ -85,7 +85,7 @@ internal fun libraryOf(scene: SceneUi) = LibraryModel(
 @Composable
 internal fun SceneLayer(shell: ShellState, scene: SceneUi, list: LazyListState = rememberLazyListState()) {
     SceneBottom(DockState.Live(scene.paused), remember { DockActions() })
-    RecordingSurface(shell.live, scene, meter, remember { SceneActions() }, onLibrary = shell.current == Destination.Library, listState = list)
+    RecordingSurface(shell.live, scene, meter, remember { SceneActions() }, listState = list)
 }
 
 /** The live library with the surface at a fixed [p] (the morph is a pure function of p). */

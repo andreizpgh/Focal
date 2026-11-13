@@ -49,6 +49,9 @@ object UndoableActions {
 
     /** Moves [noteId] to the trash. False (with [onError]) when it is busy or not deletable now. */
     suspend fun delete(app: FocalApplication, noteId: String, onError: (String) -> Unit): Boolean {
+        // Already in the trash, waiting for its Undo: asked twice, it is deleted once and says nothing more (a second
+        // message would replace "Note deleted · Undo", which commits the deletion).
+        if (synchronized(this) { noteId in deletions }) return false
         val claim = SessionOperations.tryDestructive(noteId) ?: return false.also {
             // Held by its transcription, it stays refused until that is done; anything else is a moment's work.
             val live = RecordingState.live.value
@@ -104,7 +107,9 @@ object UndoableActions {
         }
         if (refusal != null) { onError(app.getString(refusal)); return false }
         synchronized(this) {
-            removals.remove(noteId)?.cancel()
+            // Already waiting for its Undo: asked twice, it is scheduled once (a second "Audio removed" would replace
+            // the first, which removes the audio at once).
+            if (noteId in removals) return false
             pendingRemovals.update { it + noteId }
             removals[noteId] = app.scope.launch {
                 delay(FALLBACK_COMMIT_MS)

@@ -53,8 +53,8 @@ directory, so a phone with real notes is the wrong place.
 
 | Area | Tests |
 | --- | --- |
-| Storage | `NoteStoreTest` (schema 5, edits, search index, trash, crash-loop guard), `LegacyDatabaseUpgradeTest` (migration from schemas 1–4) |
-| Recording and transcription | `RecordingServiceTest`, `WindowFeedTest`, `SpeechWorkflowTest`, `UltraServiceTest`, `NotificationsTest` |
+| Storage | `NoteStoreTest` (schema 6 and its upgrade from 5, edits, search index, trash, crash-loop guard, reopening a ready note for more recording, previews), `LegacyDatabaseUpgradeTest` (migration from schemas 1–4) |
+| Recording and transcription | `RecordingServiceTest` (capture durability, pauses, the hold while another app has the microphone and its automatic return, continuing a ready note), `WindowFeedTest`, `SpeechWorkflowTest`, `UltraServiceTest`, `NotificationsTest` |
 | Speech | `OfflineRecognizerTest` and `UltraTranscriberTest` (decode the public JFK fixture), `SileroVadTest`, `UltraModelTest` (install, storage checks, damaged and interrupted copies) |
 | Playback | `SpeechPlayerTest` |
 | Interface | `InterfaceTest` (record to copy, end to end), `ui/CopyFeedbackTest`, `ui/NoteEditTest`, `ui/UiMotionTest`, `gallery/SceneGestureTest` |
@@ -116,10 +116,76 @@ to end, so before publishing a release is checked on emulators in three parts:
   cannot show them.
 - The speech tests peak at about 0.9 GB PSS on an emulator, so give the emulator
   at least 3 GB of RAM.
+- Start the emulator with `-no-audio` for the instrumented suite. Its microphone
+  then delivers faint noise, which a recording keeps. Started with host audio
+  and nothing streamed into it, the microphone delivers exact silence, and Focal
+  discards such a recording as "Nothing was recorded".
 
 ## What has been verified
 
-For 0.2.0, on x86_64 emulators only. No build has run on a phone.
+### 0.3.0
+
+On the API 36 x86_64 emulator only. No build has run on a phone.
+
+**Tests.** At 33ca95d, the commit the 0.3.0 APK was built from: the JVM tests
+passed (core 56, app 200), lint reported no errors and the script tests passed
+(58). The instrumented suite (debug build, model bundled) ran after `pm clear`
+on an 824 × 1830 display: 164 tests, none failed. Tests that need a wide display
+skip themselves there, and the landscape, tablet and two-pane gallery stages
+were not rendered for this release. One test records through the emulator's own
+microphone; started with host audio for the speech check below, that microphone
+delivers exact silence, which Focal discards as "Nothing was recorded", so the
+suite is run on an emulator started with `-no-audio`.
+
+**Emulator QA build** of the same commit (minified, x86_64, 0.3.0-emulator-qa,
+never published), with the public JFK fixture streamed into the virtual
+microphone: text appeared while recording, Finish opened the note and it became
+ready; ● on the note continued the recording with the same speech, the timer
+went on from the note's length and the new paragraph followed the old one; a tap
+on a word and four typed letters replaced it. Logcat showed no crash, ANR, link
+or JNI error. The emulator itself crashed twice in its audio code when a stream
+was started before Record; a stream started after Record worked.
+
+**The 0.3.0 APK** (`Focal-0.3.0.apk`, 700,492,030 bytes, SHA-256
+`c8132226a5fba74b55fe0f3b19e303705d82df87e790965c4982c542cabf26e9`).
+`scripts/release.py` signed it with the certificate of the earlier releases
+(SHA-256 `3e407a18…a3bc`) and checked it as described under
+[Release checks](#release-checks). The published 0.2.0 APK was installed on the
+emulator and started; 0.3.0 installed over it as an update and started. 0.2.0
+cannot record under the emulator's arm64 translation, so that install carried no
+notes: the conversion of a 0.2.0 database (schema 5 to 6) is covered by
+`NoteStoreTest`.
+
+**By hand in the debug build**, with notes seeded through the store: with search
+open and the keyboard hidden, a tap on the field brought the keyboard back and
+started nothing; a tap past a line's last word placed the caret, a tap on a word
+selected it; **Edit** in the menu put the caret in the first paragraph; several
+notes were selected and deleted with one Undo; a note deleted from its page and
+restored with Undo six seconds later opened again; Finish in the scene over a
+note settled into the note's dock pill.
+
+**Not checked:** any of it on a phone; another app actually taking the
+microphone (the hold is tested with a scripted input); a microphone that
+refuses to start (tested with a scripted input); frame pacing of any animation;
+speech in Russian through the microphone.
+
+**Known and left for later:**
+
+- Back from a note that went on recording folds with a fade-through instead of
+  the fold into the stage card, because the note has moved from its row to the
+  stage since the page opened.
+- In two panes, where the scene crossfades over a note, the dock changes pane
+  half-way through the crossfade.
+- A first launch without room for the speech model plans a recording's windows
+  with the energy detector, and they are kept when the model arrives.
+- A note's view model lives as long as the activity, so every note opened keeps
+  its text in memory until then.
+- `core` still holds Whisper-era helpers (`Transcript.title`,
+  `reconcileBoundary`) and `SpeechPlayer` a few methods that only tests call.
+
+### 0.2.0
+
+On x86_64 emulators only. No build has run on a phone.
 
 **Instrumented suite (debug build).** At 523bdd2, the commit the 0.2.0 APK was
 built from, the full suite ran after `pm clear` with the model bundled, on API 36
@@ -184,8 +250,14 @@ temperature before each run.
       its foreground type), and Android 15's processing time limit: the
       "Transcription paused" notification and the automatic continuation when
       Focal is opened again.
-- [ ] Automatic pause for a phone call, another app taking the microphone and
-      low storage, then Resume.
+- [ ] A phone call and another app taking the microphone during a recording
+      (a voice message in a messenger, voice typing, a video call): the note
+      shows as paused, nothing is written meanwhile, and recording goes on by
+      itself afterwards without losing its first words. Low storage pauses and
+      waits for Resume.
+- [ ] Continue recording into a note: with real speech, after edits, after a
+      restart, and twice in a row. The new text follows the old; playback and
+      Edit's ▶ land on the right words on both sides of the join.
 - [ ] Force-stop during a recording, then reopen: the note shows where it stopped
       and its audio is transcribed.
 
@@ -202,9 +274,13 @@ temperature before each run.
 
 **Interface**
 
-- [ ] Edit with Gboard and one other keyboard: Enter splits, Backspace at the
-      start of a paragraph joins it, the caret stays above the keyboard, and the
-      find and search rows ride the keyboard on Android 8–10.
+- [ ] Edit with Gboard and one other keyboard: a tap on a word selects it and
+      typing replaces it, a long press sweeps a phrase, Enter splits, Backspace
+      at the start of a paragraph joins it, the caret stays above the keyboard,
+      the text does not move while typing, and the find and search rows ride
+      the keyboard on Android 8–10.
+- [ ] Opening and closing search, selecting notes and the settings hint: nothing
+      arrives from two directions at once, and nothing moves by itself.
 - [ ] Predictive back on Android 14 and later: pages, the recording scene,
       settings and the player strip.
 - [ ] The Live Update recording notification on Android 16 QPR2.

@@ -5,7 +5,6 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -235,17 +234,10 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = startInset + centring, end = endInset + centring,
-                top = status.calculateTopPadding() + topBar,
+                top = status.calculateTopPadding() + topBar + SettingsMetrics.contentTop,
                 bottom = navigation.calculateBottomPadding() + FocalLayout.gutter,
             ),
         ) {
-            item(key = "title") {
-                Text(
-                    title, style = FocalType.title, color = colors.ink,
-                    modifier = Modifier.padding(horizontal = FocalLayout.gutter).padding(top = SettingsMetrics.titleTop, bottom = FocalGrid.x16)
-                        .semantics { heading() },
-                )
-            }
             LicenseEntries.forEachIndexed { index, entry ->
                 item(key = "entry:$index") {
                     val source = remember { MutableInteractionSource() }
@@ -279,10 +271,7 @@ fun LicensesPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
             }
         }
         PaperTopFade(topBar, Modifier.fillMaxSize())
-        TopBar(title, onBack, collapsed = {
-            val first = list.firstVisibleItemIndex
-            first > 0 || list.firstVisibleItemScrollOffset > with(density) { SettingsMetrics.titleTop.toPx() + FocalType.title.lineHeight.toPx() }
-        })
+        TopBar(title, onBack)
     }
 }
 

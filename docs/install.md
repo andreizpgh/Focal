@@ -1,9 +1,9 @@
 # Install Focal
 
-**[Download Focal-0.2.0.apk](https://github.com/andreizpgh/Focal/releases/download/v0.2.0/Focal-0.2.0.apk)**
+**[Download Focal-0.3.0.apk](https://github.com/andreizpgh/Focal/releases/download/v0.3.0/Focal-0.3.0.apk)**
 
 Focal is distributed as an APK on its
-[release page](https://github.com/andreizpgh/Focal/releases/tag/v0.2.0), under
+[release page](https://github.com/andreizpgh/Focal/releases/tag/v0.3.0), under
 **Assets**. You don’t need a GitHub account, Android Studio or a ZIP archive.
 Earlier versions stay on their own release pages.
 
@@ -21,7 +21,7 @@ Earlier versions stay on their own release pages.
 ## Install
 
 1. Open the download link on your phone.
-2. Open **Focal-0.2.0.apk** from your browser’s downloads or the Files app.
+2. Open **Focal-0.3.0.apk** from your browser’s downloads or the Files app.
 3. If Android asks, allow **Install unknown apps** for that browser or file
    manager, go back and tap **Install**. You can turn the permission off
    afterwards.
@@ -35,18 +35,22 @@ On first launch the recording screen may say **Preparing speech model** while th
 model is copied. Recording works during that time, and the text catches up when
 the copy is done.
 
-## Updating from an earlier alpha
+## Updating from an earlier version
 
 Android updates an app in place only when the new APK is signed with the same
-key. Alpha 2 to Alpha 9 share one development key, and each release, 0.2.0
-included, is checked to carry the same certificate before it is published.
+key. Alpha 2 to Alpha 9 and 0.2.0 share one development key, and each release
+is checked to carry the same certificate before it is published.
 
-- **Over Alpha 9:** tested on Android emulators. Every note, edit, custom title
-  and audio file was kept.
+- **Over 0.2.0:** the notes stay as they are. Titles that 0.2.0 made from a long
+  first sentence are made again by the new rule, once; titles you gave stay.
+  Tested on an Android emulator: the published 0.2.0 APK was installed, then
+  0.3.0 over it. The conversion of 0.2.0's notes is covered by a database test.
+- **Over Alpha 9:** tested on Android emulators with 0.2.0. Every note, edit,
+  custom title and audio file was kept.
 - **Over Alpha 2 to Alpha 8:** same key, and migration tests cover their older
   database formats, but installing over them has not been tried.
 
-What changes on the first launch:
+What changes on the first launch after an alpha:
 
 - Your notes are converted to the new format. Text, edits, custom titles and
   audio are kept. Older notes have no word timings, so playback starts at the
@@ -60,7 +64,7 @@ What changes on the first launch:
 - The speech-language setting is gone: the model detects the language itself.
 
 Alpha 1 was built in the cloud with its own development key, and installing
-0.2.0 over it has not been checked. If Android refuses the update, copy out any
+a later version over it has not been checked. If Android refuses the update, copy out any
 text you want to keep before you uninstall Alpha 1: uninstalling deletes Focal’s
 notes and audio.
 

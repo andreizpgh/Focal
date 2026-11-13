@@ -23,6 +23,7 @@ import app.focal.R
 import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FeedbackResult
 import app.focal.ui.components.FocalIcon
+import app.focal.ui.design.rememberFocalHaptics
 import app.focal.ui.library.confirmsCopyInApp
 import app.focal.ui.library.copyNoteText
 import app.focal.ui.library.rememberLibraryDates
@@ -47,7 +48,7 @@ import kotlinx.coroutines.launch
  * deletes and audio removals run their feedback in [appScope], so their Undo or commit outlives the page.
  */
 @Composable
-fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: Boolean) {
+fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: Boolean, recordMore: (fromMs: Long) -> Unit = {}) {
     val shell = LocalShell.current
     val context = LocalContext.current
     val activity = checkNotNull(LocalActivity.current as? ComponentActivity) { "The note page runs in a ComponentActivity." }
@@ -60,6 +61,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
     val session = player.session.collectAsStateWithLifecycle()
     val capture by recording.state.collectAsStateWithLifecycle()
     val captureElsewhere = capture.live && capture.noteId != id
+    val finishRequested by recording.finishRequested.collectAsStateWithLifecycle()
     val playback = remember(player, id) { RoutePlayback(player, id, session) }
     val feedback = shell.bottom.feedback
     val current by rememberUpdatedState(state)
@@ -103,8 +105,12 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
         }
     }
     LaunchedEffect(player) { player.errors.collect { message -> appScope.launch { feedback.show(message) } } }
-    // A note deleted elsewhere (or from here) leaves the screen; a read failure says so and offers to read it again.
-    LaunchedEffect(state.missing) { if (state.missing) leave() }
+    // A note deleted elsewhere leaves the screen; a read failure says so and offers to read it again. "Missing" is
+    // confirmed with the store first: it may be what the page was left with (deleted here, restored with Undo since).
+    LaunchedEffect(state.missing) {
+        if (!state.missing) return@LaunchedEffect
+        if (note.exists()) note.reload() else leave()
+    }
     val tryAgain = stringResource(R.string.action_try_again)
     LaunchedEffect(state.error) {
         val message = state.error ?: return@LaunchedEffect
@@ -129,8 +135,21 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
 
     val transfers by rememberUpdatedState(rememberTransferWords())
     val say: (String?) -> Unit = { message -> if (message != null) appScope.launch { feedback.show(message) } }
-    val actions = remember(note, player, library) {
+    val onRecordMore by rememberUpdatedState(recordMore)
+    val haptics = rememberFocalHaptics()
+    val actions = remember(note, player, library, recording) {
         NoteActions(
+            recordMore = {
+                // The speaker must not leak into the recording: the note's playback ends first.
+                player.stopNote(id)
+                onRecordMore(current.durationMs)
+            },
+            pause = recording::pause,
+            resume = recording::resume,
+            finish = {
+                recording.finish()
+                haptics.finish()
+            },
             back = leave,
             rename = note::rename,
             copy = {
@@ -174,6 +193,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
         dates = rememberLibraryDates(),
         today = rememberToday(),
         captureElsewhere = captureElsewhere,
+        captureFinishing = finishRequested == id,
         landing = landing,
         listState = listState,
         page = page,

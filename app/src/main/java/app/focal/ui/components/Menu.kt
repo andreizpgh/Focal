@@ -85,22 +85,14 @@ object MenuMetrics {
     val ring = 1.dp
 }
 
-/** Where a menu opens. */
-sealed interface MenuAnchor {
-    /** From an overflow button: the menu's top-end corner just under the button's bottom-end corner. */
-    data object BelowEnd : MenuAnchor
-    /** From a long-press: the menu's top-start corner at [offset] inside the anchor composable, flipped to fit. */
-    data class At(val offset: IntOffset) : MenuAnchor
-}
-
 /**
  * The dropdown menu (spec 4.15): `raised`, radius 16, 232 dp wide (up to 280 for long labels), 48 dp items. Light
  * casts two soft shadows; Dark has a 1 dp `raisedRing` instead. It scales in from the anchor corner (0.95 to 1 on
  * `press`, alpha on `fade`) and leaves on alpha (`fadeFast`). A tap outside, Back and Esc dismiss it. Place it inside
- * the composable it anchors to.
+ * the overflow button it opens from: its top-end corner sits just under the button's bottom-end corner.
  */
 @Composable
-fun FocalMenu(expanded: Boolean, onDismiss: () -> Unit, anchor: MenuAnchor = MenuAnchor.BelowEnd, content: @Composable ColumnScope.() -> Unit) {
+fun FocalMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     var composed by remember { mutableStateOf(expanded) }
     val alpha = remember { Animatable(0f) }
     val scale = remember { Animatable(MenuMetrics.ENTER_SCALE) }
@@ -120,13 +112,14 @@ fun FocalMenu(expanded: Boolean, onDismiss: () -> Unit, anchor: MenuAnchor = Men
     }
     if (!composed) return
     val density = LocalDensity.current
-    val position = remember(anchor, density) { MenuPosition(anchor, density) }
+    val position = remember(density) { MenuPosition(density) }
     // Read in the app's window: inside the popup the window is the popup's own.
     val maxWidth = menuMaxWidth()
     Popup(popupPositionProvider = position, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
         Box(Modifier.padding(MenuMetrics.shadowRoom)) {
             MenuSurface(
-                Modifier.graphicsLayer {
+                // While it fades out it takes nothing: a second tap on "Delete" must not ask for it twice.
+                Modifier.untouchable(!expanded).graphicsLayer {
                     this.alpha = alpha.value
                     scaleX = scale.value
                     scaleY = scale.value
@@ -224,41 +217,23 @@ private fun Modifier.menuElevation(dark: Boolean): Modifier = if (dark || Build.
     }
 }
 
-/** Positions the popup (its window includes [MenuMetrics.shadowRoom] on every side) and records its scale origin. */
-private class MenuPosition(private val anchor: MenuAnchor, private val density: Density) : PopupPositionProvider {
+/**
+ * Positions the popup (its window includes [MenuMetrics.shadowRoom] on every side) under the button's end (x 168-400)
+ * and records its scale origin. Only the window itself bounds it.
+ */
+private class MenuPosition(private val density: Density) : PopupPositionProvider {
     var origin = TransformOrigin(1f, 0f)
         private set
 
     override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
         with(density) {
             val room = MenuMetrics.shadowRoom.roundToPx()
-            val edge = MenuMetrics.edge.roundToPx()
             val width = popupContentSize.width - 2 * room
             val height = popupContentSize.height - 2 * room
             val rtl = layoutDirection == LayoutDirection.Rtl
-            var x: Int
-            var y: Int
-            when (anchor) {
-                MenuAnchor.BelowEnd -> {
-                    x = if (rtl) anchorBounds.left else anchorBounds.right - width
-                    y = anchorBounds.bottom + MenuMetrics.belowAnchor.roundToPx()
-                    origin = TransformOrigin(if (rtl) 0f else 1f, 0f)
-                }
-                is MenuAnchor.At -> {
-                    val pointX = anchorBounds.left + anchor.offset.x
-                    val pointY = anchorBounds.top + anchor.offset.y
-                    val flipX = if (rtl) pointX - width >= edge else pointX + width > windowSize.width - edge
-                    val flipY = pointY + height > windowSize.height - edge
-                    x = if (flipX) pointX - width else pointX
-                    y = if (flipY) pointY - height else pointY
-                    origin = TransformOrigin(if (flipX) 1f else 0f, if (flipY) 1f else 0f)
-                }
-            }
-            // A long-press menu keeps 16 dp from the window's edges (spec 4.15); one under ⋮ hangs from the button's
-            // end (x 168-400), and only the window itself bounds it.
-            val inset = if (anchor is MenuAnchor.At) edge else 0
-            x = x.coerceIn(inset, (windowSize.width - inset - width).coerceAtLeast(inset))
-            y = y.coerceIn(inset, (windowSize.height - inset - height).coerceAtLeast(inset))
+            origin = TransformOrigin(if (rtl) 0f else 1f, 0f)
+            val x = (if (rtl) anchorBounds.left else anchorBounds.right - width).coerceIn(0, (windowSize.width - width).coerceAtLeast(0))
+            val y = (anchorBounds.bottom + MenuMetrics.belowAnchor.roundToPx()).coerceIn(0, (windowSize.height - height).coerceAtLeast(0))
             return IntOffset(x - room, y - room)
         }
     }

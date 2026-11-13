@@ -56,6 +56,12 @@ class NoteActions(
      * Edit's writes, in order, in the note's view model's scope: a sequence running when the page goes (an undo, then
      * the draft's last save) still finishes. Null: the page's own queue, which ends with it (the gallery, tests).
      */
+    /** ● "Continue recording": more is recorded into this note (the microphone is asked for if need be). */
+    val recordMore: () -> Unit = {},
+    /** The note's own recording, while it runs on this page under a folded scene: the dock's Pause | Finish. */
+    val pause: () -> Unit = {},
+    val resume: () -> Unit = {},
+    val finish: () -> Unit = {},
     val writes: WriteQueue? = null,
     /**
      * Edit's session, kept by the note's view model: a page recreated by rotation, or the note opened again beside the
@@ -108,6 +114,9 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
     val stripBack = Animatable(0f)
     /** Where a gap's range playback ends: playback that reaches it ends the session. */
     var rangeEndMs: Long? = null
+    /** Edit's ▶ started the playback now running: a short clip of the words at the caret, without strip or follow. */
+    var listening by mutableStateOf(false)
+        internal set
 
     /** The content title's bottom in the window, for the collapsed title in the bar. */
     var titleBottom by mutableFloatStateOf(Float.POSITIVE_INFINITY)

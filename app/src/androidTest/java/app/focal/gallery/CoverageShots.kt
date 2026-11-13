@@ -21,7 +21,7 @@ import app.focal.ui.state.WaitingReason
 /**
  * Spec 8.4's font-scale pass over the frames the stages rendered at 1.0 only (every frame at 1.0, 1.3 and 2.0, Light
  * and Dark), and the states no stage rendered: list rows that transcribe or wait, a fallback title, inline renames,
- * Edit's failed save and Edit with no paragraph focused, "Now playing", the reduced-motion swipe and peek, the
+ * Edit's failed save and Edit with no paragraph focused, "Now playing", the reduced-motion swipe, the
  * rationale sheet (both modes), the stage's model-failed and partial-failure last lines, right-to-left layouts (8.5)
  * and the contrast and high-contrast-text palettes (8.1).
  */
@@ -31,8 +31,8 @@ object CoverageShots {
         addAll(scaled("ready") { Library(readyModel(fresh = true)) })
         addAll(scaled("copied", settleMs = COPIED_AT_MS, click = STAGE_PILL_TAG) { Library(readyModel(fresh = true)) })
         addAll(scaled("storage-full") { Library(liveModel(paused = true, reason = PauseReason.STORAGE)) })
-        addAll(scaled("menu") { Library(idleModel(), menu = true) })
-        addAll(scaled("peek") { Strip(PEEK) })
+        addAll(scaled("select") { Library(idleModel(), selected = listOf("note-0", "note-2")) })
+        addAll(scaled("hint") { Library(idleModel(), hint = true) })
         addAll(scaled("settings-swipe-50") { Strip(HALF) })
         addAll(scaled("scrolled") { Library(idleModel(), scroll = true) })
         addAll(scaled("search") { Library(idleModel(), search = searchResults()) })
@@ -54,7 +54,6 @@ object CoverageShots {
         // Reduced motion: the swipe is a fade-through on paper (H2), blank at exactly s = 0.5; these are either side of it.
         addAll(themed("settings-swipe-30-rm") { Reduced { Strip(REDUCED_OUT) } })
         addAll(themed("settings-swipe-70-rm") { Reduced { Strip(REDUCED_IN) } })
-        addAll(themed("peek-rm") { Reduced { Strip(0f, edgePeek = 1f) } })
         add(Shot("rename-stage-light-200", dark = false, fontScale = LARGE) { Library(idleModel(), rename = "note-0") })
         add(Shot("now-playing-light-200", dark = false, fontScale = LARGE) { Note(longDesign(), playing = true, states = PageStates(followOff = true)) })
         // "Now playing" tapped: the playing line back in the band's middle third, a line edge on the top band (2.6).
@@ -95,7 +94,6 @@ object CoverageShots {
     private const val FOLLOW_BACK_MS = 2_000L
     private const val REDUCED_OUT = 0.3f
     private const val REDUCED_IN = 0.7f
-    private const val PEEK = 32f / 420f
     private const val HALF = 0.5f
     private const val EXPAND_EARLY = 0.1f
     private const val LARGE = 2f

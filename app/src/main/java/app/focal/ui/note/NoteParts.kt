@@ -26,13 +26,10 @@ import app.focal.ui.design.LocalWindowLayout
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -43,6 +40,7 @@ import app.focal.core.SpeechTuning
 import app.focal.core.TextWords
 import app.focal.core.Title
 import app.focal.ui.components.inert
+import app.focal.ui.components.untouchable
 import app.focal.ui.components.waitingText
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
@@ -210,6 +208,8 @@ internal class NoteScroller(private val list: LazyListState, private val fade: A
                 scrolled += scrollBy(remaining * share)
             }
         }
+        // With animations off the block above runs once, on the estimate: the line is laid out now, so it lands.
+        windowY(list, index, lineTop())?.let { list.scrollBy(it - target) }
         settle(index, lineTop, lineHeight, edge, animate = true)
     }
 
@@ -247,25 +247,17 @@ internal class CaretSpec(
         val last = offset + size
         // Taller than the band and covering it (a focused paragraph, the list itself): nothing to bring.
         if (offset < start && last > end) return 0f
-        val scroll = when {
-            offset >= start && last <= end -> 0f
-            abs(offset - start) < abs(last - end) -> offset - start
-            else -> last - end
-        }
-        val keepTop = if (scroll == 0f) start else top + fade
-        return TopEdge.snap(scroll, lines(), top, fade, Span(offset, last), keepTop, end)
+        // Already in the band: the page stays exactly where it is. Every key and every caret move asks to be brought
+        // into view, and landing a line's edge on the top band each time shifted the whole text by a few dp under
+        // the fingers, forth on one key and back on the next.
+        if (offset >= start && last <= end) return 0f
+        val scroll = if (abs(offset - start) < abs(last - end)) offset - start else last - end
+        return TopEdge.snap(scroll, lines(), top, fade, Span(offset, last), top + fade, end)
     }
 }
 
 /** A bar that is out of play (the top bar under Find, the bar Edit replaced): never read, focused or touched. */
-internal fun Modifier.inertBar(on: Boolean): Modifier {
-    val untouchable = if (!on) Modifier else Modifier.pointerInput(Unit) {
-        awaitPointerEventScope {
-            while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
-        }
-    }
-    return inert(on).then(untouchable)
-}
+internal fun Modifier.inertBar(on: Boolean): Modifier = inert(on).untouchable(on)
 
 /** T7: a paragraph of the first screen fades in from +180 ms, the bottom one first, 24 ms apart. */
 internal fun entranceDelay(landing: Boolean, index: Int, count: Int): Long? {
@@ -318,8 +310,9 @@ private fun unclearDescription(paragraph: ParagraphUi): String? {
 private const val UNCLEAR_SEPARATOR = ", "
 
 /**
- * One paragraph row: its text, or in Edit the field that holds the caret (the same box: the swap moves nothing), the
- * edit sheet behind it (`fade` in, `fadeFast` out) and the provenance line under it.
+ * One paragraph row: its text, or in Edit the field that holds the caret (the same box: the swap moves nothing) with
+ * the edit sheet behind it (`fade` in, `fadeFast` out). Nothing is added under a paragraph while it is edited, so no
+ * line below it moves as the caret goes from one paragraph to the next: "Restore original" is in Edit's menu.
  */
 @Composable
 internal fun LazyItemScope.ParagraphItem(
@@ -328,12 +321,11 @@ internal fun LazyItemScope.ParagraphItem(
     placement: FiniteAnimationSpec<IntOffset>?,
     arrival: Arrivals.Arrival?,
     entrance: Long?,
-    onTap: (ParagraphUi, Int) -> Unit,
-    tapBlocked: () -> Boolean,
+    onTap: (ParagraphUi, offset: Int, word: IntRange?) -> Unit,
+    onSweep: ((ParagraphUi, IntRange) -> Unit)?,
     actions: List<CustomAccessibilityAction>,
     onEnter: (full: String, at: Int) -> Unit,
     onJoin: () -> Unit,
-    onRestore: () -> Unit,
 ) {
     val paragraph = item.paragraph
     val find = page.find
@@ -367,17 +359,13 @@ internal fun LazyItemScope.ParagraphItem(
                 modifier = Modifier.onSizeChanged { sizes.field = it.height },
             )
         } else {
-            val text: @Composable () -> Unit = {
-                ParagraphText(
-                    paragraph, page.focus, find, page.layouts, arrival, entrance,
-                    onTap = { offset -> onTap(paragraph, offset) }, tapBlocked = tapBlocked,
-                    actions = actions, unclear = unclear, sheet = { sheet.value },
-                )
-            }
-            // Edit and Find place the caret and show matches; the system selection is for reading.
-            if (page.editing || find.open) DisableSelection(text) else text()
+            ParagraphText(
+                paragraph, page.focus, find, page.layouts, arrival, entrance,
+                onTap = { offset, word -> onTap(paragraph, offset, word) },
+                onSweep = onSweep?.let { sweep -> { range -> sweep(paragraph, range) } },
+                actions = actions, unclear = unclear, sheet = { sheet.value },
+            )
         }
-        ProvenanceLine(visible = focused && paragraph.edited && paragraph.canRestore, onRestore = onRestore)
     }
 }
 
@@ -395,8 +383,8 @@ private class SheetSizes {
 
 /**
  * In a short window, once the keyboard has settled (and whenever the focus lands on another paragraph while it is
- * up), scrolls the focused paragraph whole between the top bar and the keyboard: its sheet, and its provenance line
- * too when both fit. The caret alone would leave the sheet cut through by the keyboard's edge.
+ * up), scrolls the focused paragraph whole between the top bar and the keyboard. The caret alone would leave the
+ * sheet cut through by the keyboard's edge.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

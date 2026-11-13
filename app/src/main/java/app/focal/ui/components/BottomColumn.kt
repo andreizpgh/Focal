@@ -180,10 +180,11 @@ fun rememberBottomColumnState(): BottomColumnState {
  * [strip], 8 above it; keyboard-riding [rows], whose lowest edge is min(IME top, navigation top - 8) - 8; the feedback
  * pill, 8 above the topmost of them (above the keyboard while the dock is hidden) and drawn behind the dock. Positions
  * read the IME inset in the layout phase, so on API 30+ the rows follow the keyboard's own curve frame by frame; on API
- * 26-29 they appear where the keyboard settles, fading in on `fadeFast`. The dock hides (24 dp down and out) while
- * rows are open (or [dockHidden]), following the keyboard when it drives the change. It never moves for any other
- * reason. In a short window ([rail], spec 5.14) the dock stands in the 96 dp rail beside the area, vertically centred,
- * and the strip, the rows and the pill keep the column, the strip on the line where the dock would stand.
+ * 26-29 they appear where the keyboard settles, fading in on `fadeFast`. The dock hides (it fades where it stands)
+ * while rows are open (or [dockHidden]), following the keyboard when it drives the change. It never moves, and once
+ * faded out it is not placed, so nothing invisible takes a tap. In a short window ([rail], spec 5.14) the dock stands
+ * in the 96 dp rail beside the area, vertically centred, and the strip, the rows and the pill keep the column, the
+ * strip on the line where the dock would stand.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -198,18 +199,15 @@ fun BottomColumn(
     rail: Boolean = false,
 ) {
     val density = LocalDensity.current
-    val hideDistance = with(density) { FocalGrid.x24.toPx() }
     val ime = WindowInsets.ime
     val imeTarget = WindowInsets.imeAnimationTarget
     val navigation = WindowInsets.navigationBars
     val status = WindowInsets.statusBars
-    // The dock slides 24 dp down on `move` and fades on `fade` (spec 4.3), or follows the keyboard while it moves.
-    val slide = remember { Animatable(if (dockHidden) 1f else 0f) }
+    // The dock fades where it stands, on `fade` (or with the keyboard while it moves): it never slides. What takes its
+    // place (the search field growing out of its circle, a keyboard rising over it) already moves, and a dock that
+    // came back up from under the screen's edge while a field came down to it read as two things arriving at once.
     val fade = remember { Animatable(if (dockHidden) 1f else 0f) }
-    LaunchedEffect(dockHidden) {
-        launch { slide.animateTo(if (dockHidden) 1f else 0f, FocalMotion.move()) }
-        fade.animateTo(if (dockHidden) 1f else 0f, FocalMotion.fade())
-    }
+    LaunchedEffect(dockHidden) { fade.animateTo(if (dockHidden) 1f else 0f, FocalMotion.fade()) }
     val rowsAlpha = remember { Animatable(1f) }
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) LaunchedEffect(rows != null) {
         // API 26-29 do not animate the IME inset: soften the jump to the settled position.
@@ -230,12 +228,11 @@ fun BottomColumn(
             },
             {
                 val graphics = Modifier.graphicsLayer {
-                    // Hiding, the dock goes as far as the keyboard has risen or its own springs have run, whichever
+                    // Hiding, the dock fades as far as the keyboard has risen or its own fade has run, whichever
                     // leads: it follows a keyboard that moves, and still hides when a requested keyboard never shows
                     // (a hardware keyboard, a refused IME). It never comes back while it is meant to be hidden.
                     val target = imeTarget.getBottom(density)
                     val keyboard = if (dockHidden && target > 0) (ime.getBottom(density).toFloat() / target).coerceIn(0f, 1f) else 0f
-                    translationY = maxOf(keyboard, slide.value) * hideDistance
                     alpha = 1 - maxOf(keyboard, fade.value)
                 }
                 Box(graphics) { dock() }
@@ -288,7 +285,11 @@ fun BottomColumn(
             feedbackPlaceables.forEach { it.place(left, feedbackBottom - it.height) }
             stripPlaceables.forEach { it.place(left, stripBottom - it.height) }
             rowPlaceables.forEach { it.place(left, rowsBottom - it.height) }
-            dockPlaceables.forEach { it.place(railBox?.let { box -> railX(box, it.width, layoutDirection == LayoutDirection.Rtl) } ?: left, dockBottom - it.height) }
+            // A dock that has faded out is not placed: rows, the feedback pill and the page's last lines stand where
+            // it stood, and an invisible Record or Copy must not take their taps, nor TalkBack's focus.
+            if (!dockHidden || fade.value < 1f) {
+                dockPlaceables.forEach { it.place(railBox?.let { box -> railX(box, it.width, layoutDirection == LayoutDirection.Rtl) } ?: left, dockBottom - it.height) }
+            }
         }
     }
 }

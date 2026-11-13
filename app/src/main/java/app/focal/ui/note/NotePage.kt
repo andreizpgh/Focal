@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.imePadding
@@ -23,8 +22,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.text.selection.rememberSelectionState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -63,6 +60,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.focal.R
 import app.focal.ui.components.BottomFade
 import app.focal.ui.components.DockActions
+import app.focal.ui.components.DockState
 import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FeedbackResult
 import app.focal.ui.components.FocalIcon
@@ -74,10 +72,8 @@ import app.focal.ui.components.rememberRowPlacement
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
-import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
-import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.LocalWindowLayout
 import app.focal.ui.design.columnInset
 import app.focal.ui.library.LibraryDates
@@ -101,8 +97,6 @@ import app.focal.ui.state.PlayingWord
 import app.focal.ui.state.WriteQueue
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
@@ -167,10 +161,12 @@ private val CaretMargin = FocalGrid.x24
 
 /**
  * The note page (spec 5.4 to 5.9): a document. Its title, meta and notices, then the paragraphs in a lazy list, with
- * gap rows where a part could not be transcribed and the writing head while the tail transcribes. Tap a word to play
- * from just before it; the playing paragraph stays in ink while the rest recede and the lens follows the word. ✎
- * turns the paragraphs into fields in place; ⋮ opens Find and replace, Rename, Share, Remove audio and Delete. The dock
- * is Play | Copy (or the progress pill); the player strip, the find rows and the feedback pill share the bottom column.
+ * gap rows where a part could not be transcribed and the writing head while the tail transcribes. The text is edited
+ * where it is read: a tap on a word opens Edit with that word selected, so the next key replaces it, and a long press
+ * sweeps a phrase the same way; the paragraphs are fields in place while Edit lasts. ▶ in the dock plays the note (the
+ * playing paragraph stays in ink while the rest recede and the lens follows the word), and Edit's own ▶ plays just the
+ * words at the caret. ⋮ opens Find and replace, Rename, Share, Remove audio and Delete. The dock is Play | Copy (or the
+ * progress pill); the player strip, the find rows and the feedback pill share the bottom column.
  *
  * Everything is drawn from [note] and the page's own state, so the gallery renders it from fakes; [playback] and
  * [edits] are the activity's player and the note's store, or fakes.
@@ -186,14 +182,14 @@ fun NotePage(
     dates: LibraryDates,
     today: LocalDate,
     captureElsewhere: Boolean,
+    /** Finish was tapped for this note's recording: its capture is closing, and the page already shows it as over. */
+    captureFinishing: Boolean = false,
     landing: Boolean = false,
     listState: LazyListState = rememberLazyListState(),
     page: NotePageState = rememberNotePageState(),
 ) {
     val shell = LocalShell.current
     val bottom = shell.bottom
-    val colors = FocalTheme.colors
-    val reduced = LocalReducedMotion.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -212,7 +208,6 @@ fun NotePage(
     val find = page.find
     val listFade = remember { Animatable(1f) }
     val scroller = remember(listState) { NoteScroller(listState, listFade) }
-    val selection = rememberSelectionState()
     val status = WindowInsets.statusBars
     // Inside a container transform the chrome has the paper's alpha and the body arrives on its own (spec 6.1).
     val reveal = LocalPageReveal.current
@@ -320,6 +315,7 @@ fun NotePage(
         val end = page.rangeEndMs ?: position.durationMs
         if (end > 0 && playback.positionMs() >= end - END_SLACK_MS) {
             page.rangeEndMs = null
+            page.listening = false
             playback.stop()
         }
     }
@@ -389,14 +385,14 @@ fun NotePage(
         if (current != null && session.resolve(current.id) == id) {
             current.text.edit {
                 if (refresh && toString() != text) replace(0, length, text)
-                this.selection = TextRange(at.caret.coerceIn(0, length))
+                this.selection = TextRange(at.caret.coerceIn(0, length), at.end.coerceIn(0, length))
             }
         } else {
             if (current != null && commit) {
                 session.leave(current.id, current.text.text.toString())
                 write { session.save() }
             }
-            page.field = FieldFocus(id, text, at.caret)
+            page.field = FieldFocus(id, text, TextRange(at.caret, at.end))
         }
         focus.editingId = id
     }
@@ -421,6 +417,12 @@ fun NotePage(
         }
     }
     fun exitEdit() {
+        // A clip Edit was playing ends with it (the player strip stays away: it was never the page's playback).
+        if (page.listening) {
+            page.listening = false
+            page.rangeEndMs = null
+            playback.stop()
+        }
         page.editing = false
         page.field = null
         page.editMenu = false
@@ -583,7 +585,15 @@ fun NotePage(
         }
     }
     LaunchedEffect(field, find.open) {
-        if (field != null && !find.open && page.takesFocus) runCatching { field.requester.requestFocus() }
+        if (field == null || find.open || !page.takesFocus) return@LaunchedEffect
+        // A step that put the caret in a paragraph off screen (an undo or a redo of a change made elsewhere): the list
+        // goes there first, so its field exists to take the focus and the keyboard stays.
+        val index = indexOf[field.id]
+        if (index != null && listState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
+            listState.scrollToItem(index)
+            withFrameMillis { }
+        }
+        runCatching { field.requester.requestFocus() }
     }
     // A paragraph put just before the first one on screen in Edit (the text before a split, by Enter or a redo) takes
     // its place there, so the lines stay put and the rest moves down, as text does where Enter is pressed: the list
@@ -751,13 +761,44 @@ fun NotePage(
         playback.playWord(paragraph, offset)
     }
 
-    // Taps: play from just before the word (reading); place the caret (Edit).
+    // Taps (spec 5.5, 5.7). Reading, a tap on a word opens Edit with the word selected, so typing replaces it; on bare
+    // paper (past a line's last word) it puts the caret there, to write on. In Edit a tap on another paragraph moves
+    // the caret to it, as a tap inside the field does. A note that cannot be edited yet (it is still being transcribed)
+    // plays from the word instead.
     val canPlay = note.canPlay && note.audioPresent
-    val onTap: (ParagraphUi, Int) -> Unit = { paragraph, offset ->
+    val canEdit = note.editable
+    val onTap: (ParagraphUi, Int, IntRange?) -> Unit = { paragraph, offset, word ->
         when {
-            page.editing && !find.open -> focusField(CaretAt(paragraph.id, offset), refresh = false, commit = true)
             find.open || page.renaming -> Unit
+            page.editing -> focusField(CaretAt(paragraph.id, offset), refresh = false, commit = true)
+            canEdit -> enterEdit(if (word == null) CaretAt(paragraph.id, offset) else CaretAt(paragraph.id, word.first, word.last + 1))
             canPlay -> playFromWord(paragraph, offset)
+        }
+    }
+    // A long press swept these chars: they are selected in the paragraph's field, in Edit (entered if need be).
+    val onSweep: ((ParagraphUi, IntRange) -> Unit)? = if (!canEdit || find.open || page.renaming) null else { paragraph, range ->
+        val at = CaretAt(paragraph.id, range.first, range.last + 1)
+        if (page.editing) focusField(at, refresh = false, commit = true) else enterEdit(at)
+    }
+    // Edit's ▶ (spec 5.7): plays just the audio of the selected words, or of the words around the caret, and stops. It
+    // is how a doubtful word is checked against what was said without leaving the place being corrected. The strip and
+    // the follow scroll stay away: the page is not being played, and the caret must not move.
+    val listening = page.listening && audio.noteId == note.noteId && audio.playing
+    val listen: () -> Unit = {
+        val current = page.field
+        val paragraph = current?.let { field -> paragraphs.firstOrNull { it.id == field.id } }
+        when {
+            listening -> playback.pause()
+            current != null && paragraph != null && canPlay -> {
+                val selection = current.text.selection
+                val lead = if (selection.collapsed) FocalTiming.LISTEN_CARET_MS else FocalTiming.LISTEN_SELECTION_MS
+                val clip = paragraph.listenRange(selection.min, selection.max, lead)
+                val end = (clip.last + 1).coerceAtMost(position.durationMs.takeIf { it > 0 } ?: Long.MAX_VALUE)
+                page.playerDismissed = true
+                page.listening = true
+                page.rangeEndMs = end
+                playback.playRange(clip.first, end)
+            }
         }
     }
 
@@ -777,10 +818,13 @@ fun NotePage(
     BackHandler(enabled = find.open) { closeFind() }
     BackHandler(enabled = page.renaming) { page.renaming = false }
 
-    // The dock (spec 4.3) and the bottom column.
-    val dockState = noteDock(
+    // The dock (spec 4.3) and the bottom column. While this note's own recording runs under a folded scene (it was
+    // continued from this page), the dock is the recording's: Pause | Finish, as on the library.
+    val recordingHere = (note.phase == NotePhase.RECORDING || note.phase == NotePhase.PAUSED) && !captureFinishing
+    val dockState: DockState = if (recordingHere) DockState.Live(paused = note.phase == NotePhase.PAUSED) else noteDock(
         audioPresent = note.audioPresent, canPlay = note.canPlay, playing = playingHere && audio.playing,
         phase = note.phase, progress = note.progress, copyEnabled = !note.noSpeech && paragraphs.isNotEmpty(),
+        append = note.canAppend, noteId = note.noteId,
     )
     val currentParagraphs by rememberUpdatedState(paragraphs)
     val currentItems by rememberUpdatedState(items)
@@ -790,14 +834,19 @@ fun NotePage(
             play = {
                 page.playerDismissed = false
                 page.followSuspended = false
+                // The page's own playback from here on: a gap's range that was paused no longer ends it.
+                page.rangeEndMs = null
                 if (playback.session.noteId == note.noteId) playback.toggle() else {
                     // With no session: from the start of the topmost paragraph on screen (spec 5.5).
                     val top = visibleParagraphs(listState, currentItems).firstOrNull()
                     currentParagraphs.firstOrNull { it.id == top }?.let { playback.playWord(it, 0) } ?: playback.playFrom(0)
                 }
             },
-            pausePlayback = { playback.toggle() },
+            // A pause and nothing else: a toggle would restart a gap's range as the whole note's playback.
+            pausePlayback = { playback.pause() },
             copy = actions.copy,
+            append = actions.recordMore,
+            pause = actions.pause, resume = actions.resume, finish = actions.finish,
         )
     }
     val findActions = run {
@@ -865,21 +914,31 @@ fun NotePage(
     LaunchedEffect(page.editing) { editT.animateTo(if (page.editing) 1f else 0f, FocalMotion.fadeFast()) }
     val findT = remember { Animatable(if (find.open) 1f else 0f) }
     LaunchedEffect(find.open) { findT.animateTo(if (find.open) 1f else 0f, FocalMotion.fade()) }
-    val collapsed by remember { derivedStateOf { page.titleBottom < bandTop() } }
+    // Scrolled past the head (also a note reopened where it was read, whose head was never composed), or the title
+    // has gone under the bar.
+    val collapsed by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || page.titleBottom < bandTop() } }
     // The bars cross-fade (`fadeFast`); each is composed only while it shows, decided twice per change, not per frame.
     val topBarShown by remember { derivedStateOf { editT.value < 1f } }
     val editBarShown by remember { derivedStateOf { editT.value > 0f } }
     // A note with no text has nothing to edit or find (spec 5.9: no speech).
     val editable = note.editable && paragraphs.isNotEmpty()
     val menuItems = NoteMenuItems(
+        edit = note.editable,
         find = editable || (note.phase == NotePhase.READY && !note.audioPresent && paragraphs.isNotEmpty()),
         share = note.phase == NotePhase.READY || note.phase == NotePhase.PARTIAL_FAILURE,
         removeAudio = note.canRemoveAudio,
-        delete = note.phase !in LibraryModels.BUSY,
+        delete = note.phase !in LibraryModels.BUSY && !recordingHere,
+        append = note.canAppend,
     )
     val menuActions = run {
         NoteMenuActions(
-            find = { openFind() }, rename = { page.renaming = true }, share = actions.share,
+            // Edit without a pointer: the caret goes before the playing word, else to the start of the topmost
+            // paragraph on screen.
+            edit = {
+                val top = visibleParagraphs(listState, currentItems).firstOrNull()
+                enterEdit(if (playingHere) null else top?.let { CaretAt(it, 0) })
+            },
+            find = { openFind() }, rename = { page.renaming = true }, share = actions.share, append = actions.recordMore,
             removeAudio = {
                 playback.stop()
                 actions.removeAudio()
@@ -892,7 +951,7 @@ fun NotePage(
         )
     }
     val editBarActions = run {
-        EditBarActions(undo = undo, redo = redo, done = { done() }, restore = restore, find = { openFind() })
+        EditBarActions(undo = undo, redo = redo, done = { done() }, restore = restore, find = { openFind() }, listen = listen)
     }
     val focusedParagraph = page.field?.id?.let { id -> paragraphs.firstOrNull { it.id == id } }
 
@@ -905,9 +964,9 @@ fun NotePage(
             PageKey.Find -> (!find.open).also { if (it) openFind() }
             // While reading, Space is the page's even with nothing to play (text only, or a capture holds the
             // audio): left to a control that the first key after a touch focused by itself, it would press it.
-            PageKey.PlayPause -> reading.also { if (it && canPlay) { if (playingHere && audio.playing) playback.toggle() else dockActions.play() } }
+            PageKey.PlayPause -> reading.also { if (it && canPlay) { if (playingHere && audio.playing) playback.pause() else dockActions.play() } }
             // Through the dock's Copy, so it confirms as a tap does (spec 5.5).
-            PageKey.Copy -> (reading && selection.selectedTexts.none { it.isNotEmpty() } && dockState.pill is NotePill.Copy).also {
+            PageKey.Copy -> (reading && (dockState as? DockState.Note)?.pill is NotePill.Copy).also {
                 if (it) bottom.dock.copy()
             }
         }
@@ -954,8 +1013,8 @@ fun NotePage(
         if (topBarShown) {
             NoteTopBar(
                 title = head.title, titleMuted = head.titleFallback, collapsed = collapsed && mode != NoteMode.Editing,
-                editable = editable, menuItems = menuItems, menuOpen = page.menu, onMenu = { page.menu = it }, menu = menuActions,
-                onBack = actions.back, onEdit = { enterEdit(null) },
+                menuItems = menuItems, menuOpen = page.menu, onMenu = { page.menu = it }, menu = menuActions,
+                onBack = actions.back,
                 chrome = { chrome() * (1 - editT.value) },
                 modifier = Modifier.zIndex(BARS_Z).inertBar(page.editing || find.open),
             )
@@ -965,6 +1024,7 @@ fun NotePage(
                 canUndo = session.canUndo, canRedo = session.canRedo,
                 canRestore = focusedParagraph?.let { it.edited && it.canRestore } == true,
                 failed = session.failed, menuOpen = page.editMenu, onMenu = { page.editMenu = it }, actions = editBarActions,
+                canListen = canPlay && page.field != null, listening = listening,
                 modifier = Modifier.zIndex(BARS_Z).graphicsLayer { alpha = editT.value * chrome() }.inertBar(!page.editing || find.open),
             )
         }
@@ -974,7 +1034,7 @@ fun NotePage(
             CaretSpec(bandTop, { with(density) { (if (short.value) EditSheetMargin else CaretMargin).toPx() } }, fadePx, topLines)
         }
         CompositionLocalProvider(LocalBringIntoViewSpec provides bringSpec) {
-            SelectionContainer(selection, Modifier.fillMaxSize()) {
+            run {
                 BoxWithConstraints(Modifier.fillMaxSize().graphicsLayer { alpha = listFade.value * reveal.body() }) {
                     // The text column is at most 600 dp and centred (spec 2.5); the list itself spans the page, so it
                     // scrolls from its margins too.
@@ -1013,7 +1073,7 @@ fun NotePage(
                                     item, page, placement,
                                     arrival = page.arrivals.of(item.paragraph.id, SystemClock.uptimeMillis()),
                                     entrance = entranceDelay(landing, item.index, paragraphs.size),
-                                    onTap = onTap, tapBlocked = { selection.selectedTexts.any { it.isNotEmpty() } },
+                                    onTap = onTap, onSweep = onSweep,
                                     actions = paragraphActions(
                                         item.paragraph, labels, note, canPlay, page.editing, finding = find.open, play = playFromWord,
                                         // In Edit, TalkBack's Edit puts the caret in this paragraph, as a tap does.
@@ -1022,10 +1082,10 @@ fun NotePage(
                                     ),
                                     onEnter = enter,
                                     onJoin = join,
-                                    onRestore = restore,
                                 )
                                 is NoteItem.Gap -> GapRow(
-                                    item.gap, playable = note.audioPresent && note.canPlay,
+                                    // Not from Edit or Find: playback would scroll the text under the caret.
+                                    item.gap, playable = note.audioPresent && note.canPlay && !page.editing && !find.open,
                                     onPlay = {
                                         page.rangeEndMs = item.gap.endMs
                                         page.playerDismissed = false

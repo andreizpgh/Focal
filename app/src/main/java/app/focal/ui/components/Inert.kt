@@ -3,6 +3,8 @@ package app.focal.ui.components
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 
 /**
@@ -17,3 +19,13 @@ fun Modifier.inert(inert: Boolean): Modifier = this
     .then(if (inert) Modifier.clearAndSetSemantics { } else Modifier)
     .focusProperties { if (inert) onEnter = { cancelFocusChange() } }
     .focusGroup()
+
+/**
+ * While [on], every touch on the layer stops at it and presses nothing inside: a bar that another replaced, a menu
+ * that is fading out.
+ */
+fun Modifier.untouchable(on: Boolean): Modifier = if (!on) this else pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+    }
+}

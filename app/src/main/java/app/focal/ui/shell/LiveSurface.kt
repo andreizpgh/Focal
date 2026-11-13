@@ -33,6 +33,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,7 +47,10 @@ enum class SceneEntry {
     Record,
     /** Record in the empty library (T1′e): the material grows out of the resting instrument. */
     RecordEmpty,
-    /** The shortcut or the recording notification (5.13): already open, the bars light up, the chrome fades in. */
+    /**
+     * No origin on screen: the shortcut or the recording notification (5.13), where the scene is already open, and a
+     * recording that continues a note, where it fades in over the note's page. The bars light up, the chrome fades in.
+     */
     Direct,
 }
 
@@ -101,8 +106,22 @@ class LiveSurfaceState internal constructor(open: Boolean) {
      */
     var material by mutableStateOf<(() -> Rect)?>(null)
 
-    /** Whether the surface morphs in space (true) or crossfades in place (reduced motion, or no origin on screen). */
-    var spatial by mutableStateOf(true)
+    /**
+     * Whether the page under the scene is the library, so the scene has an origin on screen to grow out of and to fold
+     * into. The shell provides it from its back stack (read as state).
+     */
+    var overLibrary: () -> Boolean = { true }
+
+    /** Reduced motion, as the shell last composed with it. */
+    var reducedMotion by mutableStateOf(false)
+
+    /**
+     * Whether the surface morphs in space (true) or crossfades in place: reduced motion, or no origin on screen (the
+     * scene over a note's page). Finish settles into the note's page, which is then the page under the scene, so that
+     * settle is spatial. Derived from where the surface is, never mirrored from a composition: a trigger reads it in
+     * the frame it fires, and it is right while the scene is closed too.
+     */
+    val spatial: Boolean get() = !reducedMotion && (overLibrary() || landingNote != null)
 
     /** A finger is on the surface: the morph requests a high frame rate (spec 6.5). */
     var dragging by mutableStateOf(false)
@@ -176,7 +195,32 @@ class LiveSurfaceState internal constructor(open: Boolean) {
         val motion = choreography
         launch(start = CoroutineStart.UNDISPATCHED) { motion.play(wake) }
         revealStage?.let { reveal -> launch { reveal(true) } }
-        settle(1f, reducedMotion)
+        interruptible { settle(1f, reducedMotion) }
+    }
+
+    /**
+     * A recording that continues a note, started on that note's page: there is no stage on screen to grow out of, so
+     * the scene fades in over the page on `fade` while its bars light up and its chrome arrives, as for the shortcut.
+     * Never a cut from paper to the near-black material.
+     */
+    suspend fun appear(reducedMotion: Boolean = false) = coroutineScope {
+        if (expansion.value >= 1f && landingNote == null) return@coroutineScope
+        begin(SceneEntry.Direct, reducedMotion)
+        val motion = choreography
+        launch(start = CoroutineStart.UNDISPATCHED) { motion.play(wake) }
+        interruptible {
+            withContext(FocalFullMotion) {
+                expansion.animateTo(1f, FocalMotion.fromTrigger(if (reducedMotion) FocalMotion.reducedCrossfade else FocalMotion.fade()))
+            }
+        }
+    }
+
+    /**
+     * Runs an animation of p beside an opening's choreography. A finger on the scene stops p (the gesture takes it
+     * from there), which cancels the animation but not the opening: the bars still light up and the chrome arrives.
+     */
+    private suspend inline fun interruptible(animation: () -> Unit) {
+        try { animation() } catch (_: CancellationException) { currentCoroutineContext().ensureActive() }
     }
 
     /** The shortcut or the notification: the scene is already open (no morph); the bars light up, the chrome fades in. */
@@ -226,6 +270,8 @@ class LiveSurfaceState internal constructor(open: Boolean) {
      */
     suspend fun land(reducedMotion: Boolean, openNote: () -> Unit) {
         try {
+            // A fold or an expand still running ends here: the scene settles from its full size.
+            expansion.snapTo(1f)
             landing.snapTo(0f)
             landingContent.snapTo(1f)
             landingAlpha.snapTo(1f)

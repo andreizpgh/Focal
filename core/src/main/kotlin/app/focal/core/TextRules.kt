@@ -24,6 +24,85 @@ internal object TextRules {
     /** A sentence ending in a number of up to this many digits ('3.', '15.') reads as an ordinal in the title. */
     private const val MAX_ORDINAL_DIGITS = 2
 
+    /**
+     * Function words a shortened title must not end on (articles, prepositions, conjunctions and the like), one list
+     * per language measured for the recognizer: "We looked at the cache and then at the" reads as a cut, "We looked
+     * at the cache" as a heading. The lists stay apart because a function word of one language is a content word of
+     * another ("do", "no", "die", "sur"); [functionWords] picks the lists of the language the words are in. Compared
+     * lowercased, letters only.
+     */
+    private val FUNCTION_WORDS: List<Set<String>> = listOf(
+        // English
+        setOf(
+            "a", "an", "the", "and", "or", "but", "nor", "of", "to", "in", "on", "at", "for", "with", "from", "by", "as",
+            "that", "than", "then", "if", "so", "is", "are", "was", "were", "be", "am", "this", "these", "those", "my",
+            "your", "our", "their", "his", "her", "its", "into", "about", "which", "who", "when", "while", "because",
+            "i", "we", "he", "she", "they",
+        ),
+        // Russian
+        setOf(
+            "и", "а", "но", "или", "в", "во", "на", "с", "со", "к", "ко", "у", "о", "об", "от", "до", "за", "из", "по",
+            "для", "при", "про", "над", "под", "без", "через", "что", "чтобы", "как", "то", "это", "этот", "эта", "эти",
+            "не", "ни", "же", "ли", "бы", "если", "когда", "потому", "который", "которая", "которые", "мой", "моя",
+            "наш", "том", "тем", "того", "тому", "так", "там", "тот", "та", "те",
+        ),
+        // German
+        setOf(
+            "der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "einem", "einer", "und", "oder", "aber",
+            "in", "im", "an", "am", "auf", "aus", "bei", "mit", "nach", "von", "vom", "zu", "zum", "zur", "für", "über",
+            "unter", "um", "als", "wie", "dass", "danach", "dann", "wenn", "weil",
+        ),
+        // French
+        setOf(
+            "le", "la", "les", "un", "une", "des", "et", "ou", "mais", "de", "du", "en", "au", "aux", "à", "dans", "sur",
+            "sans", "pour", "par", "avec", "que", "qui", "si", "ce", "cette", "ces", "mon", "ma", "notre",
+        ),
+        // Spanish
+        setOf(
+            "el", "la", "los", "las", "un", "una", "unos", "unas", "y", "e", "o", "u", "pero", "de", "del", "al", "a",
+            "en", "con", "sin", "por", "para", "sobre", "que", "como", "si", "mi", "su",
+        ),
+        // Italian
+        setOf(
+            "il", "lo", "la", "i", "gli", "le", "un", "uno", "una", "e", "ed", "o", "ma", "di", "del", "della", "dei",
+            "a", "al", "da", "in", "nel", "nella", "con", "su", "per", "che", "se", "come",
+        ),
+        // Portuguese
+        setOf(
+            "o", "a", "os", "as", "um", "uma", "e", "ou", "mas", "de", "do", "da", "dos", "das", "em", "no", "na", "nos",
+            "nas", "ao", "com", "por", "para", "que", "se", "como",
+        ),
+    )
+
+    /**
+     * The function words of the language [words] are in: the list most of them belong to, and every list that ties
+     * with it (Spanish, Italian and Portuguese share most of theirs). Empty when no word is in any list. The
+     * recognizer names no language, so the words themselves decide.
+     */
+    fun functionWords(words: List<String>): Set<String> {
+        val keys = words.map { wordChars(it).lowercase(Locale.ROOT) }
+        var most = 0
+        val out = HashSet<String>()
+        for (list in FUNCTION_WORDS) {
+            val hits = keys.count { it in list }
+            if (hits > most) {
+                most = hits
+                out.clear()
+            }
+            if (hits > 0 && hits == most) out += list
+        }
+        return out
+    }
+
+    /**
+     * Whether a shortened title should not end on [word]: one of [functionWords], a bare number (its unit or month
+     * went with the words after it: "am 4. Mai") or punctuation alone.
+     */
+    fun danglingWord(word: String, functionWords: Set<String>): Boolean {
+        val letters = wordChars(word)
+        return letters.isEmpty() || isDigits(letters) || letters.lowercase(Locale.ROOT) in functionWords
+    }
+
     fun isAlnum(cp: Int): Boolean = Character.isLetter(cp) || when (Character.getType(cp).toByte()) {
         Character.DECIMAL_DIGIT_NUMBER, Character.LETTER_NUMBER, Character.OTHER_NUMBER -> true
         else -> false
