@@ -123,6 +123,40 @@ to end, so before publishing a release is checked on emulators in three parts:
 
 ## What has been verified
 
+### 0.3.1
+
+On the API 36 x86_64 emulator only. No build has run on a phone. What follows
+was checked while the changes were made, on the working tree; the checks of the
+release commit itself are recorded after it.
+
+**Tests.** The JVM tests and lint passed. The instrumented suite (debug build,
+model bundled, a 720 × 1280 display, `-no-audio`): 164 tests; one failed,
+`gallery/LongNoteTest`, for two reasons that were the test's own on this display
+and are fixed in it: its tap went to the list's centre, which here is the gap
+between two paragraphs, and it waited for the autosave by sleeping while the
+rule's clock, which the autosave's debounce runs on, stood still. It passes with
+both changed; the edit, motion and interface tests were run again after the last
+changes to the page transitions (41 tests, none failed), not the whole suite.
+
+**Motion, frame by frame.** The screen was recorded (`screenrecord`, 60 frames a
+second) while a note was opened from the stage and from a row and closed again,
+and consecutive frames were compared. On the 0.3.0 debug build an opening showed
+three to six distinct frames with pauses of about 200 ms between them, one of
+them a note that had not loaded ("Jan 1, 1970 · Text only"), and Back drew the
+page over the library. On the emulator QA build of this tree (minified, x86_64)
+the same four changes show 19 to 23 consecutive frames each, with no frame of an
+unloaded note and no page drawn over another. The same recordings were made for
+search (the first letter typed: one crossfade over about ten frames, no blank
+page), the note menu (its shadow is there from its first frame), Edit (a tap on
+a word, typing over it, a tap on another word: no line of text changes place,
+and the page scrolls once, for the keyboard) and pulling the stage open.
+
+**Not checked.** A phone, and so real frame rates; other keyboards than Gboard;
+the pull gesture against Android's own back gesture at the screen's edge;
+landscape, a tablet and two panes; TalkBack with the new switch, the selection
+menu and the paragraph times; the one-time split of notes recorded before, on
+real notes (it was exercised on the emulator's seeded notes only).
+
 ### 0.3.0
 
 On the API 36 x86_64 emulator only. No build has run on a phone.

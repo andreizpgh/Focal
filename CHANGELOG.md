@@ -5,6 +5,70 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
+## [0.3.1] - 2026-11-13
+
+Changes after a second round on a phone: what moved, flickered or did nothing.
+Checked on an emulator only so far. Installs over 0.3.0 and keeps its notes;
+notes recorded before are split into shorter paragraphs once, without changing a
+word.
+
+### Added
+
+- **Paragraph times.** A note that still has its audio shows, over each paragraph
+  after the first, the time it starts at; a tap plays from there. **Paragraph
+  times** in settings turns them off.
+- **Remove audio for several notes.** While notes are selected, ⋮ in the dock
+  offers "Remove audio" with its size: the notes stay as text, with one Undo.
+- **Remove all audio** in settings, with what it would free; it asks once, since
+  it cannot be undone from there.
+- **Pull the card down to open its note**, as the live card opens the recording:
+  the card follows the finger and opens into the page when let go far enough.
+
+### Changed
+
+- **Paragraphs are shorter.** A paragraph closes after a pause of 1.5 s once it
+  holds two sentences (it was 2 s), after 3 s in any case (3.5 s), or at 60 words
+  (80): dictation without long pauses no longer reads as one block. Notes
+  recorded before are split once by the same rule where their text is still the
+  recognizer's own; edited paragraphs are left alone, and no word changes.
+- **Edit.** A tap on a word selects it everywhere in Edit, not only on the way
+  in; a tap inside the selection puts the caret there. Nothing is drawn around
+  the paragraph being edited and the others no longer dim.
+- **Opening a note** runs on the slower `stage` spring and starts once the note is
+  loaded and laid out, instead of at the tap.
+- **Search** crossfades from the library to the results once the first results
+  are there.
+- **Settings.** The storage group is an action instead of a size with a note
+  under it.
+- **Selection.** Selected rows next to each other form one block; the selected
+  card lightens instead of getting a ring.
+
+### Fixed
+
+- Opening a note and going back flickered: the motion was timed by the wall
+  clock from the tap, so the frames spent composing the page swallowed most of
+  it, and a note not loaded yet was drawn for a frame or two ("1 Jan 1970",
+  "Text only", a writing head). Frame time now advances by at most 40 ms a frame
+  for every animation in the app, and a page waits for its note.
+- Back could draw the note's page and the library over each other: the display
+  asked for a swipe-back preview of the library itself as the pop completed,
+  which replaced the fold that was running.
+- A note reopened where it had been read flew its title to the top of the window
+  and dropped it there; the title now leaves with the card when the page has
+  none on screen.
+- Text moved while editing: the title, derived from the first sentence, was
+  derived again with every autosave and re-wrapped; a field taking focus asked
+  for its whole paragraph to be scrolled into view, and the caret then asked the
+  page back. The title now holds until Done, and the page scrolls only for a
+  caret that would be hidden, together with the keyboard.
+- In Edit a tap on a word put the caret inside it, and the keyboard added what
+  was typed to the old word.
+- A menu's shadow appeared only after the menu had faded in (a layer drawn at
+  less than full alpha was clipped to the menu's own bounds), and the fade itself
+  was mostly over before the menu's window was first drawn.
+- The first letter typed in search blanked the whole page before the results
+  came.
+
 ## [0.3.0] - 2026-11-13
 
 Changes after the first week of use on a phone, and a review of the whole code
@@ -168,6 +232,7 @@ recovery of interrupted recordings.
 First public alpha: background recording and local transcription with the
 bundled Whisper Base model.
 
+[0.3.1]: https://github.com/andreizpgh/Focal/releases/tag/v0.3.1
 [0.3.0]: https://github.com/andreizpgh/Focal/releases/tag/v0.3.0
 [0.2.0]: https://github.com/andreizpgh/Focal/releases/tag/v0.2.0
 [0.1.0-alpha.9]: https://github.com/andreizpgh/Focal/releases/tag/stt-alpha-9

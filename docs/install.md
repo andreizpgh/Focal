@@ -1,9 +1,9 @@
 # Install Focal
 
-**[Download Focal-0.3.0.apk](https://github.com/andreizpgh/Focal/releases/download/v0.3.0/Focal-0.3.0.apk)**
+**[Download Focal-0.3.1.apk](https://github.com/andreizpgh/Focal/releases/download/v0.3.1/Focal-0.3.1.apk)**
 
 Focal is distributed as an APK on its
-[release page](https://github.com/andreizpgh/Focal/releases/tag/v0.3.0), under
+[release page](https://github.com/andreizpgh/Focal/releases/tag/v0.3.1), under
 **Assets**. You don’t need a GitHub account, Android Studio or a ZIP archive.
 Earlier versions stay on their own release pages.
 
@@ -21,7 +21,7 @@ Earlier versions stay on their own release pages.
 ## Install
 
 1. Open the download link on your phone.
-2. Open **Focal-0.3.0.apk** from your browser’s downloads or the Files app.
+2. Open **Focal-0.3.1.apk** from your browser’s downloads or the Files app.
 3. If Android asks, allow **Install unknown apps** for that browser or file
    manager, go back and tap **Install**. You can turn the permission off
    afterwards.
@@ -38,9 +38,12 @@ the copy is done.
 ## Updating from an earlier version
 
 Android updates an app in place only when the new APK is signed with the same
-key. Alpha 2 to Alpha 9 and 0.2.0 share one development key, and each release
-is checked to carry the same certificate before it is published.
+key. Alpha 2 to Alpha 9 and every release since share one development key, and
+each release is checked to carry the same certificate before it is published.
 
+- **Over 0.3.0:** the notes stay. On first launch, notes recorded before are
+  split into shorter paragraphs once, by the rule new recordings follow; no word
+  changes, and paragraphs you edited are left as they are.
 - **Over 0.2.0:** the notes stay as they are. Titles that 0.2.0 made from a long
   first sentence are made again by the new rule, once; titles you gave stay.
   Tested on an Android emulator: the published 0.2.0 APK was installed, then
