@@ -34,11 +34,14 @@ object NoteState {
     internal val ACTIVE = listOf(RECORDING, PAUSED, PROCESSING)
 }
 
+/** A window whose decoding failed or was killed this many times is marked FAILED: the store's and the worker's limit. */
+const val MAX_DECODE_ATTEMPTS = 2
+
 /** Why a recording was paused or ended automatically. */
 object CaptureReason {
-    /** A phone or VoIP call took the microphone (auto-pause). */
+    /** A phone or VoIP call took the microphone: capture holds, and pauses if the hold lasts too long. */
     const val CALL = "CALL"
-    /** Android or another app silenced the microphone, or it stopped delivering audio (auto-pause). */
+    /** Android or another app silenced the microphone (a hold), or it stopped delivering audio (auto-pause). */
     const val MICROPHONE = "MICROPHONE"
     const val STORAGE = "STORAGE"
     const val PERMISSION = "PERMISSION"

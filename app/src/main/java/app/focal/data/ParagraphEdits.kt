@@ -34,7 +34,7 @@ internal object ParagraphEdits {
         val sourceIsWords = words != null && source == words.joinToString(" ") { it.text }
         val (leftSource, rightSource) = when {
             source == null -> null to null
-            sourceIsWords -> words!!.subList(0, wordCut!!).joinToString(" ") { it.text } to
+            sourceIsWords -> words.subList(0, wordCut!!).joinToString(" ") { it.text } to
                 words.subList(wordCut, words.size).joinToString(" ") { it.text }
             else -> {
                 val tokens = TextWords.ranges(source)

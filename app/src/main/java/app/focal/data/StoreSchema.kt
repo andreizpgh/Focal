@@ -7,7 +7,8 @@ import app.focal.core.Title
 import java.io.File
 
 /**
- * Schema 5 of focal.db and the upgrades from every earlier schema.
+ * Schema 6 of focal.db and the upgrades from every earlier schema (6 has schema 5's tables: only automatic
+ * titles were derived again).
  *
  * - `notes`: one recording. `seq` is the note's search document id; `legacy` marks notes transcribed
  *   before schema 5; `deleted_at` is set while a deletion can still be undone.
@@ -21,7 +22,7 @@ import java.io.File
  * - `pending_audio_deletions`: the journal that makes audio file deletion retryable.
  */
 internal object StoreSchema {
-    const val VERSION = 5
+    const val VERSION = 6
     const val UNTITLED_V4 = "Untitled note"
     private const val SECONDS_BYTES = 32L
 
@@ -37,6 +38,10 @@ internal object StoreSchema {
 
     fun upgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int, audioDir: File) {
         check(oldVersion in 1 until VERSION && newVersion == VERSION) { "Missing database migration" }
+        if (oldVersion == 5) {
+            retitle(db)
+            return
+        }
         if (oldVersion == 1) createDeletionJournal(db)
         if (oldVersion < 3) {
             // Older text may already include manual edits. Its original provenance is unknown.
@@ -49,6 +54,26 @@ internal object StoreSchema {
             db.execSQL("ALTER TABLE chunks ADD COLUMN next_start INTEGER")
         }
         upgradeToFive(db, audioDir)
+    }
+
+    /**
+     * Schema 5 to 6: nothing in the tables changes. The titles schema 5 derived are derived again, because the rule for
+     * a first sentence longer than the limit changed (whole words to a clause end, no ellipsis). Renamed notes keep
+     * theirs, and so do notes from before schema 5 ([upgradeToFive] kept the titles they came with), so a database
+     * ends with the same titles whether it passed through schema 5 or not.
+     */
+    private fun retitle(db: SQLiteDatabase) {
+        val derived = db.rawQuery("SELECT id,title FROM notes WHERE title_is_custom=0 AND legacy=0", null).use { c ->
+            buildList { while (c.moveToNext()) add(c.getString(0) to c.getString(1)) }
+        }
+        var changed = false
+        for ((id, current) in derived) {
+            val title = Title.of(titleWords(db, id))
+            if (title == current) continue
+            db.update("notes", ContentValues().apply { put("title", title) }, "id=?", arrayOf(id))
+            changed = true
+        }
+        if (changed) db.execSQL("INSERT INTO title_fts(title_fts) VALUES('rebuild')")
     }
 
     private fun createDeletionJournal(db: SQLiteDatabase) {
