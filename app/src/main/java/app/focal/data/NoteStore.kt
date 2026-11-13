@@ -10,6 +10,7 @@ import androidx.core.database.sqlite.transaction
 import app.focal.core.AsrToken
 import app.focal.core.EndKind
 import app.focal.core.FormatConfig
+import app.focal.core.Paragraphs
 import app.focal.core.Title
 import app.focal.core.Transcript
 import app.focal.core.TranscriptAssembler
@@ -706,6 +707,35 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         refreshTitle(this, paragraph.noteId)
         val origin = SplitOrigin(paragraph.text, paragraph.sourceText, paragraph.wordsJson, paragraph.startMs, paragraph.endMs, paragraph.edited)
         EditResult.Saved(paragraphsIn(this, "id IN (?,?)", listOf(added.toString(), id.toString())), origin)
+    }
+
+    /**
+     * Splits the paragraphs of ready notes where the current paragraph rules ([FormatConfig]) would now close them:
+     * notes recorded under earlier, looser rules read as one block of text. Only a paragraph that still is the
+     * recognizer's own text with its word times is touched (an edited one is the person's), and only by
+     * [splitParagraph], so no word, time or original changes: the same step as Enter in the editor. Returns how many
+     * paragraphs were split off. Safe to run again: a paragraph already within the rules stays whole.
+     */
+    fun reparagraph(): Int {
+        var added = 0
+        for (note in library()) {
+            if (note.state != NoteState.READY) continue
+            for (paragraph in paragraphs(note.id)) {
+                if (paragraph.edited || paragraph.hidden || paragraph.open) continue
+                val words = paragraph.sourceWords() ?: continue
+                if (paragraph.text != words.joinToString(" ") { it.text }) continue
+                val parts = Paragraphs.split(words, format)
+                var revision = paragraph.revision
+                // Each split takes the text before it into a new paragraph; this one keeps its id with the rest.
+                for (part in parts.dropLast(1)) {
+                    val offset = part.sumOf { words[it].text.length + 1 }
+                    val result = splitParagraph(paragraph.id, revision, offset) as? EditResult.Saved ?: break
+                    revision = result.paragraphs.firstOrNull { it.id == paragraph.id }?.revision ?: break
+                    added++
+                }
+            }
+        }
+        return added
     }
 
     /**

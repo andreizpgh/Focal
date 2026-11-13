@@ -191,10 +191,18 @@ unchanged.
   from token times run about 0.3–0.5 s longer than the acoustic gap. With the
   experiment's 1.5 s threshold, 22 of 70 gaps in the normal streams (all shorter
   than 0.8 s) measured as paragraph-length pauses. The app therefore closes a
-  paragraph only at a sentence end: after a pause of at least 3.5 s, after 2.0 s
-  once the paragraph holds two sentences, or once it holds 80 words. Speech without
-  punctuation closes at the longest recent pause when a paragraph reaches 160
-  words. These thresholds still need calibration on real dictation.
+  paragraph only at a sentence end. The first thresholds (3.5 s; 2.0 s once the
+  paragraph held two sentences; 80 words) were set to avoid those false breaks,
+  and in two weeks of dictation on a phone they gave the opposite fault: people
+  speak a note without such pauses, so it read as one block. Since 0.3.1 a
+  paragraph closes after a pause of at least 3.0 s, after 1.5 s once it holds two
+  sentences, or once it holds 60 words; speech without punctuation closes at the
+  longest recent pause when a paragraph reaches 120 words. By the measurement
+  above, about a third of ordinary sentence gaps pass 1.5 s, so a paragraph is a
+  few sentences long: a break in a slightly wrong place costs less than none.
+  Notes recorded before are split once by the same rule, where their text is
+  still the recognizer's own; no word or time changes. These thresholds still
+  need calibration against reference paragraphs.
 - **Title.** The first sentence, extended by the next if it is shorter than 12
   characters, at most 36 characters. A longer first sentence is shortened to
   whole words at a clause, never to a dangling function word, and carries no

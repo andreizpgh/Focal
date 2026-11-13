@@ -223,4 +223,38 @@ class FormattingTest {
         assertEquals(3, update.paragraphs[0][0].window)
         assertEquals(emptyList(), TranscriptAssembler().append(DecodedWindow(0, null, null, emptyList()), 0).paragraphs)
     }
+
+    /** Sentences of [size] words, 350 ms a word, each followed by its pause in [pausesMs]. */
+    private fun dictation(size: Int, pausesMs: List<Long>): List<Word> {
+        val out = ArrayList<Word>()
+        var at = 0L
+        for ((sentence, pause) in pausesMs.withIndex()) {
+            for (i in 0 until size) {
+                val text = if (i == size - 1) "w$sentence." else "w$sentence"
+                out += Word(text, at, at + 300, 0.9, punctOnly = false, window = 0)
+                at += 350
+            }
+            at += pause
+        }
+        return out
+    }
+
+    @Test
+    fun dictationWithoutLongPausesIsNotOneBlock() {
+        // Twenty sentences a breath apart: no pause reaches a threshold, so the word limit alone closes paragraphs.
+        val even = Paragraphs.split(dictation(10, List(20) { 600L }))
+        assertTrue(even.size >= 3, "paragraphs ${even.size}")
+        assertTrue(even.all { it.count() <= SpeechTuning.PARAGRAPH_MAX_WORDS + 10 }, "largest ${even.maxOf { it.count() }}")
+    }
+
+    @Test
+    fun aPauseOfAThoughtClosesAParagraphAfterTwoSentences() {
+        // The measured pause counts from the word's end: 50 ms more than what follows the sentence here.
+        val thought = SpeechTuning.PARAGRAPH_PAUSE_MS
+        val paragraphs = Paragraphs.split(dictation(8, listOf(500L, thought, 500L, 500L, thought, 500L)))
+        assertEquals(listOf(0 until 16, 16 until 40, 40 until 48), paragraphs)
+        // One sentence and the same pause: not yet a paragraph of its own; the long pause makes it one.
+        assertEquals(listOf(0 until 16), Paragraphs.split(dictation(8, listOf(thought, 500L))))
+        assertEquals(listOf(0 until 8, 8 until 16), Paragraphs.split(dictation(8, listOf(SpeechTuning.LONG_PAUSE_MS, 500L))))
+    }
 }

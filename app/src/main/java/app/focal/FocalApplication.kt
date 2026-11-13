@@ -51,6 +51,14 @@ class FocalApplication : Application() {
         storageReady = scope.async { store.recover() }
         // After recovery, whatever its result: drop model files that Whisper-era builds left behind.
         scope.launch { storageReady.join(); RetiredFiles.remove(filesDir) }
+        // Once per change of the paragraph rules: notes recorded under the older ones are split by the new ones.
+        scope.launch {
+            storageReady.join()
+            if (preferences.paragraphRules >= Preferences.PARAGRAPH_RULES) return@launch
+            runCatching { store.reparagraph() }
+                .onSuccess { preferences.paragraphRules = Preferences.PARAGRAPH_RULES }
+                .onFailure { Log.w("Focal", "Paragraphs were not split again", it) }
+        }
         // Recording never waits for this copy; transcription catches up once it is done.
         models.ensureStarted()
     }
