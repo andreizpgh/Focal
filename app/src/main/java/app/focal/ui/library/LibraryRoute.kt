@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.PersistableBundle
-import android.text.format.Formatter
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -79,7 +78,7 @@ fun rememberLibraryPageStates(query: () -> String = { "" }): LibraryPageStates {
 
 /**
  * The Library destination: the library page and the settings page beside it, from the activity's view models.
- * [record] runs Record's permission flow; [sheetOpen] (the rationale sheet) keeps the peek away; [states] is the
+ * [record] runs Record's permission flow; [sheetOpen] (the rationale sheet) keeps the settings hint away; [states] is the
  * page's saved state.
  */
 @Composable
@@ -157,7 +156,7 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
             rename = { row, title -> library.rename(row.id, title) },
             removeAudio = { row -> library.removeAudio(row.id) },
             delete = { row -> library.delete(row.id) },
-            audioSize = { row -> Formatter.formatShortFileSize(context, library.audioBytes(row.id)) },
+            deleteAll = { rows -> library.deleteAll(rows.map { it.id }) },
             query = library::setQuery,
             record = record,
             pause = recording::pause,
@@ -175,7 +174,7 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
         strip = shell.settings,
         preferences = application.preferences,
         armed = { shell.settings.armed },
-        hasNotes = !model.empty,
+        hasNotes = model.loaded && !model.empty,
         capturing = model.live != null,
         blocked = sheetOpen,
         layer = layer,

@@ -49,6 +49,40 @@ class ParagraphUiTest {
         assertEquals(1_000L, ui.seekMs(14))
     }
 
+    @Test fun aTapSelectsTheWordWithoutThePunctuationThatHangsOnIt() {
+        val ui = ParagraphUi.of(paragraph("Hello, wrold again.", words))
+        // Anywhere in the word, its ends included: the letters, never the comma or the full stop.
+        assertEquals(0 until 5, ui.wordAt(0))
+        assertEquals(0 until 5, ui.wordAt(3))
+        assertEquals(0 until 5, ui.wordAt(6))
+        assertEquals(7 until 12, ui.wordAt(7))
+        assertEquals(7 until 12, ui.wordAt(12))
+        assertEquals(13 until 18, ui.wordAt(18))
+        assertEquals("again", ui.text.substring(13, 18))
+        // Past the text there is no word: the caret goes there.
+        assertNull(ui.wordAt(40))
+        // Punctuation alone is not a word to replace.
+        val dash = ParagraphUi.of(paragraph("One – two", listOf(Word("One", 0, 100, 0.9, false, 0), Word("–", 100, 150, 0.9, true, 0), Word("two", 200, 300, 0.9, false, 0))))
+        assertNull(dash.wordAt(4))
+        assertEquals(6 until 9, dash.wordAt(7))
+    }
+
+    @Test fun listeningPlaysTheWordsAtTheCaretWithALeadAndNeverInventsATime() {
+        val ui = ParagraphUi.of(paragraph("Hello, wrold again.", words))
+        // A caret in "wrold": from its start to its end, with the lead either side.
+        assertEquals(0L until 1_400L, ui.listenRange(9, 9, lead = 500))
+        // A selection of the last two words: from the first one's start to the last one's end.
+        assertEquals(300L until 1_600L, ui.listenRange(7, 19, lead = 200))
+        // Never before the recording starts.
+        assertEquals(0L until 600L, ui.listenRange(0, 3, lead = 200))
+        // An edited word has no time: the range widens to its timed neighbours.
+        val edited = ParagraphUi.of(paragraph("Hello, world again.", words, edited = true, source = "Hello, wrold again."))
+        assertEquals(0L until 1_500L, edited.listenRange(8, 10, lead = 100))
+        // Text without any word times plays its whole paragraph.
+        val legacy = ParagraphUi.of(paragraph("Saved before word times.", null, source = null))
+        assertEquals(0L until 1_300L, legacy.listenRange(3, 3, lead = 300))
+    }
+
     @Test fun legacyTextHasWordsButNoInventedTimes() {
         val ui = ParagraphUi.of(paragraph("Saved before word times.", null, source = null))
         assertEquals(4, ui.words.size)

@@ -24,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
@@ -173,8 +172,7 @@ class SceneActions(
  * are the root dock's, dressed by the material's edge. Finish settles it into the dock's pill (T7). Under reduced
  * motion, and when no origin is on screen, it crossfades in place at alpha p.
  *
- * [onLibrary] says whether the library (and so the stage) is the page under it; [timerFocus] receives focus after an
- * expand (spec 8.6).
+ * [timerFocus] receives focus after an expand (spec 8.6).
  */
 @Composable
 fun RecordingSurface(
@@ -182,7 +180,6 @@ fun RecordingSurface(
     scene: SceneUi,
     meter: WaveMeter,
     actions: SceneActions,
-    onLibrary: Boolean,
     modifier: Modifier = Modifier,
     bars: SystemBarsState? = null,
     timerFocus: FocusRequester = remember { FocusRequester() },
@@ -212,9 +209,8 @@ fun RecordingSurface(
     }
     val entry = live.entry
     val landing = live.landingNote != null
-    // Finish settles into the note's page, which is then the page under the scene: the settle stays spatial.
-    val spatial = !reduced && (onLibrary || landing)
-    SideEffect { live.spatial = spatial }
+    // The surface's own rule ([LiveSurfaceState.spatial]), with the motion setting this composition sees.
+    val spatial = !reduced && (live.overLibrary() || landing)
     val choreography = live.choreography
     EntryEffects(live, choreography, meter)
     // "↓ Latest"'s alpha: the text region clears a band above it while it shows.

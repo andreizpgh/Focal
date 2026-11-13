@@ -9,8 +9,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 
 /**
- * The four haptic moments, and no others (spec 2.9). Everything else is silent: Pause, Resume, expand and collapse,
- * the settings swipe, play, edit, delete, Undo, errors. Only `LocalHapticFeedback`: no Vibrator, no permission.
+ * The five haptic moments, and no others (spec 2.9, and the long press that selects). Everything else is silent:
+ * Pause, Resume, expand and collapse, the settings swipe, play, typing, delete, Undo, errors. Only
+ * `LocalHapticFeedback`: no Vibrator, no permission.
  */
 @Stable
 class FocalHaptics internal constructor(private val feedback: HapticFeedback) {
@@ -22,6 +23,9 @@ class FocalHaptics internal constructor(private val feedback: HapticFeedback) {
 
     /** After `setPrimaryClip` returned without throwing. */
     fun copy() = perform(HapticFeedbackType.Confirm)
+
+    /** A long press took hold: a note is selected in the library, a word in a note. */
+    fun selected() = perform(HapticFeedbackType.LongPress)
 
     /**
      * The first frame of the readiness morph, on screen only and once per note (the caller keeps that rule). Skipped

@@ -55,7 +55,7 @@ import app.focal.ui.design.LocalWindowLayout
 
 /** Top bar geometry (spec 4.1.2, 4.1.3). */
 object NoteBarMetrics {
-    /** The collapsed title starts after ← (x 72) and ends 8 dp before ✎. */
+    /** The collapsed title starts after ← (x 72) and ends 8 dp before ⋮. */
     val titleStart = FocalGrid.x12
     val titleEnd = FocalGrid.x8
     val doneHeight = FocalGrid.x40
@@ -69,34 +69,43 @@ object NoteBarMetrics {
 }
 
 /** What the note menu offers in this state (spec 4.15: items that do not apply are hidden). */
-internal data class NoteMenuItems(val find: Boolean, val share: Boolean, val removeAudio: Boolean, val delete: Boolean = true)
+internal data class NoteMenuItems(
+    /** "Edit": the way into Edit without a pointer (a keyboard cannot tap a word). */
+    val edit: Boolean = false,
+    val find: Boolean,
+    val share: Boolean,
+    val removeAudio: Boolean,
+    val delete: Boolean = true,
+    /** "Continue recording": the dock's ● as a menu item, which a short window's rail has no room for. */
+    val append: Boolean = false,
+)
 
 internal class NoteMenuActions(
+    val edit: () -> Unit = {},
     val find: () -> Unit,
     val rename: () -> Unit,
     val share: () -> Unit,
+    val append: () -> Unit = {},
     val removeAudio: () -> Unit,
     val delete: () -> Unit,
     val audioSize: suspend () -> String?,
 )
 
 /**
- * The note top bar (spec 4.1.2): ← "Back", ✎ "Edit" (only once the note is editable; it fades in at Ready), ⋮ "More
- * options" with the note menu. Once the content title has scrolled under the bar a one-line copy of it fades in
- * between ← and ✎. [chrome] is the items' alpha (they fade out under Find).
+ * The note top bar (spec 4.1.2): ← "Back" and ⋮ "More options" with the note menu. There is no Edit button: the text
+ * is edited where it is tapped. Once the content title has scrolled under the bar a one-line copy of it fades in
+ * between ← and ⋮. [chrome] is the items' alpha (they fade out under Find).
  */
 @Composable
 internal fun NoteTopBar(
     title: String,
     titleMuted: Boolean,
     collapsed: Boolean,
-    editable: Boolean,
     menuItems: NoteMenuItems,
     menuOpen: Boolean,
     onMenu: (Boolean) -> Unit,
     menu: NoteMenuActions,
     onBack: () -> Unit,
-    onEdit: () -> Unit,
     chrome: () -> Float,
     modifier: Modifier = Modifier,
 ) {
@@ -106,11 +115,6 @@ internal fun NoteTopBar(
     LaunchedEffect(collapsed, reduced) {
         val target = if (collapsed) 1f else 0f
         if (reduced) titleAlpha.snapTo(target) else titleAlpha.animateTo(target, FocalMotion.fade())
-    }
-    val pencil = remember { Animatable(if (editable) 1f else 0f) }
-    LaunchedEffect(editable, reduced) {
-        val target = if (editable) 1f else 0f
-        if (reduced) pencil.snapTo(target) else pencil.animateTo(target, FocalMotion.fade())
     }
     BarRow(modifier.graphicsLayer { alpha = chrome() }) {
         FocalIconButton(FocalIcon.Back, stringResource(R.string.cd_back), onBack)
@@ -123,12 +127,6 @@ internal fun NoteTopBar(
                 .graphicsLayer { alpha = titleAlpha.value }
                 .clearAndSetSemantics { },
         )
-        if (editable || pencil.value > 0f) {
-            FocalIconButton(
-                FocalIcon.Edit, stringResource(R.string.cd_edit), onEdit,
-                modifier = Modifier.graphicsLayer { alpha = pencil.value }, enabled = editable,
-            )
-        }
         Box {
             FocalIconButton(FocalIcon.More, stringResource(R.string.cd_more), { onMenu(true) })
             FocalMenu(expanded = menuOpen, onDismiss = { onMenu(false) }) {
@@ -138,13 +136,15 @@ internal fun NoteTopBar(
     }
 }
 
-/** The note menu (spec 4.15): Find and replace, Rename, Share, —, Remove audio · size, Delete. */
+/** The note menu (spec 4.15): Edit, Continue recording, Find and replace, Rename, Share, —, Remove audio · size, Delete. */
 @Composable
 private fun NoteMenu(items: NoteMenuItems, actions: NoteMenuActions, dismiss: () -> Unit) {
     fun run(action: () -> Unit): () -> Unit = {
         dismiss()
         action()
     }
+    if (items.edit) FocalMenuItem(stringResource(R.string.menu_edit), run(actions.edit))
+    if (items.append) FocalMenuItem(stringResource(R.string.action_append), run(actions.append))
     if (items.find) FocalMenuItem(stringResource(R.string.menu_find), run(actions.find))
     FocalMenuItem(stringResource(R.string.menu_rename), run(actions.rename))
     if (items.share) FocalMenuItem(stringResource(R.string.menu_share), run(actions.share))
@@ -164,12 +164,15 @@ internal class EditBarActions(
     val done: () -> Unit,
     val restore: () -> Unit,
     val find: () -> Unit,
+    /** ▶: plays the audio of the selected words (or of the words around the caret); ‖ while it plays. */
+    val listen: () -> Unit = {},
 )
 
 /**
- * The edit bar (spec 4.1.3): ↶ ↷ (`faint` with nothing to undo or redo), ⋮ with "Restore original" (enabled while
- * the caret's paragraph differs from its source) and "Find and replace", and the Done pill, the only filled shape on
- * screen while the dock is hidden. A failed save writes "Not saved" left of ⋮ and Done reads "Retry".
+ * The edit bar (spec 4.1.3): ↶ ↷ (`faint` with nothing to undo or redo), ▶ "Listen" (the audio of the words at the
+ * caret, to check them against what was said; hidden for a note without audio), ⋮ with "Restore original" (enabled
+ * while the caret's paragraph differs from its source) and "Find and replace", and the Done pill, the only filled
+ * shape on screen while the dock is hidden. A failed save writes "Not saved" left of ▶ and Done reads "Retry".
  */
 @Composable
 internal fun EditBar(
@@ -181,6 +184,8 @@ internal fun EditBar(
     onMenu: (Boolean) -> Unit,
     actions: EditBarActions,
     modifier: Modifier = Modifier,
+    canListen: Boolean = false,
+    listening: Boolean = false,
 ) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
@@ -194,13 +199,21 @@ internal fun EditBar(
         FocalIconButton(FocalIcon.Undo, stringResource(R.string.cd_undo), actions.undo, enabled = canUndo)
         if (!redoInMenu) FocalIconButton(FocalIcon.Redo, stringResource(R.string.cd_redo), actions.redo, enabled = canRedo)
         Spacer(Modifier.weight(1f))
-        Text(
+        // Laid out only while it shows: at rest its width belongs to the buttons (a narrow phone has none to spare).
+        if (failed || notSaved.value > 0f) Text(
             stringResource(R.string.not_saved), style = FocalType.meta, color = colors.recede, maxLines = 1,
             // Read only while it is shown, and announced when it appears.
             modifier = Modifier
                 .graphicsLayer { alpha = notSaved.value }
                 .then(if (failed) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier.clearAndSetSemantics { }),
         )
+        // "Not saved" takes ▶'s room while it shows: the save matters more than the listen.
+        if (canListen && !failed) {
+            FocalIconButton(
+                if (listening) FocalIcon.Pause else FocalIcon.Play,
+                stringResource(if (listening) R.string.cd_listen_stop else R.string.cd_listen), actions.listen,
+            )
+        }
         Box {
             FocalIconButton(FocalIcon.More, stringResource(R.string.cd_more), { onMenu(true) })
             FocalMenu(expanded = menuOpen, onDismiss = { onMenu(false) }) {

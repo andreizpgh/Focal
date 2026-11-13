@@ -25,8 +25,7 @@ private class CutLayout { var result: TextLayoutResult? = null }
  * A preview that ends on the last whole word that fits (spec 4.12.2, 4.22.4, G4): never "at all.…" or "the way h…".
  * One measuring pass finds the end of the last line that fits ([maxLines], and no more lines than the height the
  * parent allows); the text is cut back to the word before it, trailing `, . ; : – —` go, and "…" follows. If the
- * ellipsis pushes the last word out, it backs off one more word. Text before [protectedEnd] (a run-in) is never
- * cut. TalkBack reads the full [text].
+ * ellipsis pushes the last word out, it backs off one more word. TalkBack reads the full [text].
  */
 @Composable
 fun CutText(
@@ -35,7 +34,6 @@ fun CutText(
     color: Color,
     maxLines: Int,
     modifier: Modifier = Modifier,
-    protectedEnd: Int = 0,
 ) {
     val measurer = rememberTextMeasurer()
     val holder = remember { CutLayout() }
@@ -57,12 +55,13 @@ fun CutText(
                 var result = measure(text, lines)
                 if (result.hasVisualOverflow) {
                     var end = WordCut.cut(text, result.getLineEnd(lines - 1, visibleEnd = true))
-                    while (end != null && end > protectedEnd) {
+                    while (end != null && end > 0) {
                         val candidate = measure(text.subSequence(0, end) + AnnotatedString(WordCut.ELLIPSIS), lines)
                         if (!candidate.hasVisualOverflow) { result = candidate; break }
                         end = WordCut.previousWord(text, end)
                     }
-                    if (end == null || end <= protectedEnd) result = measure(text.subSequence(0, protectedEnd.coerceAtMost(text.length)), lines)
+                    // Not even one word fits beside the ellipsis: nothing is shown rather than a cut word.
+                    if (end == null || end <= 0) result = measure(AnnotatedString(""), lines)
                 }
                 holder.result = result
                 val height = ceil(result.size.height.toFloat()).toInt()

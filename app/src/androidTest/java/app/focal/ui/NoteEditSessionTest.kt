@@ -52,7 +52,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.job
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -350,8 +349,8 @@ class NoteEditSessionTest {
     }
 
     /**
-     * A3: Edit from the pencil has no field yet. TalkBack's Edit action puts the caret in a paragraph (none plays in
-     * Edit), and on another paragraph moves it there, the draft it leaves stored in turn.
+     * A3: TalkBack's Edit action opens Edit with the caret in its paragraph (none plays in Edit), and on another
+     * paragraph moves the caret there, the draft it leaves stored in turn.
      */
     @OptIn(ExperimentalTestApi::class)
     @Test fun talkBackPutsTheCaretInAParagraphInEdit() {
@@ -360,11 +359,11 @@ class NoteEditSessionTest {
         fun labels(text: String): List<String> =
             rule.onNode(hasText(text) and !hasSetTextAction()).fetchSemanticsNode().config.getOrElse(SemanticsActions.CustomActions) { emptyList() }.map { it.label }
         assertTrue(PLAY in labels(SECOND))
-        press("Edit")
+        // Reading, "Edit" opens Edit with the caret in that paragraph.
+        rule.onNode(hasText(FIRST) and !hasSetTextAction()).performCustomAccessibilityActionWithLabel(EDIT)
         rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasContentDescription("Done")).fetchSemanticsNodes().isNotEmpty() }
-        assertTrue(rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty())
+        awaitField(FIRST)
         assertEquals(listOf(EDIT, COPY), labels(SECOND).filter { it == EDIT || it == COPY || it == PLAY })
-        assertFalse(PLAY in labels(FIRST))
         rule.onNode(hasText(SECOND) and !hasSetTextAction()).performCustomAccessibilityActionWithLabel(EDIT)
         awaitField(SECOND)
         rule.waitUntil(TIMEOUT_MS) {

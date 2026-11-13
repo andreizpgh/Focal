@@ -145,7 +145,6 @@ data class SceneSlots(
     val instrumentWidth: Float = columnRight - columnLeft,
 ) {
     val window: Rect get() = Rect(0f, 0f, width, height)
-    val centreX: Float get() = width / 2
 
     fun instrument(lift: Float): Instrument = if (twoColumn) live else Instrument.lerp(start, live, lift)
 

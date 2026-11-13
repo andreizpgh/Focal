@@ -198,7 +198,7 @@ private fun LibraryControls() {
         FakeCaption("Icon buttons, text button, primary pill")
         Row(verticalAlignment = Alignment.CenterVertically) {
             FocalIconButton(FocalIcon.Back, "Back", {})
-            FocalIconButton(FocalIcon.Edit, "Edit", {})
+            FocalIconButton(FocalIcon.Delete, "Delete", {})
             FocalIconButton(FocalIcon.More, "More options", {})
             FocalIconButton(FocalIcon.Redo, "Redo", {}, enabled = false)
             Spacer(Modifier.width(FocalGrid.x8))

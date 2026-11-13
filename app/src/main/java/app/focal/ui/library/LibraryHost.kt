@@ -1,6 +1,5 @@
 package app.focal.ui.library
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
@@ -23,30 +22,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.FrameRateCategory
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.focal.R
 import app.focal.data.Preferences
-import app.focal.ui.design.FocalFullMotion
+import app.focal.ui.components.FeedbackAction
+import app.focal.ui.components.FeedbackResult
 import app.focal.ui.design.FocalGestures
 import app.focal.ui.design.FocalGrid
-import app.focal.ui.design.FocalLayout
-import app.focal.ui.design.FocalMotion
-import app.focal.ui.design.FocalShapes
-import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.LocalWindowLayout
@@ -56,11 +48,8 @@ import app.focal.ui.shell.SettingsStrip
 import app.focal.ui.shell.SettingsStripState
 import app.focal.ui.shell.settingsTravel
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -68,8 +57,6 @@ import kotlin.math.max
 object SettingsGesture {
     /** A touch-down at least this far from either side may start the swipe (or the system's inset, if wider). */
     val edgeZone = FocalGrid.x32
-    /** The peek's reach: the seam and the settings page's blank 24 dp margin (spec 4.23.5). */
-    val peekReach = FocalGrid.x32
 
     /**
      * Where a released swipe settles. [s0] is s when the direction locked, [s] now, [velocity] the finger's speed in
@@ -87,7 +74,7 @@ object SettingsGesture {
     /**
      * Whether the first move past the slop claims the stream (spec 4.23.3): horizontal when abs(dx) > 1.5·abs(dy),
      * in the opening direction from the library at rest, the closing one from the settings page at rest, either
-     * while a settle or the peek was caught mid-way. [opening] is the sign of dx that opens (-1 in LTR).
+     * while a settle was caught mid-way. [opening] is the sign of dx that opens (-1 in LTR).
      */
     fun locks(dx: Float, dy: Float, s0: Float, opening: Float): Boolean {
         if (abs(dx) <= FocalGestures.DIRECTION_LOCK * abs(dy)) return false
@@ -103,45 +90,44 @@ object SettingsGesture {
 }
 
 /**
- * When the one-time peek may play (spec 4.23.5): never after settings was opened, never more than twice; the first
- * time the library is idle; the second time only with a note in the library and in a later visit than the first.
+ * When the hint that settings are a swipe away may show (spec 4.23.5): never after settings was opened, never more
+ * than twice, and only once the library holds a note (an empty library has its own invitation, to record); the second
+ * time only in a later visit than the first.
  */
-object PeekRules {
-    fun allowed(opened: Boolean, peeks: Int, hasNotes: Boolean, visit: Int, firstPeekVisit: Int?): Boolean = when {
-        opened || peeks >= FocalTiming.PEEK_MAX -> false
-        peeks == 0 -> true
-        else -> hasNotes && (firstPeekVisit == null || visit > firstPeekVisit)
+object HintRules {
+    fun allowed(opened: Boolean, shown: Int, hasNotes: Boolean, visit: Int, firstHintVisit: Int?): Boolean = when {
+        opened || shown >= FocalTiming.SETTINGS_HINT_MAX || !hasNotes -> false
+        shown == 0 -> true
+        else -> firstHintVisit == null || visit > firstHintVisit
     }
 }
 
-/** Library visits in this process (each time the library becomes the visible page), for the second peek. */
+/** Library visits in this process (each time the library becomes the visible page), for the second hint. */
 object LibraryVisits {
     var count = 0
         private set
-    var firstPeekVisit: Int? = null
+    var firstHintVisit: Int? = null
 
     fun arrive() { count++ }
 }
 
-/** The settings layer's own state: who opened it (focus hand-off) and the peek in flight. */
+/** The settings layer's own state: who opened it (focus hand-off). */
 @Stable
 class SettingsLayerState {
     /** Settings was opened by the accessibility action or a key: focus goes to its heading on arrival. */
     var focusOnArrival by mutableStateOf(false)
-    internal var peek: Job? = null
-    internal var caught = false
     /** The finger is on the strip or it is settling: request a high frame rate (API 35+ adaptive refresh). */
     var moving by mutableStateOf(false)
         internal set
-    /** The reduced-motion peek: the edge's alpha (the library does not move). */
-    internal val edgePeek = Animatable(0f)
+    /** The settings hint is in the feedback pill: a touch on the library puts it away (the person has moved on). */
+    internal var hinting by mutableStateOf(false)
 }
 
 /**
  * The library and the settings page beside it (spec 4.23): the strip, the finger-tracked swipe that moves it, the
- * one-time peek, and the bookkeeping of settings having been opened. [library] and [settings] are the two pages;
- * [armed] says whether the library is at rest (no search, menu, rename or keyboard); [hasNotes], [capturing] and
- * [blocked] (a sheet or the feedback pill) feed the peek's idle rule. [layer] carries who opened settings.
+ * one-time hint that says so, and the bookkeeping of settings having been opened. [library] and [settings] are the
+ * two pages; [armed] says whether the library is at rest (no search, selection, rename or keyboard); [hasNotes],
+ * [capturing] and [blocked] (a sheet) feed the hint's idle rule. [layer] carries who opened settings.
  */
 @Composable
 fun LibraryHost(
@@ -181,7 +167,7 @@ fun LibraryHost(
             }
         }
     }
-    SettingsPeek(strip, preferences, layer, touched, hasNotes, capturing, blocked, armed)
+    SettingsHint(strip, preferences, layer, touched, hasNotes, capturing, blocked, armed)
 
     Box(
         Modifier
@@ -193,13 +179,11 @@ fun LibraryHost(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     touched = true
-                    // Catch: a touch stops a settle or the peek at once, the peek's hold included (I2).
-                    val wasPeeking = layer.peek?.isActive == true
-                    val previousTarget = if (wasPeeking) 0f else strip.progress.targetValue
-                    layer.caught = wasPeeking
-                    layer.peek?.cancel()
+                    if (layer.hinting) shell.bottom.feedback.dismiss()
+                    // Catch: a touch stops a settle at once (I2).
+                    val previousTarget = strip.progress.targetValue
                     val start = strip.progress.value
-                    val settling = strip.progress.isRunning || wasPeeking
+                    val settling = strip.progress.isRunning
                     if (settling) scope.launch(start = CoroutineStart.UNDISPATCHED) { strip.progress.stop() }
                     val direction = if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr
                     val edge = edgeZone(gestures.getLeft(this, direction), gestures.getRight(this, direction))
@@ -230,7 +214,7 @@ fun LibraryHost(
                         tracker.addPosition(change.uptimeMillis, change.position)
                         if (!change.pressed) {
                             if (lockX.isNaN()) {
-                                // A tap: the settle (or the peek's return) goes on to where it was heading.
+                                // A tap: the settle goes on to where it was heading.
                                 if (settling) resume(scope, strip, previousTarget, reduced)
                             } else {
                                 change.consume()
@@ -268,7 +252,6 @@ fun LibraryHost(
             },
     ) {
         SettingsStrip(strip, library = library, settings = settings)
-        if (reduced) EdgePeek(layer.edgePeek)
     }
 }
 
@@ -289,13 +272,15 @@ private fun resume(scope: kotlinx.coroutines.CoroutineScope, strip: SettingsStri
 }
 
 /**
- * The one-time peek (spec 4.23.5): after the library has been idle for 1200 ms, s goes to 32/420 on `move`, holds
- * 400 ms and springs back on `move`. A touch catches it (its job is cancelled at once, the hold included); anything
- * else that ends the calm springs s back. Under reduced motion the library does not move: the seam and the page's
- * leading 32 dp fade in at the edge, hold and fade out.
+ * The hint that settings are a swipe away (spec 4.23.5). Nothing on the library says that a page lies beside it, so
+ * it is said once, in words, where every other message is said: after the library has been at rest for a moment the
+ * feedback pill reads "Swipe left for settings" with "Open", which opens them with the swipe's own motion (the page
+ * slides in from the side it was said to be on). Nothing moves by itself: a page that shifts with no finger on it reads
+ * as a glitch. It shows at most twice ([HintRules]) and never after settings was opened; anything that ends the calm
+ * before it shows (a touch, a recording, a sheet) puts it off to the next calm.
  */
 @Composable
-private fun SettingsPeek(
+private fun SettingsHint(
     strip: SettingsStripState,
     preferences: Preferences?,
     layer: SettingsLayerState,
@@ -308,82 +293,35 @@ private fun SettingsPeek(
     if (preferences == null) return
     val shell = LocalShell.current
     val reduced = LocalReducedMotion.current
-    val density = LocalDensity.current
-    val window = LocalWindowInfo.current
+    val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val resumed by lifecycle.currentStateFlow.collectAsStateWithLifecycle()
     val focused = LocalWindowInfo.current.isWindowFocused
-    // The peek's own motion is not the end of the calm it runs in: s leaving 0 for the peek would otherwise end idle
-    // and so cancel the peek in its first frame, which then springs back unseen (spec 4.23.5).
-    val atRest by remember(strip, layer) {
-        derivedStateOf {
-            val still = strip.progress.value <= 0f && !strip.progress.isRunning
-            (still || layer.peek != null) && shell.live.expansion.value <= 0f
-        }
+    // Settings sit past the page's end: a swipe to the left, or to the right where the layout is mirrored.
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val message = stringResource(if (rtl) R.string.hint_settings_rtl else R.string.hint_settings)
+    val open = stringResource(R.string.action_open)
+    val atRest by remember(strip) {
+        derivedStateOf { strip.progress.value <= 0f && !strip.progress.isRunning && shell.live.expansion.value <= 0f }
     }
-    val idle = resumed.isAtLeast(Lifecycle.State.RESUMED) && focused && atRest && !touched && !capturing && !blocked &&
-        armed() && shell.bottom.feedback.current == null
+    val isArmed = armed()
+    // The hint gives way to what the person does next: a recording, a sheet, search, a selection.
+    if (layer.hinting && (capturing || blocked || !isArmed)) LaunchedEffect(Unit) { shell.bottom.feedback.dismiss() }
+    val idle = resumed.isAtLeast(Lifecycle.State.RESUMED) && focused && atRest && !touched && !capturing && !blocked && hasNotes &&
+        isArmed && shell.bottom.feedback.current == null
     LaunchedEffect(idle) {
         if (!idle) return@LaunchedEffect
-        delay(FocalTiming.PEEK_IDLE_MS)
+        delay(FocalTiming.SETTINGS_HINT_IDLE_MS)
         val visit = LibraryVisits.count
-        if (!PeekRules.allowed(preferences.settingsOpened, preferences.settingsPeeks, hasNotes, visit, LibraryVisits.firstPeekVisit)) return@LaunchedEffect
+        if (!HintRules.allowed(preferences.settingsOpened, preferences.settingsPeeks, hasNotes, visit, LibraryVisits.firstHintVisit)) return@LaunchedEffect
         preferences.settingsPeeks += 1
-        if (LibraryVisits.firstPeekVisit == null) LibraryVisits.firstPeekVisit = visit
-        layer.caught = false
-        layer.peek = coroutineContext[Job]
-        try {
-            if (reduced) {
-                withContext(FocalFullMotion) {
-                    layer.edgePeek.animateTo(1f, FocalMotion.reducedCrossfade)
-                    delay(FocalTiming.PEEK_HOLD_MS)
-                    layer.edgePeek.animateTo(0f, FocalMotion.reducedCrossfade)
-                }
-            } else {
-                val travel = settingsTravel(window.containerSize.width.toFloat(), density)
-                strip.settle(with(density) { SettingsGesture.peekReach.toPx() } / travel, reducedMotion = false)
-                delay(FocalTiming.PEEK_HOLD_MS)
-                strip.close()
-            }
-        } finally {
-            layer.peek = null
-            // Interrupted by anything but a touch: s springs back to 0 (the peek still counts as played).
-            if (!layer.caught) withContext(NonCancellable) {
-                if (reduced) layer.edgePeek.snapTo(0f) else if (strip.progress.value > 0f) strip.close()
-            }
+        if (LibraryVisits.firstHintVisit == null) LibraryVisits.firstHintVisit = visit
+        // In the page's own scope: showing the pill ends the calm this effect is keyed on, which must not take the
+        // pill down with it.
+        scope.launch {
+            layer.hinting = true
+            val result = try { shell.bottom.feedback.show(message, FeedbackAction(open)) } finally { layer.hinting = false }
+            if (result == FeedbackResult.ActionPerformed) strip.open(reduced)
         }
     }
-}
-
-/**
- * The reduced-motion peek: the seam and the settings page's leading 32 dp at the window's end edge, faded in place
- * (the library does not move). The library's text runs to 24 dp from that edge, so the seam would cut its last
- * glyphs ("8 mi"): over the 24 dp before the seam the library fades to paper with it, and its ink ends on a soft edge
- * where the moving peek's library ends (H1: never a clipped glyph).
- */
-@Composable
-private fun EdgePeek(alpha: Animatable<Float, *>) {
-    val colors = FocalTheme.colors
-    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    Box(
-        Modifier.fillMaxSize().drawWithContent {
-            val a = alpha.value
-            if (a <= 0f) return@drawWithContent
-            val reach = SettingsGesture.peekReach.toPx()
-            val seam = SettingsStripState.seam.toPx()
-            val radius = FocalShapes.sheetRadius.toPx()
-            val left = if (rtl) 0f else size.width - reach
-            val soft = FocalLayout.gutter.toPx()
-            val clear = colors.paper.copy(alpha = 0f)
-            val edge = if (rtl) {
-                Brush.horizontalGradient(0f to colors.paper, 1f to clear, startX = reach, endX = reach + soft)
-            } else {
-                Brush.horizontalGradient(0f to clear, 1f to colors.paper, startX = left - soft, endX = left)
-            }
-            drawRect(edge, Offset(if (rtl) reach else left - soft, 0f), Size(soft, size.height), alpha = a)
-            drawRect(colors.s2, Offset(left, 0f), Size(reach, size.height), alpha = a)
-            val pageLeft = if (rtl) -radius else left + seam
-            drawRoundRect(colors.paper, Offset(pageLeft, 0f), Size(reach - seam + radius, size.height), CornerRadius(radius), alpha = a)
-        },
-    )
 }

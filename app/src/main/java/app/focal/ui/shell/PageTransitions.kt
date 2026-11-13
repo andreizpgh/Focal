@@ -304,7 +304,10 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     internal fun pop(top: Destination) {
         arriving = null
         val current = change
-        if (current != null && current.predictive && !current.committed && current.document == top) {
+        // A released predictive back, while its seek is under way. A gesture that was cancelled leaves its change
+        // behind with the page whole again (nothing reports the cancel): a Back after it is an ordinary one.
+        val seeking = (document?.value ?: 1f) < 1f
+        if (current != null && current.predictive && !current.committed && current.document == top && seeking) {
             commitAt = document?.value ?: 1f
             predictiveBody = Animatable(1f)
             val committed = current.copy(committed = true, serial = ++serial)
@@ -344,7 +347,11 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     /** A predictive back started on [top] (NavDisplay seeks the pop with the gesture's progress). */
     internal fun beginPredictive(top: Destination, edge: Int) {
         val current = change
-        if (current != null && current.predictive && !current.committed && current.document == top) return
+        if (current != null && current.predictive && !current.committed && current.document == top) {
+            // The same gesture asking again, or a new one after a cancelled one, which may come from the other edge.
+            if (current.edge != edge) change = current.copy(edge = edge)
+            return
+        }
         clock?.cancel()
         predictiveBody = Animatable(1f)
         change = PageChange(reverse(opened[top]), top, push = false, predictive = true, edge = edge, serial = ++serial)

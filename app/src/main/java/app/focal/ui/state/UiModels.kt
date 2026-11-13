@@ -186,6 +186,8 @@ data class NoteRow(
     val canRemoveAudio: Boolean = false,
     /** Why a waiting note is not being transcribed (the stage's last line), or null. */
     val waitingReason: WaitingReason? = null,
+    /** Its page will offer ● "Continue recording" (a ready note with its audio, not from an older version). */
+    val canAppend: Boolean = false,
 )
 
 /** Rows of one local calendar day ([epochDay] in the device time zone), newest first. */
@@ -304,6 +306,32 @@ data class ParagraphUi(
         return null
     }
 
+    /**
+     * The word at [charOffset] as a tap selects it for replacement: its letters and digits, without the punctuation
+     * that hangs on it ("пятницы," selects "пятницы"), as chars [first, last]. Null between words and on punctuation
+     * alone: the caret goes there instead.
+     */
+    fun wordAt(charOffset: Int): IntRange? {
+        val word = words.firstOrNull { charOffset >= it.start && charOffset <= it.end } ?: return null
+        var start = word.start.coerceIn(0, text.length)
+        var end = word.end.coerceIn(start, text.length)
+        while (start < end && !text[start].isLetterOrDigit()) start++
+        while (end > start && !text[end - 1].isLetterOrDigit()) end--
+        return if (start < end) start until end else null
+    }
+
+    /**
+     * The audio to listen to for the chars [from, to) of this paragraph (a caret when equal), in ms of the recording:
+     * from the last timed word at or before [from] to the first timed word that ends at or after [to], with [lead] ms
+     * before and after. Words changed by an edit have no times, so the range widens to their timed neighbours, and to
+     * the paragraph's own ends when there are none: times are never invented.
+     */
+    fun listenRange(from: Int, to: Int, lead: Long): LongRange {
+        val start = seekMs(from) ?: startMs
+        val end = words.firstOrNull { it.end >= to && it.endMs != null }?.endMs ?: endMs
+        return (start - lead).coerceAtLeast(0) until (maxOf(end, start) + lead)
+    }
+
     companion object {
         /** Words with times and doubt flags via [Alignment] (identity for unedited text). Off the main thread. */
         fun of(paragraph: Paragraph): ParagraphUi {
@@ -354,7 +382,7 @@ data class GapUi(val startMs: Long, val endMs: Long, val afterParagraphId: Long?
  * with sound but no recognized words ("No speech was recognized."). [canRemoveAudio]: Remove audio is offered
  * (ready, audio kept, no failed part that Retry still needs). [canRetry]: Retry / Try again can work (the
  * audio is still there); without audio a failed part stays a gap for good. [blankParagraphs] are the stored paragraphs
- * with no text yet, which [paragraphs] leaves out.
+ * with no text yet, which [paragraphs] leaves out. [canAppend]: the recording can continue into this note.
  */
 @Immutable
 data class NoteUiState(
@@ -383,6 +411,8 @@ data class NoteUiState(
     val legacy: Boolean = false,
     val canRemoveAudio: Boolean = false,
     val canRetry: Boolean = false,
+    /** ● "Continue recording" is offered: a ready note with its audio, while nothing records. */
+    val canAppend: Boolean = false,
 )
 
 /** Coarse playback state: changes on start, pause, stop and note change only (never with the position). */

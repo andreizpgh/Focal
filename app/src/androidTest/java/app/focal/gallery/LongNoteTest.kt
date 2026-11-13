@@ -17,8 +17,6 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextInputSelection
@@ -112,10 +110,8 @@ class LongNoteTest {
         }
         report("scroll")
 
-        // Edit a paragraph three hundred in: the page enters Edit, the field takes the caret and the text changes.
+        // Edit a paragraph three hundred in: a tap on it enters Edit, the field takes the caret and the text changes.
         list.performScrollToIndex(DEEP_ITEM)
-        rule.waitForIdle()
-        rule.onNodeWithContentDescription("Edit").performClick()
         rule.waitForIdle()
         record {
             list.performTouchInput { click(center) }

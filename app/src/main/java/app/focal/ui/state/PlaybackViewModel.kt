@@ -61,9 +61,7 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
         player.toggle(noteId, failed)
     }
 
-    fun seek(noteId: String, positionMs: Long) = playFrom(noteId, positionMs)
     fun pause() = player.pause()
-    fun stop() = player.stop()
 
     /** Stops playback of [noteId] only (its audio is being removed, or it was deleted). */
     fun stopNote(noteId: String) = player.stopNote(noteId)

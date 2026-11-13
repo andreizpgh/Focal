@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +41,7 @@ import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /** Bottom sheet geometry (spec 4.19). */
 object SheetMetrics {
@@ -73,12 +75,14 @@ fun FocalBottomSheet(visible: Boolean, onDismiss: () -> Unit, content: @Composab
         }
     }
     if (!composed) return
+    val scope = rememberCoroutineScope()
     PredictiveBackHandler(enabled = visible) { events ->
         try {
             events.collect { event -> back.snapTo(event.progress) }
             onDismiss()
         } catch (cancelled: CancellationException) {
-            back.animateTo(0f, FocalMotion.press())
+            // The handler's coroutine ends with the cancelled gesture, so the sheet springs back in the composition's.
+            scope.launch { back.animateTo(0f, FocalMotion.press()) }
             throw cancelled
         }
     }

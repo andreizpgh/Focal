@@ -136,7 +136,7 @@ internal fun design(timed: Boolean = true, edited: Boolean = false, replaced: Bo
     return NoteUiState(
         noteId = "design", loaded = true, title = "Notes for Thursday’s design review", titleIsCustom = false,
         created = at("16:05"), durationMs = DESIGN_MS, phase = NotePhase.READY, audioPresent = true, canPlay = true,
-        editable = true, paragraphs = paragraphs, canRemoveAudio = true,
+        editable = true, paragraphs = paragraphs, canRemoveAudio = true, canAppend = true,
     )
 }
 
@@ -322,7 +322,7 @@ internal fun TranscribingNote(destination: Destination.Note) {
 private fun NoteMenuInline() {
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
         val top = FocalLayout.topBar - (FocalLayout.topBar - FocalLayout.target) / 2 + FocalGrid.x4
-        MenuSurface(Modifier.menuAt(x = MENU_END, y = top, endAligned = true)) {
+        MenuSurface(Modifier.menuAt(endX = MENU_END, y = top)) {
             FocalMenuItem("Find and replace", {})
             FocalMenuItem("Rename", {})
             FocalMenuItem("Share", {})

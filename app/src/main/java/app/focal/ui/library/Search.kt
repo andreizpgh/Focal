@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -90,13 +91,15 @@ object SearchMetrics {
 }
 
 /**
- * Library search (spec 5.2, T17). Opening it grows the dock's search circle into the keyboard-riding field while the
- * stage and the list fade out; closing reverses it, and the dock fades back in under the shrunk field before the
- * field leaves, so nothing dips. [grow] is the field's width (0 = the 56 dp circle, 1 = the column); [content]
- * crossfades the library (out) and the results (in).
+ * Library search (spec 5.2, T17). Opening it grows the dock's search circle into the keyboard-riding field; the
+ * library stays where it is until there is something to look for, and gives way to the results once a query is typed
+ * (an empty page with one field on it said nothing, and flashed white on the way in and out). Closing reverses it, and
+ * the dock fades back in under the shrunk field before the field leaves, so nothing dips. [grow] is the field's width
+ * (0 = the 56 dp circle, 1 = the column); [content] crossfades the library (out) and the results (in), and follows
+ * [showResults]. A restored search starts as it was left: with its results, or over the library if it had no query.
  */
 @Stable
-class LibrarySearchState internal constructor(open: Boolean) {
+class LibrarySearchState internal constructor(open: Boolean, results: Boolean = open) {
     var open by mutableStateOf(open)
         private set
     /** The field is in the bottom column (it stays while it shrinks back into the circle). */
@@ -107,7 +110,7 @@ class LibrarySearchState internal constructor(open: Boolean) {
     /** Set by [open]: the field takes focus (and the keyboard opens) once it is composed. A restored search does not. */
     internal var focusPending by mutableStateOf(false)
     val grow = Animatable(if (open) 1f else 0f)
-    val content = Animatable(if (open) 1f else 0f)
+    val content = Animatable(if (open && results) 1f else 0f)
     val focus = FocusRequester()
 
     suspend fun open() = coroutineScope {
@@ -116,8 +119,12 @@ class LibrarySearchState internal constructor(open: Boolean) {
         fieldShown = true
         dockHidden = true
         focusPending = true
-        launch { content.animateTo(1f, FocalMotion.fade()) }
         grow.animateTo(1f, FocalMotion.move())
+    }
+
+    /** The results take the page ([show]: search is open with a query), or give it back to the library. */
+    suspend fun showResults(show: Boolean) {
+        content.animateTo(if (show && open) 1f else 0f, FocalMotion.fade())
     }
 
     /** Closes back into the circle; [clear] then empties the query. */
@@ -129,12 +136,17 @@ class LibrarySearchState internal constructor(open: Boolean) {
         dockHidden = false
         // The dock fades in on `fade` over the circle-sized field; the field leaves once it is covered.
         Animatable(0f).animateTo(1f, FocalMotion.fade())
+        // Opened again meanwhile: the field and the query are the new search's.
+        if (open) return@coroutineScope
         fieldShown = false
         clear()
     }
 
     companion object {
-        val Saver: Saver<LibrarySearchState, Boolean> = Saver(save = { it.open }, restore = { LibrarySearchState(it) })
+        val Saver: Saver<LibrarySearchState, Any> = listSaver(
+            save = { listOf(it.open, it.content.targetValue > 0f) },
+            restore = { LibrarySearchState(it[0], it[1]) },
+        )
     }
 }
 
@@ -205,7 +217,8 @@ fun SearchField(search: LibrarySearchState, query: TextFieldState, onClose: () -
                     }
                 },
             )
-            ClearButton(query)
+            // It leaves with the field's text as the field shrinks back into the circle.
+            ClearButton(query, shown = { smoothstep(HALF, 1f, search.grow.value) })
         }
     }
 }
@@ -214,7 +227,7 @@ private const val HALF = 0.5f
 
 /** × "Clear", shown only while there is a query (`fadeFast`). */
 @Composable
-private fun ClearButton(query: TextFieldState) {
+private fun ClearButton(query: TextFieldState, shown: () -> Float = { 1f }) {
     val colors = FocalTheme.colors
     val visible = query.text.isNotEmpty()
     val alpha = remember { Animatable(if (visible) 1f else 0f) }
@@ -224,7 +237,7 @@ private fun ClearButton(query: TextFieldState) {
     Box(
         Modifier
             .size(SearchMetrics.target)
-            .graphicsLayer { this.alpha = alpha.value }
+            .graphicsLayer { this.alpha = alpha.value * shown() }
             .then(
                 if (visible) Modifier.focusRing(FocalShapes.pill)
                     .clickable(source, indication = null, role = Role.Button) { query.clearText() }

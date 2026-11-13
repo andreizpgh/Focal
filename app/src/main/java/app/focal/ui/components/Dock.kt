@@ -125,8 +125,14 @@ sealed interface DockState {
     data object LibraryIdle : DockState
     /** While a capture runs (library and scene): Pause + Finish, or Resume pill + Finish while paused. */
     data class Live(val paused: Boolean) : DockState
-    /** A note: Play or Pause playback (or nothing for text only) + the progress pill or Copy. */
-    data class Note(val circle: PlayCircle, val pill: NotePill) : DockState
+    /**
+     * A note: Play or Pause playback (or nothing for text only) + the progress pill or Copy. With [append], a second
+     * circle between them continues the recording into this note (● "Continue recording"). [noteId] says whose dock
+     * it is: what the pill remembers (its fill, having been ready, "Copied") belongs to that note only.
+     */
+    data class Note(val circle: PlayCircle, val pill: NotePill, val append: Boolean = false, val noteId: String? = null) : DockState
+    /** Notes are selected in the library: ✕ "Done selecting" + "Delete N". */
+    data class Selecting(val count: Int) : DockState
 }
 
 enum class PlayCircle { Play, PausePlayback, Unavailable, None }
@@ -157,6 +163,12 @@ class DockActions(
     val pausePlayback: () -> Unit = {},
     val copy: suspend () -> Boolean = { false },
     val openSettings: (() -> Unit)? = null,
+    /** ● on a note: the recording continues into it. */
+    val append: () -> Unit = {},
+    /** ✕ while notes are selected: the selection ends. */
+    val closeSelection: () -> Unit = {},
+    /** "Delete N": the selected notes go to the trash (with Undo). */
+    val deleteSelected: () -> Unit = {},
 )
 
 /**
@@ -205,15 +217,17 @@ object DockMetrics {
     val railResumePadding = FocalGrid.x8
     val railResumeGap = FocalGrid.x4
     val glyphGap = FocalGrid.x8
+    /** The record dot of a note's "Continue recording" circle: the rail's size, a glyph on its own. */
+    val appendDot = FocalGrid.x12
     /** The material's Finish pill: shadow 0 8 28 (CSS blur, so sigma 14) and a 1 dp ring. */
     val actionShadowY = FocalGrid.x8
     val actionShadowSigma = 14.dp
     val ring = 1.dp
 }
 
-private enum class CircleFace { None, Search, Pause, Resume, Play, PausePlayback, PlayUnavailable }
+private enum class CircleFace { None, Search, Pause, Resume, Play, PausePlayback, PlayUnavailable, Close, Append }
 
-private enum class PillFace { Record, Finish, NotePrimary }
+private enum class PillFace { Record, Finish, NotePrimary, Delete }
 
 private fun circleFace(state: DockState) = when (state) {
     DockState.LibraryEmpty -> CircleFace.None
@@ -225,12 +239,17 @@ private fun circleFace(state: DockState) = when (state) {
         PlayCircle.Unavailable -> CircleFace.PlayUnavailable
         PlayCircle.None -> CircleFace.None
     }
+    is DockState.Selecting -> CircleFace.Close
 }
+
+/** The second circle, between the first and the pill: ● "Continue recording" on a note that can take more. */
+private fun secondFace(state: DockState) = if (state is DockState.Note && state.append) CircleFace.Append else CircleFace.None
 
 private fun pillFace(state: DockState) = when (state) {
     DockState.LibraryEmpty, DockState.LibraryIdle -> PillFace.Record
     is DockState.Live -> PillFace.Finish
     is DockState.Note -> PillFace.NotePrimary
+    is DockState.Selecting -> PillFace.Delete
 }
 
 /** Every dock morph follows a tap (Search, Record, Pause, Finish, a page change): it counts from it. */
@@ -238,7 +257,8 @@ private fun pillFace(state: DockState) = when (state) {
 private val MoveBounds = BoundsTransform { _, _ -> FocalMotion.fromTrigger(FocalMotion.move()) }
 
 /**
- * The dock (spec 4.3): at most a 56 dp circle and a 56 dp pill on the bottom column. Bounds animate on `move`
+ * The dock (spec 4.3): a 56 dp circle and a 56 dp pill on the bottom column, with a second circle between them on a
+ * note that can go on recording. Bounds animate on `move`
  * (`animateBounds` in a `LookaheadScope`); glyphs and labels fade through; containers that change crossfade without
  * a coverage dip. Both slots swap on one q, so the circle and the pill are always at the same phase; a change that a
  * tap announced counts from the tap ([clock], started in its handler), even when the new contents arrive a frame or
@@ -264,7 +284,10 @@ fun Dock(
 ) {
     val circle = circleFace(state)
     val pill = pillFace(state)
-    val swap = rememberDockSwap(DockFaces(circle, pill), clock)
+    // The rail holds two controls only (spec 5.14): there the note's menu continues the recording.
+    val second = if (rail) CircleFace.None else secondFace(state)
+    val selected = (state as? DockState.Selecting)?.count ?: 0
+    val swap = rememberDockSwap(DockFaces(circle, pill, second), clock)
     val leaving = swap.leaving()
     val circleWidth = when (circle) {
         CircleFace.None -> 0.dp
@@ -290,8 +313,9 @@ fun Dock(
                 )
                 Spacer(Modifier.height(if (circleSize > 0.dp) DockMetrics.gap else 0.dp))
                 PillSlot(
-                    face = pill, leaving = leaving?.pill, q = swap::q, notePill = (state as? DockState.Note)?.pill, actions = actions,
-                    edge = edge, hidden = hidden, requests = requests, rail = true,
+                    face = pill, leaving = leaving?.pill, q = swap::q, notePill = (state as? DockState.Note)?.pill,
+                    noteId = (state as? DockState.Note)?.noteId, actions = actions,
+                    edge = edge, hidden = hidden, requests = requests, rail = true, selected = selected,
                     modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds).size(DockMetrics.circle),
                 )
             }
@@ -310,15 +334,29 @@ fun Dock(
                     .width(circleWidth).height(DockMetrics.height),
             )
             Spacer(Modifier.width(if (circleWidth > 0.dp) DockMetrics.gap else 0.dp))
+            // The second circle grows in between them on `move`, and the pill gives it the room.
+            val secondWidth = if (second == CircleFace.None) 0.dp else DockMetrics.circle
+            CircleSlot(
+                face = second,
+                leaving = leaving?.second,
+                q = swap::q,
+                actions = actions,
+                edge = null,
+                modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
+                    .width(secondWidth).height(DockMetrics.height),
+            )
+            Spacer(Modifier.width(if (secondWidth > 0.dp) DockMetrics.gap else 0.dp))
             PillSlot(
                 face = pill,
                 leaving = leaving?.pill,
                 q = swap::q,
                 notePill = (state as? DockState.Note)?.pill,
+                noteId = (state as? DockState.Note)?.noteId,
                 actions = actions,
                 edge = edge,
                 hidden = hidden,
                 requests = requests,
+                selected = selected,
                 modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
                     .weight(1f).heightIn(min = DockMetrics.height),
             )
@@ -340,8 +378,12 @@ private fun CircleSlot(face: CircleFace, leaving: CircleFace?, q: () -> Float, a
         CircleFace.Play -> stringResource(R.string.action_play)
         CircleFace.PausePlayback -> stringResource(R.string.action_pause_playback)
         CircleFace.PlayUnavailable -> stringResource(R.string.a11y_play_unavailable)
+        CircleFace.Close -> stringResource(R.string.cd_selection_close)
+        CircleFace.Append -> stringResource(R.string.action_append)
     }
     val onClick: (() -> Unit)? = when (face) {
+        CircleFace.Close -> actions.closeSelection
+        CircleFace.Append -> actions.append
         CircleFace.Search -> actions.search
         CircleFace.Pause -> actions.pause
         CircleFace.Resume -> actions.resume
@@ -434,6 +476,9 @@ private fun CircleContent(face: CircleFace, dress: Dress, rail: Boolean) {
         CircleFace.Play -> Glyph(FocalIcon.Play, ink)
         CircleFace.PausePlayback -> Glyph(FocalIcon.Pause, ink)
         CircleFace.PlayUnavailable -> Glyph(FocalIcon.Play, colors.faint)
+        CircleFace.Close -> Glyph(FocalIcon.Close, ink)
+        // The dot Record and Resume carry: on a note it records more of the same note.
+        CircleFace.Append -> RecordDot(ink, size = DockMetrics.appendDot)
         CircleFace.Resume -> LabelRow(stringResource(R.string.action_resume), ink) { RecordDot(ink) }
         CircleFace.None -> Unit
     }
@@ -446,18 +491,25 @@ private fun PillSlot(
     leaving: PillFace?,
     q: () -> Float,
     notePill: NotePill?,
+    noteId: String?,
     actions: DockActions,
     edge: (() -> Rect)?,
     modifier: Modifier,
     hidden: Boolean,
     requests: DockRequests?,
     rail: Boolean = false,
+    selected: Int = 0,
 ) {
     val source = remember { MutableInteractionSource() }
     val tooltip = rememberTooltipState()
     val scope = rememberCoroutineScope()
     val haptics = rememberFocalHaptics()
-    var copied by remember { mutableStateOf(false) }
+    var copied by remember(noteId) { mutableStateOf(false) }
+    // The count the Delete pill last showed: it keeps its number while it leaves, after the selection has emptied.
+    val shownCount = remember { mutableIntStateOf(selected) }
+    if (selected > 0) SideEffect { shownCount.intValue = selected }
+    val deleteCount = maxOf(1, if (selected > 0) selected else shownCount.intValue)
+    val deleteLabel = pluralStringResource(R.plurals.action_delete_notes, deleteCount, deleteCount)
     val copyEnabled = (notePill as? NotePill.Copy)?.enabled == true
     val settingsLabel = stringResource(R.string.a11y_open_settings)
     val copyLabel = stringResource(R.string.action_copy)
@@ -468,10 +520,12 @@ private fun PillSlot(
         PillFace.Record -> stringResource(R.string.action_record)
         PillFace.Finish -> stringResource(R.string.action_finish)
         PillFace.NotePrimary -> progressDescription ?: if (copied) copiedLabel else copyLabel
+        PillFace.Delete -> deleteLabel
     }
     val onClick: (() -> Unit)? = when (face) {
         PillFace.Record -> actions.record
         PillFace.Finish -> actions.finish
+        PillFace.Delete -> actions.deleteSelected.takeIf { selected > 0 }
         PillFace.NotePrimary -> if (copyEnabled && !copied) {
             {
                 scope.launch {
@@ -534,7 +588,18 @@ private fun PillSlot(
                             else LabelRow(stringResource(R.string.action_finish), ink) { FinishSquare(ink) }
                         }
                     }
-                    PillFace.NotePrimary -> NotePrimaryPill(notePill ?: NotePill.Copy(), copied, containerAlpha, contentAlpha, hidden, rail)
+                    // Keyed by its note: another note's pill starts from that note's state, with no readiness tick
+                    // and no fill left over from the one before (two panes switch notes under one dock).
+                    PillFace.NotePrimary -> key(noteId) {
+                        NotePrimaryPill(notePill ?: NotePill.Copy(), copied, containerAlpha, contentAlpha, hidden, rail)
+                    }
+                    PillFace.Delete -> {
+                        PrimaryContainer(dress, containerAlpha)
+                        PillContent(dress, contentAlpha) { ink ->
+                            if (rail) Glyph(FocalIcon.Delete, ink)
+                            else LabelRow(deleteLabel, ink) { Glyph(FocalIcon.Delete, ink, size = GlyphSize.inPill) }
+                        }
+                    }
                 }
             }
         }
@@ -592,7 +657,8 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
     val inverted = remember { Animatable(if (ready) 1f else 0f) }
     val copyShown = remember { Animatable(if (ready) 1f else 0f) }
     var wasReady by remember { mutableStateOf(ready) }
-    LaunchedEffect(target) { if (target > fill.value) fill.animateTo(target, FocalMotion.move()) }
+    // Forward it moves; backward (a retry starts over what was full) it is simply the new value.
+    LaunchedEffect(target) { if (target > fill.value) fill.animateTo(target, FocalMotion.move()) else fill.snapTo(target) }
     LaunchedEffect(ready) {
         // Felt only with the dock in sight: not while Edit or Find has it down behind the keyboard.
         if (ready && !wasReady && !hidden && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) haptics.ready()
@@ -695,9 +761,9 @@ private fun CopyContent(copied: Boolean, ink: Color) {
     CopyLabel(copied, ink, FocalType.label, GlyphSize.inPill, DockMetrics.glyphGap, Modifier.padding(horizontal = FocalGrid.x16))
 }
 
-/** What the dock's two slots show. */
+/** What the dock's slots show: the circle, the pill and the second circle between them. */
 @Immutable
-private data class DockFaces(val circle: CircleFace, val pill: PillFace)
+private data class DockFaces(val circle: CircleFace, val pill: PillFace, val second: CircleFace = CircleFace.None)
 
 /**
  * One fade-through for the whole dock (spec 4.3, Q7): the faces that leave and the faces that arrive, on one q

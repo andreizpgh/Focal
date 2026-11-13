@@ -5,7 +5,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.focal.FocalApplication
 import app.focal.R
-import app.focal.recording.AudioLevel
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
 import app.focal.recording.ServiceEvent
@@ -30,8 +29,8 @@ import kotlinx.coroutines.launch
 
 /**
  * The recording screen and the live row. [state] changes when the session changes and once a second for the
- * timer; it never carries the meter level: draw the nine bars from [level] inside a draw lambda, smoothed
- * with [app.focal.core.MeterMath] and [app.focal.core.LevelHistory].
+ * timer; it never carries the meter level: the nine bars read [app.focal.recording.AudioLevel] inside a draw lambda,
+ * smoothed with [app.focal.core.MeterMath] and [app.focal.core.LevelHistory].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RecordingViewModel(application: Application) : AndroidViewModel(application) {
@@ -43,11 +42,24 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
     val starting: Boolean get() = startRequested.value
     private val finishingNote = MutableStateFlow<String?>(null)
 
+    /**
+     * The note Finish was last asked for from here. Its capture is still closing for a moment after the tap: what shows
+     * that note meanwhile (its page under the settling scene) already treats the recording as over.
+     */
+    val finishRequested: StateFlow<String?> = finishingNote
+
+    /** Where a recording that continues a note starts counting, until the service publishes its own time. */
+    private val startSeconds = MutableStateFlow(0L)
+
+    /**
+     * What [record] was last asked for: the note it continues (null: a new note) and that note's length then. "Try
+     * again" after a start that failed repeats it, so a continued note is never retried as a new one.
+     */
+    var lastRequest: Pair<String?, Long> = null to 0L
+        private set
+
     /** Service outcomes without a note: "Nothing was recorded", storage or microphone problems at Record. */
     val events: SharedFlow<ServiceEvent> = RecordingState.events
-
-    /** The latest microphone level (0..1). Read it only in draw or frame callbacks, never in composition. */
-    fun level(): Float = AudioLevel.current
 
     private data class Session(
         val noteId: String?, val capturing: Boolean, val paused: Boolean, val processing: Boolean, val seconds: Long,
@@ -69,7 +81,7 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
             }.distinctUntilChanged()
         }.flowOn(Dispatchers.IO)
 
-    val state: StateFlow<RecordingUiState> = combine(session, paragraphs, startRequested, finishingNote) { live, text, isStarting, finishing ->
+    val state: StateFlow<RecordingUiState> = combine(session, paragraphs, startRequested, finishingNote, startSeconds) { live, text, isStarting, finishing, from ->
         val phase = when {
             live.capturing -> if (live.paused) RecordingPhase.PAUSED else RecordingPhase.RECORDING
             finishing != null && live.noteId == finishing && live.processing -> RecordingPhase.FINISHING
@@ -79,7 +91,8 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         RecordingUiState(
             phase = phase,
             noteId = live.noteId.takeIf { phase != RecordingPhase.IDLE && phase != RecordingPhase.STARTING },
-            elapsedSeconds = live.seconds,
+            // A continued note's timer opens on the note's length, not on 0:00, before the microphone has answered.
+            elapsedSeconds = if (phase == RecordingPhase.STARTING) from else live.seconds,
             pauseReason = PauseReason.of(live.pauseReason).takeIf { live.capturing && live.paused },
             storageShortBytes = if (live.capturing) live.storageShort else 0,
             speech = live.speech,
@@ -105,13 +118,17 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /**
-     * Starts a recording. Ask for RECORD_AUDIO (and POST_NOTIFICATIONS on API 33+) first; call while Focal is
-     * visible. A recording that is already live is not restarted. Failures arrive on [events].
+     * Starts a recording: a new note, or with [appendTo] more of that ready note (its audio and text go on where they
+     * ended; [fromMs] is its length so far, which the timer shows at once). Ask for RECORD_AUDIO (and POST_NOTIFICATIONS on API 33+) first; call while Focal is visible. A recording
+     * that is already live is not restarted. Failures arrive on [events].
      */
-    fun record() {
+    fun record(appendTo: String? = null, fromMs: Long = 0) {
         if (RecordingState.live.value.capturing) return
+        lastRequest = appendTo to fromMs
+        startSeconds.value = if (appendTo == null) 0 else fromMs / 1000
+        finishingNote.value = null
         try {
-            RecordingService.command(app, RecordingService.START)
+            RecordingService.command(app, RecordingService.START, appendTo)
             startRequested.value = true
         } catch (error: Exception) {
             if (error is CancellationException) throw error

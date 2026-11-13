@@ -29,7 +29,7 @@ enum class FocalIcon(@param:DrawableRes val res: Int) {
     ChevronRight(R.drawable.ic_chevron_right),
     Close(R.drawable.ic_close),
     Copy(R.drawable.ic_content_copy),
-    Edit(R.drawable.ic_edit),
+    Delete(R.drawable.ic_delete),
     Down(R.drawable.ic_keyboard_arrow_down),
     Up(R.drawable.ic_keyboard_arrow_up),
     More(R.drawable.ic_more_vert),

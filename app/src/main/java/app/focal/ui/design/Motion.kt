@@ -6,13 +6,11 @@ import android.os.Build
 import androidx.compose.animation.core.AnimationVector
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.InfiniteRepeatableSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.VectorizedFiniteAnimationSpec
-import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -56,7 +54,7 @@ object FocalMotion {
 
     /** Press scale 1 to 0.97, lens glide within a line, playhead height, menu scale-in, the Copied check. */
     fun <T> press(): SpringSpec<T> = spring(SPATIAL_DAMPING, PRESS_STIFFNESS)
-    /** Bounds and sizes: dock morphs, the feedback pill, sheets, the settings swipe and the peek. */
+    /** Bounds and sizes: dock morphs, the feedback pill, sheets and the settings swipe. */
     fun <T> move(): SpringSpec<T> = spring(SPATIAL_DAMPING, MOVE_STIFFNESS)
     /** The recording surface only: expand, fold, the drag's settle, the settle into the note, the lift. */
     fun <T> stage(): SpringSpec<T> = spring(SPATIAL_DAMPING, STAGE_STIFFNESS)
@@ -71,8 +69,6 @@ object FocalMotion {
 
     /** The only tweens in the product (2.8). Expand, fold, settle and stage-page swaps under reduced motion. */
     val reducedCrossfade: TweenSpec<Float> = tween(durationMillis = 150, easing = LinearEasing)
-    /** The writing head's working sweep phase. */
-    val sweep: InfiniteRepeatableSpec<Float> = infiniteRepeatable(tween(1200, easing = LinearEasing))
     /** The readiness shimmer's travel; its alpha is sin(pi * u) of the linear progress u. */
     val readyShimmer: TweenSpec<Float> = tween(720, easing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f))
 
@@ -207,6 +203,10 @@ object FocalTiming {
     const val SEARCH_DEBOUNCE_MS = 120L
     const val FIND_DEBOUNCE_MS = 120L
     const val AUTOSAVE_DEBOUNCE_MS = 600L
+    /** Edit's ▶ plays this much audio before and after the word at the caret: enough to hear it in its phrase. */
+    const val LISTEN_CARET_MS = 1500L
+    /** ... and this much around a selection, which already says how much to play. */
+    const val LISTEN_SELECTION_MS = 600L
     const val ARRIVAL_HIGHLIGHT_MS = 1500L
     const val NOTIFICATION_PERMISSION_DELAY_MS = 600L
     /**
@@ -227,9 +227,9 @@ object FocalTiming {
     const val SETTLE_TITLE_DELAY_MS = 120L
     const val SETTLE_META_DELAY_MS = 200L
     const val SETTLE_PARAGRAPH_DELAY_MS = 180L
-    const val PEEK_HOLD_MS = 400L
-    const val PEEK_IDLE_MS = 1200L
-    const val PEEK_MAX = 2
+    /** The settings hint shows once the library has been at rest this long, and at most this many times. */
+    const val SETTINGS_HINT_IDLE_MS = 1500L
+    const val SETTINGS_HINT_MAX = 2
     /** Arriving text renders settled once it is older than this, so scrolling never replays it. */
     const val SETTLED_AFTER_MS = 600L
 }

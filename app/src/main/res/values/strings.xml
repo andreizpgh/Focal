@@ -34,6 +34,12 @@
     <string name="action_play">Play</string>
     <string name="action_pause_playback">Pause playback</string>
     <string name="action_copy">Copy</string>
+    <string name="action_append">Continue recording</string>
+    <string name="cd_selection_close">Done selecting</string>
+    <plurals name="action_delete_notes">
+        <item quantity="one">Delete %d note</item>
+        <item quantity="other">Delete %d notes</item>
+    </plurals>
     <string name="action_copied">Copied</string>
     <string name="action_transcribing">Transcribing</string>
 
@@ -43,7 +49,8 @@
     <string name="action_done">Done</string>
     <string name="action_retry">Retry</string>
     <string name="cd_back">Back</string>
-    <string name="cd_edit">Edit</string>
+    <string name="cd_listen">Listen to these words</string>
+    <string name="cd_listen_stop">Stop listening</string>
     <string name="cd_more">More options</string>
     <string name="cd_undo">Undo</string>
     <string name="cd_redo">Redo</string>
@@ -81,9 +88,11 @@
     <string name="state_preparing">Preparing speech model</string>
     <string name="state_later">Text will catch up</string>
     <string name="hint_first_text">Text appears after each pause.</string>
-    <string name="row_transcribing">Transcribing</string>
-    <string name="row_waiting">Waiting to transcribe</string>
-    <string name="row_preparing">Preparing speech model</string>
+    <string name="hint_settings">Swipe left for settings</string>
+    <string name="hint_settings_rtl">Swipe right for settings</string>
+    <string name="action_open">Open</string>
+    <string name="row_waiting">Waiting</string>
+    <string name="row_preparing">Preparing</string>
     <string name="row_percent">%d%%</string>
     <string name="no_speech">No speech was recognized.</string>
     <string name="partial_failure">Part of this note couldn’t be transcribed.</string>
@@ -96,6 +105,7 @@
     <!-- Menus (design 7.2). -->
     <string name="menu_copy_text">Copy text</string>
     <string name="menu_share">Share</string>
+    <string name="menu_edit">Edit</string>
     <string name="menu_rename">Rename</string>
     <string name="menu_remove_audio">Remove audio</string>
     <string name="menu_delete">Delete</string>
@@ -104,10 +114,15 @@
 
     <!-- The feedback pill (design 7.3). -->
     <string name="feedback_deleted">Note deleted</string>
+    <plurals name="feedback_deleted_many">
+        <item quantity="one">%d note deleted</item>
+        <item quantity="other">%d notes deleted</item>
+    </plurals>
     <string name="feedback_audio_removed">Audio removed</string>
     <string name="feedback_too_late">Too late to undo</string>
     <string name="feedback_text_copied">Text copied</string>
     <string name="feedback_nothing_recorded">Nothing was recorded</string>
+    <string name="feedback_interrupted">The recording stopped early. What was recorded is saved.</string>
     <string name="feedback_storage">Free up about %s to record.</string>
     <string name="feedback_storage_resume">Free up about %s, then resume.</string>
     <string name="feedback_mic_busy">Another app is using the microphone.</string>
@@ -120,6 +135,7 @@
 
     <!-- Failures in the feedback pill: what went wrong and what to do; never an exception's own text. -->
     <string name="error_start">Couldn’t start recording. Try again.</string>
+    <string name="error_append">This note can’t take more recording right now.</string>
     <string name="error_finishing">Finishing the previous recording. Try again in a moment.</string>
     <string name="error_already_recording">A recording is already running.</string>
     <string name="error_note_busy">This note is busy. Try again in a moment.</string>
@@ -140,9 +156,9 @@
     <string name="error_replace_too_large">A paragraph would get too long. Nothing was replaced.</string>
     <string name="error_restore">Couldn’t restore the original.</string>
     <string name="error_copy">Couldn’t copy the text.</string>
-    <string name="error_copy_too_long">This note is too long to copy at once. Select the part you need.</string>
+    <string name="error_copy_too_long">This note is too long to copy at once. Copy it in parts.</string>
     <string name="error_share">Couldn’t open sharing.</string>
-    <string name="error_share_too_long">This note is too long to share at once. Select the part you need.</string>
+    <string name="error_share_too_long">This note is too long to share at once. Copy it in parts.</string>
     <string name="error_retry">Couldn’t continue transcription.</string>
     <string name="error_save">Couldn’t save your edit.</string>
     <string name="error_join">Can’t join these paragraphs.</string>
@@ -167,7 +183,6 @@
     <string name="stage_model_install_failed">The speech model couldn’t be prepared.</string>
     <string name="model_damaged">The speech model is damaged: reinstall Focal. Your audio is saved.</string>
     <string name="stage_model_damaged">The speech model is damaged: reinstall Focal.</string>
-    <string name="provenance_edited">Edited</string>
     <string name="not_saved">Not saved</string>
     <string name="find_hint">Find in note</string>
     <string name="replace_hint">Replace with</string>
@@ -189,16 +204,15 @@
     <string name="settings_storage">Storage</string>
     <string name="storage_audio">Audio</string>
     <plurals name="storage_desc">
-        <item quantity="one">Kept for %d note. To free space, remove audio from a note in its menu. The text stays.</item>
-        <item quantity="other">Kept for %d notes. To free space, remove audio from a note in its menu. The text stays.</item>
+        <item quantity="one">Kept for %d note. To free space, remove the audio from a note’s menu. Its text stays.</item>
+        <item quantity="other">Kept for %d notes. To free space, remove the audio from a note’s menu. Its text stays.</item>
     </plurals>
     <string name="settings_about">About</string>
-    <string name="works_offline">Works offline</string>
-    <string name="works_offline_desc">Focal has no internet permission. Audio and text never leave this phone.</string>
+    <string name="settings_version">Version</string>
+    <string name="works_offline">Focal works offline. It has no internet permission, so audio and text never leave this phone.</string>
     <string name="source_code">Source code</string>
     <string name="source_code_url" translatable="false">https://github.com/andreizpgh/Focal</string>
     <string name="licenses">Open-source licenses</string>
-    <string name="version">Focal %s</string>
     <string name="perm_title">Focal needs the microphone</string>
     <string name="perm_body">Focal turns speech into text on this phone. It has no internet access, so your audio never leaves the device.</string>
     <string name="perm_allow">Allow microphone</string>

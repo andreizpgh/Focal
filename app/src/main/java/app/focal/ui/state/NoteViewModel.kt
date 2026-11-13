@@ -172,12 +172,26 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
             editable = note.state == NoteState.READY && (phase == NotePhase.READY || phase == NotePhase.PARTIAL_FAILURE),
             canRemoveAudio = audio && note.state == NoteState.READY && phase == NotePhase.READY,
             canRetry = note.audioPresent && (phase == NotePhase.PARTIAL_FAILURE || phase == NotePhase.WAITING),
+            // More can be recorded into a ready note that still has its audio (the new audio goes on in the same file),
+            // while nothing records and its own audio is not about to be removed.
+            canAppend = audio && !note.legacy && note.state == NoteState.READY && !liveKey.capturing &&
+                (phase == NotePhase.READY || phase == NotePhase.PARTIAL_FAILURE),
             paragraphs = data.paragraphs, blankParagraphs = data.blank, gaps = data.gaps, failedParts = note.failedWindows,
             endReason = EndReason.of(note.endReason),
             noSpeech = note.state == NoteState.READY && data.paragraphs.isEmpty(),
             legacy = note.legacy,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NoteUiState(noteId))
+
+    /**
+     * Whether the store has the note now. [state] keeps its last value while nothing collects it, and the view model
+     * outlives its page, so a page opened again starts from the state it was left in: a note deleted from its page and
+     * restored since still reads as missing until the store is read again.
+     */
+    suspend fun exists(): Boolean = withContext(Dispatchers.IO) {
+        app.storageReady.await()
+        store.note(noteId) != null
+    }
 
     /** Call with true while the note is on screen, false when it leaves: "Note ready" is not posted for it. */
     fun setShown(shown: Boolean) {

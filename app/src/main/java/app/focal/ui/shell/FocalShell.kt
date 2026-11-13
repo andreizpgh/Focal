@@ -87,6 +87,11 @@ class ShellState internal constructor(
 ) {
     val current: Destination get() = backStack.last()
 
+    init {
+        // The scene morphs out of the library's stage and back into it; over any other page it has no origin on screen.
+        live.overLibrary = { current == Destination.Library }
+    }
+
     /**
      * Whether the library and a note sit side by side (spec 5.14, width >= 840 dp); the shell sets it from the window.
      * A note then opens in the detail pane in place of the one there, fading through (nothing grows out of the list
@@ -97,7 +102,11 @@ class ShellState internal constructor(
 
     /** Opens [destination] on top; [motion] says how (spec 6.1): a fade-through unless it grows out of the library. */
     fun open(destination: Destination, motion: PageMotion = PageMotion.FadeThrough) {
-        if (backStack.lastOrNull() == destination) return
+        val top = backStack.lastOrNull()
+        if (top == destination) return
+        // The note's page is already on top (it was opened at a search hit, and its recording went on from it): Finish
+        // lands on that page, never on a second one for the same note.
+        if (destination is Destination.Note && destination.hit == null && (top as? Destination.Note)?.id == destination.id) return
         dockClock.start()
         if (twoPane && destination is Destination.Note) {
             // T7 stays a cut under the scene; everything else fades through in the detail pane.
@@ -131,6 +140,15 @@ class ShellState internal constructor(
     suspend fun record(fromEmpty: Boolean, reducedMotion: Boolean = false) {
         dockClock.start()
         live.record(fromEmpty, reducedMotion)
+    }
+
+    /**
+     * A note's ● "Continue recording": the scene comes in over the note's page, and the dock's Play | ● | Copy fade
+     * through to Pause | Finish from the tap.
+     */
+    suspend fun recordMore(reducedMotion: Boolean = false) {
+        dockClock.start()
+        live.appear(reducedMotion)
     }
 
     /** What each destination asked the bottom column to show; only the current destination's is drawn. */
@@ -233,6 +251,7 @@ fun FocalShell(
     SideEffect {
         shell.pages.reduced = reduced
         shell.pages.density = density
+        shell.live.reducedMotion = reduced
     }
     // One holder for every page's saved state, so a page keeps it when the layout changes around it (a rotation
     // between one pane and two).

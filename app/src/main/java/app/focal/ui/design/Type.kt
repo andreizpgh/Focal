@@ -89,8 +89,10 @@ object FocalType {
     val dateline = style(FocalText, 15, 20, FocalWeight.Medium, -0.0088f, TNUM)
     val title = style(FocalDisplay, 28, 34, FocalWeight.Semibold, -0.0209f)
     val headline = style(FocalDisplay, 22, 28, FocalWeight.Semibold, -0.0183f)
+    // Lines break greedily, one after another (`Simple`): the body is edited in place, and a strategy that sets the
+    // whole paragraph at once would move the lines above the caret with every character typed below them.
     val body = style(FocalText, 18, 28, FocalWeight.Regular, -0.0143f)
-        .copy(lineBreak = LineBreak.Paragraph, hyphens = Hyphens.None)
+        .copy(lineBreak = LineBreak.Simple, hyphens = Hyphens.None)
     val rowTitle = style(FocalText, 17, 24, FocalWeight.Semibold, -0.0128f)
     val field = style(FocalText, 17, 24, FocalWeight.Regular, -0.0128f)
     val label = style(FocalText, 16, 20, FocalWeight.Semibold, -0.0110f)

@@ -60,33 +60,41 @@ enum class RationaleMode { Allow, OpenSettings }
 class RecordFlow internal constructor() {
     var sheet by mutableStateOf<RationaleMode?>(null)
         internal set
-    internal var start: () -> Unit = {}
+    internal var start: (String?, Long) -> Unit = { _, _ -> }
     internal var allow: () -> Unit = {}
     internal var openDetails: () -> Unit = {}
 
-    /** Record: start now, or ask for the microphone first. */
-    fun record() = start()
+    /**
+     * Record: start now, or ask for the microphone first. With [appendTo], the recording continues that note, whose
+     * length so far is [fromMs].
+     */
+    fun record(appendTo: String? = null, fromMs: Long = 0) = start(appendTo, fromMs)
 
     fun dismiss() { sheet = null }
 }
 
 @Composable
-fun rememberRecordFlow(record: () -> Unit): RecordFlow {
+fun rememberRecordFlow(record: (appendTo: String?, fromMs: Long) -> Unit): RecordFlow {
     val context = LocalContext.current
     val flow = remember { RecordFlow() }
     val onRecord by rememberUpdatedState(record)
     var fromSettings by rememberSaveable { mutableStateOf(false) }
+    // The note the pending Record continues, kept while Android asks for the microphone (the activity may be recreated).
+    var target by rememberSaveable { mutableStateOf<String?>(null) }
+    var targetMs by rememberSaveable { mutableStateOf(0L) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) onRecord()
+        if (granted) onRecord(target, targetMs)
         else if (context.findActivity()?.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) == false) {
             // Android will not ask again: the sheet's pill opens the app's details instead.
             flow.sheet = RationaleMode.OpenSettings
         }
     }
-    flow.start = {
+    flow.start = { appendTo, fromMs ->
+        target = appendTo
+        targetMs = fromMs
         val activity = context.findActivity()
         when {
-            context.hasMicrophone() -> onRecord()
+            context.hasMicrophone() -> onRecord(appendTo, fromMs)
             activity?.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) == true -> flow.sheet = RationaleMode.Allow
             else -> launcher.launch(Manifest.permission.RECORD_AUDIO)
         }
@@ -99,7 +107,7 @@ fun rememberRecordFlow(record: () -> Unit): RecordFlow {
                 fromSettings = false
                 if (context.hasMicrophone()) {
                     flow.sheet = null
-                    onRecord()
+                    onRecord(target, targetMs)
                 }
             }
         }

@@ -47,7 +47,7 @@ import kotlinx.coroutines.withContext
  * Every input moves the same value (the finger, springs, Back, predictive back, Ctrl+, the accessibility action), and
  * everything on screen is a function of it read in the layer and draw phases, so a swipe never recomposes.
  *
- * The swipe gesture, the peek and the accessibility action belong to the library screen (it knows its own touch
+ * The swipe gesture, the hint and the accessibility action belong to the library screen (it knows its own touch
  * regions); this state, the strip's layout, Back and the keyboard shortcut are here.
  */
 @Stable
@@ -107,7 +107,7 @@ fun settingsTravel(widthPx: Float, density: Density): Float = widthPx + with(den
  * (1 - s) * D_s, the 8 dp `s2` seam between them and 28 dp seam-side corners while 0 < s < 1. Under reduced motion
  * nothing travels: a fade-through on paper. The page that is off screen is inert (no semantics, no focus). Back and
  * predictive back close settings with the same motion: s = 1 - progress, commit on `move`, cancel back to 1. Back is
- * settings' only while it is open or opening: the peek and a close in flight leave it to the library (the app).
+ * settings' only while it is open or opening: a close in flight leaves it to the library (the app).
  */
 @Composable
 fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, settings: @Composable () -> Unit, modifier: Modifier = Modifier) {

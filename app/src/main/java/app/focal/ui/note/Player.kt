@@ -165,16 +165,20 @@ internal fun PlayerStrip(position: PlayerPosition, onSeek: (Long) -> Unit, modif
                         return ((if (rtl) 1 - fraction else fraction) * position.durationMs).roundToInt().toLong()
                     }
                     position.scrubMs = at(down.position.x)
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        if (!change.pressed) break
-                        position.scrubMs = at(change.position.x)
-                        change.consume()
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            position.scrubMs = at(change.position.x)
+                            change.consume()
+                        }
+                        position.scrubMs?.let(seek)
+                    } finally {
+                        // Also when the strip leaves under the finger (the audio ended, a recording began), which
+                        // cancels the gesture: a scrub position left behind would hold the next playback's playhead.
+                        position.scrubMs = null
                     }
-                    val target = position.scrubMs
-                    position.scrubMs = null
-                    if (target != null) seek(target)
                 }
             },
         verticalAlignment = Alignment.CenterVertically,
