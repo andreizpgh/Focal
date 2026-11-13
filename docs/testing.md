@@ -116,10 +116,76 @@ to end, so before publishing a release is checked on emulators in three parts:
   cannot show them.
 - The speech tests peak at about 0.9 GB PSS on an emulator, so give the emulator
   at least 3 GB of RAM.
+- Start the emulator with `-no-audio` for the instrumented suite. Its microphone
+  then delivers faint noise, which a recording keeps. Started with host audio
+  and nothing streamed into it, the microphone delivers exact silence, and Focal
+  discards such a recording as "Nothing was recorded".
 
 ## What has been verified
 
-For 0.2.0, on x86_64 emulators only. No build has run on a phone.
+### 0.3.0
+
+On the API 36 x86_64 emulator only. No build has run on a phone.
+
+**Tests.** At 33ca95d, the commit the 0.3.0 APK was built from: the JVM tests
+passed (core 56, app 200), lint reported no errors and the script tests passed
+(58). The instrumented suite (debug build, model bundled) ran after `pm clear`
+on an 824 × 1830 display: 164 tests, none failed. Tests that need a wide display
+skip themselves there, and the landscape, tablet and two-pane gallery stages
+were not rendered for this release. One test records through the emulator's own
+microphone; started with host audio for the speech check below, that microphone
+delivers exact silence, which Focal discards as "Nothing was recorded", so the
+suite is run on an emulator started with `-no-audio`.
+
+**Emulator QA build** of the same commit (minified, x86_64, 0.3.0-emulator-qa,
+never published), with the public JFK fixture streamed into the virtual
+microphone: text appeared while recording, Finish opened the note and it became
+ready; ● on the note continued the recording with the same speech, the timer
+went on from the note's length and the new paragraph followed the old one; a tap
+on a word and four typed letters replaced it. Logcat showed no crash, ANR, link
+or JNI error. The emulator itself crashed twice in its audio code when a stream
+was started before Record; a stream started after Record worked.
+
+**The 0.3.0 APK** (`Focal-0.3.0.apk`, 700,492,030 bytes, SHA-256
+`c8132226a5fba74b55fe0f3b19e303705d82df87e790965c4982c542cabf26e9`).
+`scripts/release.py` signed it with the certificate of the earlier releases
+(SHA-256 `3e407a18…a3bc`) and checked it as described under
+[Release checks](#release-checks). The published 0.2.0 APK was installed on the
+emulator and started; 0.3.0 installed over it as an update and started. 0.2.0
+cannot record under the emulator's arm64 translation, so that install carried no
+notes: the conversion of a 0.2.0 database (schema 5 to 6) is covered by
+`NoteStoreTest`.
+
+**By hand in the debug build**, with notes seeded through the store: with search
+open and the keyboard hidden, a tap on the field brought the keyboard back and
+started nothing; a tap past a line's last word placed the caret, a tap on a word
+selected it; **Edit** in the menu put the caret in the first paragraph; several
+notes were selected and deleted with one Undo; a note deleted from its page and
+restored with Undo six seconds later opened again; Finish in the scene over a
+note settled into the note's dock pill.
+
+**Not checked:** any of it on a phone; another app actually taking the
+microphone (the hold is tested with a scripted input); a microphone that
+refuses to start (tested with a scripted input); frame pacing of any animation;
+speech in Russian through the microphone.
+
+**Known and left for later:**
+
+- Back from a note that went on recording folds with a fade-through instead of
+  the fold into the stage card, because the note has moved from its row to the
+  stage since the page opened.
+- In two panes, where the scene crossfades over a note, the dock changes pane
+  half-way through the crossfade.
+- A first launch without room for the speech model plans a recording's windows
+  with the energy detector, and they are kept when the model arrives.
+- A note's view model lives as long as the activity, so every note opened keeps
+  its text in memory until then.
+- `core` still holds Whisper-era helpers (`Transcript.title`,
+  `reconcileBoundary`) and `SpeechPlayer` a few methods that only tests call.
+
+### 0.2.0
+
+On x86_64 emulators only. No build has run on a phone.
 
 **Instrumented suite (debug build).** At 523bdd2, the commit the 0.2.0 APK was
 built from, the full suite ran after `pm clear` with the model bundled, on API 36
@@ -154,26 +220,6 @@ the emulator's arm64 translation, which is why the QA build above exists.
 transcription and the recovery that follows behaved as designed with emulator
 audio. Speech quality figures come from host experiments on read speech; see
 [speech quality](speech-quality.md).
-
-**After 0.2.0 (unreleased, the working tree of 13 November 2026).** The changes
-listed under Unreleased in the [changelog](../CHANGELOG.md) were checked on the
-API 36 x86_64 emulator only, in the debug build with the model bundled:
-
-- The JVM tests passed (255), lint reported no errors, both APKs built and the
-  script tests passed (58).
-- The instrumented suite ran after `pm clear` on an 824 × 1830 display: 163 tests,
-  none failed. Tests that need a wide display skip themselves there, and the
-  landscape, tablet and two-pane gallery stages were not rendered.
-- By hand, with notes seeded through the store and the emulator's silent
-  microphone: a tap on a word opened Edit with the word selected and typing
-  replaced it; several notes were selected and deleted with one Undo; a note
-  was continued from its page (the timer went on from its length, Finish
-  settled back, the edit made before was kept); search opened and closed; the
-  settings hint showed and **Open** opened settings.
-- Not checked: any of it on a phone; continuing a note with real speech through
-  the microphone (the store and service tests use synthetic audio and a
-  scripted recognizer); another app actually taking the microphone (the hold is
-  tested with a scripted input); frame pacing of any animation.
 
 ## Phone validation
 
