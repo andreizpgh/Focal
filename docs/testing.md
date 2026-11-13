@@ -125,37 +125,60 @@ to end, so before publishing a release is checked on emulators in three parts:
 
 ### 0.3.1
 
-On the API 36 x86_64 emulator only. No build has run on a phone. What follows
-was checked while the changes were made, on the working tree; the checks of the
-release commit itself are recorded after it.
+On the API 36 x86_64 emulator only. No build has run on a phone.
 
-**Tests.** The JVM tests and lint passed. The instrumented suite (debug build,
-model bundled, a 720 × 1280 display, `-no-audio`): 164 tests; one failed,
-`gallery/LongNoteTest`, for two reasons that were the test's own on this display
-and are fixed in it: its tap went to the list's centre, which here is the gap
-between two paragraphs, and it waited for the autosave by sleeping while the
-rule's clock, which the autosave's debounce runs on, stood still. It passes with
-both changed; the edit, motion and interface tests were run again after the last
-changes to the page transitions (41 tests, none failed), not the whole suite.
+**Tests.** At 5119dca, the commit the 0.3.1 APK was built from: the JVM tests
+passed (core 58, app 205), lint reported no errors and the script tests passed
+(58). The instrumented suite (debug build, model bundled) ran after `pm clear`
+on an 824 × 1830 display, on an emulator started with `-no-audio`: 164 tests,
+none failed. Tests that need a wide display skip themselves there, and the
+landscape, tablet and two-pane gallery stages were not rendered for this
+release. While the changes were made the suite also ran on a 720 × 1280 display,
+where `gallery/LongNoteTest` failed for two reasons of its own, both fixed in
+it: its tap went to the list's centre, which there is the gap between two
+paragraphs, and it waited for the autosave by sleeping while the rule's clock,
+which the autosave's debounce runs on, stood still.
+
+**Emulator QA build** of the same commit (minified, x86_64, 0.3.1-emulator-qa,
+never published), through the emulator's own microphone, which delivers faint
+noise: Record opened the scene and the timer ran, Finish opened the note, which
+became ready with "No speech was recognized", the library showed it on the
+stage, and settings opened with the new rows. Logcat's crash buffer was empty.
+No speech was streamed into this build, so text arriving while recording was
+not seen in it; the speech tests of the suite decode the JFK fixture in the
+debug build.
+
+**The 0.3.1 APK** (`Focal-0.3.1.apk`, 700,512,510 bytes, SHA-256
+`15f9bf056b29aaeb0b8b3ac81dbd2629fa38c369d7c249f94751f86ca91ea255`).
+`scripts/release.py` signed it with the certificate of the earlier releases
+(SHA-256 `3e407a18…a3bc`) and checked it as described under
+[Release checks](#release-checks). The published 0.3.0 APK was installed on the
+emulator and started; 0.3.1 installed over it as an update and started. 0.3.0
+cannot record under the emulator's arm64 translation, so that install carried no
+notes. The database schema is the one 0.3.0 has. The one-time split of earlier
+notes ran in the debug build over notes seeded through the store under the old
+rules: a two-minute monologue stored as two paragraphs became seven, and a
+paragraph edited beforehand was left whole.
 
 **Motion, frame by frame.** The screen was recorded (`screenrecord`, 60 frames a
 second) while a note was opened from the stage and from a row and closed again,
 and consecutive frames were compared. On the 0.3.0 debug build an opening showed
 three to six distinct frames with pauses of about 200 ms between them, one of
 them a note that had not loaded ("Jan 1, 1970 · Text only"), and Back drew the
-page over the library. On the emulator QA build of this tree (minified, x86_64)
-the same four changes show 19 to 23 consecutive frames each, with no frame of an
-unloaded note and no page drawn over another. The same recordings were made for
-search (the first letter typed: one crossfade over about ten frames, no blank
-page), the note menu (its shadow is there from its first frame), Edit (a tap on
-a word, typing over it, a tap on another word: no line of text changes place,
-and the page scrolls once, for the keyboard) and pulling the stage open.
+page over the library. On an emulator QA build of this code the same four
+changes show 19 to 23 consecutive frames each, with no frame of an unloaded note
+and no page drawn over another. The same recordings were made in the debug
+build for search (the first letter typed: one crossfade over about ten frames,
+no blank page), the note menu (its shadow is there from its first frame), Edit
+(a tap on a word, typing over it, a tap on another word: no line of text changes
+place, the page scrolls once, for the keyboard, and the typed text was still
+there after the process was killed) and pulling the stage open.
 
-**Not checked.** A phone, and so real frame rates; other keyboards than Gboard;
-the pull gesture against Android's own back gesture at the screen's edge;
-landscape, a tablet and two panes; TalkBack with the new switch, the selection
-menu and the paragraph times; the one-time split of notes recorded before, on
-real notes (it was exercised on the emulator's seeded notes only).
+**Not checked:** any of it on a phone, and so real frame rates; other keyboards
+than Gboard; the pull gesture against Android's own back gesture at the screen's
+edge; landscape, a tablet and two panes; TalkBack with the new switch, the
+selection menu and the paragraph times; the one-time split on a phone's real
+notes; speech in Russian through the microphone.
 
 ### 0.3.0
 

@@ -43,7 +43,8 @@ each release is checked to carry the same certificate before it is published.
 
 - **Over 0.3.0:** the notes stay. On first launch, notes recorded before are
   split into shorter paragraphs once, by the rule new recordings follow; no word
-  changes, and paragraphs you edited are left as they are.
+  changes, and paragraphs you edited are left as they are. Tested on an Android
+  emulator: the published 0.3.0 APK was installed, then 0.3.1 over it.
 - **Over 0.2.0:** the notes stay as they are. Titles that 0.2.0 made from a long
   first sentence are made again by the new rule, once; titles you gave stay.
   Tested on an Android emulator: the published 0.2.0 APK was installed, then
