@@ -157,8 +157,9 @@ emulator and started; 0.3.1 installed over it as an update and started. 0.3.0
 cannot record under the emulator's arm64 translation, so that install carried no
 notes. The database schema is the one 0.3.0 has. The one-time split of earlier
 notes ran in the debug build over notes seeded through the store under the old
-rules: a two-minute monologue stored as two paragraphs became seven, and a
-paragraph edited beforehand was left whole.
+rules: the later paragraphs of a two-minute monologue came out split, each
+under its start time, and its first paragraph, edited beforehand, was left
+whole. How many paragraphs the note had before and after was not counted.
 
 **Motion, frame by frame.** The screen was recorded (`screenrecord`, 60 frames a
 second) while a note was opened from the stage and from a row and closed again,
