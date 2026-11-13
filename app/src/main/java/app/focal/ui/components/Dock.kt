@@ -131,8 +131,11 @@ sealed interface DockState {
      * it is: what the pill remembers (its fill, having been ready, "Copied") belongs to that note only.
      */
     data class Note(val circle: PlayCircle, val pill: NotePill, val append: Boolean = false, val noteId: String? = null) : DockState
-    /** Notes are selected in the library: ✕ "Done selecting" + "Delete N". */
-    data class Selecting(val count: Int) : DockState
+    /**
+     * Notes are selected in the library: ✕ "Done selecting" + "Delete N". With [audio] (a selected note has audio that
+     * can go), ⋮ between them offers "Remove audio": the notes stay, as text only.
+     */
+    data class Selecting(val count: Int, val audio: Boolean = false) : DockState
 }
 
 enum class PlayCircle { Play, PausePlayback, Unavailable, None }
@@ -169,6 +172,10 @@ class DockActions(
     val closeSelection: () -> Unit = {},
     /** "Delete N": the selected notes go to the trash (with Undo). */
     val deleteSelected: () -> Unit = {},
+    /** ⋮ "Remove audio": the selected notes keep their text and lose their audio (with Undo). */
+    val removeSelectedAudio: () -> Unit = {},
+    /** What that audio takes, for "Remove audio · 42 MB". */
+    val selectedAudioSize: suspend () -> String? = { null },
 )
 
 /**
@@ -225,7 +232,7 @@ object DockMetrics {
     val ring = 1.dp
 }
 
-private enum class CircleFace { None, Search, Pause, Resume, Play, PausePlayback, PlayUnavailable, Close, Append }
+private enum class CircleFace { None, Search, Pause, Resume, Play, PausePlayback, PlayUnavailable, Close, Append, More }
 
 private enum class PillFace { Record, Finish, NotePrimary, Delete }
 
@@ -242,8 +249,15 @@ private fun circleFace(state: DockState) = when (state) {
     is DockState.Selecting -> CircleFace.Close
 }
 
-/** The second circle, between the first and the pill: ● "Continue recording" on a note that can take more. */
-private fun secondFace(state: DockState) = if (state is DockState.Note && state.append) CircleFace.Append else CircleFace.None
+/**
+ * The second circle, between the first and the pill: ● "Continue recording" on a note that can take more, ⋮ over a
+ * selection whose audio can be removed.
+ */
+private fun secondFace(state: DockState) = when {
+    state is DockState.Note && state.append -> CircleFace.Append
+    state is DockState.Selecting && state.audio -> CircleFace.More
+    else -> CircleFace.None
+}
 
 private fun pillFace(state: DockState) = when (state) {
     DockState.LibraryEmpty, DockState.LibraryIdle -> PillFace.Record
@@ -287,6 +301,9 @@ fun Dock(
     // The rail holds two controls only (spec 5.14): there the note's menu continues the recording.
     val second = if (rail) CircleFace.None else secondFace(state)
     val selected = (state as? DockState.Selecting)?.count ?: 0
+    // ⋮ over a selection opens its menu above the dock, at the dock's end.
+    var selectionMenu by remember { mutableStateOf(false) }
+    if (second != CircleFace.More && selectionMenu) SideEffect { selectionMenu = false }
     val swap = rememberDockSwap(DockFaces(circle, pill, second), clock)
     val leaving = swap.leaving()
     val circleWidth = when (circle) {
@@ -344,6 +361,7 @@ fun Dock(
                 edge = null,
                 modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
                     .width(secondWidth).height(DockMetrics.height),
+                onMore = { selectionMenu = true },
             )
             Spacer(Modifier.width(if (secondWidth > 0.dp) DockMetrics.gap else 0.dp))
             PillSlot(
@@ -360,13 +378,35 @@ fun Dock(
                 modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
                     .weight(1f).heightIn(min = DockMetrics.height),
             )
+            // Anchored to the dock's row: it opens above it, its end on the dock's end.
+            FocalMenu(expanded = selectionMenu, onDismiss = { selectionMenu = false }, above = true) {
+                val size = remember { mutableStateOf<String?>(null) }
+                LaunchedEffect(Unit) { size.value = actions.selectedAudioSize() }
+                FocalMenuItem(
+                    stringResource(R.string.menu_remove_audio),
+                    onClick = {
+                        selectionMenu = false
+                        actions.removeSelectedAudio()
+                    },
+                    trailing = size.value,
+                )
+            }
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CircleSlot(face: CircleFace, leaving: CircleFace?, q: () -> Float, actions: DockActions, edge: (() -> Rect)?, modifier: Modifier, rail: Boolean = false) {
+private fun CircleSlot(
+    face: CircleFace,
+    leaving: CircleFace?,
+    q: () -> Float,
+    actions: DockActions,
+    edge: (() -> Rect)?,
+    modifier: Modifier,
+    rail: Boolean = false,
+    onMore: () -> Unit = {},
+) {
     val source = remember { MutableInteractionSource() }
     val tooltip = rememberTooltipState()
     val scope = rememberCoroutineScope()
@@ -380,10 +420,12 @@ private fun CircleSlot(face: CircleFace, leaving: CircleFace?, q: () -> Float, a
         CircleFace.PlayUnavailable -> stringResource(R.string.a11y_play_unavailable)
         CircleFace.Close -> stringResource(R.string.cd_selection_close)
         CircleFace.Append -> stringResource(R.string.action_append)
+        CircleFace.More -> stringResource(R.string.cd_more)
     }
     val onClick: (() -> Unit)? = when (face) {
         CircleFace.Close -> actions.closeSelection
         CircleFace.Append -> actions.append
+        CircleFace.More -> onMore
         CircleFace.Search -> actions.search
         CircleFace.Pause -> actions.pause
         CircleFace.Resume -> actions.resume
@@ -477,6 +519,7 @@ private fun CircleContent(face: CircleFace, dress: Dress, rail: Boolean) {
         CircleFace.PausePlayback -> Glyph(FocalIcon.Pause, ink)
         CircleFace.PlayUnavailable -> Glyph(FocalIcon.Play, colors.faint)
         CircleFace.Close -> Glyph(FocalIcon.Close, ink)
+        CircleFace.More -> Glyph(FocalIcon.More, ink)
         // The dot Record and Resume carry: on a note it records more of the same note.
         CircleFace.Append -> RecordDot(ink, size = DockMetrics.appendDot)
         CircleFace.Resume -> LabelRow(stringResource(R.string.action_resume), ink) { RecordDot(ink) }

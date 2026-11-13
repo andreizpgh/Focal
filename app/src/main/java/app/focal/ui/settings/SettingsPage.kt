@@ -1,6 +1,7 @@
 package app.focal.ui.settings
 
 import android.text.format.Formatter
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -15,22 +16,32 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -43,10 +54,14 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.focal.R
+import app.focal.ui.components.FocalBottomSheet
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.FocalIconButton
+import app.focal.ui.components.FocalPrimaryPill
+import app.focal.ui.components.FocalTextButton
 import app.focal.ui.components.Glyph
 import app.focal.ui.components.NineBars
 import app.focal.ui.components.PageArea
@@ -59,6 +74,7 @@ import app.focal.ui.components.markBox
 import app.focal.ui.components.pageInsets
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
+import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
@@ -72,6 +88,9 @@ import app.focal.ui.state.ThemeMode
 @Stable
 class SettingsActions(
     val setTheme: (ThemeMode) -> Unit = {},
+    val setParagraphTimes: (Boolean) -> Unit = {},
+    /** "Remove all audio", once confirmed in its sheet. */
+    val removeAllAudio: () -> Unit = {},
     /** ← and Esc: the strip closes with the swipe's motion; in `SettingsActivity` the activity finishes. */
     val back: () -> Unit = {},
     val sourceCode: () -> Unit = {},
@@ -92,8 +111,10 @@ object SettingsMetrics {
     val trailingGap = FocalGrid.x16
     /** A row's trailing value never takes more than this, so its title keeps room at large font scales. */
     val valueMaxWidth = 160.dp
-    /** A group's note ends this far under the row it explains (the row's own 12 dp padding less this overlap). */
-    val noteLift = FocalGrid.x8
+    /** The switch: a 52 x 32 pill with a thumb 4 dp inside it. */
+    val switchWidth = 52.dp
+    val switchHeight = FocalGrid.x32
+    val switchInset = FocalGrid.x4
     /** The footer: the static mark 48 dp under the last row, the statement 12 dp under it, at most this wide. */
     val footerGap = FocalGrid.x48
     val footerMark = FocalGrid.x32
@@ -107,10 +128,11 @@ object SettingsMetrics {
 private val RowPlate = PressPlate(FocalShapes.block, insetX = SettingsMetrics.plateInset)
 
 /**
- * The settings page (spec 5.10): the bar with ← "Back" and the page's name beside it, then three groups under small
- * labels. Each row is one line: what it is, and its value or where it leads. What needs a sentence is a note under
- * its group, in the smallest type, never a second heading inside a row; the statement that Focal works offline is not
- * a setting, so it closes the page under the mark instead of sitting in a list. Paper, a top fade, no dock.
+ * The settings page (spec 5.10): the bar with ← "Back" and the page's name beside it, then four groups under small
+ * labels. Every row does something or leads somewhere: a switch, an action with what it would free, a link; nothing
+ * on the page is there only to be read, except the version. Each row is one line. "Remove all audio" asks once, in a
+ * sheet, because it cannot be undone from here. The statement that Focal works offline is not a setting, so it closes
+ * the page under the mark instead of sitting in a list. Paper, a top fade, no dock.
  * [headingFocus] receives focus when the page was opened by the accessibility action or a key.
  */
 @Composable
@@ -123,6 +145,8 @@ fun SettingsPage(
 ) {
     val context = LocalContext.current
     val pane = stringResource(R.string.settings_pane)
+    var confirming by rememberSaveable { mutableStateOf(false) }
+    val audio = Formatter.formatShortFileSize(context, state.audioBytes)
     Box(modifier.fillMaxSize().semantics { paneTitle = pane }) {
         Column(
             Modifier
@@ -142,9 +166,15 @@ fun SettingsPage(
                     state.theme, actions.setTheme,
                     Modifier.padding(horizontal = FocalLayout.gutter).padding(top = SettingsMetrics.controlTop - SettingsMetrics.groupBelow),
                 )
+                GroupLabel(stringResource(R.string.settings_notes))
+                SwitchRow(stringResource(R.string.paragraph_times), state.paragraphTimes, actions.setParagraphTimes)
                 GroupLabel(stringResource(R.string.settings_storage))
-                SettingsRow(stringResource(R.string.storage_audio), value = Formatter.formatShortFileSize(context, state.audioBytes))
-                GroupNote(pluralStringResource(R.plurals.storage_desc, state.notesWithAudio, state.notesWithAudio))
+                // The action itself, with what it would free beside it; with no audio kept there is nothing to do.
+                SettingsRow(
+                    stringResource(R.string.storage_remove_all),
+                    value = if (state.notesWithAudio > 0) audio else stringResource(R.string.storage_none),
+                    onClick = { confirming = true }, enabled = state.notesWithAudio > 0,
+                )
                 GroupLabel(stringResource(R.string.settings_about))
                 SettingsRow(
                     stringResource(R.string.source_code), glyph = FocalIcon.OpenExternal, onClick = actions.sourceCode,
@@ -157,6 +187,39 @@ fun SettingsPage(
         }
         PaperTopFade(LocalWindowLayout.current.topBar, Modifier.fillMaxSize())
         TopBar(stringResource(R.string.settings_title), actions.back, headingFocus)
+        RemoveAudioSheet(
+            visible = confirming && state.notesWithAudio > 0, notes = state.notesWithAudio, size = audio,
+            onConfirm = {
+                confirming = false
+                actions.removeAllAudio()
+            },
+            onDismiss = { confirming = false },
+        )
+    }
+}
+
+/**
+ * "Remove all audio" asks before it acts: what goes (the audio of N notes, and how much that frees), what stays
+ * (every note's text), and that it is final. The count and the size are kept while the sheet leaves, after the audio
+ * has gone.
+ */
+@Composable
+private fun RemoveAudioSheet(visible: Boolean, notes: Int, size: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val colors = FocalTheme.colors
+    val shown = remember { mutableStateOf(notes to size) }
+    if (visible) shown.value = notes to size
+    val (count, freed) = shown.value
+    FocalBottomSheet(visible = visible, onDismiss = onDismiss) {
+        Text(
+            pluralStringResource(R.plurals.storage_remove_title, count, count), style = FocalType.headline, color = colors.ink,
+            textAlign = TextAlign.Center, modifier = Modifier.padding(top = FocalGrid.x24).semantics { heading() },
+        )
+        Text(
+            stringResource(R.string.storage_remove_body, freed), style = FocalType.secondary, color = colors.recede,
+            textAlign = TextAlign.Center, modifier = Modifier.padding(top = FocalGrid.x8),
+        )
+        FocalPrimaryPill(stringResource(R.string.storage_remove_confirm), onClick = onConfirm, modifier = Modifier.fillMaxWidth().padding(top = FocalGrid.x24))
+        FocalTextButton(stringResource(R.string.action_cancel), onClick = onDismiss, modifier = Modifier.padding(top = FocalGrid.x8))
     }
 }
 
@@ -200,18 +263,10 @@ private fun GroupLabel(text: String, first: Boolean = false) {
     )
 }
 
-/** What a group's row needs a sentence for: `caption` `muted`, close under the row it explains. */
-@Composable
-private fun GroupNote(text: String) {
-    Text(
-        text, style = FocalType.caption, color = FocalTheme.colors.recede, textAlign = chromeAlign(),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = FocalLayout.gutter).offset(y = -SettingsMetrics.noteLift),
-    )
-}
-
 /**
  * A settings row (spec 4.18): one line, at least 56 dp tall, 24 dp side padding: its name in `field`, then its value
- * (`muted`, tabular) or the glyph of where it leads. Pressable rows get the plate at x 8-404.
+ * (`muted`, tabular) or the glyph of where it leads. Pressable rows get the plate at x 8-404; one that has nothing to
+ * act on now ([enabled] false) is `faint` and takes no press.
  */
 @Composable
 private fun SettingsRow(
@@ -220,6 +275,7 @@ private fun SettingsRow(
     glyph: FocalIcon? = null,
     onClick: (() -> Unit)? = null,
     spoken: String? = null,
+    enabled: Boolean = true,
 ) {
     val colors = FocalTheme.colors
     val source = remember { MutableInteractionSource() }
@@ -229,13 +285,14 @@ private fun SettingsRow(
             .heightIn(min = SettingsMetrics.rowMinHeight)
             .then(
                 if (onClick == null) Modifier.semantics(mergeDescendants = true) { }
-                else Modifier.focusRing(FocalShapes.block).clickable(source, indication = RowPlate, role = Role.Button, onClick = onClick)
+                else Modifier.focusRing(FocalShapes.block)
+                    .clickable(source, indication = RowPlate, enabled = enabled, role = Role.Button, onClick = onClick)
                     .then(if (spoken != null) Modifier.clearAndSetSemantics { contentDescription = spoken; role = Role.Button } else Modifier),
             )
             .padding(horizontal = FocalLayout.gutter, vertical = SettingsMetrics.rowPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, style = FocalType.field, color = colors.ink, textAlign = chromeAlign(), modifier = Modifier.weight(1f))
+        Text(title, style = FocalType.field, color = if (enabled) colors.ink else colors.faint, textAlign = chromeAlign(), modifier = Modifier.weight(1f))
         if (value != null) {
             Spacer(Modifier.width(SettingsMetrics.trailingGap))
             Text(
@@ -247,6 +304,42 @@ private fun SettingsRow(
             Spacer(Modifier.width(SettingsMetrics.trailingGap))
             Glyph(glyph, colors.recede)
         }
+    }
+}
+
+/**
+ * A row that turns something on or off: its name and a switch; the whole row toggles it. The switch is the dock's
+ * shapes at a smaller size: a pill track (`s2` off, `inv` on) and a round thumb that crosses it on `move`.
+ */
+@Composable
+private fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val colors = FocalTheme.colors
+    val source = remember { MutableInteractionSource() }
+    val on = remember { Animatable(if (checked) 1f else 0f) }
+    LaunchedEffect(checked) { on.animateTo(if (checked) 1f else 0f, FocalMotion.move()) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = SettingsMetrics.rowMinHeight)
+            .focusRing(FocalShapes.block)
+            .toggleable(checked, source, indication = RowPlate, role = Role.Switch, onValueChange = onChange)
+            .padding(horizontal = FocalLayout.gutter, vertical = SettingsMetrics.rowPadding),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, style = FocalType.field, color = colors.ink, textAlign = chromeAlign(), modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(SettingsMetrics.trailingGap))
+        Spacer(
+            Modifier.size(SettingsMetrics.switchWidth, SettingsMetrics.switchHeight).drawBehind {
+                val t = on.value
+                val radius = size.height / 2
+                drawRoundRect(lerp(colors.s2, colors.inv, t), cornerRadius = CornerRadius(radius))
+                val inset = SettingsMetrics.switchInset.toPx()
+                val thumb = radius - inset
+                val travel = size.width - 2 * radius
+                val x = if (layoutDirection == LayoutDirection.Rtl) size.width - radius - travel * t else radius + travel * t
+                drawCircle(lerp(colors.paper, colors.onInv, t), thumb, Offset(x, radius))
+            },
+        )
     }
 }
 

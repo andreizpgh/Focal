@@ -33,7 +33,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
@@ -120,7 +123,8 @@ class RowActions(
  * one place: its length, or what is happening to it while it is not ready ("42%", "Waiting", "Preparing"); the day
  * is the label above it and the time of day is on its page. The hit area is the full width, 12 dp above the title and
  * below the preview; the press plate spans x 8-404. A long press selects the row; a [selected] row keeps its plate
- * (`s1`) and shows a check where its length was, and is said to be selected. [capturing]: a recording holds the
+ * (`s1`, joined with the plates of selected rows next to it) and shows a check where its length was, and is said to
+ * be selected. [capturing]: a recording holds the
  * microphone, so the row's page will open with ▶ unavailable.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -133,6 +137,9 @@ fun NoteRowItem(
     title: (@Composable () -> Unit)? = null,
     capturing: Boolean = false,
     selected: Boolean = false,
+    /** The rows right above and below are selected too: the plates join into one block, square where they meet. */
+    joinsAbove: Boolean = false,
+    joinsBelow: Boolean = false,
 ) {
     val colors = FocalTheme.colors
     val source = remember { MutableInteractionSource() }
@@ -158,8 +165,13 @@ fun NoteRowItem(
                 val a = plate.value
                 if (a <= 0f) return@drawBehind
                 val inset = RowMetrics.plateInset.toPx()
-                val radius = CornerRadius(FocalShapes.blockRadius.toPx())
-                drawRoundRect(colors.s1, Offset(inset, 0f), Size(size.width - 2 * inset, size.height), radius, alpha = a)
+                val round = CornerRadius(FocalShapes.blockRadius.toPx())
+                // Rows that are selected next to each other are one block: a stack of rounded plates, each with its
+                // own corners, read as separate buttons.
+                val top = if (joinsAbove && selected) CornerRadius.Zero else round
+                val bottom = if (joinsBelow && selected) CornerRadius.Zero else round
+                val plateRect = RoundRect(Rect(inset, 0f, size.width - inset, size.height), top, top, bottom, bottom)
+                drawPath(Path().apply { addRoundRect(plateRect) }, colors.s1, alpha = a)
             }
             // While the title is renamed the row's actions are out of reach for touch, and so for TalkBack.
             .semantics {

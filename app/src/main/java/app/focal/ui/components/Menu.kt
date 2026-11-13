@@ -26,8 +26,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -56,6 +58,7 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** Menu geometry (spec 4.15). */
@@ -92,8 +95,11 @@ object MenuMetrics {
  * the overflow button it opens from: its top-end corner sits just under the button's bottom-end corner.
  */
 @Composable
-fun FocalMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun FocalMenu(expanded: Boolean, onDismiss: () -> Unit, above: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     var composed by remember { mutableStateOf(expanded) }
+    // The popup is a window of its own, drawn a frame or two after it is asked for: the menu arrives from its first
+    // drawn frame, never from the tap, so its arrival is seen whole instead of cut to its end.
+    var drawn by remember { mutableStateOf(false) }
     val alpha = remember { Animatable(0f) }
     val scale = remember { Animatable(MenuMetrics.ENTER_SCALE) }
     LaunchedEffect(expanded) {
@@ -101,6 +107,7 @@ fun FocalMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable Col
             composed = true
             scale.snapTo(MenuMetrics.ENTER_SCALE)
             alpha.snapTo(0f)
+            snapshotFlow { drawn }.first { it }
             coroutineScope {
                 launch { scale.animateTo(1f, FocalMotion.press()) }
                 alpha.animateTo(1f, FocalMotion.fade())
@@ -108,26 +115,35 @@ fun FocalMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable Col
         } else if (composed) {
             alpha.animateTo(0f, FocalMotion.fadeFast())
             composed = false
+            drawn = false
         }
     }
     if (!composed) return
     val density = LocalDensity.current
-    val position = remember(density) { MenuPosition(density) }
+    val position = remember(density, above) { MenuPosition(density, above) }
     // Read in the app's window: inside the popup the window is the popup's own.
     val maxWidth = menuMaxWidth()
     Popup(popupPositionProvider = position, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
-        Box(Modifier.padding(MenuMetrics.shadowRoom)) {
-            MenuSurface(
-                // While it fades out it takes nothing: a second tap on "Delete" must not ask for it twice.
-                Modifier.untouchable(!expanded).graphicsLayer {
+        Box(
+            Modifier
+                .drawBehind { if (!drawn) drawn = true }
+                // The layer holds the shadows' room too: a layer drawn at less than full alpha is clipped to its
+                // bounds, and one around the surface alone cut the shadows off until the fade had ended.
+                .graphicsLayer {
                     this.alpha = alpha.value
                     scaleX = scale.value
                     scaleY = scale.value
-                    transformOrigin = position.origin
-                },
-                maxWidth = maxWidth,
-                content = content,
-            )
+                    val room = MenuMetrics.shadowRoom.toPx()
+                    val origin = position.origin
+                    transformOrigin = TransformOrigin(
+                        if (origin.pivotFractionX > 0.5f) 1 - room / size.width else room / size.width,
+                        if (origin.pivotFractionY > 0.5f) 1 - room / size.height else room / size.height,
+                    )
+                }
+                .padding(MenuMetrics.shadowRoom),
+        ) {
+            // While it fades out it takes nothing: a second tap on "Delete" must not ask for it twice.
+            MenuSurface(Modifier.untouchable(!expanded), maxWidth = maxWidth, content = content)
         }
     }
 }
@@ -218,10 +234,10 @@ private fun Modifier.menuElevation(dark: Boolean): Modifier = if (dark || Build.
 }
 
 /**
- * Positions the popup (its window includes [MenuMetrics.shadowRoom] on every side) under the button's end (x 168-400)
- * and records its scale origin. Only the window itself bounds it.
+ * Positions the popup (its window includes [MenuMetrics.shadowRoom] on every side) under the button's end (x 168-400),
+ * or [above] it, and records its scale origin. Only the window itself bounds it.
  */
-private class MenuPosition(private val density: Density) : PopupPositionProvider {
+private class MenuPosition(private val density: Density, private val above: Boolean = false) : PopupPositionProvider {
     var origin = TransformOrigin(1f, 0f)
         private set
 
@@ -231,9 +247,11 @@ private class MenuPosition(private val density: Density) : PopupPositionProvider
             val width = popupContentSize.width - 2 * room
             val height = popupContentSize.height - 2 * room
             val rtl = layoutDirection == LayoutDirection.Rtl
-            origin = TransformOrigin(if (rtl) 0f else 1f, 0f)
+            origin = TransformOrigin(if (rtl) 0f else 1f, if (above) 1f else 0f)
             val x = (if (rtl) anchorBounds.left else anchorBounds.right - width).coerceIn(0, (windowSize.width - width).coerceAtLeast(0))
-            val y = (anchorBounds.bottom + MenuMetrics.belowAnchor.roundToPx()).coerceIn(0, (windowSize.height - height).coerceAtLeast(0))
+            // Under the button it opens from; [above] it for a control at the bottom of the window (the dock).
+            val gap = MenuMetrics.belowAnchor.roundToPx()
+            val y = (if (above) anchorBounds.top - gap - height else anchorBounds.bottom + gap).coerceIn(0, (windowSize.height - height).coerceAtLeast(0))
             return IntOffset(x - room, y - room)
         }
     }

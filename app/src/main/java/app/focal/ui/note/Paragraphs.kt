@@ -28,7 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -36,7 +35,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -46,7 +44,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalDensity
@@ -66,6 +67,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.focal.core.SpeechTuning
+import app.focal.core.TextWords
 import app.focal.ui.design.FocalClock
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalMotion
@@ -98,9 +100,6 @@ object ParagraphMetrics {
     val dotDrop = 3.dp
     /** A tap or a long press this close beside a word's letters still means the word. */
     val wordSlop = FocalGrid.x4
-    /** The edit sheet is drawn this far outside the text box (x 12-400 for a 24-388 paragraph). */
-    val sheetOutsetX = FocalGrid.x12
-    val sheetOutsetY = FocalGrid.x8
     /** An arriving paragraph rises this far as it develops. */
     val developRise = FocalGrid.x8
     const val LENS_START_SCALE = 0.92f
@@ -190,7 +189,6 @@ internal fun ParagraphText(
     actions: List<CustomAccessibilityAction>,
     unclear: String?,
     modifier: Modifier = Modifier,
-    sheet: () -> Float = { 0f },
 ) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
@@ -291,7 +289,6 @@ internal fun ParagraphText(
                 alpha = shown.value * entered()
                 translationY = rise.value * ParagraphMetrics.developRise.toPx()
             }
-            .editSheet(colors.s1, sheet)
             .drawWithCache {
                 val result = layout
                 val inset = ParagraphMetrics.markInset.toPx()
@@ -395,25 +392,32 @@ private fun doubtDots(layout: TextLayoutResult, paragraph: ParagraphUi, density:
     out
 }
 
-/** The edit sheet (spec 4.14): `s1`, radius 12, drawn 12 dp outside the text box sideways and 8 dp above and below. */
-internal fun Modifier.editSheet(color: Color, alpha: () -> Float): Modifier = drawBehind {
-    val a = alpha()
-    if (a <= 0f) return@drawBehind
-    val x = ParagraphMetrics.sheetOutsetX.toPx()
-    val y = ParagraphMetrics.sheetOutsetY.toPx()
-    drawRoundRect(
-        color, topLeft = Offset(-x, -y), size = Size(size.width + 2 * x, size.height + 2 * y),
-        cornerRadius = CornerRadius(FocalShapes.blockRadius.toPx()), alpha = a,
-    )
+/**
+ * The word of [text] at [offset] as a tap selects it for replacement: its letters and digits, without the punctuation
+ * that hangs on it, as chars [first, last]. Null between words and on punctuation alone. The same rule as
+ * [ParagraphUi.wordAt], for the text a field holds (which the recognizer's words no longer describe).
+ */
+internal fun wordIn(text: CharSequence, offset: Int): IntRange? {
+    val word = TextWords.ranges(text).firstOrNull { offset >= it.first && offset <= it.last + 1 } ?: return null
+    var start = word.first
+    var end = word.last + 1
+    while (start < end && !text[start].isLetterOrDigit()) start++
+    while (end > start && !text[end - 1].isLetterOrDigit()) end--
+    return if (start < end) start until end else null
 }
 
 /**
  * The focused paragraph in Edit (spec 4.14): a text field with the reading text's exact style and box, so the swap
- * moves nothing. Enter splits at the caret (a selection goes first): the field keeps the text after it, caret at its
- * start, in the same edit as the key, and [onEnter] gets the field's text without the line break and the caret, to
- * show the text before the caret as a new paragraph above (the line break itself is never inserted). Backspace at the
- * very start joins the paragraph before ([onJoin]), from a hardware key or a soft keyboard ([JoinAtStart]); pasted
- * line breaks become spaces.
+ * moves nothing, and nothing is drawn around it: the caret says where the edit is. A tap on a word selects the word,
+ * as the tap that opened Edit did, so the next key replaces it; a tap inside what is selected puts the caret there, to
+ * change a letter; a tap on bare paper puts the caret there too. (A field of its own would put the caret inside the
+ * word, and the keyboard would then add what is typed to the old word.)
+ *
+ * Enter splits at the caret (a selection goes first): the field keeps the text after it, caret at its start, in the
+ * same edit as the key, and [onEnter] gets the field's text without the line break and the caret, to show the text
+ * before the caret as a new paragraph above (the line break itself is never inserted). Backspace at the very start
+ * joins the paragraph before ([onJoin]), from a hardware key or a soft keyboard ([JoinAtStart]); pasted line breaks
+ * become spaces.
  */
 @Composable
 internal fun ParagraphField(
@@ -424,19 +428,19 @@ internal fun ParagraphField(
     onEnter: (full: String, at: Int) -> Unit,
     onJoin: () -> Unit,
     modifier: Modifier = Modifier,
-    sheet: () -> Float = { 0f },
 ) {
     val colors = FocalTheme.colors
     val enter by rememberUpdatedState(onEnter)
     val join by rememberUpdatedState(onJoin)
     val input = remember { ParagraphInput { full, at -> enter(full, at) } }
     val softJoin = remember(state) { JoinAtStart(state) { join() } }
+    val laidOut = remember { FieldLayout() }
     InterceptPlatformTextInput(softJoin) {
         BasicTextField(
             state = state,
             modifier = modifier
                 .fillMaxWidth()
-                .editSheet(colors.s1, sheet)
+                .selectWordOnTap(state) { laidOut.result?.invoke() }
                 .focusRequester(focusRequester)
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown && event.key == Key.Backspace && JoinAtStart.atStart(state)) {
@@ -448,9 +452,48 @@ internal fun ParagraphField(
             textStyle = FocalType.bodyWords.copy(color = colors.ink),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Default),
             lineLimits = TextFieldLineLimits.MultiLine(),
-            onTextLayout = { result -> result()?.let { layouts.put(paragraphId, it) } },
+            onTextLayout = { result ->
+                laidOut.result = result
+                result()?.let { layouts.put(paragraphId, it) }
+            },
             cursorBrush = SolidColor(colors.ink),
         )
+    }
+}
+
+/** The field's text layout as the field last reported it. */
+private class FieldLayout {
+    var result: (() -> TextLayoutResult?)? = null
+}
+
+/**
+ * A tap on a word of the field selects it (see [ParagraphField]). The field has already handled the tap when this
+ * hears of it (the Final pass), and has put the caret at the tap; the word's selection replaces that in the same
+ * event, so no frame shows the caret alone. A press that moves, or is held, stays the field's own: its handles, its
+ * long press and its drags work as in any field.
+ */
+private fun Modifier.selectWordOnTap(state: TextFieldState, layout: () -> TextLayoutResult?): Modifier = pointerInput(state) {
+    val slop = ParagraphMetrics.wordSlop.toPx()
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        val before = state.selection
+        var up: PointerInputChange? = null
+        while (true) {
+            val change = awaitPointerEvent(PointerEventPass.Final).changes.firstOrNull { it.id == down.id } ?: break
+            if (change.changedToUpIgnoreConsumed()) {
+                up = change
+                break
+            }
+            if (!change.pressed || (change.position - down.position).getDistance() > viewConfiguration.touchSlop) break
+        }
+        val lifted = up ?: return@awaitEachGesture
+        if (lifted.uptimeMillis - down.uptimeMillis >= viewConfiguration.longPressTimeoutMillis) return@awaitEachGesture
+        val result = layout() ?: return@awaitEachGesture
+        val text = state.text
+        val word = result.wordUnder(lifted.position, { wordIn(text, it) }, slop) ?: return@awaitEachGesture
+        val offset = result.getOffsetForPosition(lifted.position)
+        if (!before.collapsed && offset >= before.min && offset <= before.max) return@awaitEachGesture
+        state.edit { selection = TextRange(word.first.coerceIn(0, length), (word.last + 1).coerceIn(0, length)) }
     }
 }
 

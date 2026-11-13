@@ -16,4 +16,12 @@ class NoteItemsTest {
         val items = noteItems(emptyList(), emptyList(), writing = false, noSpeech = true).map { it.key }
         assertEquals(listOf("head", "no-speech"), items)
     }
+
+    @Test fun timesHeadEveryParagraphAfterTheFirst() {
+        val paragraphs = listOf(paragraph(1, "One."), paragraph(2, "Two."), paragraph(3, "Three."))
+        val items = noteItems(paragraphs, listOf(GapUi(1500, 1900, 1)), writing = false, noSpeech = false, times = true).map { it.key }
+        assertEquals(listOf("head", 1L, "gap:1500", timeKey(2), 2L, timeKey(3), 3L), items)
+        // A note of one paragraph starts where the note does: no time.
+        assertEquals(listOf("head", 1L), noteItems(paragraphs.take(1), emptyList(), writing = false, noSpeech = false, times = true).map { it.key })
+    }
 }

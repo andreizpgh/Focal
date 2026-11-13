@@ -174,8 +174,8 @@ object StageMetrics {
     val groupGap = 10.dp
     /** The length yields to the pill when they would come closer than this. */
     val footerYield = FocalGrid.x12
-    /** The ring of a selected card, drawn just inside its edge. */
-    val selectedRing = 2.dp
+    /** How much of the card's own ink lies over a selected card. */
+    const val SELECTED_VEIL = 0.12f
 
     // The live state (spec 4.22.3).
     val wave = FocalGrid.x56
@@ -212,7 +212,7 @@ class StageActions(
 /**
  * The stage (spec 4.22): one card in the instrument's material at the top of the library that holds whatever is
  * current: the live capture, or one note (transcribing, waiting, ready). A long press selects its note; [selected]
- * shows a check where its time was and rings the card. [title] replaces the title while it is renamed in place. [shown] says whether the card is on
+ * shows a check where its time was and lightens the card. [title] replaces the title while it is renamed in place. [shown] says whether the card is on
  * screen now (the readiness moment plays only there). [liveSeconds] is the recording's time, read only where it is
  * shown and spoken, so the card does not recompose once a second (the model's own when null).
  */
@@ -312,17 +312,12 @@ fun StageCard(
             )
             .clip(FocalShapes.sheet)
             .sceneMaterial(FocalShapes.sheetRadius, ring = colors.stageRing)
-            // Selected: a ring of the card's own ink just inside its edge, on `fadeFast`.
+            // Selected: the whole card lightens a step, as a selected row's plate does on paper (`fadeFast`). No
+            // outline: a ring inside the card's edge read as a second, thinner card.
             .drawWithContent {
                 drawContent()
                 val a = check.value
-                if (a <= 0f) return@drawWithContent
-                val width = StageMetrics.selectedRing.toPx()
-                val radius = FocalShapes.sheetRadius.toPx() - width / 2
-                drawRoundRect(
-                    colors.stageInk, Offset(width / 2, width / 2), androidx.compose.ui.geometry.Size(size.width - width, size.height - width),
-                    androidx.compose.ui.geometry.CornerRadius(radius), style = androidx.compose.ui.graphics.drawscope.Stroke(width), alpha = a,
-                )
+                if (a > 0f) drawRect(colors.stageInk, alpha = StageMetrics.SELECTED_VEIL * a)
             },
     ) {
         if (shimmering) Spacer(Modifier.matchParentSize().shimmer { shimmer.value })

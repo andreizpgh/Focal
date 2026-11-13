@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
@@ -55,6 +56,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -118,6 +120,10 @@ class LibraryActions(
     val delete: (NoteRow) -> Unit = {},
     /** "Delete N": the selected notes go to the trash together, with one Undo. */
     val deleteAll: (List<NoteRow>) -> Unit = { rows -> rows.forEach(delete) },
+    /** ⋮ "Remove audio" over a selection: these notes keep their text and lose their audio, with one Undo. */
+    val removeAudioAll: (List<NoteRow>) -> Unit = { rows -> rows.forEach(removeAudio) },
+    /** What the audio of these notes takes together ("42 MB"), for that menu item. */
+    val audioSize: suspend (List<NoteRow>) -> String? = { null },
     val query: (String) -> Unit = {},
     val record: () -> Unit = {},
     val pause: () -> Unit = {},
@@ -135,8 +141,8 @@ private class RenameBounds { var rect: androidx.compose.ui.geometry.Rect? = null
  * drawn from [model] and [search], immutable state; [meter] is the live wave's level, read in the draw phase.
  *
  * A long press on a note (a row, or the stage holding one) selects it; while notes are selected ([selection]) a tap
- * adds or removes one, the dock is ✕ | "Delete N", and Back or ✕ ends it. A note that is being transcribed cannot be
- * deleted, so it cannot be selected.
+ * adds or removes one, the dock is ✕ | ⋮ | "Delete N" (⋮ "Remove audio" keeps the notes as text), and Back or ✕ ends
+ * it. A note that is being transcribed cannot be deleted, so it cannot be selected.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -171,9 +177,12 @@ fun LibraryPage(
         focusManager.clearFocus()
         scope.launch { searchState.close { query.clearText() } }
     }
-    // The results take the page once there is a query; until then the library stays under the open field.
+    // The results take the page once there is a query; until then the library stays under the open field. It also
+    // stays until the first results are there: giving the page up on the first letter, a moment before anything
+    // could take its place, left it blank in between.
     val querying = searchState.open && search.query.isNotBlank()
-    LaunchedEffect(querying) { searchState.showResults(querying) }
+    val answered = querying && search.resultsQuery.isNotBlank()
+    LaunchedEffect(answered) { searchState.showResults(answered) }
     // Not under the licences, whose Back comes first (two panes keep this page composed beneath them).
     val covered = shell.current == Destination.Licenses
     BackHandler(enabled = searchState.open && !covered, onBack = closeSearch)
@@ -207,10 +216,18 @@ fun LibraryPage(
                     selection.clear()
                     if (rows.isNotEmpty()) actions.deleteAll(rows)
                 },
+                removeSelectedAudio = {
+                    val rows = selection.ids.mapNotNull { currentSelectable[it] }.filter { it.canRemoveAudio }
+                    selection.clear()
+                    if (rows.isNotEmpty()) actions.removeAudioAll(rows)
+                },
+                selectedAudioSize = { actions.audioSize(selection.ids.mapNotNull { currentSelectable[it] }.filter { it.canRemoveAudio }) },
             )
         }
+        // ⋮ is there only while a selected note has audio that can go.
+        val selectedAudio = selecting && selection.ids.any { selectable[it]?.canRemoveAudio == true }
         DestinationBottom(
-            Destination.Library, if (selecting && model.live == null) DockState.Selecting(selection.count) else model.dock, dockActions,
+            Destination.Library, if (selecting && model.live == null) DockState.Selecting(selection.count, selectedAudio) else model.dock, dockActions,
             rows = if (searchState.fieldShown) { { SearchField(searchState, query, onClose = closeSearch) } } else null,
             dockHidden = searchState.dockHidden || renaming != null,
         )
@@ -293,6 +310,8 @@ fun LibraryPage(
                     }
                 },
             )
+            // A note's page folding back waits until this page is laid out again (one pane composes it anew).
+            .onPlaced { shell.pages.library = it }
             // Beside the landscape rail, in the list pane of two panes, inside the side insets (spec 5.14).
             .windowInsetsPadding(pageInsets(PageArea.Library)),
     ) {
@@ -302,9 +321,10 @@ fun LibraryPage(
         Box(
             Modifier
                 .fillMaxSize()
-                // A fade-through with the results: one leaves before the other arrives, so two typesettings are
-                // never drawn over each other.
-                .graphicsLayer { alpha = 1 - smoothstep(0f, HALF, searchState.content.value) }
+                // The library dissolves as the results come up from the field. They overlap for a moment: a
+                // fade-through here left the whole page blank between a dark stage and the results, a flash at
+                // the first letter typed.
+                .graphicsLayer { alpha = 1 - smoothstep(0f, LIBRARY_GONE, searchState.content.value) }
                 .inert(behindSearch)
                 .then(if (behindSearch) Modifier.tapsOnly { if (!querying) closeSearch() } else Modifier),
         ) {
@@ -317,7 +337,13 @@ fun LibraryPage(
             )
         }
         if (searchState.open || searchState.content.value > 0f) {
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = smoothstep(HALF, 1f, searchState.content.value) }) {
+            Box(
+                Modifier.fillMaxSize().graphicsLayer {
+                    val shown = smoothstep(RESULTS_FROM, 1f, searchState.content.value)
+                    alpha = shown
+                    translationY = (1 - shown) * RESULTS_RISE.toPx()
+                },
+            ) {
                 SearchResults(search, bottom, dates, today, onOpen = { result ->
                     focusManager.clearFocus()
                     actions.openResult(result)
@@ -412,6 +438,15 @@ private fun LibraryList(
     expandDrag.travel = { windowHeight - (live.stageBounds?.bottom ?: 0f) }
     expandDrag.density = density.density
     expandDrag.reduced = reduced || !live.spatial
+    // Dragging a stage that holds a note down opens the note the same way (the card's edge follows the finger).
+    val stagePull = remember(shell.pages) { StagePull(shell.pages) }
+    val stageRow = (model.stage as? StageUi.Note)?.row
+    stagePull.travel = { windowHeight - (live.stageBounds?.bottom ?: 0f) }
+    stagePull.density = density.density
+    stagePull.note = stageRow?.id
+    stagePull.open = { stageRow?.let(stageActions.open) }
+    // Not while notes are selected or a title is renamed (a drag then scrolls, as anywhere), nor beside an open note.
+    val canPull by rememberUpdatedState(stageRow != null && !selection.active && renaming == null && !shell.twoPane && shell.current == Destination.Library)
     // Record and a fold bring the stage into view; focus returns to it after a fold (spec 5.3.1, T5′, 8.6).
     DisposableEffect(live, listState, stageFocus) {
         live.revealStage = { animated -> if (animated) listState.animateScrollToItem(0) else listState.scrollToItem(0) }
@@ -471,11 +506,13 @@ private fun LibraryList(
                 }
                 .then(if (imePadded) Modifier.imePadding() else Modifier)
                 .nestedScroll(expandDrag)
-                .pointerInput(expandDrag) {
+                .nestedScroll(stagePull)
+                .pointerInput(expandDrag, stagePull) {
                     // Every stream starts disarmed; the stage arms the ones that start on it (it sees them after).
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                         expandDrag.arm(false)
+                        stagePull.arm(false)
                     }
                 },
             contentPadding = padding,
@@ -493,7 +530,19 @@ private fun LibraryList(
                             // The morph draws the stage while it is up (spec 6.4); under the crossfade it stays.
                             .graphicsLayer { alpha = if (live.spatial && live.expansion.value > 0f) 0f else 1f }
                             .then(
-                                if (!isLive) Modifier else Modifier.pointerInput(expandDrag) {
+                                if (!isLive) Modifier.pointerInput(stagePull) {
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                        val atTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+                                        stagePull.arm(atTop && canPull)
+                                        while (stagePull.deciding) {
+                                            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                                            if (!change.pressed) break
+                                            val travel = change.position - down.position
+                                            stagePull.track(travel.x, travel.y, viewConfiguration.touchSlop)
+                                        }
+                                    }
+                                } else Modifier.pointerInput(expandDrag) {
                                     awaitEachGesture {
                                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                                         val atTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
@@ -530,13 +579,16 @@ private fun LibraryList(
                             .animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
                     )
                 }
-                items(day.rows, key = { it.id }, contentType = { ROW_TYPE }) { row ->
+                itemsIndexed(day.rows, key = { _, row -> row.id }, contentType = { _, _ -> ROW_TYPE }) { at, row ->
                     NoteRowItem(
                         row, dates, rowActions,
                         modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
                         title = if (renaming == row.id) { { renameField(row, false) } } else null,
                         capturing = model.live != null,
                         selected = selection.contains(row.id),
+                        // Within a day the rows touch; a day's label parts it from the next.
+                        joinsAbove = day.rows.getOrNull(at - 1)?.let { selection.contains(it.id) } == true,
+                        joinsBelow = day.rows.getOrNull(at + 1)?.let { selection.contains(it.id) } == true,
                     )
                 }
             }
@@ -547,6 +599,11 @@ private fun LibraryList(
 }
 
 private const val HALF = 0.5f
+/** The library is gone at this share of the change to the results, which start to arrive at [RESULTS_FROM]. */
+private const val LIBRARY_GONE = 0.7f
+private const val RESULTS_FROM = 0.3f
+/** The results rise this far as they arrive, from the field they answer. */
+private val RESULTS_RISE = FocalGrid.x12
 private const val STAGE_KEY = "stage"
 private const val DAY_TYPE = "day"
 private const val ROW_TYPE = "row"

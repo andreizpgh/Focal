@@ -92,6 +92,29 @@ class NoteFormatTest {
         assertEquals(0f, TopEdge.snap(0f, paragraph, 100f, 16f, Span(136f, 164f), 136f, 164f))
     }
 
+    @Test fun editMovesThePageOnlyWhenTheCaretIsOutOfItsBand() {
+        // The band between the bar and the keyboard is 200..600; the caret's line is 28 tall.
+        assertEquals(0f, caretScroll(300f, 328f, 200f, 600f))
+        assertEquals(0f, caretScroll(200f, 228f, 200f, 600f))
+        // Under the keyboard: up by what brings its bottom to the band's; above the bar: down to the band's top.
+        assertEquals(40f, caretScroll(612f, 640f, 200f, 600f))
+        assertEquals(-50f, caretScroll(150f, 178f, 200f, 600f))
+        // A line taller than the band (a very large font in a short window) keeps its top in view.
+        assertEquals(10f, caretScroll(210f, 700f, 200f, 600f))
+    }
+
+    @Test fun aTapSelectsTheWordWithoutItsPunctuation() {
+        val text = "Плитку привезут в понедельник, но — затирку выбрать."
+        assertEquals(18 until 29, wordIn(text, 20))
+        // On the comma that hangs on the word, the word still; at its very end too.
+        assertEquals(18 until 29, wordIn(text, 29))
+        assertEquals(18 until 29, wordIn(text, 30))
+        // A dash on its own is not a word, nor is the space beside it.
+        assertNull(wordIn(text, 35))
+        assertEquals(0 until 6, wordIn(text, 0))
+        assertNull(wordIn("", 0))
+    }
+
     @Test fun theMetaOpensWithAShortDateAndTime() {
         val zone = ZoneOffset.UTC
         val today = LocalDate.of(2026, 11, 6)

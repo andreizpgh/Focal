@@ -6,6 +6,7 @@ import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +45,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -110,10 +112,15 @@ internal sealed interface NoteItem {
 
     data object Head : NoteItem { override val key: Any = "head" }
     data class Text(val paragraph: ParagraphUi, val index: Int) : NoteItem { override val key: Any = paragraph.id }
+    /** The time the paragraph under it starts at in the recording. */
+    data class Time(val paragraph: ParagraphUi) : NoteItem { override val key: Any = timeKey(paragraph.id) }
     data class Gap(val gap: GapUi) : NoteItem { override val key: Any = "gap:${gap.startMs}" }
     data object Writing : NoteItem { override val key: Any = "writing" }
     data object NoSpeech : NoteItem { override val key: Any = "no-speech" }
 }
+
+/** The list key of the time over paragraph [id]. */
+internal fun timeKey(id: Long): String = "time:$id"
 
 /** What the page says when an edit outside the session's own writes does not save. */
 private class OutcomeWords(val replace: String, val tooLarge: String, val restore: String, val tooLate: String)
@@ -144,6 +151,15 @@ private class ShownKeys {
     var keys: List<Any> = emptyList()
 }
 
+/** A tap at [offset] of paragraph [id]: the [word] under it selected, or the caret there on bare paper. */
+private fun wordOrCaret(id: Long, offset: Int, word: IntRange?): CaretAt =
+    if (word == null) CaretAt(id, offset) else CaretAt(id, word.first, word.last + 1)
+
+/** The head as Edit found it: it stays as it was until Done ([NotePage]). */
+private class HeldHead {
+    var head: HeadUi? = null
+}
+
 /** The field and the page's changes as a write that reseeds the field found them ([NotePage]). */
 private class FieldMark(val field: FieldFocus?, val text: String?, val changes: Int)
 
@@ -159,9 +175,14 @@ private const val BARS_Z = 2f
 /** Edit keeps the caret's line this far inside the visible band, above the keyboard (spec 5.7). */
 private val CaretMargin = FocalGrid.x24
 
+/** ... and this far in a short window (a phone in landscape), where the band is a few lines tall. */
+private val ShortCaretMargin = FocalGrid.x8
+
 /**
  * The note page (spec 5.4 to 5.9): a document. Its title, meta and notices, then the paragraphs in a lazy list, with
- * gap rows where a part could not be transcribed and the writing head while the tail transcribes. The text is edited
+ * gap rows where a part could not be transcribed and the writing head while the tail transcribes. With
+ * [paragraphTimes], a note that has audio carries a small time over each paragraph after the first: where it starts in
+ * the recording; a tap plays from there. The text is edited
  * where it is read: a tap on a word opens Edit with that word selected, so the next key replaces it, and a long press
  * sweeps a phrase the same way; the paragraphs are fields in place while Edit lasts. ▶ in the dock plays the note (the
  * playing paragraph stays in ink while the rest recede and the lens follows the word), and Edit's own ▶ plays just the
@@ -187,6 +208,8 @@ fun NotePage(
     landing: Boolean = false,
     listState: LazyListState = rememberLazyListState(),
     page: NotePageState = rememberNotePageState(),
+    /** The setting "Paragraph times": a note with audio shows where each paragraph after the first starts. */
+    paragraphTimes: Boolean = false,
 ) {
     val shell = LocalShell.current
     val bottom = shell.bottom
@@ -225,7 +248,9 @@ fun NotePage(
     // New text is noted once the composition is applied; the paragraphs it shows are composed after it, in layout.
     SideEffect { page.arrivals.observe(note.paragraphs, transcribing, SystemClock.uptimeMillis()) }
     val writing = transcribing && !note.noSpeech
-    val items = remember(paragraphs, note.gaps, writing, note.noSpeech) { noteItems(paragraphs, note.gaps, writing, note.noSpeech) }
+    // Times only while there is audio to go to: without it they are numbers about nothing.
+    val times = paragraphTimes && note.audioPresent
+    val items = remember(paragraphs, note.gaps, writing, note.noSpeech, times) { noteItems(paragraphs, note.gaps, writing, note.noSpeech, times) }
     val indexOf = remember(items) { items.withIndex().associate { (index, item) -> item.key to index } }
     val placement = rememberRowPlacement(remember(items) { items.map { it.key } })
 
@@ -575,6 +600,8 @@ fun NotePage(
             }
         }
     }
+    val ime = WindowInsets.ime
+    val imeTarget = WindowInsets.imeAnimationTarget
     // Autosave 600 ms after typing stops (spec 5.7).
     val field = page.field
     LaunchedEffect(field) {
@@ -595,6 +622,30 @@ fun NotePage(
         }
         runCatching { field.requester.requestFocus() }
     }
+    // Edit moves the page for the caret alone (spec 5.7): when the caret's line is not between the bar and the
+    // keyboard, the list scrolls by the least that brings it there, on `move`, and at no other time. It follows the
+    // keyboard's target, so the page settles with the keyboard as it rises, in one motion.
+    val window = LocalWindowInfo.current
+    val indexNow = rememberUpdatedState(indexOf)
+    val caretMargin = with(density) { (if (LocalWindowLayout.current.rail) ShortCaretMargin else CaretMargin).toPx() }
+    LaunchedEffect(field, find.open) {
+        val current = field ?: return@LaunchedEffect
+        if (find.open) return@LaunchedEffect
+        snapshotFlow { Triple(current.text.selection, current.text.text.length, imeTarget.getBottom(density)) }.collectLatest { (selection, _, keyboard) ->
+            // The field lays out what changed in the frame that follows.
+            withFrameMillis { }
+            val index = indexNow.value[current.id] ?: return@collectLatest
+            if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
+                listState.scrollToItem(index)
+                withFrameMillis { }
+            }
+            val line = lineBox(page.layouts[current.id], selection.end)
+            val y = windowY(listState, index, line.first) ?: return@collectLatest
+            val bandEnd = if (keyboard > 0) window.containerSize.height - keyboard else listState.layoutInfo.viewportSize.height
+            val scroll = caretScroll(y, y + (line.second - line.first), bandTop() + caretMargin, bandEnd - caretMargin)
+            if (scroll != 0f) listState.animateScrollBy(scroll, FocalMotion.move())
+        }
+    }
     // A paragraph put just before the first one on screen in Edit (the text before a split, by Enter or a redo) takes
     // its place there, so the lines stay put and the rest moves down, as text does where Enter is pressed: the list
     // would keep the first paragraph's own key in place and push the new one out of view above it.
@@ -606,8 +657,13 @@ fun NotePage(
         if (!page.editing || before === itemKeys || before.isEmpty()) return@SideEffect
         val first = before.getOrNull(listState.firstVisibleItemIndex) ?: return@SideEffect
         val now = indexOf[first] ?: return@SideEffect
-        val added = itemKeys.getOrNull(now - 1)
-        if (added is Long && added !in before) listState.requestScrollToItem(now - 1, listState.firstVisibleItemScrollOffset)
+        // The paragraph just above it (a time between them belongs to the lower one), with its own time if it has one.
+        val above = itemKeys.subList(0, now).indexOfLast { it is Long }
+        val added = itemKeys.getOrNull(above)
+        if (added is Long && added !in before) {
+            val from = if (itemKeys.getOrNull(above - 1) == timeKey(added)) above - 1 else above
+            listState.requestScrollToItem(from, listState.firstVisibleItemScrollOffset)
+        }
     }
 
     // Find and replace (spec 5.8).
@@ -656,8 +712,6 @@ fun NotePage(
     val currentMatch = find.currentMatch
     // A keyboard that opens after the match was placed (a query already in the field) moves the band up: the match is
     // brought to its new centre once the keyboard has settled, never left under the rows (spec 5.8, 5.14).
-    val ime = WindowInsets.ime
-    val imeTarget = WindowInsets.imeAnimationTarget
     val keyboardUp = imeTarget.getBottom(density) > 0
     val centred = remember { CentredMatch() }
     LaunchedEffect(currentMatch, find.open, keyboardUp) {
@@ -761,17 +815,17 @@ fun NotePage(
         playback.playWord(paragraph, offset)
     }
 
-    // Taps (spec 5.5, 5.7). Reading, a tap on a word opens Edit with the word selected, so typing replaces it; on bare
-    // paper (past a line's last word) it puts the caret there, to write on. In Edit a tap on another paragraph moves
-    // the caret to it, as a tap inside the field does. A note that cannot be edited yet (it is still being transcribed)
-    // plays from the word instead.
+    // Taps (spec 5.5, 5.7). A tap on a word selects it, so typing replaces it; on bare paper (past a line's last word)
+    // it puts the caret there, to write on. Reading, that opens Edit; in Edit it is the same in every paragraph, the
+    // one with the caret included (the field does it there). A note that cannot be edited yet (it is still being
+    // transcribed) plays from the word instead.
     val canPlay = note.canPlay && note.audioPresent
     val canEdit = note.editable
     val onTap: (ParagraphUi, Int, IntRange?) -> Unit = { paragraph, offset, word ->
         when {
             find.open || page.renaming -> Unit
-            page.editing -> focusField(CaretAt(paragraph.id, offset), refresh = false, commit = true)
-            canEdit -> enterEdit(if (word == null) CaretAt(paragraph.id, offset) else CaretAt(paragraph.id, word.first, word.last + 1))
+            page.editing -> focusField(wordOrCaret(paragraph.id, offset, word), refresh = false, commit = true)
+            canEdit -> enterEdit(wordOrCaret(paragraph.id, offset, word))
             canPlay -> playFromWord(paragraph, offset)
         }
     }
@@ -878,7 +932,11 @@ fun NotePage(
     )
 
     // Strings for the head, notices and the paragraphs' actions.
-    val head = headUi(note, paragraphs, dates, today, captureElsewhere, actions, interactive = !page.editing && !find.open)
+    // In Edit the head stays as Edit found it: a title derived from the first sentence would change with every
+    // autosave of that sentence, wrap onto another line and push the text being typed down the page.
+    val liveHead = headUi(note, paragraphs, dates, today, captureElsewhere, actions, interactive = !page.editing && !find.open)
+    val heldHead = remember(page.editing) { HeldHead() }
+    val head = if (page.editing) heldHead.head ?: liveHead.also { heldHead.head = it } else liveHead
     val labels = ParagraphLabels(
         play = stringResource(R.string.a11y_play_here), edit = stringResource(R.string.a11y_edit),
         copy = stringResource(R.string.a11y_copy_paragraph), restore = stringResource(R.string.menu_restore),
@@ -1030,11 +1088,11 @@ fun NotePage(
         }
         val topPadding = with(density) { status.getTop(this).toDp() } + topBar + FocalGrid.x8
         val short = rememberUpdatedState(LocalWindowLayout.current.rail)
-        val bringSpec = remember(density, status) {
-            CaretSpec(bandTop, { with(density) { (if (short.value) EditSheetMargin else CaretMargin).toPx() } }, fadePx, topLines)
-        }
-        CompositionLocalProvider(LocalBringIntoViewSpec provides bringSpec) {
-            run {
+        // Nothing of a note is drawn before the note is there: an empty state would show a date in 1970 and a
+        // writing head for a frame or two. The page's opening waits for this ([PageTransitions.ready]).
+        if (note.loaded) SideEffect { shell.pages.ready(destination) }
+        CompositionLocalProvider(LocalBringIntoViewSpec provides StillPage) {
+            if (note.loaded) {
                 BoxWithConstraints(Modifier.fillMaxSize().graphicsLayer { alpha = listFade.value * reveal.body() }) {
                     // The text column is at most 600 dp and centred (spec 2.5); the list itself spans the page, so it
                     // scrolls from its margins too.
@@ -1082,6 +1140,12 @@ fun NotePage(
                                     ),
                                     onEnter = enter,
                                     onJoin = join,
+                                )
+                                is NoteItem.Time -> ParagraphTime(
+                                    item.paragraph.startMs,
+                                    // Not from Edit or Find: playback would scroll the text under the caret.
+                                    onPlay = if (canPlay && !page.editing && !find.open) { { playFromWord(item.paragraph, 0) } } else null,
+                                    modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
                                 )
                                 is NoteItem.Gap -> GapRow(
                                     // Not from Edit or Find: playback would scroll the text under the caret.

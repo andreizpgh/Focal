@@ -9,25 +9,9 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.imeAnimationTarget
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.unit.IntSize
-import app.focal.ui.design.LocalWindowLayout
-import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -45,7 +29,6 @@ import app.focal.ui.components.waitingText
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalTiming
-import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.library.LibraryDates
 import app.focal.ui.library.datelines
 import app.focal.ui.library.durationText
@@ -65,12 +48,23 @@ internal const val THIRDS = 3f
 /** A scroll farther than this many screens crossfades instead (spec 4.11, 5.8). */
 private const val FAR_SCREENS = 3
 
-/** The note's rows: the head, paragraphs with the gap rows after the paragraph they follow, the writing head. */
-internal fun noteItems(paragraphs: List<ParagraphUi>, gaps: List<GapUi>, writing: Boolean, noSpeech: Boolean): List<NoteItem> = buildList {
+/**
+ * The note's rows: the head, paragraphs with the gap rows after the paragraph they follow, the writing head. With
+ * [times], each paragraph after the first is headed by the time it starts at (the first starts where the note does,
+ * which the head already says; a note of one paragraph carries none).
+ */
+internal fun noteItems(
+    paragraphs: List<ParagraphUi>,
+    gaps: List<GapUi>,
+    writing: Boolean,
+    noSpeech: Boolean,
+    times: Boolean = false,
+): List<NoteItem> = buildList {
     add(NoteItem.Head)
     val after = gaps.groupBy { it.afterParagraphId }
     after[null]?.forEach { add(NoteItem.Gap(it)) }
     paragraphs.forEachIndexed { index, paragraph ->
+        if (times && index > 0) add(NoteItem.Time(paragraph))
         add(NoteItem.Text(paragraph, index))
         after[paragraph.id]?.forEach { add(NoteItem.Gap(it)) }
     }
@@ -84,6 +78,7 @@ internal fun noteItems(paragraphs: List<ParagraphUi>, gaps: List<GapUi>, writing
 internal fun contentTypeOf(item: NoteItem): String = when (item) {
     NoteItem.Head -> "head"
     is NoteItem.Text -> "p"
+    is NoteItem.Time -> "time"
     is NoteItem.Gap -> "gap"
     NoteItem.Writing -> "writing"
     NoteItem.NoSpeech -> "no-speech"
@@ -229,31 +224,24 @@ internal class NoteScroller(private val list: LazyListState, private val fade: A
 }
 
 /**
- * Edit keeps the caret's line inside the band between the edit bar and the keyboard, [margin] from each (spec 5.7):
- * the list is padded by the keyboard, and the bar lies over its top ([bandTop] is the bar's bottom, where the top fade
- * starts). The lines at the top land on the band's edge ([TopEdge]): out of the band, the caret only has to stay
- * clear of the fade; in it, within its margins, so the list never steps back and forth on its way.
+ * In Edit the page moves for one reason only: the caret's line would otherwise be hidden ([caretScroll], run by the
+ * page). Every other request to bring something into view is declined: a field that takes focus asks for its whole
+ * paragraph, each key and each caret move asks again, and answering them stepped the text up and back under the
+ * fingers.
  */
-internal class CaretSpec(
-    private val bandTop: () -> Float,
-    private val margin: () -> Float,
-    private val fade: Float,
-    private val lines: () -> List<Span>,
-) : BringIntoViewSpec {
-    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-        val top = bandTop()
-        val start = top + margin()
-        val end = containerSize - margin()
-        val last = offset + size
-        // Taller than the band and covering it (a focused paragraph, the list itself): nothing to bring.
-        if (offset < start && last > end) return 0f
-        // Already in the band: the page stays exactly where it is. Every key and every caret move asks to be brought
-        // into view, and landing a line's edge on the top band each time shifted the whole text by a few dp under
-        // the fingers, forth on one key and back on the next.
-        if (offset >= start && last <= end) return 0f
-        val scroll = if (abs(offset - start) < abs(last - end)) offset - start else last - end
-        return TopEdge.snap(scroll, lines(), top, fade, Span(offset, last), top + fade, end)
-    }
+internal object StillPage : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = 0f
+}
+
+/**
+ * How far the list scrolls (pixels, positive moves the text up) to keep the caret's line, [top]..[bottom] in the
+ * window, inside the band [bandTop]..[bandBottom]: nothing while it is inside, else the least that brings it in. A
+ * line taller than the band keeps its top.
+ */
+internal fun caretScroll(top: Float, bottom: Float, bandTop: Float, bandBottom: Float): Float = when {
+    top < bandTop || bottom - top > bandBottom - bandTop -> top - bandTop
+    bottom > bandBottom -> bottom - bandBottom
+    else -> 0f
 }
 
 /** A bar that is out of play (the top bar under Find, the bar Edit replaced): never read, focused or touched. */
@@ -310,9 +298,9 @@ private fun unclearDescription(paragraph: ParagraphUi): String? {
 private const val UNCLEAR_SEPARATOR = ", "
 
 /**
- * One paragraph row: its text, or in Edit the field that holds the caret (the same box: the swap moves nothing) with
- * the edit sheet behind it (`fade` in, `fadeFast` out). Nothing is added under a paragraph while it is edited, so no
- * line below it moves as the caret goes from one paragraph to the next: "Restore original" is in Edit's menu.
+ * One paragraph row: its text, or in Edit the field that holds the caret (the same box and style: the swap moves
+ * nothing). Nothing is drawn around a paragraph while it is edited and nothing is added under it, so no line moves or
+ * changes as the caret goes from one paragraph to the next: "Restore original" is in Edit's menu.
  */
 @Composable
 internal fun LazyItemScope.ParagraphItem(
@@ -330,82 +318,22 @@ internal fun LazyItemScope.ParagraphItem(
     val paragraph = item.paragraph
     val find = page.find
     val field = page.field?.takeIf { page.editing && !find.open && it.id == paragraph.id }
-    val reduced = LocalReducedMotion.current
-    val sheet = remember { Animatable(if (field != null) 1f else 0f) }
-    val focused = field != null
-    LaunchedEffect(focused, reduced) {
-        val target = if (focused) 1f else 0f
-        when {
-            reduced -> sheet.snapTo(target)
-            focused -> sheet.animateTo(1f, FocalMotion.fade())
-            else -> sheet.animateTo(0f, FocalMotion.fadeFast())
-        }
-    }
     val unclear = unclearDescription(paragraph)
-    // A short window (a phone in landscape) keeps the whole focused sheet above the keyboard (spec 5.7, 5.14).
-    val sheetView = remember { BringIntoViewRequester() }
-    val sizes = remember { SheetSizes() }
-    if (focused && LocalWindowLayout.current.rail) KeepSheetInView(sheetView, sizes)
     Column(
         Modifier
             .animateItem(fadeInSpec = null, placementSpec = placement, fadeOutSpec = null)
-            .padding(horizontal = FocalLayout.gutter)
-            .bringIntoViewRequester(sheetView)
-            .onSizeChanged { sizes.item = it },
+            .padding(horizontal = FocalLayout.gutter),
     ) {
         if (field != null) {
-            ParagraphField(
-                field.text, paragraph.id, field.requester, page.layouts, onEnter, onJoin, sheet = { sheet.value },
-                modifier = Modifier.onSizeChanged { sizes.field = it.height },
-            )
+            ParagraphField(field.text, paragraph.id, field.requester, page.layouts, onEnter, onJoin)
         } else {
             ParagraphText(
                 paragraph, page.focus, find, page.layouts, arrival, entrance,
                 onTap = { offset, word -> onTap(paragraph, offset, word) },
                 onSweep = onSweep?.let { sweep -> { range -> sweep(paragraph, range) } },
-                actions = actions, unclear = unclear, sheet = { sheet.value },
+                actions = actions, unclear = unclear,
             )
         }
-    }
-}
-
-/**
- * In a short window Edit keeps the caret's line and a brought sheet this far inside the band: the sheet's own outset,
- * so a three-line paragraph's whole sheet fits between a landscape top bar and keyboard (spec 5.7, 5.14).
- */
-internal val EditSheetMargin = ParagraphMetrics.sheetOutsetY
-
-/** The focused paragraph's item (field and provenance line) and its field alone, in pixels, as last laid out. */
-private class SheetSizes {
-    var item = IntSize.Zero
-    var field = 0
-}
-
-/**
- * In a short window, once the keyboard has settled (and whenever the focus lands on another paragraph while it is
- * up), scrolls the focused paragraph whole between the top bar and the keyboard. The caret alone would leave the
- * sheet cut through by the keyboard's edge.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun KeepSheetInView(requester: BringIntoViewRequester, sizes: SheetSizes) {
-    val density = LocalDensity.current
-    val ime = WindowInsets.ime
-    val imeTarget = WindowInsets.imeAnimationTarget
-    val status = WindowInsets.statusBars
-    val window = LocalWindowInfo.current
-    val topBar = LocalWindowLayout.current.topBar
-    LaunchedEffect(requester) {
-        snapshotFlow { ime.getBottom(density).let { it > 0 && it == imeTarget.getBottom(density) } }
-            .distinctUntilChanged()
-            .collect { settled ->
-                if (!settled) return@collect
-                val band = window.containerSize.height - ime.getBottom(density) - status.getTop(density) -
-                    with(density) { (topBar + EditSheetMargin * 2).toPx() }
-                val item = sizes.item
-                val height = if (item.height <= band) item.height else sizes.field
-                if (height > 0) requester.bringIntoView(Rect(0f, 0f, item.width.toFloat(), height.toFloat()))
-            }
     }
 }
 

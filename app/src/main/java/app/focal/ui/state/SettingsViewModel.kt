@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * Theme, the space kept audio uses, and the version. Audio space is re-read when the store changes, only while the
@@ -44,13 +45,33 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }.flowOn(Dispatchers.IO)
 
     val state: StateFlow<SettingsUiState> = combine(app.preferences.settings, usage) { settings, (bytes, notes) ->
-        SettingsUiState(ThemeMode.of(settings.theme), bytes, notes, BuildConfig.VERSION_NAME)
+        SettingsUiState(ThemeMode.of(settings.theme), bytes, notes, BuildConfig.VERSION_NAME, settings.paragraphTimes)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState(versionName = BuildConfig.VERSION_NAME))
 
     /** The speech model's install state (Settings may show it; recording never waits for it). */
     val model: StateFlow<ModelStatus> = app.models.status
 
     fun setTheme(mode: ThemeMode) = app.preferences.theme(mode.key)
+
+    fun setParagraphTimes(shown: Boolean) = app.preferences.paragraphTimes(shown)
+
+    /**
+     * "Remove all audio", confirmed: the audio of every note that can lose it now goes at once (their text stays). A
+     * note whose audio is still needed (it is being recorded or transcribed, or a part of it failed and can be
+     * retried) keeps it, as it would from its own menu; the storage row then shows what is left.
+     */
+    fun removeAllAudio() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val withAudio = try { store.library().filter { it.audioPresent } } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                emptyList()
+            }
+            for (note in withAudio) {
+                // Scheduled and committed in one go: the confirmation was the chance to keep it.
+                if (UndoableActions.removeAudio(app, note.id) { }) UndoableActions.commitRemoveAudio(app, note.id) { }
+            }
+        }
+    }
 
     /** Whether the page is on screen; while it is not, the last usage stays and nothing is re-read. */
     fun setVisible(shown: Boolean) { visible.value = shown }

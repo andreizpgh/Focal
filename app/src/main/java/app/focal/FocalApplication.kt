@@ -15,6 +15,7 @@ import app.focal.recording.RecordingService
 import app.focal.recording.ServiceNotifications
 import app.focal.speech.EngineGuard
 import app.focal.speech.SpeechModels
+import app.focal.ui.design.SteadyFrameClock
 import kotlinx.coroutines.*
 import java.io.File
 
@@ -42,6 +43,8 @@ class FocalApplication : Application() {
         super.onCreate()
         // Debug builds' engine guard probe (device tests) runs in a process of its own: it must touch none of the app.
         if (BuildConfig.DEBUG && processName().endsWith(PROBE_PROCESS)) return
+        // Every animation runs on frame time that a long frame cannot skip ahead.
+        SteadyFrameClock.install()
         store = NoteStore(this); preferences = Preferences(this)
         // First, before anything can enter the speech work: a marker left by the previous process is its death.
         engineGuard = EngineGuard.open(this)

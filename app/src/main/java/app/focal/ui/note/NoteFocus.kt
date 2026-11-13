@@ -15,8 +15,9 @@ enum class NoteMode { Reading, Playing, Editing, Finding }
 
 /**
  * The focus rule on the note page (spec 1, "the focus rule"): whatever is current is set in ink and everything else
- * recedes one step to `muted`. Reading: everything is ink. Playing: the playing paragraph. Editing: the paragraph
- * holding the caret (all ink before one is focused). Finding: nothing; the matches carry the focus. Paragraphs read
+ * recedes one step to `muted`. Reading: everything is ink. Playing: the playing paragraph. Editing: everything is
+ * ink too (the caret says where the edit is; paragraphs that dimmed and lit as the caret moved between them read as
+ * flicker). Finding: nothing; the matches carry the focus. Paragraphs read
  * these values through `derivedStateOf`, so a change redraws only the paragraphs whose focus changed; the playing
  * word is read in the draw phase of the playing paragraph only.
  */
@@ -39,16 +40,12 @@ class NoteFocus {
     fun inks(id: Long): Boolean = when (mode) {
         NoteMode.Reading -> true
         NoteMode.Playing -> playingId == null || playingId == id
-        NoteMode.Editing -> editingId == null || editingId == id
+        NoteMode.Editing -> true
         NoteMode.Finding -> false
     }
 
-    /** The title follows the body: it recedes in Edit (once a paragraph has the caret) and in Find. */
-    val titleInks: Boolean get() = when (mode) {
-        NoteMode.Reading, NoteMode.Playing -> true
-        NoteMode.Editing -> editingId == null
-        NoteMode.Finding -> false
-    }
+    /** The title follows the body: it recedes in Find. */
+    val titleInks: Boolean get() = mode != NoteMode.Finding
 
     /**
      * Every paragraph returns to ink: those on screen ([visible], top to bottom) are staggered 24 ms apart from the

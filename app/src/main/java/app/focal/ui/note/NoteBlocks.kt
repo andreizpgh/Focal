@@ -85,6 +85,11 @@ object NoteBlockMetrics {
     const val GAP_MARK_ALPHA = 0.4f
     val gapMarkGap = FocalGrid.x12
     val writingHead = FocalGrid.x40
+    /** A paragraph's time sits this far under the paragraph before it and this far over its own. */
+    val timeAbove = FocalGrid.x24
+    val timeBelow = FocalGrid.x4
+    /** Its press plate reaches this far beside the digits. */
+    val timeInset = FocalGrid.x8
 }
 
 /** A notice under the meta (spec 4.16): its first sentence in ink (or none, [quiet]), the rest `muted`. */
@@ -310,6 +315,50 @@ internal fun GapRow(gap: GapUi, playable: Boolean, onPlay: () -> Unit, modifier:
         }
     }
 }
+
+/**
+ * The time a paragraph starts at in the recording (the setting "Paragraph times"): `caption` `muted`, tabular, on the
+ * paragraph's own edge, [NoteBlockMetrics.timeAbove] under the paragraph before it and [NoteBlockMetrics.timeBelow]
+ * over its own, so it reads as that paragraph's. A tap plays from there ([onPlay]; null while nothing can play). It is
+ * a row of its own in the list, shorter than what it draws by the list's own gap, so the paragraphs stay rows that
+ * hold their text alone (their line positions are read from the row's top).
+ */
+@Composable
+internal fun ParagraphTime(ms: Long, onPlay: (() -> Unit)?, modifier: Modifier = Modifier) {
+    val colors = FocalTheme.colors
+    val time = NoteTimes.clock(ms)
+    val spoken = stringResource(R.string.a11y_play_from, time)
+    val source = remember { MutableInteractionSource() }
+    Box(
+        modifier
+            .fillMaxWidth()
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                val lift = (ParagraphMetrics.gap - NoteBlockMetrics.timeBelow).roundToPx()
+                layout(placeable.width, (placeable.height - lift).coerceAtLeast(0)) { placeable.place(0, 0) }
+            }
+            .padding(start = FocalLayout.gutter - NoteBlockMetrics.timeInset, end = FocalLayout.gutter, top = NoteBlockMetrics.timeAbove - ParagraphMetrics.gap),
+    ) {
+        Text(
+            time, style = FocalType.caption, color = colors.recede,
+            modifier = Modifier
+                .then(
+                    if (onPlay == null) Modifier.clearAndSetSemantics { }
+                    else Modifier
+                        .focusRing(FocalShapes.pill)
+                        .clickable(source, indication = TimePlate, role = Role.Button, onClick = onPlay)
+                        .clearAndSetSemantics {
+                            contentDescription = spoken
+                            role = Role.Button
+                            onClick { onPlay(); true }
+                        },
+                )
+                .padding(horizontal = NoteBlockMetrics.timeInset),
+        )
+    }
+}
+
+private val TimePlate = PressPlate(FocalShapes.pill)
 
 /** The text button's 12 dp padding: its label's end lands on the gutter. */
 private val GapPlayInset = FocalGrid.x12
