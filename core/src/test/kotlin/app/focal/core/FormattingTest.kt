@@ -82,9 +82,10 @@ class FormattingTest {
 
     @Test
     fun titleNeverSplitsASurrogatePair() {
+        // One word longer than the limit is the only title cut inside a word, and the only one with an ellipsis.
         val long = "😀".repeat(30)
         val title = Title.of(listOf(long))
-        assertEquals("😀".repeat(23) + "…", title)
+        assertEquals("😀".repeat(17) + "…", title)
     }
 
     @Test
@@ -92,14 +93,70 @@ class FormattingTest {
         val text = "So the plan for Saturday is simple. We meet at the trailhead at eight."
         assertEquals("So the plan for Saturday is simple", Title.of(TextWords.split(text)))
         assertEquals("We meet at the trailhead at eight.", Title.remainder(text))
-        // A clipped title shows fewer words than its sentence: the preview picks up the rest of the sentence.
+        // A shortened title shows fewer words than its sentence: the preview picks up the rest of the sentence.
         val long = "Start with the recording screen because that is the moment people decide whether to trust it"
-        val clipped = Title.of(TextWords.split(long))
-        assertTrue(clipped.endsWith("…"))
-        val shown = clipped.removeSuffix("…").trimEnd()
+        val shown = Title.of(TextWords.split(long))
+        assertEquals("Start with the recording screen", shown)
         assertEquals(long.removePrefix(shown).trimStart(), Title.remainder(long))
         assertEquals("", Title.remainder("Pick up the prescription before six."))
         assertEquals("", Title.remainder("   "))
+    }
+
+    @Test
+    fun aLongFirstSentenceIsShortenedToWholeWordsWithoutAnEllipsis() {
+        fun title(text: String) = Title.of(TextWords.split(text))
+        // Whole words that fit, never an ellipsis.
+        assertEquals("Сегодня мы наконец починили этот баг", title("Сегодня мы наконец починили этот баг с логином в приложении."))
+        // Never left on a dangling function word.
+        assertEquals("We looked at the cache", title("We looked at the cache and then at the network stack again."))
+        assertEquals("Нужно не забыть позвонить", title("Нужно не забыть позвонить в страховую компанию и уточнить сроки."))
+        // The last clause that fills at least half of the room wins over a longer run of words.
+        assertEquals("If the build fails again", title("If the build fails again, the release waits for the next one."))
+        assertEquals("Встреча перенесена на завтра", title("Встреча перенесена на завтра, в десять часов у главного входа."))
+        // Nor on the correlative that a clause can end with.
+        assertEquals("Сегодня я хотел поговорить", title("Сегодня я хотел поговорить о том, что нам нужно сделать до конца недели."))
+        // A clause too short to be a title is passed over.
+        assertEquals("So, we keep going over the numbers", title("So, we keep going over the numbers and the plan for the next quarter."))
+        // A dash is a clause end, and never the last thing in a title.
+        assertEquals("One thing about the release", title("One thing about the release - check the logs before you go home."))
+        // At least two words stay, whatever they are.
+        assertEquals("Но и", title("Но и в Константинопольско-Иерусалимском патриархате думают иначе."))
+        // Nor on a bare number whose unit went with the rest.
+        assertEquals("Wir treffen uns morgen", title("Wir treffen uns morgen am 3. oder am 4. Mai in Berlin."))
+        // A sentence that fits is the title, whole.
+        assertEquals("Wir treffen uns am 3. oder am 4. Mai", title("Wir treffen uns am 3. oder am 4. Mai. Dann sehen wir weiter."))
+    }
+
+    @Test
+    fun aFunctionWordOfAnotherLanguageMayEndATitle() {
+        fun title(text: String) = Title.of(TextWords.split(text))
+        // "do" and "no" are Portuguese function words and English content words: the sentence's own words decide.
+        assertEquals("This is something I will never do", title("This is something I will never do and I mean every word of it."))
+        assertEquals("I have no idea what to do", title("I have no idea what to do about the release next week."))
+        // In its own language the same word still never ends a title.
+        assertEquals("Eu preciso falar com o gerente", title("Eu preciso falar com o gerente do banco sobre a conta nova."))
+        // German "die" is an article there and a verb in English.
+        assertEquals("Ich habe gestern mit dem Team", title("Ich habe gestern mit dem Team über die Planung gesprochen."))
+        assertEquals("The old batteries in the shed die", title("The old batteries in the shed die when the winter gets cold."))
+    }
+
+    @Test
+    fun aShortenedTitleAndItsRemainderCoverTheSentence() {
+        val texts = listOf(
+            "Сегодня я хотел поговорить о том, что нам нужно сделать до конца недели, и первым делом про ремонт.",
+            "Remember to call the insurance company about the claim before the end of the month.",
+            "Wir prüfen zuerst die Daten und danach den Bericht und alle weiteren Unterlagen dazu.",
+        )
+        for (text in texts) {
+            val shown = Title.of(TextWords.split(text))
+            assertTrue(shown.length <= SpeechTuning.TITLE_MAX_CHARS, shown)
+            assertTrue(!shown.endsWith("…"), shown)
+            val rest = Title.remainder(text)
+            assertTrue(rest.isNotEmpty() && text.endsWith(rest), rest)
+            // Nothing between them but the punctuation the title dropped.
+            val between = text.removeSuffix(rest).trim().removePrefix(shown)
+            assertTrue(between.all { it in ",;:–—- " }, "'$between'")
+        }
     }
 
     /**

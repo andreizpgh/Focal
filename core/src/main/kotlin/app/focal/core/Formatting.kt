@@ -113,9 +113,16 @@ object Paragraphs {
     }
 }
 
-/** Note title from its first words: the first sentence, clipped on a word boundary. */
+/**
+ * Note title from its first words: the first sentence. A sentence longer than the limit is shortened to whole
+ * words: to the last clause that fits (the words up to a comma, semicolon, colon or dash) when that keeps at least
+ * half of the room, and never left on a dangling function word ("…and then at the"). A shortened title carries no
+ * ellipsis: the words after it follow in the note's text ([remainder]), so it reads as a heading, not a cut.
+ */
 object Title {
     private const val CLIP_TRIM = ",;:–—-.… "
+    private const val CLAUSE_END = ",;:"
+    private val DASHES = setOf("–", "—", "-")
 
     /** Empty when there are no words (the UI shows the date instead). Lengths are UTF-16 chars. */
     fun of(
@@ -125,9 +132,9 @@ object Title {
     ): String = derive(words, maxChars, minChars).first
 
     /**
-     * What follows a derived title in [text]: the words after the ones the title shows (a clipped title shows fewer
-     * words than its sentence, and the rest of the sentence follows). Rows and the stage start their preview here,
-     * so a derived title is never repeated under itself. Empty when the title takes every word.
+     * What follows a derived title in [text]: the words after the ones the title shows (a shortened title shows
+     * fewer words than its sentence, and the rest of the sentence follows). Rows and the stage start their preview
+     * here, so a derived title is never repeated under itself. Empty when the title takes every word.
      */
     fun remainder(
         text: String,
@@ -151,27 +158,50 @@ object Title {
         }
         if (first.isEmpty()) return "" to 0
         val text = first.joinToString(" ")
-        if (text.length <= maxChars) {
-            // A final period goes; '?' and '!' stay, and so does the period of an ordinal or abbreviation.
-            val stem = TextRules.periodStem(first.last())
-            if (stem == null || TextRules.sentenceAbbreviation(stem)) return text to first.size
+        // A final period goes; '?' and '!' stay, and so does the period of an ordinal or abbreviation.
+        val stem = TextRules.periodStem(first.last())
+        val whole = if (stem == null || TextRules.sentenceAbbreviation(stem)) text else {
             val stripped = TextRules.stripClosers(text)
-            return text.removeRange(stripped.length - 1, stripped.length) to first.size
+            text.removeRange(stripped.length - 1, stripped.length)
         }
-        var out = ""
-        var shown = 0
+        if (whole.length <= maxChars) return whole to first.size
+        // The whole words that fit.
+        var fit = 0
+        var fitLength = -1
         for (word in first) {
-            val candidate = if (out.isEmpty()) word else "$out $word"
-            if (candidate.length > maxChars - 1) break
-            out = candidate
-            shown++
+            if (fitLength + 1 + word.length > maxChars) break
+            fitLength += 1 + word.length
+            fit++
         }
-        if (out.isEmpty()) {
-            out = Transcript.truncateUtf16(first[0], maxChars - 1)
-            shown = 1
-        }
-        return out.trimEnd { it in CLIP_TRIM } + "…" to shown
+        // One word longer than the limit is cut inside itself, and says so.
+        if (fit == 0) return Transcript.truncateUtf16(first[0], maxChars - 1).trimEnd { it in CLIP_TRIM } + "…" to 1
+        var shown = clauseEnd(first, fit, maxChars) ?: fit
+        // Also after a clause end: "…поговорить о том, что…" ends its first clause on "о том".
+        val functionWords = TextRules.functionWords(first)
+        while (shown > MIN_WORDS && TextRules.danglingWord(first[shown - 1], functionWords)) shown--
+        // A dash that would end the title goes with the words after it.
+        while (shown > 1 && first[shown - 1] in DASHES) shown--
+        return first.take(shown).joinToString(" ").trimEnd { it in CLIP_TRIM } to shown
     }
+
+    /**
+     * How many of the [fit] leading words end the last clause that still fills half of the room: the words up to
+     * a ',', ';' or ':' or before a dash. Null when no clause ends there.
+     */
+    private fun clauseEnd(words: List<String>, fit: Int, maxChars: Int): Int? {
+        var length = words.take(fit).sumOf { it.length } + fit - 1
+        for (count in fit downTo 1) {
+            if (length * 2 < maxChars) return null
+            val last = TextRules.stripClosers(words[count - 1])
+            val beforeDash = words.getOrNull(count) in DASHES
+            if (last.lastOrNull()?.let { it in CLAUSE_END } == true || beforeDash) return count
+            length -= words[count - 1].length + 1
+        }
+        return null
+    }
+
+    /** A shortened title keeps at least this many words, whatever they are. */
+    private const val MIN_WORDS = 2
 }
 
 /**

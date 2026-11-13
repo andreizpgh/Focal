@@ -69,7 +69,11 @@ object SpeechTuning {
     const val PARAGRAPH_CAP_WORDS = 2 * PARAGRAPH_MAX_WORDS
     /** ... at the longest pause among its last this many words (ties: the latest, so even pauses cut at the cap). */
     const val PARAGRAPH_CAP_LOOKBACK_WORDS = 40
-    const val TITLE_MAX_CHARS = 48
+    /**
+     * A derived title is at most this long: two lines of the stage's headline and of a note's title, usually one
+     * line of a library row. A longer first sentence is shortened to whole words, without an ellipsis.
+     */
+    const val TITLE_MAX_CHARS = 36
     /** A first sentence shorter than this is extended by the next one for the title. */
     const val TITLE_MIN_CHARS = 12
 
