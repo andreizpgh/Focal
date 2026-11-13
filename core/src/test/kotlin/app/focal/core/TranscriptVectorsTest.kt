@@ -29,7 +29,15 @@ class TranscriptVectorsTest {
 
     @Test
     fun constantsMatchTheShippedTuning() {
-        assertEquals(FormatConfig(), format)
+        // The paragraph thresholds were retuned after a week of dictation on a phone (SpeechTuning), after the
+        // vectors were generated: the vectors keep the reference implementation's thresholds and test the rule with
+        // them. Everything else is what ships.
+        val shipped = FormatConfig().copy(
+            paragraphPauseMs = format.paragraphPauseMs, longPauseMs = format.longPauseMs,
+            maxWords = format.maxWords, capWords = format.capWords,
+        )
+        assertEquals(shipped, format)
+        assertEquals(2 * SpeechTuning.PARAGRAPH_MAX_WORDS, SpeechTuning.PARAGRAPH_CAP_WORDS)
         assertEquals(SpeechTuning.TITLE_MAX_CHARS, constants["TITLE_MAX"].long().toInt())
         assertEquals(SpeechTuning.TITLE_MIN_CHARS, constants["MIN_TITLE_CHARS"].long().toInt())
         assertEquals(SpeechTuning.DOUBT_THRESHOLD, constants["FLAG_THRESHOLD"].double())

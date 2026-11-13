@@ -54,14 +54,17 @@ object SpeechTuning {
     // about 0.3-0.5 s longer than the acoustic gap, so these are in "measured pause" units.
     /** Seam repair only acts on seams with a shorter pause than this. */
     const val SEAM_PAUSE_MS = 800L
+    // Paragraphs. A week of dictation on a phone read as one block of text with the first thresholds (2.0 s, 3.5 s,
+    // 80 words): people speak notes without the long pauses those waited for. These close a paragraph every few
+    // sentences; a paragraph of one sentence still needs the long pause.
     /** Provisional: pause after a sentence end that starts a paragraph (with MIN sentences). */
-    const val PARAGRAPH_PAUSE_MS = 2_000L
+    const val PARAGRAPH_PAUSE_MS = 1_500L
     /** Provisional: pause after a sentence end that always starts a paragraph. */
-    const val LONG_PAUSE_MS = 3_500L
+    const val LONG_PAUSE_MS = 3_000L
     /** Provisional. */
     const val PARAGRAPH_MIN_SENTENCES = 2
-    /** Provisional: a paragraph closes at the first sentence end once it holds this many words. */
-    const val PARAGRAPH_MAX_WORDS = 80
+    /** Provisional: a paragraph closes at the first sentence end once it holds this many words (some six lines on a phone). */
+    const val PARAGRAPH_MAX_WORDS = 60
     /**
      * A paragraph that reaches this many words without closing at a sentence end closes anyway (speech the
      * recognizer did not punctuate), so no paragraph grows without bound.

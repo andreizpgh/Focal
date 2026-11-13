@@ -119,6 +119,10 @@
         <item quantity="other">%d notes deleted</item>
     </plurals>
     <string name="feedback_audio_removed">Audio removed</string>
+    <plurals name="feedback_audio_removed_many">
+        <item quantity="one">Audio removed from %d note</item>
+        <item quantity="other">Audio removed from %d notes</item>
+    </plurals>
     <string name="feedback_too_late">Too late to undo</string>
     <string name="feedback_text_copied">Text copied</string>
     <string name="feedback_nothing_recorded">Nothing was recorded</string>
@@ -201,12 +205,20 @@
     <string name="theme_system">System</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
+    <string name="settings_notes">Notes</string>
+    <string name="paragraph_times">Paragraph times</string>
     <string name="settings_storage">Storage</string>
-    <string name="storage_audio">Audio</string>
-    <plurals name="storage_desc">
-        <item quantity="one">Kept for %d note. To free space, remove the audio from a note’s menu. Its text stays.</item>
-        <item quantity="other">Kept for %d notes. To free space, remove the audio from a note’s menu. Its text stays.</item>
+    <string name="storage_remove_all">Remove all audio</string>
+    <string name="storage_none">None kept</string>
+    <plurals name="storage_remove_title">
+        <item quantity="one">Remove the audio of %d note?</item>
+        <item quantity="other">Remove the audio of %d notes?</item>
     </plurals>
+    <string name="storage_remove_body">This frees %s. The text of every note stays; the recordings cannot be brought back.</string>
+    <string name="storage_remove_confirm">Remove audio</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="a11y_on">on</string>
+    <string name="a11y_off">off</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
     <string name="works_offline">Focal works offline. It has no internet permission, so audio and text never leave this phone.</string>
@@ -288,6 +300,7 @@
     <string name="a11y_audio_position">Audio position</string>
     <string name="a11y_position_of">%1$s of %2$s</string>
     <string name="a11y_play_here">Play from here</string>
+    <string name="a11y_play_from">Play from %s</string>
     <string name="a11y_edit">Edit</string>
     <string name="a11y_copy_paragraph">Copy paragraph</string>
     <plurals name="a11y_unclear">

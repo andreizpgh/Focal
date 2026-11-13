@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.PersistableBundle
+import android.text.format.Formatter
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -157,6 +158,8 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
             removeAudio = { row -> library.removeAudio(row.id) },
             delete = { row -> library.delete(row.id) },
             deleteAll = { rows -> library.deleteAll(rows.map { it.id }) },
+            removeAudioAll = { rows -> library.removeAudioAll(rows.map { it.id }) },
+            audioSize = { rows -> Formatter.formatShortFileSize(context, library.audioBytes(rows.map { it.id })) },
             query = library::setQuery,
             record = record,
             pause = recording::pause,

@@ -19,6 +19,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.focal.FocalApplication
 import app.focal.R
 import app.focal.ui.components.FeedbackAction
 import app.focal.ui.components.FeedbackResult
@@ -180,6 +181,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
             session = note.editSession,
         )
     }
+    val settings by (context.applicationContext as FocalApplication).preferences.settings.collectAsStateWithLifecycle()
     val edits = note.editBackend
     val page = rememberNotePageState()
     // A hit the page has already shown no longer overrides where the reader was.
@@ -197,6 +199,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
         landing = landing,
         listState = listState,
         page = page,
+        paragraphTimes = settings.paragraphTimes,
     )
 }
 

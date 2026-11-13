@@ -107,11 +107,11 @@ class ShellState internal constructor(
         // The note's page is already on top (it was opened at a search hit, and its recording went on from it): Finish
         // lands on that page, never on a second one for the same note.
         if (destination is Destination.Note && destination.hit == null && (top as? Destination.Note)?.id == destination.id) return
-        dockClock.start()
         if (twoPane && destination is Destination.Note) {
             // T7 stays a cut under the scene; everything else fades through in the detail pane.
             val inPane = if (motion == PageMotion.Cut) motion else PageMotion.FadeThrough
             val top = backStack.last()
+            dockClock.start()
             if (top is Destination.Note) {
                 pages.replace(top, destination, inPane)
                 backStack[backStack.lastIndex] = destination
@@ -121,7 +121,8 @@ class ShellState internal constructor(
             }
             return
         }
-        pages.push(destination, motion)
+        // A page that waits for its note before it opens swaps the dock when it arrives, not at the tap.
+        if (pages.push(destination, motion)) dockClock.start()
         backStack.add(destination)
     }
 
@@ -312,7 +313,9 @@ private fun Shell(
                 transitionSpec = { pageSwap() },
                 popTransitionSpec = { pageSwap() },
                 predictivePopTransitionSpec = { edge ->
-                    shell.pages.beginPredictive(shell.current, edge)
+                    // Only a page above the library can be swiped back; asked for the library itself (the display
+                    // reads this once more as a pop completes), it would replace the pop that is running.
+                    if (shell.backStack.size > 1) shell.pages.beginPredictive(shell.current, edge)
                     pageSwap()
                 },
                 // One entry content for both layouts: a rememberSaveable is found again only at the place in the

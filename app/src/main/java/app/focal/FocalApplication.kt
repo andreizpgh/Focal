@@ -15,6 +15,7 @@ import app.focal.recording.RecordingService
 import app.focal.recording.ServiceNotifications
 import app.focal.speech.EngineGuard
 import app.focal.speech.SpeechModels
+import app.focal.ui.design.SteadyFrameClock
 import kotlinx.coroutines.*
 import java.io.File
 
@@ -42,6 +43,8 @@ class FocalApplication : Application() {
         super.onCreate()
         // Debug builds' engine guard probe (device tests) runs in a process of its own: it must touch none of the app.
         if (BuildConfig.DEBUG && processName().endsWith(PROBE_PROCESS)) return
+        // Every animation runs on frame time that a long frame cannot skip ahead.
+        SteadyFrameClock.install()
         store = NoteStore(this); preferences = Preferences(this)
         // First, before anything can enter the speech work: a marker left by the previous process is its death.
         engineGuard = EngineGuard.open(this)
@@ -51,6 +54,14 @@ class FocalApplication : Application() {
         storageReady = scope.async { store.recover() }
         // After recovery, whatever its result: drop model files that Whisper-era builds left behind.
         scope.launch { storageReady.join(); RetiredFiles.remove(filesDir) }
+        // Once per change of the paragraph rules: notes recorded under the older ones are split by the new ones.
+        scope.launch {
+            storageReady.join()
+            if (preferences.paragraphRules >= Preferences.PARAGRAPH_RULES) return@launch
+            runCatching { store.reparagraph() }
+                .onSuccess { preferences.paragraphRules = Preferences.PARAGRAPH_RULES }
+                .onFailure { Log.w("Focal", "Paragraphs were not split again", it) }
+        }
         // Recording never waits for this copy; transcription catches up once it is done.
         models.ensureStarted()
     }

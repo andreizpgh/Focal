@@ -56,7 +56,11 @@ object FocalMotion {
     fun <T> press(): SpringSpec<T> = spring(SPATIAL_DAMPING, PRESS_STIFFNESS)
     /** Bounds and sizes: dock morphs, the feedback pill, sheets and the settings swipe. */
     fun <T> move(): SpringSpec<T> = spring(SPATIAL_DAMPING, MOVE_STIFFNESS)
-    /** The recording surface only: expand, fold, the drag's settle, the settle into the note, the lift. */
+    /**
+     * What takes the whole window: the recording surface (expand, fold, the drag's settle, the settle into the note,
+     * the lift) and a note's page opening out of the stage or a row and folding back. `move` covers half its way in
+     * 60 ms, which over a whole window reads as a cut.
+     */
     fun <T> stage(): SpringSpec<T> = spring(SPATIAL_DAMPING, STAGE_STIFFNESS)
     /** Icon and label swaps, menu exit, feedback exit, press plates. */
     fun <T> fadeFast(): SpringSpec<T> = spring(EFFECTS_DAMPING, FADE_FAST_STIFFNESS)
@@ -133,6 +137,7 @@ object FocalSettle {
     const val FADE_MS = 231L
     const val FADE_SLOW_MS = 326L
     const val MOVE_MS = 317L
+    const val STAGE_MS = 484L
 }
 
 /**
@@ -141,6 +146,7 @@ object FocalSettle {
  */
 object FocalClock {
     fun move(ms: Float): Float = at(FocalMotion.SPATIAL_DAMPING, FocalMotion.MOVE_STIFFNESS, FocalSettle.MOVE_MS, ms)
+    fun stage(ms: Float): Float = at(FocalMotion.SPATIAL_DAMPING, FocalMotion.STAGE_STIFFNESS, FocalSettle.STAGE_MS, ms)
     fun fadeFast(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS, FocalSettle.FADE_FAST_MS, ms)
     fun fade(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_STIFFNESS, FocalSettle.FADE_MS, ms)
     fun fadeSlow(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_SLOW_STIFFNESS, FocalSettle.FADE_SLOW_MS, ms)

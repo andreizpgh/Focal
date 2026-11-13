@@ -40,7 +40,10 @@ sealed interface LibraryEvent {
     data class Deleted(val noteIds: List<String>) : LibraryEvent {
         constructor(noteId: String) : this(listOf(noteId))
     }
-    data class AudioRemoved(val noteId: String) : LibraryEvent
+    /** The audio of these notes is leaving (one, or a selection): "Audio removed · Undo", "Audio removed from 3 notes · Undo". */
+    data class AudioRemoved(val noteIds: List<String>) : LibraryEvent {
+        constructor(noteId: String) : this(listOf(noteId))
+    }
     /** Undo came after the deletion or removal was committed: "Too late to undo". */
     data class TooLateToUndo(val noteId: String) : LibraryEvent
     data class Error(val message: String) : LibraryEvent
@@ -153,14 +156,36 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             eventFlow.emit(LibraryEvent.AudioRemoved(noteId))
     }
 
+    /**
+     * Schedules the removal of the selected notes' audio (their text stays) and emits one [LibraryEvent.AudioRemoved]
+     * for those it was scheduled for. A note whose audio cannot go now (it has none, or a part of it still waits to be
+     * transcribed) keeps it; its refusal is said only when nothing was scheduled, as for [deleteAll].
+     */
+    fun removeAudioAll(noteIds: List<String>) = launch {
+        var refusal: String? = null
+        val removed = noteIds.filter { id -> UndoableActions.removeAudio(app, id) { if (refusal == null) refusal = it } }
+        if (removed.isNotEmpty()) eventFlow.emit(LibraryEvent.AudioRemoved(removed))
+        else refusal?.let { eventFlow.emit(LibraryEvent.Error(it)) }
+    }
+
     /** Undo on "Audio removed"; emits [LibraryEvent.TooLateToUndo] if the audio was already deleted. */
-    fun undoRemoveAudio(noteId: String) {
-        if (!UndoableActions.undoRemoveAudio(noteId)) eventFlow.tryEmit(LibraryEvent.TooLateToUndo(noteId))
+    fun undoRemoveAudio(noteId: String) = undoRemoveAudio(listOf(noteId))
+
+    /** Undo for a selection: every note keeps its audio; [LibraryEvent.TooLateToUndo] once if any was already gone. */
+    fun undoRemoveAudio(noteIds: List<String>) {
+        val late = noteIds.filterNot { UndoableActions.undoRemoveAudio(it) }
+        late.firstOrNull()?.let { eventFlow.tryEmit(LibraryEvent.TooLateToUndo(it)) }
     }
 
     /** The "Audio removed" snackbar closed without Undo (`SnackbarResult.Dismissed`): delete the audio now. */
-    fun commitRemoveAudio(noteId: String) =
-        UndoableActions.commitRemoveAudio(app, noteId) { eventFlow.tryEmit(LibraryEvent.Error(it)) }
+    fun commitRemoveAudio(noteId: String) = commitRemoveAudio(listOf(noteId))
+
+    fun commitRemoveAudio(noteIds: List<String>) = noteIds.forEach { id ->
+        UndoableActions.commitRemoveAudio(app, id) { eventFlow.tryEmit(LibraryEvent.Error(it)) }
+    }
+
+    /** The bytes the audio of these notes takes together, for "Remove audio · 42 MB". */
+    suspend fun audioBytes(noteIds: List<String>): Long = withContext(Dispatchers.IO) { noteIds.sumOf { store.audioBytes(it) } }
 
     /** The bytes the note's audio takes, for the menu's "Remove audio · 9 MB" (0 when it has none). */
     suspend fun audioBytes(noteId: String): Long = withContext(Dispatchers.IO) { store.audioBytes(noteId) }

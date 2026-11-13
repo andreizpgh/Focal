@@ -96,8 +96,10 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
                         undo = { library.undoDelete(event.noteIds) }, commit = { library.commitDelete(event.noteIds) },
                     )
                     is LibraryEvent.AudioRemoved -> feedback.showDeferred(
-                        words.audioRemoved, FeedbackAction(words.undo, FocalIcon.Undo),
-                        undo = { library.undoRemoveAudio(event.noteId) }, commit = { library.commitRemoveAudio(event.noteId) },
+                        if (event.noteIds.size == 1) words.audioRemoved
+                        else resources.getQuantityString(R.plurals.feedback_audio_removed_many, event.noteIds.size, event.noteIds.size),
+                        FeedbackAction(words.undo, FocalIcon.Undo),
+                        undo = { library.undoRemoveAudio(event.noteIds) }, commit = { library.commitRemoveAudio(event.noteIds) },
                     )
                     is LibraryEvent.TooLateToUndo -> feedback.show(words.tooLate)
                     is LibraryEvent.Error -> feedback.show(event.message)

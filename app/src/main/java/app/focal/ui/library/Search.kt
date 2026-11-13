@@ -1,5 +1,6 @@
 package app.focal.ui.library
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -124,7 +125,7 @@ class LibrarySearchState internal constructor(open: Boolean, results: Boolean = 
 
     /** The results take the page ([show]: search is open with a query), or give it back to the library. */
     suspend fun showResults(show: Boolean) {
-        content.animateTo(if (show && open) 1f else 0f, FocalMotion.fade())
+        content.animateTo(if (show && open) 1f else 0f, FocalMotion.fadeSlow())
     }
 
     /** Closes back into the circle; [clear] then empties the query. */
@@ -285,39 +286,55 @@ fun SearchResults(
     ) {
         // The results keep the content column (at most 600 dp, centred) over the field below them.
         val side = FocalLayout.columnInset(maxWidth) - FocalLayout.gutter
-        when {
-            search.resultsQuery.isBlank() -> Unit
-            results.isEmpty() && !search.searching -> Text(
-                stringResource(R.string.search_none, search.resultsQuery), style = FocalType.secondary, color = colors.recede,
-                modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = side + FocalLayout.gutter)
-                    .padding(bottom = SearchMetrics.headGap),
-            )
-            else -> LazyColumn(
-                state = list,
-                reverseLayout = true,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = side, end = side,
-                    top = with(LocalDensity.current) { status.getTop(this).toDp() } + FocalLayout.topFade,
-                    // The last row's hit area reaches 12 dp below its text: its text ends 24 dp above the field.
-                    bottom = SearchMetrics.resultsGap - RowMetrics.hitPad,
-                ),
-            ) {
-                items(results, key = { it.row.id }, contentType = { "result" }) { result ->
-                    SearchResultItem(result, dates, today, onOpen, Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()))
-                }
-                item(key = "count", contentType = "head") {
+        val shows = when {
+            search.resultsQuery.isBlank() -> ResultsShow.Nothing
+            results.isEmpty() && !search.searching -> ResultsShow.None
+            else -> ResultsShow.List
+        }
+        // The list and the "no notes" line take each other's place on `fade`, never in one frame.
+        Crossfade(shows, Modifier.fillMaxSize(), animationSpec = FocalMotion.fade(), label = "results") { shown ->
+            when (shown) {
+                ResultsShow.Nothing -> Unit
+                ResultsShow.None -> Box(Modifier.fillMaxSize()) {
                     Text(
-                        pluralStringResource(R.plurals.search_count, results.size, results.size), style = FocalType.section,
-                        color = colors.recede,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = FocalLayout.gutter)
-                            .padding(bottom = SearchMetrics.headGap - RowMetrics.hitPad).semantics { heading() },
+                        stringResource(R.string.search_none, search.resultsQuery), style = FocalType.secondary, color = colors.recede,
+                        modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = side + FocalLayout.gutter)
+                            .padding(bottom = SearchMetrics.headGap),
                     )
+                }
+                ResultsShow.List -> LazyColumn(
+                    state = list,
+                    reverseLayout = true,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = side, end = side,
+                        top = with(LocalDensity.current) { status.getTop(this).toDp() } + FocalLayout.topFade,
+                        // The last row's hit area reaches 12 dp below its text: its text ends 24 dp above the field.
+                        bottom = SearchMetrics.resultsGap - RowMetrics.hitPad,
+                    ),
+                ) {
+                    items(results, key = { it.row.id }, contentType = { "result" }) { result ->
+                        SearchResultItem(
+                            result, dates, today, onOpen,
+                            Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()),
+                        )
+                    }
+                    item(key = "count", contentType = "head") {
+                        Text(
+                            pluralStringResource(R.plurals.search_count, results.size, results.size), style = FocalType.section,
+                            color = colors.recede,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = FocalLayout.gutter)
+                                .padding(bottom = SearchMetrics.headGap - RowMetrics.hitPad).semantics { heading() },
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+/** What the results page shows: nothing yet, "No notes found", or the matches. */
+private enum class ResultsShow { Nothing, None, List }
 
 /**
  * The bottom fade's alpha above the results (spec 2.6, 5.2): at rest every result clears it, so it stays off and the

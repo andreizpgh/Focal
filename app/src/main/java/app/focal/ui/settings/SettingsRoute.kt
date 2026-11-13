@@ -45,6 +45,8 @@ fun SettingsRoute(
     val actions = remember(settings, url) {
         SettingsActions(
             setTheme = settings::setTheme,
+            setParagraphTimes = settings::setParagraphTimes,
+            removeAllAudio = settings::removeAllAudio,
             back = { back() },
             sourceCode = {
                 try { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) } catch (_: ActivityNotFoundException) { }

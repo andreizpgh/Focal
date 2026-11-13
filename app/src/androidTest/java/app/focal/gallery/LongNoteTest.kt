@@ -17,6 +17,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextInputSelection
@@ -113,15 +114,18 @@ class LongNoteTest {
         // Edit a paragraph three hundred in: a tap on it enters Edit, the field takes the caret and the text changes.
         list.performScrollToIndex(DEEP_ITEM)
         rule.waitForIdle()
+        // On the paragraph's own text: the list's centre may be the gap between two paragraphs, where a tap is no tap.
+        val paragraph = rule.onNodeWithText(store.note.paragraphs[DEEP_ITEM].text)
         record {
-            list.performTouchInput { click(center) }
+            paragraph.performTouchInput { click(center) }
             rule.waitForIdle()
             val field = rule.onNode(hasSetTextAction() and SemanticsMatcher.expectValue(SemanticsProperties.Focused, true))
             field.performTextInputSelection(TextRange(0))
             field.performTextInput("Edited. ")
             rule.waitForIdle()
-            Thread.sleep(AUTOSAVE_WAIT_MS)
-            rule.waitForIdle()
+            // The autosave's debounce runs on the rule's clock, which only moves while something asks for frames:
+            // wait for the write itself rather than for whatever else happens to be animating.
+            rule.waitUntil(AUTOSAVE_WAIT_MS) { store.edits > 0 }
         }
         report("edit")
         assertTrue("the autosave wrote the edit", store.edits > 0)
@@ -155,7 +159,7 @@ class LongNoteTest {
         const val FLINGS = 20
         const val SWIPE_MS = 120L
         const val DEEP_ITEM = 300
-        const val AUTOSAVE_WAIT_MS = 900L
+        const val AUTOSAVE_WAIT_MS = 5_000L
         const val NANOS_PER_MS = 1_000_000.0
         const val FRAME_BUDGET_MS = 16.7
         const val P50 = 0.5

@@ -11,21 +11,25 @@ difference is listed under [Known deviations](#known-deviations).
 ## Principles
 
 - **Text is the product.** A note reads like a document: a title, a quiet
-  dateline and paragraphs. No timestamps, labels or counters in the text column.
+  dateline and short paragraphs. The only thing between them is the time a
+  paragraph starts at, for a note that still has its audio, and that can be
+  turned off.
 - **Two materials.** *Paper* is where notes are read and found: white, or near
   black in the dark theme. *The instrument* is the logo's own material, a
   near-black gradient with grain and a soft top highlight, used only for
   recording. It looks the same in both themes, so an open microphone is
   unmistakable from across a room.
 - **One focus.** Whatever is current is in full ink: new text while recording,
-  the paragraph being played or edited, the current find match. Everything else
-  recedes exactly one step to a muted gray. Text is never blurred, hidden or
+  the paragraph being played, the current find match. Everything else recedes
+  exactly one step to a muted gray. (In Edit everything stays in ink: the caret
+  says where the edit is.) Text is never blurred, hidden or
   replaced by placeholders.
 - **One bottom column.** Everything touched often sits in one column at the
   bottom, 24 dp from each edge: the dock, the feedback pill, the player strip, the
   search field and the find rows.
-- **Nothing to configure.** No language or model picker, no modes beyond Edit,
-  and a settings page with only theme, storage and About.
+- **Little to configure.** No language or model picker, no modes beyond Edit.
+  The settings page holds the theme, one reading option, one storage action and
+  About; every row on it does something.
 - **Nothing moves by itself.** Text stays where it is while it is edited, pages
   shift only under a finger, and what leaves fades where it stands.
 - **Honest states.** Progress is real, failures say what happened and what is
@@ -99,7 +103,7 @@ They match Material 3's standard motion scheme value for value.
 | --- | --- | --- | --- |
 | `press` | 0.9, 1400 | 224 ms | Press scale, the lens within a line, menu scale-in |
 | `move` | 0.9, 700 | 317 ms | Bounds and sizes: dock morphs, sheets, the settings swipe, the feedback pill |
-| `stage` | 0.9, 300 | 484 ms | The recording surface only: expand, fold, settle |
+| `stage` | 0.9, 300 | 484 ms | What takes the whole window: the recording surface (expand, fold, settle) and a note's page opening out of the stage or a row and folding back |
 | `fadeFast` | 1.0, 3800 | 150 ms | Icon and label swaps, exits |
 | `fade` | 1.0, 1600 | 231 ms | Layers, menus, notices, the theme switch |
 | `fadeSlow` | 1.0, 800 | 326 ms | Arriving text |
@@ -110,6 +114,16 @@ settle under reduced motion, and wherever the scene has no origin on screen (it
 fades in over a note's page when that note goes on recording); the 1.2 s sweep
 of the writing head; and the single 720 ms band of light when a note becomes
 ready.
+
+**Frame time never jumps.** Every animation is a function of frame time, and a
+frame that takes long (a page composed for the first time) would otherwise be
+followed by one that shows the motion where the wall clock says it should be by
+then: most of it gone in one step. The app's frame clock advances by at most
+40 ms a frame, so a long frame holds a motion still and the next goes on from
+there. A page change also waits for its page: a note opening out of the stage or
+a row starts to move once the note is loaded and laid out, and a fold once the
+library is laid out under it again. Nothing of a note is drawn before the note
+is there.
 
 New text **develops**: it fades in from a faint color to ink over about half a
 second, and the text before it recedes 140 ms later. There are no double-tap
@@ -142,7 +156,9 @@ deleting, Undo and errors are silent. Focal plays no sounds.
 A card at the top of the library in the instrument's material. It always holds
 what is current: while recording, the live wave, the running length and the
 latest line; otherwise the note being transcribed, or the latest note with a
-one-tap Copy. In an empty library there is no card; the nine bars rest in ink on
+one-tap Copy. Dragging the card down opens what it holds: the recording scene
+while recording, and at rest the note, whose card follows the finger and opens
+into the page when it is let go far enough (or flung); sooner, it goes back. In an empty library there is no card; the nine bars rest in ink on
 the paper above one line of invitation.
 
 ### The recording scene
@@ -171,10 +187,14 @@ words: after the library has been at rest for a moment the feedback pill reads
 own motion. The hint shows at most twice, only once the library holds a note,
 and never after settings has been opened. Nothing moves by itself.
 
-The page has its name beside the back arrow and three groups under small labels.
-A row is one line: what it is, then its value or the glyph of where it leads.
-What needs a sentence is a short note under its group. That Focal works offline
-is not a setting, so it closes the page under the mark.
+The page has its name beside the back arrow and four groups under small labels.
+A row is one line, and every row does something or leads somewhere: the theme;
+**Paragraph times**, a switch; **Remove all audio**, with what it would free
+beside it; the source code and the licenses. Only the version is there to be
+read. Remove all audio asks once, in a bottom sheet that says how many notes
+lose their audio, how much that frees and that their text stays: it cannot be
+undone from this page. That Focal works offline is not a setting, so it closes
+the page under the mark.
 
 Every input has another path: an "Open settings" accessibility action, Ctrl+, on
 a keyboard, and App info's settings link.
@@ -188,19 +208,23 @@ not ready ("42%", "Waiting"). The day is the label above it and the time of day
 is on the note's page. Search results show the day where the length was.
 
 A long press selects a note, the stage's note included; while notes are selected
-a tap adds or removes one, the dock is ✕ and "Delete N notes", and Back ends it.
-Deleting several notes offers one Undo. A note that is being transcribed cannot
-be selected.
+a tap adds or removes one, the dock is ✕, ⋮ and "Delete N notes", and Back ends
+it. Selected rows lie on one plate: rows selected next to each other join into a
+single block, square where they meet, and the stage lightens a step; neither
+gets an outline. ⋮ (there while a selected note has audio that can go) offers
+**Remove audio** with its size: the notes stay as text. Deleting several notes,
+or removing their audio, offers one Undo. A note that is being transcribed
+cannot be selected.
 
-Search keeps the library on screen until something is typed; the results then
-take the page, growing upward from the field. A tap on the library under an empty
-field closes search.
+Search keeps the library on screen until the first results are there; the
+library then dissolves as the results come up from the field, in one crossfade.
+A tap on the library under an empty field closes search.
 
 ### The dock
 
 At most three controls, whose meaning changes and whose position never does:
 Search and Record in the library; Pause and Finish while recording (Resume
-becomes a labeled pill while paused); ✕ and Delete while notes are selected;
+becomes a labeled pill while paused); ✕, ⋮ and Delete while notes are selected;
 Play, ● and Copy on a note. ● continues the recording into that note: the scene
 comes in over the page, its timer goes on from the note's length, and Finish
 settles it back. In a short window, where the dock stands in a side rail, there
@@ -224,6 +248,9 @@ it is read.
 
 - **Tap a word** to replace it: Edit opens with that word selected, so the next
   key replaces it. Between words, the caret goes there.
+- **Paragraph times.** A note that still has its audio shows, over each paragraph
+  after the first, the time it starts at; a tap plays from there. A setting turns
+  them off.
 - **Long-press** to sweep a phrase: the word under the finger, growing word by
   word as the finger moves; lifting it opens Edit with the phrase selected.
 - **▶ in the dock** plays the note. The playing paragraph stays in ink, a soft
@@ -241,10 +268,13 @@ it is read.
 
 ### Edit
 
-Paragraphs become text fields in place, with the same typography and the same
-line breaks, so nothing moves. The focused paragraph sits on a light sheet; the
-rest recede. Enter splits a paragraph and Backspace at its start joins it to the
-one before; one undo and redo history covers the session. Changes save 600 ms
+The paragraph with the caret becomes a text field in place, with the same
+typography and the same line breaks, so nothing moves; nothing is drawn around
+it and nothing recedes. A tap means the same everywhere in Edit as it did on the
+way in: on a word it selects the word, so the next key replaces it; inside what
+is selected it puts the caret there, to change a letter; on bare paper it puts
+the caret there. Enter splits a paragraph and Backspace at its start joins it to
+the one before; one undo and redo history covers the session. Changes save 600 ms
 after typing stops. ▶ in the edit bar plays just the audio of the selected words,
 or of the words around the caret, and stops: a word is checked against what was
 said without leaving it. **Restore original** for an edited paragraph is in the
@@ -252,8 +282,12 @@ edit menu. Done or Back leaves Edit; nothing is discarded and there is no dialog
 **Edit** in the note's menu is the way in without a pointer: the caret goes
 before the playing word, or to the start of the first paragraph on screen.
 
-While a caret stays in view the page does not scroll, and nothing is added under
-a paragraph while it is edited: text never moves under the fingers.
+The page moves for one reason only: the caret's line would otherwise be under the
+keyboard or the bar, and then by the least that brings it into view, together
+with the keyboard as it rises. The title and the dateline stay as Edit found
+them until Done (a title derived from the first sentence would change, and
+re-wrap, with every save of that sentence), and nothing is added under a
+paragraph while it is edited: text never moves under the fingers.
 
 ### Find and replace
 
@@ -331,6 +365,15 @@ ones stand in for amendments to the specification.
   (4.3); search keeps the library until a query is typed (5.2); body text breaks
   line by line, not as a whole paragraph (2.3); derived titles are at most 36
   characters and are never cut with an ellipsis (4.22.4).
+- **After the second week** (0.3.1) these were replaced too: the edit sheet and
+  the receding of the other paragraphs in Edit are gone, and a tap in Edit
+  selects a word (4.14, 5.7); paragraphs carry their start time (1, 5.5);
+  settings hold a switch and an action instead of a storage note (5.10); a
+  selection is one plate without a ring, and its dock has ⋮ (4.12, 4.3); the
+  stage opens its note by a drag too (6.5); a page transform runs on `stage`,
+  waits for its page and no longer counts from the tap (6.1, 2.8); search
+  crossfades to its results instead of fading through (5.2, Q7); a menu's
+  arrival starts at its first drawn frame (4.15).
 
 **Not resolved**
 

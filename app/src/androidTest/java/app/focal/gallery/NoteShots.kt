@@ -305,6 +305,8 @@ internal fun NoteDestination(
     NotePage(
         note = note, playback = playback, actions = actions, edits = edits, destination = destination,
         dates = dates, today = today, captureElsewhere = captureElsewhere, landing = landing, listState = list, page = page,
+        // As the app shows a note by default: with the setting "Paragraph times" on.
+        paragraphTimes = true,
     )
 }
 
