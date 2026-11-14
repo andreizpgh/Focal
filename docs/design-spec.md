@@ -361,8 +361,8 @@ One voice: critically or near-critically damped springs with no visible bounce, 
 | Token | Compose | Settle to 0.1 % | to 1 % | Used for |
 |---|---|---|---|---|
 | `press` | `spring(dampingRatio = 0.9f, stiffness = 1400f)` | 224 ms | 137 ms | Press scale 1 → 0.97; lens glide within a line; playhead 24 ↔ 32 dp; menu scale-in; Copied check scale |
-| `move` | `spring(0.9f, 700f)` | 317 ms | 194 ms | Bounds and sizes (dock morphs, Resume pill, search circle → field), `animateItem`, follow-scroll, strip, feedback pill, jump pill, provenance line, sheets, row and stage ↔ note transforms; the settings swipe's settle and the peek (4.23); the readiness pill's width |
-| `stage` | `spring(0.9f, 300f)` | 484 ms | 296 ms | The recording surface only: expand, fold, the drag's settle (clamped, 2.8.6), the settle into the note, the lift; and the Finish scroll-to-top |
+| `move` | `spring(0.9f, 700f)` | 317 ms | 194 ms | Bounds and sizes (dock morphs, Resume pill, search circle → field), `animateItem`, follow-scroll, strip, feedback pill, jump pill, provenance line, sheets, the settings swipe's settle and the peek (4.23); the readiness pill's width |
+| `stage` | `spring(0.9f, 300f)` | 484 ms | 296 ms | What takes the whole window: the recording surface (expand, fold, the drag's settle (clamped, 2.8.6), the settle into the note, the lift) and the Finish scroll-to-top; row and stage ↔ note transforms, opening and folding back (6.1); settings opening or closing with no finger on them (←, Esc, Back, the hint's Open, Ctrl+, the action, 4.23). A 0..1 progress that runs on it, or on `move` across the window, runs to 0.1 % (the settle time here), not to Compose's default 1 % |
 | `fadeFast` | `spring(1f, 3800f)` | 150 ms | 108 ms | Icon and label swaps; lens line-jump; menu exit; hint exit; row press plate; feedback exit |
 | `fade` | `spring(1f, 1600f)` | 231 ms | 166 ms | Layers, menus, top-bar items, notices, theme colour switch, scene fade during fold and settle |
 | `fadeSlow` | `spring(1f, 800f)` | 326 ms | 235 ms | Alpha of arriving text; the glow's arrival |
@@ -440,9 +440,9 @@ Applies when `ValueAnimator.areAnimatorsEnabled()` is false (animator duration s
 
 For every in-app back layer and page except the scene and the settings page:
 - During the gesture the page scales 1 → 0.9, its corner radius goes 0 → 28 dp, and it shifts `(W/20 − 8)` dp toward the swipe edge. Progress is mapped through `PathInterpolator(0f, 0f, 0f, 1f)`.
-- **Commit:** reverse container transform into the origin (`move`) if the origin is visible (for a note opened from the stage: into the stage, reverse T16′), otherwise a fade-through (`fade`). **Cancel:** spring back (`press`).
+- **Commit:** reverse container transform into the origin (`stage`) if the origin is visible (for a note opened from the stage: into the stage, reverse T16′), otherwise a fade-through (`fade`). **Cancel:** spring back (`press`).
 - **The scene:** the gesture drives the morph itself (6.4): `p = 1 − 0.4·PathInterpolator(0f, 0f, 0f, 1f)(backEvent.progress)`, so a full back swipe previews exactly the 40 % release threshold. Commit: `animateTo(0)` on `stage`. Cancel: `animateTo(1)` on `move`. The swipe edge does not shift the scene sideways: the morph's target is the stage, not an edge.
-- **Settings:** the gesture drives s itself (4.23.4): s = 1 − progress, so the page follows the gesture's progress as the in-app swipe follows the finger. Commit: `animateTo(0)` on `move`. Cancel: `animateTo(1)` on `move`.
+- **Settings:** the gesture drives s itself (4.23.4): s = 1 − progress, so the page follows the gesture's progress as the in-app swipe follows the finger. Commit: `animateTo(0)` on `stage`. Cancel: `animateTo(1)` on `move`.
 - Back layers resolve in this order: menu → keyboard (system) → find → edit (= Done) → search → player → scene → page (Note, Licenses) → settings.
 
 #### 2.8.6 Expansion constants
@@ -587,7 +587,7 @@ Each entry lists anatomy, size, states and motion. "Pressed" is the `press` stat
 - **Save failure.** A `meta` `muted` "Not saved" appears left of ⋮ (`fade`) and Done's label becomes "Retry". Back triggers a retry. A second failure shows the feedback pill "Couldn’t save your edit. Free up some space, then tap Retry." above the keyboard; the user stays in Edit and nothing is discarded.
 
 #### 4.1.4 Settings and Licenses bar
-← "Back" at x 12–60 only. The page title (`title`) sits at y 112 and collapses into the bar on scroll exactly like the note title. On Settings, ← closes the page with the swipe's own motion (s 1 → 0 on `move`, 4.23.4); in `SettingsActivity` (the App info entry) it finishes the activity.
+← "Back" at x 12–60 only. The page title (`title`) sits at y 112 and collapses into the bar on scroll exactly like the note title. On Settings, ← closes the page (s 1 → 0 on `stage`, 4.23.4); in `SettingsActivity` (the App info entry) it finishes the activity.
 
 ### 4.2 Icon button
 48 dp target, 24 dp glyph. Pressed: a 40 dp `press` circle behind the glyph (`fadeFast`). Disabled: `faint` glyph, no press layer, `disabled()` semantics. A content description is required (section 12).
@@ -1005,7 +1005,7 @@ v is the finger's horizontal velocity from a `VelocityTracker` over the last ~90
 
 #### 4.23.4 Closing
 - **Swipe** right across the page (4.23.3).
-- **←** (top bar, 12–60 × 48–96) and **Esc**: s 1 → 0 on `move` from rest. The **Back key** (3-button navigation, a hardware Back key; API ≤ 33, where back has no progress) reaches the same `PredictiveBackHandler` as the gesture: its flow emits no events, so only the `animateTo(0f, move)` after `collect` runs.
+- **←** (top bar, 12–60 × 48–96) and **Esc**: s 1 → 0 on `stage` from rest. The **Back key** (3-button navigation, a hardware Back key; API ≤ 33, where back has no progress) reaches the same `PredictiveBackHandler` as the gesture: its flow emits no events, so only the `animateTo(0f, stage)` after `collect` runs.
 - **Predictive back** (API 34+): the gesture drives s itself: s = 1 − `BackEventCompat.progress` while the gesture runs, so the page follows the gesture's progress (the system reports it along the screen width, as the in-app swipe tracks the finger along D_s; the finger is not pinned to the page, because the system owns the gesture). Commit: `animateTo(0)` on `move`. Cancel: `animateTo(1)` on `move`. `swipeEdge` is ignored: the page always leaves to the right, also for a gesture from the right edge. The generic page preview of 2.8.5 (scale 0.9) is not used here.
 - **Licenses** (pushed from Settings) returns to Settings with 2.8.5's generic predictive back; the strip stays at s = 1 underneath.
 - After a close the library is exactly as it was: the scroll position, the stage, a running recording.
@@ -1382,7 +1382,7 @@ Durations are settle times (2.8). "+n" is a start delay after the trigger. Under
 | T16′ | **Stage ↔ note** | Tap on the stage (note states): container transform from the stage's bounds to the page (`move`), r 28 → 0; the material crossfades to paper over the first 60 % of the travel; the title is a `sharedElement`, 22 → 28 sp (`ScaleToBounds`), `stageInk` → `ink`, x 44 → 24, top 76 → 112; the time, text and footer leave (`fadeFast`); the body arrives at +80 (`fade`); the dock: Search \| Record → ▶ \| Copy or progress (containers crossfade, glyphs and labels fade through, 4.3; the geometry is the same); the page's chrome (top fade, ← ✎ ⋮) has the paper's alpha, so no white band or half-clipped icon appears inside the dark card. **Back reverses it into the stage** (V7, S1): paper → material over the last 60 %, the stage's time, text and footer arrive over the last 40 % (`smoothstep(0.6, 1, q)`), the dock returns to the idle library dock (Search \| Record, fade-through). Predictive back previews it (2.8.5). | ≈ 400 ms |
 | T17 | Search open / close | The stage fades out with the list and the sticky label (`fade`). | ≈ 320 ms + IME |
 | T18–T23, T25, T26 | Menu, Delete → Undo, Find, Replace all, Theme, Remove audio, Rationale, Splash | Defined with their components and screens (4.15, 5.1.7, 5.8, 5.9, 5.10, 5.11, 5.13). Delete of the stage note: 4.22.6. | |
-| T24′ | **Library ↔ Settings** (the swipe, ←, Back, predictive back, Ctrl+,, the TalkBack action) | Both pages move as one strip, finger-tracked: library x = −s·(W + 8), settings x = (1 − s)·(W + 8), the 8 dp `s2` seam between them, seam-side corners 28 dp in flight (4.23.2). Release past 0.35 or a fling completes on `move` (no bounce, clamped); otherwise it springs back. Keys, ← and the action animate from rest on `move`. Reduced motion: fade-through, 150 ms | finger + ≤ 317 ms |
+| T24′ | **Library ↔ Settings** (the swipe, ←, Back, predictive back, Ctrl+,, the TalkBack action) | Both pages move as one strip, finger-tracked: library x = −s·(W + 8), settings x = (1 − s)·(W + 8), the 8 dp `s2` seam between them, seam-side corners 28 dp in flight (4.23.2). Release past 0.35 or a fling completes on `move` (no bounce, clamped); otherwise it springs back. Keys, ← and the action animate from rest on `stage`. Reduced motion: fade-through, 150 ms | finger + ≤ 317 ms |
 | T27′ | Empty → first note | T1′e from the resting instrument. Finish lands on the note (V7); Back folds the page into the stage, which appears here for the first time at 56–296 (reverse T16′); the list below it is still empty (the stage's note is not repeated, 4.22.2). The search circle grows from width 0 and Record's left edge goes 24 → 92 (`move`). | ≈ 400 ms |
 | T28 | **Drag the live stage down / swipe the scene up** | Only while a capture runs (X4). The morph tracks the finger: `p = clamp(p₀ + Δy / D, 0, 1)`. Release: 6.5. Settle on `stage` with the finger's velocity, clamped at the bounds. | finger + ≤ 484 ms |
 | T29 | **Predictive back on the scene** | `p = 1 − 0.4·PathInterpolator(0, 0, 0, 1)(progress)`. Commit: p → 0 on `stage`. Cancel: p → 1 on `move`. | gesture + ≤ 484 ms |
@@ -1668,7 +1668,7 @@ The swipe is an accelerator, never the only path (X1).
 | Light-up blur growth (T1′) | none | none | yes | yes | yes |
 | Drag to expand / swipe up to collapse | Nested scroll + pointer input, identical | same | same | same | same |
 | The settings swipe and the peek | Pointer input + `graphicsLayer` translation, identical | same | same | same | same |
-| Predictive back on Settings | Back key → s 1 → 0 on `move` | same | same | 33: `OnBackInvokedCallback` without progress → the same | 34+: progress drives s (4.23.4) |
+| Predictive back on Settings | Back key → s 1 → 0 on `stage` | same | same | 33: `OnBackInvokedCallback` without progress → the same | 34+: progress drives s (4.23.4) |
 | App info gear (`APPLICATION_PREFERENCES`) | yes (API 24+) | yes | yes | yes | yes |
 | Keyboard-shortcuts helper (Ctrl+,) | yes (API 24+) | yes | yes | yes | yes |
 | Morph wave blur (in flight) | Alpha only | Sprite cache (2 dp buckets) | Sprite cache | Sprite cache | Sprite cache |

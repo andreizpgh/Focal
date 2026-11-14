@@ -3,11 +3,11 @@
   <h1>Focal</h1>
   <p>Offline voice notes for Android. Speak, and it’s written down.</p>
   <p>
-    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/v0.3.1/Focal-0.3.1.apk">Download Focal 0.3.1</a></strong>
+    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/v0.3.2/Focal-0.3.2.apk">Download Focal 0.3.2</a></strong>
     &nbsp; · &nbsp;
     <a href="docs/install.md">Install guide</a>
     &nbsp; · &nbsp;
-    <a href="https://github.com/andreizpgh/Focal/releases/tag/v0.3.1">Release notes</a>
+    <a href="https://github.com/andreizpgh/Focal/releases/tag/v0.3.2">Release notes</a>
   </p>
   <sub>Android 8.0+ · ARM64 · about 0.7 GB · testing release</sub>
 </div>
@@ -48,7 +48,7 @@ Tap **Finish**, then **Copy**.
   it, from one note, several, or all of them. Copy gives you clean paragraphs,
   nothing else.
 
-Version 0.3.1 installs over 0.3.0 and 0.2.0 and keeps your notes.
+Version 0.3.2 installs over 0.3.1, 0.3.0 and 0.2.0 and keeps your notes.
 
 **Status:** a testing release. It has been checked on Android emulators, not yet
 on phones: speed, memory, battery, heat, long background recordings and natural
