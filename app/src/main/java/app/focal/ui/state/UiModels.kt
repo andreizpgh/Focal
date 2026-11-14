@@ -440,4 +440,6 @@ data class SettingsUiState(
     val versionName: String = "",
     /** A note with audio shows the time each paragraph starts at. */
     val paragraphTimes: Boolean = true,
+    /** Whether [audioBytes] and [notesWithAudio] have been read yet. */
+    val usageKnown: Boolean = true,
 )

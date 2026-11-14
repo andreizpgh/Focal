@@ -2,10 +2,12 @@ package app.focal.ui.shell
 
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
@@ -39,6 +41,7 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.smoothstep
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -67,16 +70,24 @@ class SettingsStripState internal constructor(open: Boolean) {
      */
     var armed by mutableStateOf(true)
 
-    /** Opens with `move` from wherever s is (the reduced-motion crossfade under [reducedMotion]). */
-    suspend fun open(reducedMotion: Boolean = false) = settle(1f, reducedMotion)
+    /** The spring of the last settle: a touch that catches it and lets it go on resumes on the same one. */
+    internal var settleSpring: AnimationSpec<Float> = FocalMotion.moveUnit()
+        private set
 
-    suspend fun close(reducedMotion: Boolean = false) = settle(0f, reducedMotion)
+    /**
+     * Opens from wherever s is with no finger on it (the hint's Open, the keyboard, Back's close): the whole window
+     * slides, so on `stage`, which `move` would cross in a blink (the reduced-motion crossfade under [reducedMotion]).
+     */
+    suspend fun open(reducedMotion: Boolean = false) = settle(1f, reducedMotion, spring = FocalMotion.stageUnit())
+
+    suspend fun close(reducedMotion: Boolean = false) = settle(0f, reducedMotion, spring = FocalMotion.stageUnit())
 
     /** For the swipe's release: `move` with the finger's velocity, in s per second, clamped at the bounds. */
-    suspend fun settle(target: Float, reducedMotion: Boolean, velocity: Float = 0f) {
+    suspend fun settle(target: Float, reducedMotion: Boolean, velocity: Float = 0f, spring: AnimationSpec<Float> = FocalMotion.moveUnit()) {
         composedSettings = composedSettings || target > 0f
+        settleSpring = spring
         if (reducedMotion) withContext(FocalFullMotion) { progress.animateTo(target, FocalMotion.reducedCrossfade) }
-        else progress.animateTo(target, FocalMotion.move(), initialVelocity = velocity)
+        else progress.animateTo(target, spring, initialVelocity = velocity)
     }
 
     /** The finger's tracking: composes the settings page the first time s leaves 0, then moves s there. */
@@ -118,17 +129,27 @@ fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, se
     val libraryHidden by remember(state) { derivedStateOf { state.progress.value >= 1f } }
     val settingsHidden by remember(state) { derivedStateOf { state.progress.value <= 0f } }
     if (!settingsHidden) SideEffect { state.composedSettings = true }
+    // Settings is composed off screen once the library has had a moment to settle, not in the first frame of the
+    // first swipe: that frame would otherwise build the page, its view model and its controls while the finger moves.
+    LaunchedEffect(state) {
+        if (state.composedSettings) return@LaunchedEffect
+        delay(SETTINGS_WARM_MS)
+        state.composedSettings = true
+    }
     val corner = FocalShapes.sheetRadius
+    // One shape per side for the whole swipe, not one per frame.
+    val librarySeam = remember(corner) { SeamSideShape(corner, seamAtEnd = true) }
+    val settingsSeam = remember(corner) { SeamSideShape(corner, seamAtEnd = false) }
     // The handler's own coroutine is cancelled with the gesture, so the spring back runs in this scope; a back that
     // follows at once stops it before it can undo the close.
     val scope = rememberCoroutineScope()
     val springBack = remember { PendingJob() }
     // The gesture's own previews move s's target below 1; the handler stays with the gesture it started.
     var backing by remember { mutableStateOf(false) }
-    // The licences pushed from settings cover the strip, which stays open beneath them (4.23.4). In two panes the
-    // library's pane stays composed under them and its handlers come after the display's, so Back would close the
-    // hidden strip and leave the licences on screen: Back is theirs.
-    val covered = LocalShell.current.current == Destination.Licenses
+    // The licences pushed from settings cover the strip, which stays open beneath them (4.23.4). The library's pane
+    // stays composed under them and its handlers come after the display's, so Back would close the hidden strip and
+    // leave the licences on screen: Back is theirs.
+    val covered = LocalShell.current.libraryCovered
     PredictiveBackHandler(enabled = (state.isOpen || backing) && !covered) { events ->
         springBack.cancel()
         backing = true
@@ -169,10 +190,14 @@ fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, se
                 .inert(libraryHidden)
                 .graphicsLayer {
                     val s = state.progress.value
-                    if (reduced) alpha = 1 - smoothstep(0f, HALF, s) else {
+                    if (reduced) {
+                        // Reduced motion crossfades in place: the page faded out stands aside, so it takes no tap.
+                        alpha = 1 - smoothstep(0f, HALF, s)
+                        translationX = if (alpha <= 0f) -direction * ASIDE * size.width else 0f
+                    } else {
                         translationX = -direction * s * settingsTravel(size.width, this)
                         clip = s > 0f && s < 1f
-                        shape = if (clip) SeamSideShape(corner, seamAtEnd = true) else RectangleShape
+                        shape = if (clip) librarySeam else RectangleShape
                     }
                 }
                 // Each page is opaque paper, so the seam shows only between them and under their rounded corners.
@@ -185,10 +210,14 @@ fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, se
                     .inert(settingsHidden)
                     .graphicsLayer {
                         val s = state.progress.value
-                        if (reduced) alpha = smoothstep(HALF, 1f, s) else {
+                        if (reduced) {
+                            // Composed ahead of the first swipe, it lies over the library: unseen, it is aside.
+                            alpha = smoothstep(HALF, 1f, s)
+                            translationX = if (alpha <= 0f) direction * ASIDE * size.width else 0f
+                        } else {
                             translationX = direction * (1 - s) * settingsTravel(size.width, this)
                             clip = s > 0f && s < 1f
-                            shape = if (clip) SeamSideShape(corner, seamAtEnd = false) else RectangleShape
+                            shape = if (clip) settingsSeam else RectangleShape
                         }
                     }
                     .background(colors.paper),
@@ -198,6 +227,10 @@ fun SettingsStrip(state: SettingsStripState, library: @Composable () -> Unit, se
 }
 
 private const val HALF = 0.5f
+/** A page faded out under reduced motion is placed this many widths aside. */
+private const val ASIDE = 2f
+/** How long after the library first shows the settings page is composed beside it, off screen. */
+private const val SETTINGS_WARM_MS = 1_500L
 
 /** A page in motion: the `sheet` radius on its seam side only (spec 4.23.2). Mirrored in RTL. */
 internal class SeamSideShape(private val radius: Dp, private val seamAtEnd: Boolean) : Shape {

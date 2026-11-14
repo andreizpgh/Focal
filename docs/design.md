@@ -102,8 +102,8 @@ They match Material 3's standard motion scheme value for value.
 | Token | Spring (damping, stiffness) | Settles in | Used for |
 | --- | --- | --- | --- |
 | `press` | 0.9, 1400 | 224 ms | Press scale, the lens within a line, menu scale-in |
-| `move` | 0.9, 700 | 317 ms | Bounds and sizes: dock morphs, sheets, the settings swipe, the feedback pill |
-| `stage` | 0.9, 300 | 484 ms | What takes the whole window: the recording surface (expand, fold, settle) and a note's page opening out of the stage or a row and folding back |
+| `move` | 0.9, 700 | 317 ms | Bounds and sizes: dock morphs, sheets, the settings swipe as it is let go, the feedback pill |
+| `stage` | 0.9, 300 | 484 ms | What takes the whole window: the recording surface (expand, fold, settle), a note's page opening out of the stage or a row and folding back, and settings sliding in or out with no finger on them |
 | `fadeFast` | 1.0, 3800 | 150 ms | Icon and label swaps, exits |
 | `fade` | 1.0, 1600 | 231 ms | Layers, menus, notices, the theme switch |
 | `fadeSlow` | 1.0, 800 | 326 ms | Arriving text |
@@ -121,13 +121,29 @@ followed by one that shows the motion where the wall clock says it should be by
 then: most of it gone in one step. The app's frame clock advances by at most
 40 ms a frame, so a long frame holds a motion still and the next goes on from
 there. A page change also waits for its page: a note opening out of the stage or
-a row starts to move once the note is loaded and laid out, and a fold once the
-library is laid out under it again. Nothing of a note is drawn before the note
-is there.
+a row starts to move once the note is loaded and laid out (it is read as the
+finger lands), and nothing of a note is drawn before the note is there. The
+library stays composed under the pages opened over it, so Back folds a page away
+at once. A page that has left is never drawn again, and nothing on a page that
+is leaving or still opening can be pressed. A tap on the library while a page
+folds away, or while a card let go short goes back into the stage, reaches the
+row it was meant for: the motion finishes four times as fast while the next page
+composes, and that page opens from where it landed, so two pages never share a
+frame and the tap is not lost.
+
+A finger that drags something carries it exactly: a pulled card's edge is under
+the finger in every frame, with no smoothing. Let go, the motion goes on from
+there at the finger's speed on its own spring (a card let go short goes back the
+same way), so it neither lurches nor stops dead. Springs that carry something
+across the window run to 0.1 % of their way, as the page clock does, instead of
+Compose's default 1 %, which ends in a visible step of 10-20 px.
 
 New text **develops**: it fades in from a faint color to ink over about half a
 second, and the text before it recedes 140 ms later. There are no double-tap
-gestures anywhere, so every tap acts on release without a delay.
+gestures anywhere, so every tap acts on release without a delay. One guard comes
+from that: a dock button whose face changed less than 300 ms ago ignores a tap,
+so the second tap of an accidental double tap never presses what replaced the
+first one (Record after Delete N, Finish after Record).
 
 Under reduced motion, the expand, fold and settle become a 150 ms crossfade
 (never a cut from white paper to near-black), the readiness band is dropped, and
@@ -156,10 +172,12 @@ deleting, Undo and errors are silent. Focal plays no sounds.
 A card at the top of the library in the instrument's material. It always holds
 what is current: while recording, the live wave, the running length and the
 latest line; otherwise the note being transcribed, or the latest note with a
-one-tap Copy. Dragging the card down opens what it holds: the recording scene
-while recording, and at rest the note, whose card follows the finger and opens
-into the page when it is let go far enough (or flung); sooner, it goes back. In an empty library there is no card; the nine bars rest in ink on
-the paper above one line of invitation.
+one-tap Copy. Dragging the card down opens what it holds, the same way in both
+cases: while recording the scene, and at rest the note. The card's edge follows
+the finger all the way, and a note's card turns into its page under the finger;
+let go past 40 % of the way, or flung down, it opens, and sooner it goes back
+into the card. In an empty library there is no card; the nine bars rest in ink
+on the paper above one line of invitation.
 
 ### The recording scene
 
@@ -374,6 +392,15 @@ ones stand in for amendments to the specification.
   waits for its page and no longer counts from the tap (6.1, 2.8); search
   crossfades to its results instead of fading through (5.2, Q7); a menu's
   arrival starts at its first drawn frame (4.15).
+- **After the third round** these changed as well: pulling a note's card follows
+  the finger all the way and scrubs the opening itself, with the release rule of
+  6.5's Release row and 6.1 T16′; this replaces the "a drag on a note stage
+  starts nothing" rules of X4, V3, 4.22 (Stage row), T28 and 6.5 (Never row).
+  The dock keeps the library's controls until the finger lets go into the page.
+  The library is composed once and stays under the pages over it (one pane
+  composed it per visit); a tap on it during a fold opens its note once the fold
+  has landed (6.1); a button whose face has just changed ignores a tap for the
+  double-tap time (4.3).
 
 **Not resolved**
 

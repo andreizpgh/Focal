@@ -8,6 +8,8 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +32,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
@@ -59,6 +62,8 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
@@ -207,6 +212,8 @@ class StageActions(
     val select: (NoteRow) -> Unit = {},
     /** The note's actions as accessibility actions, offered on a note stage before "Open settings" (spec 12). */
     val menuActions: (NoteRow) -> List<CustomAccessibilityAction> = { emptyList() },
+    /** A finger landed on a stage holding a note: its note may be read ahead of a tap or a pull (by note id). */
+    val prepare: (String) -> Unit = {},
 )
 
 /**
@@ -247,6 +254,15 @@ fun StageCard(
     if (stage is StageUi.Live) Speaks(spoken) { stageDescription(stage.copy(elapsedSeconds = seconds()), dates, today) }
     val description = if (stage is StageUi.Live) null else stageDescription(stage, dates, today)
     val note = (stage as? StageUi.Note)?.row
+    val prepare by rememberUpdatedState(actions.prepare)
+    // Another note on the card (the one before was deleted, or Undo brought it back): its title, time and text come
+    // in on `fade` instead of replacing the last ones in a single frame. The first note shown is simply there.
+    val firstNote = remember { NoteOnStage(note?.id) }
+    val arrival = remember(note?.id) { Animatable(if (note?.id == firstNote.id || reduced) 1f else 0f) }
+    LaunchedEffect(arrival) {
+        firstNote.id = null
+        if (arrival.value < 1f) arrival.animateTo(1f, FocalMotion.fade())
+    }
     val clickLabel = stringResource(if (note != null) R.string.a11y_open_note else R.string.a11y_expand_recording)
     // The keys the focused card answers itself (spec 8.5), which the two-pane library leaves to it: Space on the live
     // stage expands it, as Enter does (both through the card's click); Ctrl+C on a stage holding a note copies that
@@ -287,6 +303,15 @@ fun StageCard(
                 if (note != null && selected) this.selected = true
             }
             .pressScale(source)
+            // Its note is read as the finger lands, so the page a tap or a pull opens has it in its first frame.
+            .then(
+                if (note == null) Modifier else Modifier.pointerInput(note.id) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        prepare(note.id)
+                    }
+                },
+            )
             .focusRing(FocalShapes.sheet)
             .onFocusChanged {
                 if (it.hasFocus && !focusOrigin.focused) focusOrigin.byItself = focusOrigin.modeSeen == InputMode.Touch
@@ -323,7 +348,7 @@ fun StageCard(
         if (shimmering) Spacer(Modifier.matchParentSize().shimmer { shimmer.value })
         when (stage) {
             is StageUi.Live -> RecordedStage { LiveStage(stage, meter, seconds) }
-            is StageUi.Note -> RecordedStage { NoteStage(
+            is StageUi.Note -> RecordedStage(alpha = { arrival.value }) { NoteStage(
                 stage, dates, today, actions, title, origin, shown, copyRequests = { copyRequests.intValue },
                 checked = { check.value },
                 onReadyMoment = {
@@ -350,7 +375,7 @@ fun StageCard(
  * the recording it had when Finish was tapped: the content is leaving, it must not turn into the note on its way out.
  */
 @Composable
-private fun RecordedStage(content: @Composable () -> Unit) {
+private fun RecordedStage(modifier: Modifier = Modifier, alpha: () -> Float = { 1f }, content: @Composable () -> Unit) {
     val shell = LocalShell.current
     val live = shell.live
     val layer = rememberGraphicsLayer()
@@ -359,8 +384,11 @@ private fun RecordedStage(content: @Composable () -> Unit) {
         onDispose { if (live.stageNote === layer) live.stageNote = null }
     }
     Box(
-        Modifier.drawWithContent {
+        modifier.drawWithContent {
             if (!shell.pages.freezesStage()) layer.record { this@drawWithContent.drawContent() }
+            // On the recording itself, so what draws it elsewhere (a page opening out of it, the scene) draws it as
+            // faded in as the card is, never whole over a card that is still arriving.
+            layer.alpha = alpha()
             drawLayer(layer)
         },
     ) { content() }
@@ -532,7 +560,8 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter, seconds: () -> Long
                         // Under the open scene the stage is covered (the scene draws the same meter): no frames.
                         NineBars(
                             WaveMode.Live(meter, stage.paused), WaveDress.Material, Modifier.markBox(StageMetrics.wave),
-                            active = { !shell.live.open },
+                            // Nor while a page or settings covers the library: the card is not seen, so no frames.
+                            active = { !shell.live.open && !shell.libraryCovered && shell.settings.progress.value < 1f },
                         )
                         // The badge is part of the mark, which never mirrors: placed from the wave's left edge in every
                         // layout direction, as the morph places it (wave.left + BADGE_X), so the first frame of an
@@ -875,3 +904,6 @@ private fun rememberFigureMetrics(): FigureMetrics {
         FigureMetrics(paint, FocalType.stageLength.letterSpacing.value * size)
     }
 }
+
+/** The note the card showed when it was first composed (see StageCard's arrival). */
+private class NoteOnStage(var id: String?)

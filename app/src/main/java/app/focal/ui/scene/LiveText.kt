@@ -297,13 +297,12 @@ fun StageTranscript(
     val shown = remember(paragraphs) { paragraphs.takeLast(STAGE_PARAGRAPHS) }
     val view = rememberTranscript(shown)
     val motion = rememberTranscriptMotion(view, focus)
-    val now = remember(view) { SystemClock.uptimeMillis() }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(gap, Alignment.Bottom)) {
         if (view.paragraphs.isEmpty()) hint?.invoke()
         view.paragraphs.forEachIndexed { index, paragraph ->
             androidx.compose.runtime.key(paragraph.id) {
                 val (bright, recede) = view.spans(index)
-                Arriving(view.opens(index, now), Modifier.fillMaxWidth()) {
+                Arriving(view.opens(index, SystemClock.uptimeMillis()), Modifier.fillMaxWidth()) {
                     LiveParagraphText(paragraph.text, bright, recede, style, inks, motion)
                 }
             }
@@ -335,7 +334,6 @@ fun SceneTranscript(
 ) {
     val view = rememberTranscript(paragraphs)
     val motion = rememberTranscriptMotion(view, focus = true)
-    val now = remember(view) { SystemClock.uptimeMillis() }
     val newest = view.paragraphs.lastOrNull()?.id
     // The data changes in composition, so the list keeps the latest paragraph in view in the same frame.
     val following by remember(state) { derivedStateOf { state.firstVisibleItemIndex == 0 } }
@@ -355,7 +353,7 @@ fun SceneTranscript(
         itemsIndexed(reversed, key = { _, paragraph -> paragraph.id }, contentType = { _, _ -> PARAGRAPH }) { position, paragraph ->
             val index = view.paragraphs.lastIndex - position
             val (bright, recede) = view.spans(index)
-            Arriving(view.opens(index, now), Modifier.fillMaxWidth()) {
+            Arriving(view.opens(index, SystemClock.uptimeMillis()), Modifier.fillMaxWidth()) {
                 LiveParagraphText(paragraph.text, bright, recede, style, inks, motion)
             }
         }

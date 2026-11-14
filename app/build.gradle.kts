@@ -114,8 +114,8 @@ android {
         applicationId = "app.focal"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.3.1"
+        versionCode = 13
+        versionName = "0.3.2"
         // The app verifies its installed model copy against the same lock the build used.
         buildConfigField("String", "ULTRA_MODEL_FILES",
             "\"" + modelFiles.joinToString(";") { "${it.name}:${it.bytes}:${it.sha256}" } + "\"")

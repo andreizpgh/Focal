@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -180,6 +181,8 @@ fun StagePill(
     var announced by remember { mutableStateOf(false) }
     // Both faces are composed only while the morph runs.
     var morphing by remember { mutableStateOf(false) }
+    // The progress face has not fully left (read through derived state: not every frame of the morph).
+    val outgoing by remember { derivedStateOf { q.value < 1f } }
 
     LaunchedEffect(copy != null) {
         if (copy == null) {
@@ -300,7 +303,9 @@ fun StagePill(
     ) {
         // The outgoing progress content: the label and its track, out at 1 - smoothstep(0, 0.5, q).
         val shownLabel = lastLabel
-        if (progress != null || morphing) {
+        // Also in the frame the note turns ready, before the morph's effect has started: the Copy face is still at
+        // q = 0 then, and without the label the pill would be blank for that frame.
+        if (progress != null || morphing || outgoing) {
             val withTrack = (progress?.phase ?: ProgressPhase.Transcribing) == ProgressPhase.Transcribing
             Box(Modifier.matchParentSize().graphicsLayer { alpha = 1 - smoothstep(0f, HALF, q.value) }) {
                 Text(

@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -146,6 +147,8 @@ fun SettingsPage(
     val context = LocalContext.current
     val pane = stringResource(R.string.settings_pane)
     var confirming by rememberSaveable { mutableStateOf(false) }
+    // Nothing left to remove (the last audio went elsewhere): the question is withdrawn, not kept for later.
+    if (confirming && state.usageKnown && state.notesWithAudio == 0) SideEffect { confirming = false }
     val audio = Formatter.formatShortFileSize(context, state.audioBytes)
     Box(modifier.fillMaxSize().semantics { paneTitle = pane }) {
         Column(
@@ -169,11 +172,18 @@ fun SettingsPage(
                 GroupLabel(stringResource(R.string.settings_notes))
                 SwitchRow(stringResource(R.string.paragraph_times), state.paragraphTimes, actions.setParagraphTimes)
                 GroupLabel(stringResource(R.string.settings_storage))
-                // The action itself, with what it would free beside it; with no audio kept there is nothing to do.
+                // The action itself, with what it would free beside it; with no audio kept there is nothing to do. Until
+                // the space is read (a moment, off screen) it says nothing rather than something it would take back.
                 SettingsRow(
                     stringResource(R.string.storage_remove_all),
-                    value = if (state.notesWithAudio > 0) audio else stringResource(R.string.storage_none),
-                    onClick = { confirming = true }, enabled = state.notesWithAudio > 0,
+                    value = when {
+                        !state.usageKnown -> ""
+                        state.notesWithAudio > 0 -> audio
+                        else -> stringResource(R.string.storage_none)
+                    },
+                    // A tap before the space is read asks nothing: the sheet would otherwise wait and open by itself.
+                    onClick = { if (state.usageKnown && state.notesWithAudio > 0) confirming = true },
+                    enabled = !state.usageKnown || state.notesWithAudio > 0,
                 )
                 GroupLabel(stringResource(R.string.settings_about))
                 SettingsRow(

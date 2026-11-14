@@ -184,6 +184,7 @@ class SurfaceTouch(live: LiveSurfaceState, scope: CoroutineScope, internal val r
             val velocity = VelocityTracker().apply { addPosition(down.uptimeMillis, down.position) }
             val mayFold = mayFold(down.position)
             var claimed = false
+            var moved = false
             var lockY = 0f
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Main)
@@ -195,6 +196,9 @@ class SurfaceTouch(live: LiveSurfaceState, scope: CoroutineScope, internal val r
                             change.consume()
                             release(velocity.calculateVelocity().y)
                         }
+                        // A control took the tap (the chevron folds the scene): what it started stands. A drag that a
+                        // child kept (the text scrolling) ends consumed as well: the settle it caught goes on.
+                        change.isConsumed && !moved -> Unit
                         // A tap, or a stream the region kept without folding: the settle goes on.
                         caught && !region.tracking -> scope.launch { live.settle(heading, reduced) }
                     }
@@ -202,6 +206,7 @@ class SurfaceTouch(live: LiveSurfaceState, scope: CoroutineScope, internal val r
                 }
                 if (!claimed) {
                     val delta = change.position - down.position
+                    if (delta.getDistance() > viewConfiguration.touchSlop) moved = true
                     if (delta.getDistance() <= viewConfiguration.touchSlop || change.isConsumed) continue
                     val vertical = abs(delta.y) > abs(delta.x)
                     if (!vertical || !mayFold || (!caught && delta.y >= 0f)) {

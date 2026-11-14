@@ -507,6 +507,7 @@ private fun TextRegion(
     // On the stage a storage-full pause recedes the transcript under its "Storage is full" line (4.22.3); the scene
     // keeps its latest stretch bright and says it in the state line alone (4.21.4).
     val stageFocus = !scene.storageFull
+    val paragraphs = scene.paragraphs
     Box(
         Modifier
             .fillMaxSize()
@@ -573,8 +574,10 @@ private fun TextRegion(
                 .placeAt { val f = frame.value; Rect(0f, f.textTop, slots.width, f.textBottom) }
                 .graphicsLayer { alpha = frame.value.sceneTextAlpha }
                 .nestedScroll(fold)
+                // Reads the paragraphs, not the whole scene: the scene changes every second with its timer, and a
+                // modifier that captured it would compose the transcript again every second while recording.
                 .semantics {
-                    val latest = scene.paragraphs.lastOrNull()?.text
+                    val latest = paragraphs.lastOrNull()?.text
                     if (latest != null) customActions = listOf(CustomAccessibilityAction(readLabel) { announced = latest; true })
                 },
         )
@@ -796,7 +799,11 @@ private fun LatestPill(open: Boolean, listState: LazyListState, slots: SceneSlot
     val scale = remember { Animatable(if (shown) 1f else JUMP_START_SCALE) }
     LaunchedEffect(shown) {
         if (shown) {
-            launch { scale.snapTo(JUMP_START_SCALE); scale.animateTo(1f, FocalMotion.press()) }
+            launch {
+                // Shown again while fading out, it goes on from the size it has.
+                if (alpha.value <= 0f) scale.snapTo(JUMP_START_SCALE)
+                scale.animateTo(1f, FocalMotion.press())
+            }
             alpha.animateTo(1f, FocalMotion.fade())
         } else alpha.animateTo(0f, FocalMotion.fadeFast())
     }

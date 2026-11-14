@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +35,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,7 +66,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.util.lerp
 import app.focal.R
 import app.focal.ui.components.BottomFade
@@ -107,6 +112,8 @@ class LibraryActions(
     val open: (NoteRow) -> Unit = {},
     /** The stage opens its note (T16′). */
     val openStage: (NoteRow) -> Unit = open,
+    /** A finger landed on a row or the stage: its note is read ahead of the tap (by note id). */
+    val prepare: (String) -> Unit = {},
     val openResult: (SearchRow) -> Unit = {},
     /** Tap or Enter on the live stage: the scene expands (T6′). */
     val expand: () -> Unit = {},
@@ -183,8 +190,8 @@ fun LibraryPage(
     val querying = searchState.open && search.query.isNotBlank()
     val answered = querying && search.resultsQuery.isNotBlank()
     LaunchedEffect(answered) { searchState.showResults(answered) }
-    // Not under the licences, whose Back comes first (two panes keep this page composed beneath them).
-    val covered = shell.current == Destination.Licenses
+    // Not under a page (a note, the licences): its Back comes first. This page stays composed beneath it.
+    val covered = shell.libraryCovered
     BackHandler(enabled = searchState.open && !covered, onBack = closeSearch)
     BackHandler(enabled = renaming != null && !covered) { renaming = null }
     // The notes that can be selected now, by id: a selected note that left (deleted elsewhere, or now recording or
@@ -199,8 +206,8 @@ fun LibraryPage(
     LaunchedEffect(selectable, model.loaded) { if (model.loaded) selection.retain(selectable.keys) }
     val selecting = selection.active
     BackHandler(enabled = selecting && !covered) { selection.clear() }
-    // Settings may open only from the library at rest (spec 4.23.3).
-    val armed = !searchState.open && renaming == null && !imeVisible && !selecting
+    // Settings may open only from the library at rest (spec 4.23.3), and on screen.
+    val armed = !covered && !searchState.open && renaming == null && !imeVisible && !selecting
     SideEffect { shell.settings.armed = armed }
 
     if (model.loaded) {
@@ -259,6 +266,7 @@ fun LibraryPage(
             open = { row -> if (selection.active) select(row) else actions.open(row) },
             select = select,
             menuActions = { row -> menuItems(row).map { item -> CustomAccessibilityAction(menuLabels.of(item)) { menuActions.run(item, row); true } } },
+            prepare = actions.prepare,
         )
     }
     val stageActions = remember(actions, rowActions, selection) {
@@ -267,9 +275,11 @@ fun LibraryPage(
             expand = actions.expand, copy = actions.copy, openSettings = actions.openSettings,
             select = select,
             menuActions = rowActions.menuActions,
+            prepare = actions.prepare,
         )
     }
-    val renameField: @Composable (NoteRow, onStage: Boolean) -> Unit = { row, onStage ->
+    // The same lambda across recompositions, so the list it is handed to can skip.
+    val renameField: @Composable (NoteRow, onStage: Boolean) -> Unit = remember(actions, rename, renameBounds) { { row, onStage ->
         val colors = FocalTheme.colors
         // On the material the paper's `select` and ink handles would vanish: stageInk handles on a light veil.
         val stageSelection = remember(colors.stageInk) { TextSelectionColors(handleColor = colors.stageInk, backgroundColor = Stage.selection) }
@@ -283,13 +293,13 @@ fun LibraryPage(
                 color = if (onStage) colors.stageInk else colors.ink,
                 caret = if (onStage) colors.stageInk else colors.ink,
                 onCommit = { text ->
-                    renaming = null
+                    rename.noteId = null
                     if (text != row.title) actions.rename(row, text)
                 },
                 modifier = Modifier.onGloballyPositioned { renameBounds.rect = it.boundsInWindow() },
             )
         }
-    }
+    } }
 
     Box(
         Modifier
@@ -332,11 +342,15 @@ fun LibraryPage(
                 model, dates, today, meter, listState, stageActions, rowActions, selection,
                 renaming = renaming, renameField = renameField, imePadded = renaming != null,
                 openSettings = actions.openSettings, stageFocus = stageFocus, liveSeconds = liveSeconds,
-                // The library itself is on screen: no settings page, search or scene over it.
-                onScreen = { !searchState.open && shell.settings.progress.value <= 0f && shell.live.expansion.value <= 0f },
+                // The library itself is on screen: no page, settings, search or scene over it.
+                onScreen = {
+                    !shell.libraryCovered && !searchState.open && shell.settings.progress.value <= 0f && shell.live.expansion.value <= 0f
+                },
             )
         }
-        if (searchState.open || searchState.content.value > 0f) {
+        // Read through derived state: the page composes when the results come or go, not on every frame of their fade.
+        val resultsShown by remember(searchState) { derivedStateOf { searchState.open || searchState.content.value > 0f } }
+        if (resultsShown) {
             Box(
                 Modifier.fillMaxSize().graphicsLayer {
                     val shown = smoothstep(RESULTS_FROM, 1f, searchState.content.value)
@@ -391,10 +405,13 @@ private fun LibraryContent(
             listAlpha.animateTo(1f, FocalMotion.fade())
         }
     }
-    if (empty || emptyAlpha.value > 0f) {
+    // Whether each is still on screen, read through derived state: not every frame of their crossfade.
+    val emptyShown by remember { derivedStateOf { emptyAlpha.value > 0f } }
+    val listShown by remember { derivedStateOf { listAlpha.value > 0f } }
+    if (empty || emptyShown) {
         EmptyLibrary(openSettings, Modifier.fillMaxSize().graphicsLayer { alpha = emptyAlpha.value })
     }
-    if (!empty || listAlpha.value > 0f) {
+    if (!empty || listShown) {
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = listAlpha.value }) {
             LibraryList(
                 model, dates, today, meter, listState, stageActions, rowActions, selection, renaming, renameField, imePadded, stageFocus,
@@ -445,6 +462,7 @@ private fun LibraryList(
     stagePull.density = density.density
     stagePull.note = stageRow?.id
     stagePull.open = { stageRow?.let(stageActions.open) }
+    stagePull.drop = { page -> shell.dropPulled(page) }
     // Not while notes are selected or a title is renamed (a drag then scrolls, as anywhere), nor beside an open note.
     val canPull by rememberUpdatedState(stageRow != null && !selection.active && renaming == null && !shell.twoPane && shell.current == Destination.Library)
     // Record and a fold bring the stage into view; focus returns to it after a fold (spec 5.3.1, T5′, 8.6).
@@ -489,7 +507,10 @@ private fun LibraryList(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // The stage, the labels and the rows keep the content column: at most 600 dp, centred (spec 2.5, 4.22.1).
         val side = FocalLayout.columnInset(maxWidth) - FocalLayout.gutter
-        val padding = remember(top, side, shell.bottom, density) { shell.bottom.contentPadding(top, density, side) }
+        // While a page covers the library, the bottom column is that page's: the hidden list keeps the reserve and the
+        // fade it had, instead of measuring and drawing again with every frame of the page's own bottom motion.
+        val held = remember(shell) { HeldWhileCovered { shell.libraryCovered } }
+        val padding = remember(top, side, shell.bottom, density, held) { held.padding(shell.bottom.contentPadding(top, density, side)) }
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -499,7 +520,7 @@ private fun LibraryList(
                 // the window's edges land inside a pixel that the paper covers only partly, and the glyphs under it
                 // would show there as a dotted line.
                 .drawWithContent {
-                    val solidBottom = shell.bottom.fadeEnd(this)
+                    val solidBottom = held.fadeEnd { shell.bottom.fadeEnd(this) }
                     clipRect(top = status.getTop(this).toFloat(), bottom = if (solidBottom.isNaN()) size.height else solidBottom) {
                         this@drawWithContent.drawContent()
                     }
@@ -534,7 +555,8 @@ private fun LibraryList(
                                     awaitEachGesture {
                                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                                         val atTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-                                        stagePull.arm(atTop && canPull)
+                                        // Not while the settings swipe still settles: the library is still moving sideways.
+                                        stagePull.arm(atTop && canPull && shell.settings.progress.value <= 0f)
                                         while (stagePull.deciding) {
                                             val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
                                             if (!change.pressed) break
@@ -594,7 +616,7 @@ private fun LibraryList(
             }
         }
         LibraryTopFade(stageBottom, Modifier.fillMaxSize())
-        StickyLabelOverlay(labels, { key -> texts[key].orEmpty() }, Modifier.fillMaxSize())
+        StickyLabelOverlay(labels, { key -> texts[key].orEmpty() }, Modifier)
     }
 }
 
@@ -741,3 +763,33 @@ private class NoteMenuActions(
 
 /** API 32 and below show no system clipboard preview, so a row's Copy text confirms in the pill (5.1.6). */
 val confirmsCopyInApp: Boolean get() = Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2
+
+/**
+ * What the library's list reads of the shared bottom column, held at its last value while a page covers the library
+ * ([covered]): the column then moves for that page (its player, Find, the keyboard), and the hidden list would measure
+ * or draw again on every frame of it. Uncovered, it reads the column again.
+ */
+private class HeldWhileCovered(private val covered: () -> Boolean) {
+    private var bottom = Dp.Unspecified
+    private var fade = Float.NaN
+    private var faded = false
+
+    fun padding(live: PaddingValues): PaddingValues = object : PaddingValues {
+        override fun calculateTopPadding(): Dp = live.calculateTopPadding()
+        override fun calculateLeftPadding(layoutDirection: LayoutDirection): Dp = live.calculateLeftPadding(layoutDirection)
+        override fun calculateRightPadding(layoutDirection: LayoutDirection): Dp = live.calculateRightPadding(layoutDirection)
+        override fun calculateBottomPadding(): Dp {
+            if (covered() && bottom.isSpecified) return bottom
+            return live.calculateBottomPadding().also { bottom = it }
+        }
+    }
+
+    fun fadeEnd(live: () -> Float): Float {
+        if (covered() && faded) return fade
+        return live().also {
+            fade = it
+            faded = true
+        }
+    }
+}
+

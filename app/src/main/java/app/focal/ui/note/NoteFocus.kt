@@ -1,5 +1,6 @@
 package app.focal.ui.note
 
+import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -36,6 +37,8 @@ class NoteFocus {
 
     /** When the focus returns to every paragraph, each waits its turn from the bottom up (rack focus, 2.8.1). */
     private var rack: Map<Long, Long> = emptyMap()
+    /** When the rack was set (uptime ms): it belongs to the paragraphs that turn to ink right then, and to no later change. */
+    private var rackAt = 0L
 
     fun inks(id: Long): Boolean = when (mode) {
         NoteMode.Reading -> true
@@ -54,14 +57,24 @@ class NoteFocus {
     fun rackFocus(visible: List<Long>) {
         val shown = visible.takeLast(RACK_MAX)
         rack = shown.withIndex().associate { (index, id) -> id to (shown.lastIndex - index) * FocalTiming.RACK_STAGGER_MS }
+        rackAt = SystemClock.uptimeMillis()
         mode = NoteMode.Reading
     }
 
-    /** How long paragraph [id] waits before it racks back to ink; the delay is used once. */
-    fun rackDelay(id: Long): Long = rack[id] ?: 0L
+    /**
+     * How long paragraph [id] waits before it racks back to ink: used once, and only by the change that racked it. A
+     * paragraph that playback reaches later turns to ink at once.
+     */
+    fun rackDelay(id: Long): Long {
+        val delay = rack[id] ?: return 0L
+        rack = rack - id
+        return if (SystemClock.uptimeMillis() - rackAt <= RACK_VALID_MS) delay else 0L
+    }
 
     private companion object {
         const val RACK_MAX = 12
+        /** The paragraphs a rack staggers start within a frame or two of it. */
+        const val RACK_VALID_MS = 100L
     }
 }
 

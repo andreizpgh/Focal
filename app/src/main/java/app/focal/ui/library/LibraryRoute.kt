@@ -8,6 +8,8 @@ import android.content.Intent
 import android.os.Build
 import android.os.PersistableBundle
 import android.text.format.Formatter
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -41,6 +43,7 @@ import app.focal.ui.shell.NoteHit
 import app.focal.ui.shell.PageMotion
 import app.focal.ui.state.LibraryViewModel
 import app.focal.ui.state.NoteRow
+import app.focal.ui.state.NoteViewModel
 import app.focal.ui.state.RecordingUiState
 import app.focal.ui.state.RecordingViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -86,6 +89,7 @@ fun rememberLibraryPageStates(query: () -> String = { "" }): LibraryPageStates {
 fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, states: LibraryPageStates = rememberLibraryPageStates()) {
     val shell = LocalShell.current
     val context = LocalContext.current
+    val activity = LocalActivity.current as? ComponentActivity
     val application = context.applicationContext as FocalApplication
     val library: LibraryViewModel = viewModel()
     val recording: RecordingViewModel = viewModel()
@@ -134,6 +138,7 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
         LibraryActions(
             open = { row -> shell.open(Destination.Note(row.id), PageMotion.Row) },
             openStage = { row -> shell.open(Destination.Note(row.id), PageMotion.Stage) },
+            prepare = { id -> activity?.let { NoteViewModel.prepare(it, id) } },
             openResult = { result ->
                 val hit = result.paragraphId?.let { NoteHit(it, result.hitStart, result.hitEnd) }
                 shell.open(Destination.Note(result.row.id, hit))
@@ -192,7 +197,8 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
                 onBack = { scope.launch { shell.settings.close(reduced) } },
                 onLicenses = { shell.open(Destination.Licenses) },
                 headingFocus = headingFocus,
-                visible = { shell.settings.progress.value > 0f },
+                // Not under the licences opened from it: the strip stays open there, unseen.
+                visible = { shell.settings.progress.value > 0f && !shell.libraryCovered },
                 scroll = states.settingsScroll,
             )
         },

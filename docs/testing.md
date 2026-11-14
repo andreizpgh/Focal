@@ -123,6 +123,72 @@ to end, so before publishing a release is checked on emulators in three parts:
 
 ## What has been verified
 
+### 0.3.2
+
+On the API 36 x86_64 emulator only. No build has run on a phone.
+
+**Tests.** At 069decc, the commit the 0.3.2 APK was built from: the JVM tests
+passed (core 58, app 210), lint reported no errors and the script tests passed
+(58). The instrumented suite (debug build, model bundled, an emulator started
+with `-no-audio`) passed on the emulator's own display: 164 tests, none failed.
+While the changes were made it also passed at 1080 × 2400, where 12 tests skip
+themselves because they need another display (one pane upright and two panes
+turned, a tablet, landscape). The signed APK installed over the published 0.3.1
+(with no notes in it) and started, with nothing in the crash log; the emulator
+QA build started, recorded and went back to the library.
+
+**Review.** Before release the change was reviewed by focused agents, one per
+part (page changes, the pull, the library kept under pages, the note page,
+settings and the scene) and per aspect (motion across the app, Compose costs,
+the docs against the code, tests), each finding checked by another agent
+against the code, plus two passes by a second model on the page state machine
+and on per-frame cost and lifetime. What they confirmed is fixed and listed in
+the changelog; an emulator run of the old build showed the worst of them (with
+animations off in the system the library took no taps; two quick taps opened
+two notes; Back just after a tap blanked the library).
+
+**Frames.** Measured on emulator QA builds (minified, x86_64, never published) at
+1080 × 2400, with `dumpsys gfxinfo` frame stats, a Perfetto trace and 60 fps
+screen recordings compared frame by frame:
+
+- *Back, then a tap on another note* (the owner's screenshot): on the 0.3.1 build
+  the note that had just been closed was drawn over the library at full
+  strength for several frames as the next one began to open. On the new build
+  no frame shows it, and a tap 50 or 150 ms after Back is not lost: the fold
+  ends within about 8 to 17 frames and the tapped note opens from there.
+- *A tap, then Back 50 or 150 ms later:* the card folds back with its title and
+  the library's rows return as it folds; the near-white frames of the first
+  fix are gone.
+- *A card let go short, then a tap on a row* 0 to 250 ms later: the tapped note
+  opened in every run, as soon as the card had landed (its return quickens);
+  a tap on the card itself opens it from the card.
+- *Two rows tapped in quick succession:* only the first note opens.
+- *The same note opened again* 0.6 s after Back opens at once, its dock working.
+- *Back:* the frames after Back took 11.6 and 32.3 ms on the main thread on the
+  0.3.1 build (the library composed again); on the new one at most 10.8 ms, with
+  a median of 2 ms over the first 30 frames.
+- *Opening a note,* warm: a median of 2 ms a frame; the first frame, which
+  composes the page, 13 to 31 ms.
+- *Pulling the card:* its edge follows the finger step by step; let go short it
+  goes back into the card and the dock never changes; let go past 40 % or flung,
+  it opens and the dock swaps after the release. A median of 2.7 ms a frame,
+  at most 18.4 ms.
+- *Animations off in the system:* rows open, settings open and close, and no
+  tap reaches a page that is not shown.
+- *Scrolling* the library with a pinned day label: at most 4.3 ms a frame on the
+  main thread.
+- *A 45 s run of random taps, Backs, pulls and double taps:* no crash.
+
+**Not checked:** any of it on a phone, and so real frame rates and how long a
+note's first frame takes there; the predictive back gesture (the emulator's
+injected edge swipes did not start one); landscape, a tablet and two panes; a
+fold or unfold during a page change (the open page's change then ends without
+its transform); TalkBack over a covered library. Known and left as it was:
+Finish tapped while the recording scene is still opening or folding starts its
+landing from the full scene, so the scene snaps open for a frame first; opening
+a search result, the keyboard and the search field leave over the first frames
+of the note's page.
+
 ### 0.3.1
 
 On the API 36 x86_64 emulator only. No build has run on a phone.

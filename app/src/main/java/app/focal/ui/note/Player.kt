@@ -275,14 +275,20 @@ internal fun JumpPill(visible: Boolean, up: Boolean, bottom: BottomColumnState, 
             alpha.snapTo(if (visible) 1f else 0f)
             scale.snapTo(1f)
         } else if (visible) {
-            scale.snapTo(PlayerMetrics.JUMP_START_SCALE)
+            // From its smaller size only when it had gone: shown again while fading out, it goes on from where it is.
+            if (alpha.value <= 0f) scale.snapTo(PlayerMetrics.JUMP_START_SCALE)
             coroutineScope {
                 launch { scale.animateTo(1f, FocalMotion.press()) }
                 alpha.animateTo(1f, FocalMotion.fade())
             }
         } else alpha.animateTo(0f, FocalMotion.fadeFast())
     }
-    if (!visible && alpha.value <= 0f) return
+    // Composed while it shows or fades out; whether it has faded out is read once, not every frame of the fade.
+    val gone by remember { derivedStateOf { alpha.value <= 0f } }
+    if (!visible && gone) return
+    // The arrow it showed: leaving, the pill says where the line was, not where nothing is any more.
+    val shownUp = remember { JumpDirection() }
+    if (visible) shownUp.up = up
     val source = remember { MutableInteractionSource() }
     val description = stringResource(R.string.jump_now_playing)
     Box(
@@ -323,9 +329,12 @@ internal fun JumpPill(visible: Boolean, up: Boolean, bottom: BottomColumnState, 
                 .padding(start = PlayerMetrics.jumpStart, end = PlayerMetrics.jumpEnd),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Glyph(if (up) FocalIcon.ArrowUp else FocalIcon.ArrowDown, colors.ink, size = GlyphSize.small)
+            Glyph(if (shownUp.up) FocalIcon.ArrowUp else FocalIcon.ArrowDown, colors.ink, size = GlyphSize.small)
             Spacer(Modifier.width(PlayerMetrics.jumpGlyphGap))
             Text(description, style = FocalType.action.copy(fontWeight = FocalWeight.Medium), color = colors.ink, maxLines = 1)
         }
     }
 }
+
+/** The jump pill's arrow while it is shown (see [JumpPill]). */
+private class JumpDirection { var up = false }

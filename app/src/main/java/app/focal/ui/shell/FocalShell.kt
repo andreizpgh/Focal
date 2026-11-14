@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,10 +34,12 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -52,6 +55,7 @@ import app.focal.ui.components.BottomColumnState
 import app.focal.ui.components.Dock
 import app.focal.ui.components.DockActions
 import app.focal.ui.components.DockState
+import app.focal.ui.components.closedToNewTouches
 import app.focal.ui.components.inert
 import app.focal.ui.components.rememberBottomColumnState
 import app.focal.ui.design.FocalMotion
@@ -116,21 +120,38 @@ class ShellState internal constructor(
                 pages.replace(top, destination, inPane)
                 backStack[backStack.lastIndex] = destination
             } else {
-                pages.push(destination, inPane)
+                pages.push(destination, inPane, other = top)
                 backStack.add(destination)
             }
             return
         }
         // A page that waits for its note before it opens swaps the dock when it arrives, not at the tap.
-        if (pages.push(destination, motion)) dockClock.start()
+        if (pages.push(destination, motion, other = top)) dockClock.start()
         backStack.add(destination)
     }
+
+    /**
+     * A pulled stage let go short (PageTransitions.endDrag): the page opened for the pull leaves the back stack unseen,
+     * with no change of its own (the card has already gone back into the stage). The dock never left the library's.
+     */
+    internal fun dropPulled(destination: Destination) {
+        if (backStack.size <= 1 || backStack.last() != destination) return
+        droppedPull = true
+        pages.forget(destination, under = backStack[backStack.lastIndex - 1])
+        backStack.removeAt(backStack.lastIndex)
+    }
+
+    /** Set as a pulled page is dropped: the library that shows again was never left (see [takeDroppedPull]). */
+    private var droppedPull = false
+
+    /** Whether the library came back from a pulled page dropped unseen, rather than from a page that was opened. */
+    internal fun takeDroppedPull(): Boolean = droppedPull.also { droppedPull = false }
 
     /** Back from the top page: it folds into where it came from if that is on screen, else it fades through. */
     fun back() {
         if (backStack.size <= 1) return
         dockClock.start()
-        pages.pop(backStack.last())
+        pages.pop(backStack.last(), other = backStack[backStack.lastIndex - 1])
         backStack.removeAt(backStack.lastIndex)
     }
 
@@ -151,6 +172,14 @@ class ShellState internal constructor(
         dockClock.start()
         live.appear(reducedMotion)
     }
+
+    /**
+     * Whether the library's page lies under another page now: in one pane, any page over it; in two, the licences,
+     * which cover the whole window (a note opens beside it). It stays composed there, neither drawn nor reachable, so
+     * Back finds it laid out and a note folds into it at once.
+     */
+    val libraryCovered: Boolean
+        get() = current == Destination.Licenses || (!twoPane && current != Destination.Library)
 
     /** What each destination asked the bottom column to show; only the current destination's is drawn. */
     internal val bottomContent = mutableStateMapOf<Destination, BottomContent>()
@@ -175,14 +204,17 @@ val LocalShell = staticCompositionLocalOf<ShellState> { error("No ShellState: wr
 /** [capturing] says whether a recording is live, so an open scene survives recreation only while one runs. */
 @Composable
 fun rememberShellState(capturing: () -> Boolean = { false }): ShellState {
-    val backStack = rememberSaveable(saver = Destination.BackStackSaver) { SnapshotStateList<Destination>().apply { add(Destination.Library) } }
+    // Page changes run their clock in the composition's scope, on its frame clock.
+    val scope = rememberCoroutineScope()
+    val pages = remember(scope) { PageTransitions(scope) }
+    val backStack = rememberSaveable(saver = Destination.backStackSaver { pages.provisional() }) {
+        SnapshotStateList<Destination>().apply { add(Destination.Library) }
+    }
     val settings = rememberSettingsStripState()
     val live = rememberLiveSurfaceState(capturing)
     val bottom = rememberBottomColumnState()
-    // Page changes run their clock in the composition's scope, on its frame clock.
-    val scope = rememberCoroutineScope()
-    return remember(backStack, settings, live, bottom) {
-        ShellState(backStack, settings, live, bottom, SystemBarsState(), PageTransitions(scope), TriggerClock(scope, FocalSettle.FADE_FAST_MS))
+    return remember(backStack, settings, live, bottom, pages) {
+        ShellState(backStack, settings, live, bottom, SystemBarsState(), pages, TriggerClock(scope, FocalSettle.FADE_FAST_MS))
     }
 }
 
@@ -214,6 +246,12 @@ fun DestinationBottom(
     val shell = LocalShell.current
     val content = BottomContent(dock, actions, strip, rows, dockHidden)
     SideEffect { shell.bottomContent[destination] = content }
+    // Kept while the page is composed, not only while it is on the back stack: a page NavDisplay still holds after
+    // Back, opened again, has its dock at once (nothing in it composes again to register it anew).
+    val latest = rememberUpdatedState(content)
+    DisposableEffect(shell, destination) {
+        onDispose { if (shell.bottomContent[destination] === latest.value) shell.bottomContent.remove(destination) }
+    }
 }
 
 /**
@@ -266,8 +304,6 @@ fun FocalShell(
             Shell(shell, layout, pageStates, destination, scene)
         }
     }
-    // Pages that left the back stack drop what they registered.
-    LaunchedEffect(shell.backStack.toList()) { shell.bottomContent.keys.retainAll(shell.backStack.toSet()) }
 }
 
 @Composable
@@ -301,13 +337,15 @@ private fun Shell(
         ) {
             val twoPane = layout.twoPane
             // Every change is a bare swap; each page draws its own part from the upper page's progress, and the
-            // container transforms draw above both (PageTransitions). In two panes the display holds the detail
-            // pane (and the licences, over the whole window) above the library's pane; it is composed first, so
-            // the library's own Back (settings, search) comes before it, except under the licences, which cover
-            // the library's pane and whose Back the library leaves to the display.
+            // container transforms draw above both (PageTransitions). The display holds the pages over the library
+            // (in two panes the detail pane, and the licences over the whole window); the library is composed once,
+            // in its own pane beneath them, and stays composed under a page: Back finds it laid out, so nothing has
+            // to be built before a note folds into it. The display is composed first, so the library's own Back
+            // (settings, search) comes before it, except while a page covers the library, whose Back the library
+            // leaves to the display.
             NavDisplay(
                 backStack = shell.backStack,
-                modifier = if (twoPane) Modifier.zIndex(DETAIL_Z) else Modifier,
+                modifier = Modifier.zIndex(PAGES_Z),
                 onBack = { shell.back() },
                 entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(pageStates)),
                 transitionSpec = { pageSwap() },
@@ -315,20 +353,21 @@ private fun Shell(
                 predictivePopTransitionSpec = { edge ->
                     // Only a page above the library can be swiped back; asked for the library itself (the display
                     // reads this once more as a pop completes), it would replace the pop that is running.
-                    if (shell.backStack.size > 1) shell.pages.beginPredictive(shell.current, edge)
+                    val stack = shell.backStack
+                    if (stack.size > 1) shell.pages.beginPredictive(stack.last(), edge, other = stack[stack.lastIndex - 1])
                     pageSwap()
                 },
                 // One entry content for both layouts: a rememberSaveable is found again only at the place in the
                 // tree that saved it, so a page keeps its state across a turn between one pane and two only if it
                 // sits at the same place in both.
                 entryProvider = { key ->
-                    NavEntry(key, contentKey = if (twoPane) DetailKey.of(key) else key.toString()) {
+                    NavEntry(key, contentKey = DetailKey.of(key)) {
                         PageEntry(key, shell, twoPane, colors.paper, destination)
                     }
                 },
             )
-            if (twoPane) pageStates.SaveableStateProvider(Destination.Library.toString()) { ListPane(shell, destination) }
-            else PageTransformOverlay(shell.pages, shell.live, shell.bottom)
+            pageStates.SaveableStateProvider(Destination.Library.toString()) { LibraryPane(shell, twoPane, destination) }
+            if (!twoPane) PageTransformOverlay(shell.pages, shell.live, shell.bottom, Modifier.zIndex(OVERLAY_Z))
         }
         LiveSurfaceHost(shell.live, scene)
         ShellBottom(shell, layout)
@@ -336,8 +375,8 @@ private fun Shell(
 }
 
 /**
- * The saved-state keys of the two-pane display's entries: the library's entry is the empty detail pane there (its
- * page is in the list pane, under the key it has in one pane), the others keep the keys they have in one pane.
+ * The saved-state keys of the display's entries: the library's entry is empty (its page is in its own pane), the
+ * others are keyed by their destination.
  */
 private object DetailKey {
     fun of(destination: Destination): Any = if (destination == Destination.Library) "detail:none" else destination.toString()
@@ -347,42 +386,52 @@ private object DetailKey {
  * One entry of the display, the same composable in both layouts (see the display's entry provider). In one pane the
  * page as it is. In two: a note in the detail pane, moving with the settings strip as the rest of the window does
  * (spec 4.23.7: the whole window slides) and rounding its seam-side corners with the library's; the licences on paper
- * over the whole window; nothing for the library itself, whose page is in its own pane.
+ * over the whole window. Nothing for the library itself, whose page is in its own pane ([LibraryPane]).
  */
 @Composable
 private fun PageEntry(key: Destination, shell: ShellState, twoPane: Boolean, paper: Color, destination: @Composable (Destination) -> Unit) {
-    if (twoPane && key == Destination.Library) return
+    if (key == Destination.Library) return
     val strip = shell.settings
     val behindSettings by remember(strip) { derivedStateOf { strip.progress.value >= 1f } }
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val reduced = LocalReducedMotion.current
     // After the list pane, or after the hinge that ends it.
     val detailStart = LocalWindowLayout.current.detailStart
+    // One shape for the whole swipe, not one per frame.
+    val seam = remember { SeamSideShape(FocalShapes.sheetRadius, seamAtEnd = true) }
     val frame = when {
-        !twoPane -> Modifier
-        key is Destination.Note -> Modifier
+        twoPane && key is Destination.Note -> Modifier
             .fillMaxSize()
             .padding(start = detailStart)
             .inert(behindSettings)
             .graphicsLayer {
                 val s = strip.progress.value
-                if (reduced) alpha = 1 - smoothstep(0f, HALF, s) else {
-                    // The window's travel: this pane's right edge is the window's, as the library layer's is.
-                    val window = size.width + detailStart.toPx()
+                // The window's travel: this pane's right edge is the window's, as the library layer's is.
+                val window = size.width + detailStart.toPx()
+                if (reduced) {
+                    alpha = 1 - smoothstep(0f, HALF, s)
+                    // Faded out, it stands aside: nothing unseen over the settings page takes a tap meant for it.
+                    translationX = if (alpha <= 0f) 2 * window else 0f
+                } else {
                     translationX = (if (rtl) 1 else -1) * s * settingsTravel(window, this)
                     clip = s > 0f && s < 1f
-                    shape = if (clip) SeamSideShape(FocalShapes.sheetRadius, seamAtEnd = true) else RectangleShape
+                    shape = if (clip) seam else RectangleShape
                 }
             }
-        else -> Modifier.fillMaxSize().background(paper)
+        else -> Modifier
     }
-    Box(frame) { PageFrame(key, shell.pages) { destination(key) } }
+    // The licences cover the whole window on their own paper in two panes, which leaves with them as they fade.
+    val background = if (twoPane && key !is Destination.Note) paper else Color.Unspecified
+    Box(frame) { PageFrame(key, shell.pages, background) { destination(key) } }
 }
 
 /**
- * The library's pane (two panes): the Library destination at the window's size, so the settings strip slides the
- * whole window (spec 4.23.7); its page keeps to the list pane. While the licences fade through over the window, the
- * settings page under them leaves as the page below a fade-through does (two typesettings never overlap).
+ * The library's pane, beneath the display in both layouts, at the window's size: in two panes the settings strip
+ * slides the whole window (spec 4.23.7) and the library's page keeps to the list pane. It is composed once and stays
+ * composed under the pages over it ([ShellState.libraryCovered]): there it is neither drawn nor reached by a touch,
+ * a key or TalkBack. In one pane it draws itself as the page under every change ([LibraryFrame]); in two, only the
+ * licences cover it, and while they fade through over the window, the settings page under them leaves as the page
+ * below a fade-through does (two typesettings never overlap).
  *
  * With a note open beside it, the note's shortcuts (spec 8.5: Space, Ctrl+F, Ctrl+C, Ctrl+Z) go to the note even while
  * focus is in this pane: after a touch the first hardware key leaves touch mode and puts focus on this pane's first
@@ -394,21 +443,35 @@ private fun PageEntry(key: Destination, shell: ShellState, twoPane: Boolean, pap
  * here.
  */
 @Composable
-private fun ListPane(shell: ShellState, destination: @Composable (Destination) -> Unit) {
+private fun LibraryPane(shell: ShellState, twoPane: Boolean, destination: @Composable (Destination) -> Unit) {
     val pages = shell.pages
     val pageKeys = LocalPageKeys.current
     val focused = remember { FocusedKeys() }
     val shortcuts = remember(pageKeys) { ShortcutKeys(focused.leaving(pageKeys::dispatch)) }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                val change = pages.change
-                if (change != null && change.document == Destination.Licenses) alpha = pages.look(Destination.Library).alpha
-            }
+    val covered by remember(shell) { derivedStateOf { shell.libraryCovered } }
+    // A key or D-pad focus left inside goes once a page covers the library: Tab and Enter would walk and press rows no
+    // one sees, under the page that is read.
+    val focusManager = LocalFocusManager.current
+    val focus = remember { FocusInside() }
+    LaunchedEffect(shell) {
+        snapshotFlow { shell.libraryCovered }.collect { if (it && focus.inside) focusManager.clearFocus(force = true) }
+    }
+    LibraryFrame(
+        pages,
+        twoPane = twoPane,
+        covered = { shell.libraryCovered },
+        modifier = Modifier
+            .onFocusChanged { focus.inside = it.hasFocus }
+            .inert(covered)
+            // A touch that lands while a page covers it presses nothing here (the page over it may still be composing,
+            // or opening, which takes no touch either); a finger already down, the pull that opened the page, goes on.
+            .closedToNewTouches { shell.libraryCovered }
             .shortcutKeys(shortcuts) { shell.current is Destination.Note },
     ) { CompositionLocalProvider(LocalFocusedKeys provides focused) { destination(Destination.Library) } }
 }
+
+/** Whether focus is in the library's pane. */
+private class FocusInside { var inside = false }
 
 /**
  * Where the bottom column stands (spec 2.5, 5.14), read in the layout phase: the page area inside the side insets and
@@ -469,7 +532,17 @@ private class ShownBottom { var content: BottomContent? = null }
 
 @Composable
 private fun ShellBottom(shell: ShellState, layout: WindowLayout) {
-    val current = shell.current
+    val stack = shell.backStack
+    // A page only pulled at, not let go into, is not the dock's yet: the library's stays, and swaps from the release.
+    val pulledAt = shell.pages.provisionalPage
+    val current = if (pulledAt != null && stack.size > 1 && stack.last() == pulledAt) stack[stack.lastIndex - 1] else shell.current
+    LaunchedEffect(shell) {
+        var was: Destination? = null
+        snapshotFlow { shell.pages.provisionalPage }.collect { page ->
+            if (was != null && page == null && shell.current == was) shell.dockClock.start()
+            was = page
+        }
+    }
     val shown = remember { ShownBottom() }
     val live = shell.live
     // The scene's controls while it is up and not settling into the note's page (T7). Until the scene has registered
@@ -497,8 +570,11 @@ private fun ShellBottom(shell: ShellState, layout: WindowLayout) {
                 // The library's dock and feedback pill move with the library page (spec 4.23.2).
                 if (onLibrary) {
                     val s = shell.settings.progress.value
-                    if (reduced) alpha = 1 - smoothstep(0f, HALF, s)
-                    else translationX = (if (rtl) 1 else -1) * s * settingsTravel(size.width, this)
+                    if (reduced) {
+                        alpha = 1 - smoothstep(0f, HALF, s)
+                        // Faded out over the settings page, it stands aside: no unseen Record takes a tap there.
+                        translationX = if (alpha <= 0f) 2 * size.width else 0f
+                    } else translationX = (if (rtl) 1 else -1) * s * settingsTravel(size.width, this)
                 }
             },
         dock = {
@@ -527,8 +603,10 @@ private val LiveSceneDock = BottomContent(DockState.Live(paused = false), NoActi
 private val PausedSceneDock = BottomContent(DockState.Live(paused = true), NoActions, strip = null, rows = null, dockHidden = false)
 
 private const val HALF = 0.5f
-/** In two panes the display (the detail pane, the licences) draws above the library's pane. */
-private const val DETAIL_Z = 1f
+/** The display (the pages over the library; in two panes the detail pane and the licences) draws above the library's pane. */
+private const val PAGES_Z = 1f
+/** One pane: the container transforms draw above the pages. */
+private const val OVERLAY_Z = 2f
 /** The pages behind the morph darken (spec 2.8.2 `libraryDim`). */
 private const val PAGES_DIM = 0.30f
 

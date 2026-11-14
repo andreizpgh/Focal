@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -31,7 +32,13 @@ class SpeechModelsTest {
     @After fun cleanup() = scope.cancel()
 
     private fun settle(models: SpeechModels = this.models): ModelStatus = runBlocking {
-        withTimeout(10_000) { models.status.first { it !is ModelStatus.Checking && it !is ModelStatus.Installing } }
+        withTimeout(10_000) {
+            val settled = models.status.first { it !is ModelStatus.Checking && it !is ModelStatus.Installing }
+            // The attempt that reported it has ended as well: a retry asked for next is never refused as one still
+            // running (on a slow machine the attempt is still finishing as its outcome is read).
+            scope.coroutineContext.job.children.forEach { it.join() }
+            settled
+        }
     }
 
     private var pid = 1

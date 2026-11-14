@@ -108,6 +108,15 @@ class FeedbackHostState {
     fun dismiss() { current?.finish(FeedbackResult.Dismissed) }
 
     internal fun perform() { current?.finish(FeedbackResult.ActionPerformed) }
+
+    /**
+     * [action], pressed on the pill: it acts for the message on screen only if that message offers it. The action of a
+     * message being replaced is still drawn for a moment as it fades through; a tap on it presses nothing of the next.
+     */
+    internal fun perform(action: FeedbackAction) {
+        val message = current ?: return
+        if (message.action == action) message.finish(FeedbackResult.ActionPerformed)
+    }
 }
 
 /** Feedback pill geometry (spec 4.8). */
@@ -215,12 +224,18 @@ fun FeedbackPill(state: FeedbackHostState, modifier: Modifier = Modifier) {
                     maxLines = if (wraps) 2 else 1, overflow = TextOverflow.Ellipsis,
                 )
             }
-            visible.action?.let { action ->
-                FocalTextButton(
-                    text = action.label, onClick = { state.perform() }, leading = action.icon,
-                    style = FocalType.action, horizontalPadding = FeedbackMetrics.actionPadding,
-                )
+            // A message that replaces another crossfades its action with its text, as it comes or goes.
+            FadeThrough(ShownAction(visible.action)) { shownAction ->
+                shownAction.action?.let { action ->
+                    FocalTextButton(
+                        text = action.label, onClick = { state.perform(action) }, leading = action.icon,
+                        style = FocalType.action, horizontalPadding = FeedbackMetrics.actionPadding,
+                    )
+                }
             }
         }
     }
 }
+
+/** The pill's action, or none, as one key for its crossfade. */
+private data class ShownAction(val action: FeedbackAction?)

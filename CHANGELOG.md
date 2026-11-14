@@ -5,6 +5,117 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
+## [0.3.2] - 2026-11-14
+
+Changes after a third round on a phone: transitions that left a mess on screen,
+a card that lagged behind the finger, and whatever else an audit of every
+animation found. Checked on an emulator only so far.
+
+### Changed
+
+- **Pulling the card down** works as the live card does: its edge follows the
+  finger all the way, and the card turns into the note's page under the finger
+  (the page is opened as the pull begins). Let go past 40 % of the way, or flung
+  down, it opens; sooner, it goes back into the card. Either way it goes on at
+  the finger's speed, and the dock keeps the library's buttons until the card is
+  let go into the page. It used to stop following the finger a third of the way
+  down and build the page only once it was let go.
+- **Back is immediate.** The library stays composed under a note's page instead
+  of being built again on Back, which held the screen for a moment before the
+  page folded away.
+- **Opening a note is lighter.** A note is read as the finger lands on its row or
+  the card, so the page a tap opens has its text in its first frame; each
+  paragraph is composed once instead of twice as the page appears.
+- **Settings** are composed off screen a moment after the library appears, with
+  their values read at once: the first swipe no longer builds the page under the
+  finger, and the theme, the switch and the audio size no longer slide to their
+  values as it comes in. Opened or closed without a finger (the hint's Open,
+  Back), the page slides on the slower `stage` spring, as every motion that
+  takes the whole window does.
+- **A tap on another note while one folds away** opens it as soon as the fold
+  has landed (the fold finishes four times as fast meanwhile), instead of being
+  lost or drawing the two pages over each other.
+- **A note's page lets go of its note** five seconds after it closes, and of
+  what its Edit session held of it: a note read ahead as a finger lands on its
+  row is not kept, and a note opened again is read again instead of showing
+  what it was when it closed.
+- **Motions that cross the window** (the scene, settings, sheets, search) run
+  to their end instead of jumping over the last 1 % of their way.
+- **A search result opens at its line** instead of opening at the top and then
+  scrolling to it while the page fades in.
+- **Another note on the card** (after a delete, or its Undo) fades in instead of
+  replacing the last one in a single frame.
+
+### Fixed
+
+- Leaving a note and tapping another at once showed the first note's page over
+  the library at full strength for a moment: the page that had just left was
+  still held by the display, and the next change drew it as the page below.
+- A tap just after Back went to the page that was folding away, out of sight.
+- With animations turned off in the system, the settings page lay invisible
+  over the library and took its taps: no note could be opened, and a tap could
+  open the source code link. The library's dock did the same over settings.
+- Two quick taps on two rows opened both notes, one over the other; a tap on a
+  note that was still opening pressed its unseen buttons.
+- Back pressed just after a tap on a row blanked the library for a moment, and
+  the flying title jumped.
+- Opening the same note again just after Back stalled for most of a second, and
+  its dock did nothing.
+- A card let go short took the taps meant for the library while it went back
+  (a tap on a row now opens that note as soon as the card has landed), and a
+  turn of the phone at that moment restored the note open.
+- A back swipe started while a note opened turned the half-open card into the
+  whole page at once.
+- Two panes: Back from the licences blanked the window before the library
+  appeared at once; with settings open over a note, Back stopped the player or
+  left Edit unseen instead of closing settings.
+- Folding a recording over a note's page scrolled the library under it to the
+  top, and could give the hidden library keyboard focus.
+- A pull could start while settings were still sliding away.
+- The settings hint never came back after the first touch of a session.
+- After the app returned from the background the storage row went blank; a tap
+  on "Remove all audio" before the size was read could open its sheet later by
+  itself; the size was read twice, and again under the licences.
+- A touch that caught the scene in mid-motion and then dragged left it frozen
+  half-open.
+- The bottom fade and the list's end waited for one motion to finish before
+  following the keyboard or a pill that came and went.
+- A label that changed twice in quick succession came back at full strength
+  before fading again; "Now playing", "↓ Latest" and menus shown again while
+  fading out snapped.
+- The action of a message being replaced in the feedback pill could undo or
+  open what the next message was about.
+- A card still fading in showed whole in the first frame of a page or a
+  recording opening out of it.
+- Under an open note the library kept its live card's wave running, measured
+  its list again with every motion of the note's bottom bar, and kept keyboard
+  focus.
+- Double-tapping "Delete N" (or a button the first tap seemed to miss) pressed
+  what replaced it: Record started a recording, Search opened the keyboard.
+- The library's rows dropped by the feedback pill's height in one frame when the
+  pill left; they now glide down with the fade.
+- A tap that caught the settings page in mid-slide opened the note under it.
+- The card's pill was blank for one frame as a note became ready.
+- After a jump to a far match in Find was cut short (the next match asked for,
+  Find closed), the note's text could stay faded or invisible.
+- During playback, a paragraph could stay grey for a quarter of a second after
+  the voice reached it.
+- "Now playing" turned its arrow the other way as it faded out.
+- Back while a recording settled into its note folded the note into the library
+  at the same time.
+- The chevron tapped while the scene was still opening did not fold it.
+- The newest paragraph of a recording opened again after scrolling back to it.
+- The library composed itself on every frame of search closing; the day label
+  pinned at the top redrew a layer the size of the window on every frame of a
+  scroll; the recording's transcript composed itself again every second with
+  the timer.
+- Search results lagged behind the keyboard and overlapped for a moment as it
+  opened or closed.
+- A tap outside a menu that was fading out was lost.
+- A message that replaced another in the feedback pill swapped its action
+  button in a single frame.
+- Find's rows appeared under the dock instead of over it while it faded.
+
 ## [0.3.1] - 2026-11-13
 
 Changes after a second round on a phone: what moved, flickered or did nothing.
@@ -232,6 +343,7 @@ recovery of interrupted recordings.
 First public alpha: background recording and local transcription with the
 bundled Whisper Base model.
 
+[0.3.2]: https://github.com/andreizpgh/Focal/releases/tag/v0.3.2
 [0.3.1]: https://github.com/andreizpgh/Focal/releases/tag/v0.3.1
 [0.3.0]: https://github.com/andreizpgh/Focal/releases/tag/v0.3.0
 [0.2.0]: https://github.com/andreizpgh/Focal/releases/tag/v0.2.0

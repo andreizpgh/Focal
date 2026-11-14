@@ -1,6 +1,7 @@
 package app.focal.ui.state
 
 import android.app.Application
+import androidx.activity.ComponentActivity
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -25,6 +26,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,9 +36,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -149,7 +153,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
             if (error is CancellationException) throw error
             Loaded(null, emptyList(), emptyList(), emptyList(), 0, app.getString(R.string.error_load_note))
         }
-    }.flowOn(Dispatchers.IO)
+    }.onCompletion { synchronized(converted) { converted.clear() } }.flowOn(Dispatchers.IO)
 
     val state: StateFlow<NoteUiState> = combine(loaded, live, modelState, UndoableActions.audioRemovalsPending) { data, liveKey, model, removals ->
         val note = data.note
@@ -181,12 +185,15 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
             noSpeech = note.state == NoteState.READY && data.paragraphs.isEmpty(),
             legacy = note.legacy,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NoteUiState(noteId))
+    // Five seconds after its page (or a prefetch) last looked, the reads stop and the state goes back to not loaded: a
+    // view model kept for the note's next visit holds no copy of the note that could open stale, and a library touched
+    // row by row holds no note it is not showing.
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000, replayExpirationMillis = 0), NoteUiState(noteId))
 
     /**
-     * Whether the store has the note now. [state] keeps its last value while nothing collects it, and the view model
-     * outlives its page, so a page opened again starts from the state it was left in: a note deleted from its page and
-     * restored since still reads as missing until the store is read again.
+     * Whether the store has the note now. [state] keeps its last value for a few seconds after nothing collects it, and
+     * the view model outlives its page, so a page opened again at once starts from the state it was left in: a note
+     * deleted from its page and restored since still reads as missing until the store is read again.
      */
     suspend fun exists(): Boolean = withContext(Dispatchers.IO) {
         app.storageReady.await()
@@ -305,10 +312,30 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         }
     }
 
+    private var prefetch: Job? = null
+
+    /**
+     * Reads the note now, before its page asks: a finger has landed on its row or the stage, and the page that a tap or
+     * a pull opens then has its note in its first frame (one long frame instead of two, and no wait for the read).
+     */
+    fun prefetch() {
+        if (state.value.loaded || prefetch?.isActive == true) return
+        prefetch = viewModelScope.launch { state.first { it.loaded } }
+    }
+
     companion object {
-        /** `viewModel(key = noteId, factory = NoteViewModel.factory(noteId))`. */
+        /** The view model's key in its store: the note page's and [prepare]'s. */
+        fun key(noteId: String): String = "note:$noteId"
+
+        /** `viewModel(key = NoteViewModel.key(noteId), factory = NoteViewModel.factory(noteId))`. */
         fun factory(noteId: String): ViewModelProvider.Factory = viewModelFactory {
             initializer { NoteViewModel(checkNotNull(this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]), noteId) }
+        }
+
+        /** The note page's view model for [noteId] in [activity]'s store (the page's own), reading its note ([prefetch]). */
+        fun prepare(activity: ComponentActivity, noteId: String) {
+            ViewModelProvider.create(activity.viewModelStore, factory(noteId), activity.defaultViewModelCreationExtras)[key(noteId), NoteViewModel::class]
+                .prefetch()
         }
     }
 }

@@ -145,7 +145,11 @@ fun SceneEffects(shell: ShellState, recording: RecordingViewModel, scope: Corout
     LaunchedEffect(live) {
         var wasVisible = live.visible
         snapshotFlow { live.visible }.collect { visible ->
-            if (wasVisible && !visible && live.landingNote == null && wantsFocus()) runCatching { live.stageFocus?.requestFocus() }
+            // Back to the stage it folded into; over a note's page the library under it is covered, and the focus
+            // stays with the page.
+            if (wasVisible && !visible && live.landingNote == null && !shell.libraryCovered && wantsFocus()) {
+                runCatching { live.stageFocus?.requestFocus() }
+            }
             wasVisible = visible
         }
     }

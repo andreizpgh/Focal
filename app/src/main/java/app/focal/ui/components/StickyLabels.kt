@@ -2,6 +2,8 @@ package app.focal.ui.components
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.Text
@@ -118,15 +120,22 @@ fun rememberStickyLabels(listState: LazyListState, sectionOf: (key: Any) -> Any?
 fun Modifier.stickyLabelSource(labels: StickyLabels, key: Any): Modifier =
     graphicsLayer { alpha = if (labels.covered(key)) 0f else 1f }
 
-/** Draws the pinned labels; place it above the library's top fade. Masked under the status edge like the fade. */
+/**
+ * Draws the pinned labels; place it at the top of the library, above its top fade. Masked under the status edge like
+ * the fade. It is only as tall as the band a label can be drawn in (the status bar, the band, one label more), so the
+ * offscreen layer its mask needs, drawn again on every frame of a scroll, is a strip and not the whole window.
+ */
 @Composable
 fun StickyLabelOverlay(labels: StickyLabels, text: (key: Any) -> String, modifier: Modifier) {
     val measurer = rememberTextMeasurer()
     val style = FocalType.section.copy(color = FocalTheme.colors.recede)
     val status = WindowInsets.statusBars
     val density = LocalDensity.current
+    val band = with(density) { (status.getTop(density) + StickyLabelMetrics.bandEnd(density) + FocalType.section.lineHeight.toPx()).toDp() }
     Spacer(
         modifier
+            .fillMaxWidth()
+            .height(band)
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
                 val top = status.getTop(density).toFloat()

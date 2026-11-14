@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -167,10 +170,29 @@ internal class PhaseMemory {
  */
 internal class NoteScroller(private val list: LazyListState, private val fade: Animatable<Float, AnimationVector1D>) {
     /**
+     * A far jump is under way, from its fade-out until its fade-in has begun. A jump cut short (the next match asked
+     * for, Find closed, a finger on the list) leaves the list faded; the page brings it back ([restoresFade]).
+     */
+    var jumping by mutableStateOf(false)
+        private set
+
+    /** Whether the list is left faded by a jump that was cut short: nothing is jumping or fading it. */
+    val restoresFade: Boolean get() = !jumping && !fade.isRunning && fade.value < 1f
+
+    /**
      * Brings the line at [lineTop] (from item [index]'s top, [lineHeight] tall) to window y [target]; with [edge], to
      * where the lines at the top land on the band's edge, the nearest place that keeps the line where [edge] allows.
      */
-    suspend fun bring(index: Int, lineTop: () -> Float, target: Float, lineHeight: () -> Float = { 0f }, edge: EdgeSnap? = null) {
+    suspend fun bring(
+        index: Int, lineTop: () -> Float, target: Float, lineHeight: () -> Float = { 0f }, edge: EdgeSnap? = null, instant: Boolean = false,
+    ) {
+        // A page that has only just opened is placed there: it arrives at the line instead of moving to it.
+        if (instant) {
+            list.scrollToItem(index)
+            windowY(list, index, lineTop())?.let { list.scrollBy(it - target) }
+            settle(index, lineTop, lineHeight, edge, animate = false)
+            return
+        }
         windowY(list, index, lineTop())?.let { y ->
             val scroll = y - target
             list.animateScrollBy(edge?.adjust(scroll, Span(y, y + lineHeight())) ?: scroll, FocalMotion.move())
@@ -182,10 +204,15 @@ internal class NoteScroller(private val list: LazyListState, private val fade: A
         val pitch = visible.sumOf { it.size }.toFloat() / visible.size + info.mainAxisItemSpacing
         val far = abs(index - first.index) * pitch > FAR_SCREENS * info.viewportSize.height
         if (far) {
-            fade.animateTo(0f, FocalMotion.fadeFast())
-            list.scrollToItem(index)
-            windowY(list, index, lineTop())?.let { list.scrollBy(it - target) }
-            settle(index, lineTop, lineHeight, edge, animate = false)
+            jumping = true
+            try {
+                fade.animateTo(0f, FocalMotion.fadeFast())
+                list.scrollToItem(index)
+                windowY(list, index, lineTop())?.let { list.scrollBy(it - target) }
+                settle(index, lineTop, lineHeight, edge, animate = false)
+            } finally {
+                jumping = false
+            }
             fade.animateTo(1f, FocalMotion.fade())
             return
         }

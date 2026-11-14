@@ -62,6 +62,15 @@ object FocalMotion {
      * 60 ms, which over a whole window reads as a cut.
      */
     fun <T> stage(): SpringSpec<T> = spring(SPATIAL_DAMPING, STAGE_STIFFNESS)
+
+    /**
+     * `move` and `stage` for a 0..1 progress that carries something across the window (the scene, the settings strip,
+     * a sheet, search): run to 0.1 % of the way, as the page clock is (FocalClock), not to Compose's default 1 %, at
+     * which the last 10-20 px would land in one frame.
+     */
+    fun moveUnit(): SpringSpec<Float> = spring(SPATIAL_DAMPING, MOVE_STIFFNESS, visibilityThreshold = UNIT_THRESHOLD)
+    fun stageUnit(): SpringSpec<Float> = spring(SPATIAL_DAMPING, STAGE_STIFFNESS, visibilityThreshold = UNIT_THRESHOLD)
+    const val UNIT_THRESHOLD = 0.001f
     /** Icon and label swaps, menu exit, feedback exit, press plates. */
     fun <T> fadeFast(): SpringSpec<T> = spring(EFFECTS_DAMPING, FADE_FAST_STIFFNESS)
     /** Layers, menus, notices, the theme switch. */
@@ -98,6 +107,21 @@ object FocalMotion {
         if (dampingRatio >= 1f) return (1f - exp(-w * t) * (1f + w * t))
         val wd = w * sqrt(1f - dampingRatio * dampingRatio)
         return 1f - exp(-dampingRatio * w * t) * (cos(wd * t) + (dampingRatio * w / wd) * sin(wd * t))
+    }
+
+    /**
+     * Where a spring is [timeMs] after it left [from] at [velocity] (units per second) toward [to]: what carries a
+     * finger's speed on into the motion that takes over from it. At rest it is [springFraction]'s curve.
+     */
+    fun springTo(dampingRatio: Float, stiffness: Float, from: Float, to: Float, velocity: Float, timeMs: Float): Float {
+        if (timeMs <= 0f) return from
+        val w = sqrt(stiffness)
+        val t = timeMs / 1000f
+        val a = from - to
+        if (dampingRatio >= 1f) return to + exp(-w * t) * (a + (velocity + w * a) * t)
+        val wd = w * sqrt(1f - dampingRatio * dampingRatio)
+        val b = (velocity + dampingRatio * w * a) / wd
+        return to + exp(-dampingRatio * w * t) * (a * cos(wd * t) + b * sin(wd * t))
     }
 
     /** A [TimeInterpolator] that follows a spring over [durationMs] (its settle time to 0.1 %). */

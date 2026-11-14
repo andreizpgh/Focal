@@ -54,7 +54,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
     val context = LocalContext.current
     val activity = checkNotNull(LocalActivity.current as? ComponentActivity) { "The note page runs in a ComponentActivity." }
     val id = destination.id
-    val note: NoteViewModel = viewModel(key = "note:$id", factory = NoteViewModel.factory(id))
+    val note: NoteViewModel = viewModel(key = NoteViewModel.key(id), factory = NoteViewModel.factory(id))
     val player: PlaybackViewModel = viewModel(viewModelStoreOwner = activity)
     val recording: RecordingViewModel = viewModel(viewModelStoreOwner = activity)
     val library: LibraryViewModel = viewModel(viewModelStoreOwner = activity)

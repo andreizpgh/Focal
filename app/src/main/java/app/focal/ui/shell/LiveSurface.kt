@@ -1,5 +1,6 @@
 package app.focal.ui.shell
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
@@ -238,7 +239,8 @@ class LiveSurfaceState internal constructor(open: Boolean) {
 
     /** The chevron, Back, Esc: the same frames backwards (T5′); a scrolled list snaps to its top first. */
     suspend fun collapse(reducedMotion: Boolean = false) = coroutineScope {
-        revealStage?.let { reveal -> launch { reveal(false) } }
+        // Only the library the scene folds into: one kept under a note's page keeps its place for Back.
+        if (overLibrary()) revealStage?.let { reveal -> launch { reveal(false) } }
         settle(0f, reducedMotion)
     }
 
@@ -251,7 +253,7 @@ class LiveSurfaceState internal constructor(open: Boolean) {
         if (reducedMotion || !spatial) {
             withContext(FocalFullMotion) { expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.reducedCrossfade)) }
         } else {
-            expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.stage()), initialVelocity = velocity)
+            expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.stageUnit()), initialVelocity = velocity)
         }
     }
 
@@ -285,7 +287,7 @@ class LiveSurfaceState internal constructor(open: Boolean) {
                     snapshotFlow { landing.value >= HALF }.first { it }
                     landingAlpha.animateTo(0f, FocalMotion.fade())
                 }
-                landing.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.stage()))
+                landing.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.stageUnit()))
             }
         } finally {
             withContext(NonCancellable) {
@@ -342,13 +344,16 @@ fun LiveSurfaceHost(state: LiveSurfaceState, scene: @Composable () -> Unit) {
         } catch (cancelled: CancellationException) {
             // Only a cancelled gesture springs back; a committed fold ends by removing this handler.
             if (!committed) springBack.job = scope.launch {
-                if (reduced || !state.spatial) state.settle(1f, true) else state.expansion.animateTo(1f, FocalMotion.move())
+                if (reduced || !state.spatial) state.settle(1f, true) else state.expansion.animateTo(1f, FocalMotion.moveUnit())
             }
             throw cancelled
         } finally {
             backing = false
         }
     }
+    // While the scene settles into the note's page (T7, about half a second), Back waits: the page under it would
+    // otherwise fold into the library while the scene is still contracting into the dock, two opposite morphs at once.
+    BackHandler(enabled = state.landingNote != null) { }
     Box(Modifier.fillMaxSize().zIndex(if (state.landingNote != null) LANDING_Z else 0f)) { scene() }
 }
 

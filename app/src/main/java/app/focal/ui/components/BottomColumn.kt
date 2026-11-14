@@ -55,6 +55,7 @@ import app.focal.ui.design.WindowLayout
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -94,11 +95,16 @@ class BottomColumnState {
      */
     fun fadeHeight(density: Density): Float = with(density) { lerp(FocalLayout.bottomFade, FocalLayout.topFade, bare.value).toPx() }
 
-    /** Scrolling content reserves the column's height plus 64 dp, so the last line scrolls clear of the fade. */
+    /**
+     * Scrolling content reserves the column's height plus 64 dp, so the last line scrolls clear of the fade. It follows
+     * the edge as the fade does, on `move` (exactly while the keyboard drives it): a list scrolled to its end then
+     * glides down with the fade when the feedback pill leaves, instead of dropping by the pill's height in one frame.
+     */
     fun contentReserve(density: Density): Dp = with(density) {
-        val target = topTarget
-        if (target.isNaN() || windowHeight <= 0f) return FocalLayout.contentReserve + FocalGrid.x56 + FocalLayout.dockInset
-        (windowHeight - target).toDp() + FocalLayout.contentReserve
+        val moving = top.value
+        val edge = if (keyboardDriven || moving.isNaN()) topTarget else moving
+        if (edge.isNaN() || windowHeight <= 0f) return FocalLayout.contentReserve + FocalGrid.x56 + FocalLayout.dockInset
+        (windowHeight - edge).toDp() + FocalLayout.contentReserve
     }
 
     /**
@@ -159,8 +165,9 @@ private fun Density.railX(circles: Rect, width: Int, rtl: Boolean): Int {
 fun rememberBottomColumnState(): BottomColumnState {
     val state = remember { BottomColumnState() }
     LaunchedEffect(state) {
-        snapshotFlow { Triple(state.topTarget, state.keyboardDriven, state.bareTarget) }.distinctUntilChanged().collect { (target, keyboard, bare) ->
-            if (target.isNaN()) return@collect
+        // Latest: a new edge (the keyboard rising, a pill gone again) takes over the motion in flight from where it is.
+        snapshotFlow { Triple(state.topTarget, state.keyboardDriven, state.bareTarget) }.distinctUntilChanged().collectLatest { (target, keyboard, bare) ->
+            if (target.isNaN()) return@collectLatest
             val bareValue = if (bare) 1f else 0f
             if (keyboard || state.top.value.isNaN()) {
                 state.top.snapTo(target)
@@ -284,12 +291,14 @@ fun BottomColumn(
         layout(width, height) {
             feedbackPlaceables.forEach { it.place(left, feedbackBottom - it.height) }
             stripPlaceables.forEach { it.place(left, stripBottom - it.height) }
-            rowPlaceables.forEach { it.place(left, rowsBottom - it.height) }
             // A dock that has faded out is not placed: rows, the feedback pill and the page's last lines stand where
             // it stood, and an invisible Record or Copy must not take their taps, nor TalkBack's focus.
             if (!dockHidden || fade.value < 1f) {
                 dockPlaceables.forEach { it.place(railBox?.let { box -> railX(box, it.width, layoutDirection == LayoutDirection.Rtl) } ?: left, dockBottom - it.height) }
             }
+            // Rows over the dock: they arrive where it stands (Find's rows before the keyboard has lifted them) while it
+            // fades, and a dock drawn over them would cover the row being typed in.
+            rowPlaceables.forEach { it.place(left, rowsBottom - it.height) }
         }
     }
 }
