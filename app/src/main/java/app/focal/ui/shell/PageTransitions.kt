@@ -10,6 +10,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,6 +43,7 @@ import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Shape
@@ -56,6 +58,8 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
@@ -153,6 +157,12 @@ internal data class PageChange(
     val dragged: Boolean = false,
     /** Where it starts: from rest, or from what the change it replaced mid-flight had drawn. */
     val start: ChangeStart = if (push) ChangeStart.Push else ChangeStart.Pop,
+    /**
+     * The change's other page: the one [document] opens over or folds back onto (or, in the detail pane, replaces).
+     * NavDisplay may still hold a third page, one that left before this change began; it is neither drawn nor
+     * touched ([PageTransitions.look]).
+     */
+    val other: Destination? = null,
 )
 
 /**
@@ -219,7 +229,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
 
     internal val stage = Origin()
     internal val rows = HashMap<String, Origin>()
-    internal val pageTitle = PageTitle()
+    /** Each composed note page's title, by note id: where the flight lands ([rememberPageTitle]). */
+    internal val pageTitles = HashMap<String, PageTitle>()
     /** The library's day labels where they are laid out (a detached one is gone): T16's fold keeps them off the title. */
     internal val labels = HashMap<String, LayoutCoordinates>()
 
@@ -287,20 +298,26 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     private var developing: Destination? = null
 
     /**
-     * The note's page that has its note and has laid it out ([ready]). A page opening out of the stage or a row
-     * waits for it ([waits]): composing the page takes the frames right after the tap, and a motion started at the
-     * tap would spend itself behind them.
+     * The note pages that have their note and have laid it out ([ready]), for as long as they stay composed. A page
+     * opening out of the stage or a row waits for its own ([waits]): composing the page takes the frames right after
+     * the tap, and a motion started at the tap would spend itself behind them. A page NavDisplay still holds after it
+     * left is still ready if it opens again, and a page on its way out that composes again never counts for another.
      */
-    private var readyPage: Destination? = null
+    private val readied = HashSet<Destination>()
 
     /** [destination]'s page has loaded its note and composed it: an opening that waited for it starts now. */
     internal fun ready(destination: Destination) {
-        readyPage = destination
+        readied += destination
+    }
+
+    /** [destination]'s page left composition: it is no longer ready. */
+    internal fun disposed(destination: Destination) {
+        readied -= destination
     }
 
     /** Whether [c] holds still until its page is [ready]: an opening out of the stage or a row, with motion on. */
     private fun waits(c: PageChange): Boolean =
-        c.push && !reduced && (c.motion == PageMotion.Stage || c.motion == PageMotion.Row) && readyPage != c.document
+        c.push && !reduced && (c.motion == PageMotion.Stage || c.motion == PageMotion.Row) && c.document !in readied
 
     /**
      * The library's page where it is laid out (a detached one is gone). One pane composes it again when a note's
@@ -317,25 +334,42 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      * [destination] opens on top with [motion]. True when the motion starts at once, timed from now; false when it
      * waits for the page to be [ready] and is timed from then (the dock then swaps with the page, not ahead of it).
      */
-    internal fun push(destination: Destination, motion: PageMotion): Boolean {
+    internal fun push(destination: Destination, motion: PageMotion, other: Destination?): Boolean {
         opened[destination] = motion
-        // The stage was pulled open and let go: its page opens from where the finger left the card, on the same clock.
-        val pulled = change?.takeIf { it.dragged && it.document == destination && it.motion == motion && pull != null }
+        top = destination
+        // The stage is being pulled open: its page is composed now, under the finger, and the pull goes on; the dock
+        // keeps the library's until the finger lets go into the page ([provisionalPage]).
+        val pulled = change?.takeIf { it.dragged && it.document == destination && it.motion == motion && pull != null && letGo == null }
         if (pulled != null) {
-            readyPage = null
-            arriving = null
-            pull = null
-            pullReleasedAt = elapsed
-            pullReleasedP = progress(pulled).coerceAtLeast(MIN_RELEASE_P)
-            return false
+            arriving = originOf(pulled)?.dock?.let { destination to it }
+            provisionalPage = destination
+            return true
         }
         pull = null
+        letGo = null
+        provisionalPage = null
         val interrupted = inFlight(destination, push = true)
-        // A page turned back in mid-fold is still composed, and ready.
-        if (interrupted == null) readyPage = null
-        val c = PageChange(motion, destination, push = true, serial = ++serial, start = interrupted?.let(::startOf) ?: ChangeStart.Push)
+        val c = PageChange(
+            motion, destination, push = true, serial = ++serial, start = interrupted?.let(::startOf) ?: ChangeStart.Push, other = other,
+        )
         carryDecision(interrupted, c)
+        // Another page is still folding away (a tap on the library right after Back): it lands first, quickened, while
+        // this page composes, and this change starts from there. The two never share a frame, and the tap is not lost.
+        if (interrupted == null && motion != PageMotion.Cut && motion != PageMotion.LiveStage && change?.let(::folds) == true) {
+            queued = c
+            arriving = null
+            return false
+        }
+        queued = null
+        begin(c)
+        return !waits(c)
+    }
+
+    /** [c] is the change in flight from now: its clock starts (an opening first waits for its page, [waits]). */
+    private fun begin(c: PageChange) {
         change = c
+        val destination = c.document
+        val motion = c.motion
         val waits = waits(c)
         arriving = if (waits) null else originOf(c)?.dock?.let { destination to it }
         if (motion == PageMotion.Cut || motion == PageMotion.LiveStage) {
@@ -343,18 +377,56 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
             developClock.start()
         }
         startClock()
-        return !waits
     }
+
+    /**
+     * An opening that waits for the page folding away before it ([push]): that fold runs [HURRY] times as fast until it
+     * has landed, then this change begins.
+     */
+    private var queued: PageChange? = null
+
+    /** Whether [c] is a page folding or fading away on the clock: an opening asked for meanwhile waits for it. */
+    private fun folds(c: PageChange): Boolean =
+        (!c.push && !c.predictive && c.motion != PageMotion.Cut && elapsed.isFinite() && active(c)) || returning(c)
+
+    /** Whether [c] is a pulled card let go short, on its way back into the stage. */
+    private fun returning(c: PageChange): Boolean = c.dragged && pull != null && letGo?.to == 0f
 
     /** Two panes: a note opens in place of [old] in the detail pane, which fades through to it. */
     internal fun replace(old: Destination, destination: Destination, motion: PageMotion): Boolean {
         opened.remove(old)
-        return push(destination, motion)
+        return push(destination, motion, other = old)
     }
 
-    internal fun pop(top: Destination) {
+    /**
+     * [destination] left the back stack with no change of its own (a pulled page dropped, see [endDrag]), and [under]
+     * is on top again.
+     */
+    internal fun forget(destination: Destination, under: Destination) {
+        opened.remove(destination)
         arriving = null
+        top = under
+    }
+
+    /**
+     * The top of the back stack as the changes left it (null until the first change). With no change in flight, a
+     * page NavDisplay still holds that is not on top (one dropped with no change of its own) is not drawn.
+     */
+    private var top: Destination? = null
+
+    /** [top] goes back to [other], the page under it. */
+    internal fun pop(top: Destination, other: Destination?) {
+        this.top = other
+        arriving = null
+        // A page that was to open once the fold before it landed goes back before it ever showed: the fold lands.
+        if (queued?.document == top) {
+            queued = null
+            opened.remove(top)
+            return
+        }
         pull = null
+        letGo = null
+        provisionalPage = null
         val current = change
         // A released predictive back, while its seek is under way. A gesture that was cancelled leaves its change
         // behind with the page whole again (nothing reports the cancel): a Back after it is an ordinary one.
@@ -371,7 +443,9 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
             }
         } else {
             val interrupted = inFlight(top, push = false)
-            val c = PageChange(reverse(opened[top]), top, push = false, serial = ++serial, start = interrupted?.let(::startOf) ?: ChangeStart.Pop)
+            val c = PageChange(
+                reverse(opened[top]), top, push = false, serial = ++serial, start = interrupted?.let(::startOf) ?: ChangeStart.Pop, other = other,
+            )
             carryDecision(interrupted, c)
             change = c
             startClock()
@@ -397,71 +471,99 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     }
 
     /**
-     * The stage pulled down (spec 6.5, as the live stage is): where the finger has taken the clock (ms of the opening),
-     * or null when no pull holds it. The card's edge follows the finger while its page does not exist yet; let go far
-     * enough, the page opens from there ([push]); let go sooner, the clock runs back to 0 ([endDrag]).
+     * The stage pulled down (spec 6.5, as the live stage is): where the finger has taken the opening (the clock time
+     * whose travel is the finger's), or null when no finger holds it. The page is pushed as the pull begins, so the
+     * card turns into the page under the finger, the transform's every part following the travel; let go, it opens
+     * on from there or goes back to the stage and the page is dropped ([endDrag]). It stays set until the card has
+     * landed at either end.
      */
     private var pull: Float? = null
-    private var pullCancelled = false
-    /** The clock time and the progress at which a pull was let go: its material and content leave from there. */
-    private var pullReleasedAt = Float.NaN
-    private var pullReleasedP = 1f
+    /** The finger let go: where the card goes from there, carrying the finger's speed ([LetGo]). */
+    private var letGo: LetGo? = null
+    /**
+     * The travel p at which the pulled page was ready (laid out with its note): its own parts (chrome, text, the
+     * title's flight) run over what is left of the way from there ([pageTravel]), so a page that took a moment to
+     * compose comes in from nothing instead of appearing at the travel already reached.
+     */
+    private var pageFromP = Float.NaN
 
-    /** The stage starts to follow a finger toward [destination]'s page. False when it cannot now. */
+    /** The stage starts to follow a finger toward [destination]'s page (its page is pushed next). False when it cannot now. */
     internal fun beginDrag(destination: Destination): Boolean {
         if (reduced || change?.let { active(it) || it.predictive } == true) return false
-        val c = PageChange(PageMotion.Stage, destination, push = true, serial = ++serial, dragged = true)
+        val c = PageChange(PageMotion.Stage, destination, push = true, serial = ++serial, dragged = true, other = Destination.Library)
         if (originCard(c) == null) return false
         change = c
+        queued = null
         arriving = null
         pull = 0f
-        pullCancelled = false
-        pullReleasedAt = Float.NaN
-        pullReleasedP = 1f
+        letGo = null
+        pageFromP = Float.NaN
         startClock()
         return true
     }
 
-    /** The finger has pulled the card's bottom edge [fraction] of its way to the window's (0..1). */
+    /** The finger has pulled the card's bottom edge [fraction] of its way to the window's (0..1): the edge is there. */
     internal fun drag(fraction: Float) {
-        if (pull == null || pullCancelled) return
-        // The edge follows the finger for the first third of the way, then ever less: the card is not the page yet.
-        val f = fraction.coerceAtLeast(0f)
-        val v = if (f <= PULL_FREE) f else PULL_FREE + PULL_REST * (1 - kotlin.math.exp(-(f - PULL_FREE) / PULL_REST))
-        pull = stageTime(v)
+        if (pull == null || letGo != null) return
+        pull = stageTime(fraction.coerceIn(0f, 1f))
     }
-
-    /** The finger lifted without opening the page: the card goes back. (Opening it is [push].) */
-    internal fun cancelDrag() {
-        if (pull == null) return
-        pull = 0f
-        pullCancelled = true
-    }
-
-    /** True while a pull holds the stage open and its page has not been asked for. */
-    private fun pulling(c: PageChange): Boolean = c.dragged && pull != null
 
     /**
-     * A pulled card keeps its material and its own content while the finger holds it; let go, they leave over what is
-     * left of the way, from where they were.
+     * The finger lifted, moving at [velocity] (the card's way per second, positive toward the page): [open] goes on to
+     * the page from where the card is, otherwise the card goes back into the stage. Either way on `stage`, starting at
+     * the finger's speed, so the card neither lurches nor stops dead as the finger leaves it. Let go short, the page is
+     * off the back stack at once ([drop]): the card going back is the overlay's, the library is the page again, and a
+     * tap on it meanwhile opens its note once the card has landed ([queued]).
      */
-    private fun travelled(c: PageChange): Float = when {
-        !c.dragged -> progress(c)
-        pulling(c) -> 1f
-        else -> (progress(c) / pullReleasedP).coerceIn(0f, 1f)
+    internal fun endDrag(open: Boolean, velocity: Float, drop: () -> Unit) {
+        if (pull == null || letGo != null) return
+        letGo = LetGo(from = documentProgress(), to = if (open) 1f else 0f, velocity = velocity)
+        provisionalPage = null
+        if (!open) drop()
     }
 
-    /** A predictive back started on [top] (NavDisplay seeks the pop with the gesture's progress). */
-    internal fun beginPredictive(top: Destination, edge: Int) {
+    /**
+     * The page a finger is pulling open and has not let go into (held, or going back into the stage): it is on the
+     * back stack only for the pull, and a saved back stack leaves it out.
+     */
+    internal fun provisional(): Destination? = provisionalPage
+
+    /**
+     * [provisional] as state: the dock keeps the library's controls while the page is only pulled at (a pull let go
+     * short never swaps it), and swaps to the page's as the finger lets go into it.
+     */
+    internal var provisionalPage by mutableStateOf<Destination?>(null)
+        private set
+
+    /** True while a finger holds the pulled stage, or it is still settling after the finger let go. */
+    private fun pulling(c: PageChange): Boolean = c.dragged && pull != null
+
+    /** A pulled page's own way, 1 to 0, from the travel at which it was ready (see [pageFromP]); 0 once it has arrived. */
+    private fun pageTravel(c: PageChange): Float {
+        if (!elapsed.isFinite()) return 0f
+        val from = pageFromP
+        if (from.isNaN()) return 1f
+        return (progress(c) / from).coerceIn(0f, 1f)
+    }
+
+    /** A predictive back started on [top] toward [other] (NavDisplay seeks the pop with the gesture's progress). */
+    internal fun beginPredictive(top: Destination, edge: Int, other: Destination?) {
         val current = change
         if (current != null && current.predictive && !current.committed && current.document == top) {
             // The same gesture asking again, or a new one after a cancelled one, which may come from the other edge.
             if (current.edge != edge) change = current.copy(edge = edge)
             return
         }
+        // A released back still folding: the display asks once more as its pop completes, with the next page on top.
+        if (current != null && current.predictive && current.committed && active(current)) return
+        // An opening on its way (a tap's, or a pull a finger holds or has let go) has no preview to start from, and
+        // turning it into a whole page would undo what is on screen: it runs on, and a back let go over it folds it
+        // from where it is, as the Back key does ([pop]). Likewise a page still waiting to open ([queued]).
+        if (queued != null) return
+        if (current != null && current.push && !current.predictive && current.motion in CONTAINERS && (pulling(current) || active(current))) return
         clock?.cancel()
         predictiveBody = Animatable(1f)
-        change = PageChange(reverse(opened[top]), top, push = false, predictive = true, edge = edge, serial = ++serial)
+        change = PageChange(reverse(opened[top]), top, push = false, predictive = true, edge = edge, serial = ++serial, other = other)
     }
 
     /**
@@ -488,22 +590,41 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
             val scale = coroutineContext[MotionDurationScale]?.scaleFactor?.takeIf { it > 0f } ?: 1f
             var trigger = Long.MIN_VALUE
             var held = 0
+            var last = Long.MIN_VALUE
             do {
                 withFrameNanos { now ->
-                    // A pull holds the clock: it goes where the finger is, a frame's worth of time at a step, and
-                    // back to 0 when the finger lets go too soon.
+                    val step = if (last == Long.MIN_VALUE) 0L else now - last
+                    last = now
+                    // A pull holds the clock: the card's edge is where the finger is, in the very frame the finger is
+                    // there; let go, the card carries the finger's speed on to the page or back into the stage.
                     val pulled = pull
                     if (pulled != null && c.dragged) {
-                        // Let go too soon, the card eases back; held, it keeps up with the finger.
-                        if (pullCancelled) elapsed = (elapsed - maxOf(elapsed * PULL_RETURN, PULL_RETURN_MIN_MS)).coerceAtLeast(0f)
-                        else elapsed += (pulled - elapsed).coerceIn(-PULL_STEP_MS, PULL_STEP_MS)
+                        val let = letGo
+                        if (let == null) elapsed = pulled
+                        else {
+                            if (let.at == Long.MIN_VALUE) let.at = now
+                            // A card going back that a tapped note waits for goes [HURRY] times as fast.
+                            else if (queued != null) let.at -= step * (HURRY - 1)
+                            val t = (now - let.at).toFloat() / NANOS_PER_MS / scale + FocalTiming.TRIGGER_LEAD_MS
+                            elapsed = if (let.landed(t)) (if (let.to > 0f) end else 0f) else stageTime(let.travel(t).coerceIn(0f, 1f))
+                        }
                         decide(c)
-                        if (pullCancelled && elapsed <= 0f) {
+                        if (let != null && (elapsed <= 0f || elapsed >= end)) {
                             pull = null
-                            if (change === c) change = null
+                            letGo = null
+                            if (let.to > 0f) {
+                                // Arrived: an opening that has landed, whose body may still be arriving.
+                                trigger = now - (elapsed * NANOS_PER_MS * scale).toLong()
+                            } else {
+                                // The card is the stage again (what was left is a pixel or two); its page is gone
+                                // already. A note tapped meanwhile opens now (after the loop).
+                                if (change === c && queued == null) change = null
+                            }
                         }
                         return@withFrameNanos
                     }
+                    // A page opened while this one folds away waits for it: the fold runs on [HURRY] times as fast.
+                    if (queued != null && trigger != Long.MIN_VALUE) trigger -= step * (HURRY - 1)
                     // An opening holds on its origin until its page is ready, a fold on its page until the library is
                     // back under it (or either has taken too long).
                     if (trigger == Long.MIN_VALUE && (waits(c) || returns(c)) && held < READY_FRAMES) {
@@ -521,9 +642,18 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
                         elapsed = (now - trigger).toFloat() / NANOS_PER_MS / scale
                     }
                 }
-                // An opening runs on while its body, which waited for the title, is still arriving.
-            } while (change === c && (pulling(c) || elapsed < end || (bodyArriving(c) && elapsed < BODY_LIMIT_MS)))
+                // An opening runs on while its body, which waited for the title, is still arriving; a fold that a page
+                // waits for ends as it lands.
+            } while (change === c && !(queued != null && progress(c) >= LANDED) &&
+                (pulling(c) || elapsed < end || (bodyArriving(c) && elapsed < BODY_LIMIT_MS)))
             elapsed = Float.POSITIVE_INFINITY
+            val next = queued
+            if (next != null && change === c) {
+                queued = null
+                pull = null
+                letGo = null
+                begin(next)
+            }
         }
     }
 
@@ -550,6 +680,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         // Only between two titles that are both on screen. A page reopened where it was read has its title above the
         // window: the origin's title then leaves with the rest of the origin's content instead of flying to nowhere.
         flightReady = resolved && titled && originTitle(c) != null && titleFlies(c)
+        if (c.dragged && pageFromP.isNaN() && c.document in readied) pageFromP = progress(c).coerceAtLeast(MIN_PAGE_FROM)
         if (c.push && titleFrom.isNaN() && flightReady && titleFlies(c)) titleFrom = elapsed
         if (c.push && bodyFrom.isNaN() && !titleFrom.isNaN()) {
             val gap = titleGap(c)
@@ -561,7 +692,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     /** How far the flying title still is from its line on the page (window pixels), while both ends are laid out. */
     private fun titleGap(c: PageChange): Float? {
         val origin = originTitle(c) ?: return null
-        val page = pageTitle.coordinates?.takeIf { it.isAttached && pageTitle.noteId == noteIdOf(c.document) } ?: return null
+        val page = titleOf(c)?.coordinates?.takeIf { it.isAttached } ?: return null
         return abs(origin.positionInWindow().y - page.positionInWindow().y) * titleProgress(c)
     }
 
@@ -574,10 +705,17 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     /**
      * The flying title's progress, 0 = the page's title, 1 = the origin's: opening, its own `move` from the frame the
      * page's title was laid out (until then it holds at the origin); folding and after a predictive release, the
-     * change's own.
+     * change's own. A fold that turned an opening back starts where that opening's title was (it lagged the page by the
+     * frames its title took to lay out), and the difference melts away on the fold's own curve.
      */
     internal fun titleProgress(c: PageChange): Float {
-        if (!c.push) return progress(c)
+        if (!c.push) {
+            if (c.predictive) return progress(c)
+            val behind = c.start.title - (1 - c.start.v)
+            return (progress(c) + behind * (1 - move(elapsed))).coerceIn(0f, 1f)
+        }
+        // Pulled: the title rises with the travel, from where the page was ready (it rode the card until then).
+        if (c.dragged) return pageTravel(c)
         if (titleFrom.isNaN()) return c.start.title
         return c.start.title * (1 - move(elapsed - titleFrom))
     }
@@ -625,6 +763,9 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     }
 
     private fun noteIdOf(destination: Destination): String? = (destination as? Destination.Note)?.id
+
+    /** The title of [c]'s note page, while that page is composed. */
+    internal fun titleOf(c: PageChange): PageTitle? = noteIdOf(c.document)?.let { pageTitles[it] }
 
     private fun originOf(c: PageChange): Origin? {
         val id = noteIdOf(c.document) ?: return null
@@ -678,9 +819,17 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
 
     private fun titleFlies(c: PageChange): Boolean {
         val origin = originOf(c)?.title?.takeIf { it.isAttached } ?: return false
-        val page = pageTitle.coordinates?.takeIf { it.isAttached && pageTitle.noteId == noteIdOf(c.document) } ?: return false
-        return origin.size.width > 0 && page.size.width > 0 && page.boundsInWindowOrEmpty().height > 0f
+        val page = titleOf(c)?.coordinates?.takeIf { it.isAttached } ?: return false
+        if (origin.size.width <= 0 || page.size.width <= 0) return false
+        // Some of it on screen: inside its frame, as far as the page's list shows it.
+        val shown = inPage(c, page, clip = true) ?: return page.boundsInWindowOrEmpty().height > 0f
+        val height = frames[c.document]?.size?.height?.toFloat() ?: return false
+        return min(shown.bottom, height) - max(shown.top, 0f) > 0f
     }
+
+    /** The page's title in the overlay's space, [c]'s page standing in place (see [inPage]). */
+    internal fun pageTitleIn(c: PageChange, title: LayoutCoordinates, overlay: LayoutCoordinates): Rect =
+        inPage(c, title, clip = false) ?: overlay.rectOf(title)
 
     /** p: 0 = the page, 1 = the origin; on a predictive commit, from the previewed page. */
     internal fun progress(c: PageChange): Float {
@@ -699,8 +848,12 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     }
 
     /** The material's alpha in a stage transform: it crossfades to paper over the first 60 % of the travel. */
-    internal fun material(c: PageChange): Float =
-        if (c.motion == PageMotion.Row) 0f else smoothstep(MATERIAL_FROM, 1f, travelled(c))
+    internal fun material(c: PageChange): Float = when {
+        c.motion == PageMotion.Row -> 0f
+        // Pulled, the card stays the card over the first quarter of the way: a short pull is a stretch, not a grey card.
+        c.dragged -> smoothstep(PULLED_MATERIAL_FROM, PULLED_MATERIAL_TO, progress(c))
+        else -> smoothstep(MATERIAL_FROM, 1f, progress(c))
+    }
 
     internal fun reveal(destination: Destination): PageReveal = PageReveal(
         chrome = {
@@ -738,7 +891,9 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      * over to the stage's own time, text and footer, which arrive from p 0.6 on a fold, so it is gone by then and
      * never drawn over them. Opening, it arrives while the material has all but gone.
      */
-    private fun chrome(c: PageChange): Float = 1 - smoothstep(MATERIAL_FROM, CONTENT_FROM, travelled(c))
+    private fun chrome(c: PageChange): Float =
+        if (c.dragged) 1 - smoothstep(PULLED_CHROME_FROM, PULLED_CHROME_TO, pageTravel(c))
+        else 1 - smoothstep(MATERIAL_FROM, CONTENT_FROM, progress(c))
 
     /**
      * A page opening out of a row: its chrome (top bar, fades) has no material to hand over from, so it arrives on
@@ -760,6 +915,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         val from = c.start.body
         return when {
             c.predictive -> predictiveBody.value
+            // Pulled: with the travel, over the last part of the page's own way, under the title that rises with it.
+            c.dragged -> 1 - smoothstep(PULLED_BODY_FROM, PULLED_BODY_TO, pageTravel(c))
             !c.push && c.motion == PageMotion.Row -> from * (1 - smoothstep(0f, HALF, fadeFast(elapsed)))
             !c.push -> from * (1 - fadeFast(elapsed))
             c.motion == PageMotion.Stage || c.motion == PageMotion.Row -> {
@@ -784,14 +941,17 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      */
     private fun rows(c: PageChange): Float {
         val from = c.start.rows
-        return if (c.push) from * (1 - fadeFast(elapsed)) else from + (1 - from) * smoothstep(HALF, 1f, fadeFast(elapsed))
+        if (c.push) return from * (1 - fadeFast(elapsed))
+        // They wait for as much of the page's text as was there: none when Back turned an opening around before its
+        // text arrived, so the library never blanks between a page that showed nothing and the rows.
+        return from + (1 - from) * smoothstep(HALF * c.start.body, 1f, fadeFast(elapsed))
     }
 
     /** The origin's own content as the page opens out of it (T16′, T7b): the time, text and footer leave on `fadeFast`. */
     internal fun content(c: PageChange): Float = when {
         !c.dragged -> c.start.content * (1 - fadeFast(elapsed))
-        pulling(c) -> 1f
-        else -> 1 - fadeFast(elapsed - pullReleasedAt)
+        // Pulled, it follows the travel: whole over the first fifth of the way, gone before the material.
+        else -> smoothstep(PULLED_CONTENT_FROM, PULLED_CONTENT_TO, progress(c))
     }
 
     /**
@@ -827,13 +987,20 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         if (c.document == destination && !c.push) change = null
     }
 
-    /** How one page draws itself in the current change (read in the draw phase), from the upper page's progress v. */
-    internal fun look(destination: Destination): PageLook {
-        val c = change ?: return PageLook.Shown
+    /**
+     * How one page draws itself in the current change (read in the draw phase), from the upper page's progress v.
+     * [under]: as the change's other page, whichever it is (two panes: the library's pane under the licences).
+     */
+    internal fun look(destination: Destination, under: Boolean = false): PageLook {
+        val c = change ?: return if (top == null || top == destination) PageLook.Shown else PageLook.Gone
+        // A page that left before this change began, which NavDisplay still holds for a moment, is no part of it.
+        if (!under && stray(c, destination)) return PageLook.Gone
         val v = documentProgress()
         val upper = destination == c.document
         if (c.predictive) {
-            if (!upper) return PageLook.Shown
+            // The page under a back swipe shows while the swipe previews it: a swipe let go short leaves the page
+            // over it whole again (nothing reports the cancel), and it covers what is under it once more.
+            if (!upper) return if (c.committed || preview(c) > 0f) PageLook.Shown else PageLook.Gone
             if (!c.committed) return PageLook(preview = preview(c), edge = c.edge)
             if (transforms(c)) return if (active(c)) PageLook.Recorded else PageLook.Gone
             val fraction = if (commitAt <= 0f) 0f else v / commitAt
@@ -865,6 +1032,60 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         return PageLook(alpha = if (upper) smoothstep(HALF, 1f, v) else smoothstep(HALF, 1f, 1 - v))
     }
 
+    /** [destination] is neither of [c]'s pages: it left before [c] began. */
+    private fun stray(c: PageChange, destination: Destination): Boolean =
+        c.other != null && destination != c.document && destination != c.other
+
+    /**
+     * Whether [destination]'s page is on its way out: the page a change folds or fades away (from the moment Back is
+     * let go), or one that left before this change began. Nothing on it can be pressed; while it still stands in
+     * place ([aside]) it stops every touch, so nothing under it is pressed unseen either.
+     */
+    internal fun leaving(destination: Destination): Boolean {
+        val c = change ?: return false
+        if (stray(c, destination)) return true
+        if (destination == c.document && returning(c)) return true
+        return destination == c.document && !c.push && (!c.predictive || c.committed)
+    }
+
+    /**
+     * Whether [destination]'s page takes no touch now: it is [leaving], or it is still opening out of the stage or a
+     * row, held by a finger or on its way, where what is drawn is the overlay's card and the page's controls are not
+     * where they will be. A second tap there presses nothing (the library under it is covered, and takes none either).
+     */
+    internal fun blocks(destination: Destination): Boolean {
+        if (leaving(destination)) return true
+        val c = change ?: return false
+        return c.push && destination == c.document && c.motion in CONTAINERS && (pulling(c) || documentProgress() < LANDED)
+    }
+
+    /**
+     * Whether [destination]'s page, drawn this frame as [look], stands aside, where it takes no touch and the page
+     * under it takes them: a page that is not drawn, once its change no longer reads where it stands (a transform
+     * reads its origin on the page below) or as soon as it is leaving; and a page that leaves through a transform
+     * (drawn by the overlay from its recording) from the moment it is leaving, so a tap on the library during the fold
+     * reaches the row it was meant for (the page it opens waits for the fold, [queued]). The overlay finds the page's
+     * title in the page's own frame ([frames]), so a page aside still folds onto its own lines.
+     */
+    internal fun aside(destination: Destination, look: PageLook): Boolean {
+        val c = change ?: return look.alpha <= 0f
+        return when {
+            look.recorded -> leaving(destination)
+            look.alpha <= 0f -> leaving(destination) || settled()
+            else -> false
+        }
+    }
+
+    /** Where each composed page's frame is laid out: the transforms find the page's title in it. */
+    internal val frames = HashMap<Destination, LayoutCoordinates>()
+
+    /**
+     * [title], a part of [c]'s page, in the page's own frame: the frame stands where the overlay does (one pane, the
+     * only layout with transforms) unless it is aside. [clip]: only what the page's list shows of it.
+     */
+    private fun inPage(c: PageChange, title: LayoutCoordinates, clip: Boolean): Rect? =
+        frames[c.document]?.takeIf { it.isAttached }?.localBoundingBoxOf(title, clipBounds = clip)
+
     /** A predictive back released past its threshold: the page's meta and text leave on `fadeFast` as it folds. */
     internal suspend fun play(c: PageChange) {
         if (c.motion in CONTAINERS && c.predictive && c.committed) predictiveBody.animateTo(0f, FocalMotion.fadeFast())
@@ -893,17 +1114,30 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         const val DECIDE_MS = 4f * FocalTiming.TRIGGER_LEAD_MS
         /** An opening waits at most this many frames for its page to be ready, then opens anyway. */
         const val READY_FRAMES = 45
-        /** A pulled card follows the finger over this share of its way, and over at most [PULL_REST] more after it. */
-        const val PULL_FREE = 0.3f
-        const val PULL_REST = 0.15f
-        /** Let go at or past this share of the way (or flung down), a pulled card opens its page. */
-        const val PULL_OPENS = 0.12f
-        /** How fast the clock follows a pull: a frame's worth of the opening per frame. */
-        const val PULL_STEP_MS = 34f
-        /** A card let go too soon goes back by this share of what is left of its way per frame, and at least this much. */
-        const val PULL_RETURN = 0.22f
-        const val PULL_RETURN_MIN_MS = 2f
-        const val MIN_RELEASE_P = 0.05f
+        /** A page opened while another folds away waits for it, and the fold runs this many times as fast meanwhile. */
+        const val HURRY = 4L
+        /*
+         * A pulled card turns into its page in overlapping steps, so that at no point of the way is it an empty slab
+         * (a pull can stop anywhere): over p (1 at the stage, 0 at the page) its own time, text and footer leave from
+         * 0.85 to 0.65 and its material turns to paper from 0.8 to 0.45; over the page's own way q its bar arrives
+         * from 0.75 to 0.55 and its text from 0.65 to 0.35, under the title that rises all the way.
+         */
+        const val PULLED_CONTENT_TO = 0.85f
+        const val PULLED_CONTENT_FROM = 0.65f
+        const val PULLED_MATERIAL_TO = 0.8f
+        const val PULLED_MATERIAL_FROM = 0.45f
+        const val PULLED_CHROME_TO = 0.75f
+        const val PULLED_CHROME_FROM = 0.55f
+        const val PULLED_BODY_TO = 0.65f
+        const val PULLED_BODY_FROM = 0.35f
+        /** A card let go has landed at either end once this little of its way is left, and stays so (a pixel or two). */
+        const val PULL_LANDED = 0.002f
+        /** How far ahead a let-go card's spring is looked at to tell that it stays landed. */
+        const val LANDED_PROBE_MS = 32f
+        /** The least travel a pulled page's own way is counted from (see pageFromP). */
+        const val MIN_PAGE_FROM = 0.05f
+        /** A page that folds into its origin stands aside once this much of its way is done: the rest is a pixel or two. */
+        const val LANDED = 0.995f
         /** T16, T16′: the soft edge between the flying title and the text it has passed, while it is in flight. */
         val TITLE_CLEARANCE = 16.dp
         /** T16, T16′: the page's meta and text arrive once the flying title is this close to its own line. */
@@ -921,6 +1155,22 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         const val SHIFT_DIVISOR = 20f
         val ShiftInset = 8.dp
     }
+}
+
+/**
+ * A pulled card let go at travel [from] (0 the stage, 1 the page), moving at [velocity] (travel per second): it goes on
+ * to [to] on `stage` from that speed.
+ */
+private class LetGo(val from: Float, val to: Float, val velocity: Float) {
+    /** The frame time of the first frame after the finger left (unset until then). */
+    var at = Long.MIN_VALUE
+
+    fun travel(ms: Float): Float =
+        FocalMotion.springTo(FocalMotion.SPATIAL_DAMPING, FocalMotion.STAGE_STIFFNESS, from, to, velocity, ms)
+
+    /** Within a pixel or two of [to], and staying there (or past any time it could take). */
+    fun landed(ms: Float): Boolean = ms >= 2 * FocalSettle.STAGE_MS ||
+        (abs(travel(ms) - to) <= PageTransitions.PULL_LANDED && abs(travel(ms + PageTransitions.LANDED_PROBE_MS) - to) <= PageTransitions.PULL_LANDED)
 }
 
 /** The clock time at which a page's travel has covered [v] of its way: [move]'s inverse, by bisection. */
@@ -978,7 +1228,12 @@ private fun Density.previewShift(e: Float, width: Float, edge: Int): Float {
  * draws it clipped.
  */
 @Composable
-internal fun PageFrame(destination: Destination, pages: PageTransitions, content: @Composable () -> Unit) {
+internal fun PageFrame(
+    destination: Destination,
+    pages: PageTransitions,
+    background: Color = Color.Unspecified,
+    content: @Composable () -> Unit,
+) {
     val transition = LocalNavAnimatedContentScope.current.transition
     val visibility = transition.animateFloat(transitionSpec = { pages.spec() }, label = "page") { state ->
         if (state == EnterExitState.Visible) 1f else 0f
@@ -1000,22 +1255,43 @@ internal fun PageFrame(destination: Destination, pages: PageTransitions, content
             pages.left(destination)
         }
     }
+    val placed = remember { PlacedFrame() }
+    DisposableEffect(pages, destination) {
+        onDispose {
+            placed.coordinates?.let { if (pages.frames[destination] === it) pages.frames.remove(destination) }
+            pages.disposed(destination)
+        }
+    }
     Box(
         Modifier
             .fillMaxSize()
             .graphicsLayer {
                 val look = pages.look(destination)
                 alpha = if (look.recorded) 1f else look.alpha
-                // A page that is not drawn once its change is over takes no touch either: it stands aside, so one
-                // kept composed a moment longer never swallows a tap meant for the page that replaced it. (While
-                // the change runs it stays in place: a transform reads where its origin is.)
-                val aside = !look.recorded && look.alpha <= 0f && pages.settled()
+                // A page that is not drawn, or one leaving that has all but landed, stands aside: one kept composed a
+                // moment longer never swallows a tap meant for the page under it (PageTransitions.aside).
+                val aside = pages.aside(destination, look)
                 val e = if (look.recorded) 0f else look.preview
                 scaleX = previewScale(e)
                 scaleY = scaleX
                 translationX = if (aside) ASIDE * size.width else previewShift(e, size.width, look.edge)
                 shape = if (e > 0f) RoundedCornerShape(FocalShapes.sheetRadius * e) else androidx.compose.ui.graphics.RectangleShape
                 clip = e > 0f
+            }
+            // Inside the layer: the frame's own space, where the transforms find the page's title even while it is aside.
+            .onPlaced {
+                placed.coordinates = it
+                pages.frames[destination] = it
+            }
+            // A page on its way out or still on its way in presses nothing, and while it stands in place nothing under
+            // it either.
+            .pointerInput(pages, destination) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (pages.blocks(destination)) event.changes.forEach { it.consume() }
+                    }
+                }
             }
             .drawWithContent {
                 val look = pages.look(destination)
@@ -1025,14 +1301,54 @@ internal fun PageFrame(destination: Destination, pages: PageTransitions, content
                     if (look.preview > 0f) drawRect(paper)
                     drawContent()
                 }
-            },
+            }
+            // Its own paper, if it brings one, is part of the page: it fades and moves with it.
+            .then(if (background.isSpecified) Modifier.background(background) else Modifier),
     ) {
         CompositionLocalProvider(LocalPageReveal provides reveal) { content() }
     }
 }
 
+/**
+ * The library's page in its own pane (FocalShell's LibraryPane). In one pane it is the page under every change, drawn
+ * from [PageTransitions.look] like any page below; with no change in flight it is shown unless a page [covered] it.
+ * It never stands aside: whatever covers it is drawn in place and takes the touches, and the library's own places
+ * (the stage's bounds the scene grows out of, the rows a page folds into) stay where they are on screen. In two panes
+ * only the licences cover it, and it fades through under them.
+ */
+@Composable
+internal fun LibraryFrame(
+    pages: PageTransitions,
+    twoPane: Boolean,
+    covered: () -> Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                val change = pages.change
+                if (twoPane) {
+                    alpha = if (change?.document == Destination.Licenses) pages.look(Destination.Library, under = true).alpha else 1f
+                    return@graphicsLayer
+                }
+                val look = when {
+                    change != null -> pages.look(Destination.Library)
+                    covered() -> PageLook.Gone
+                    else -> PageLook.Shown
+                }
+                alpha = look.alpha
+            }
+            .then(modifier),
+    ) { content() }
+}
+
 /** A page that is not drawn is placed this many widths aside (see [PageFrame]). */
 private const val ASIDE = 2f
+
+/** Where one page's frame was laid out, so it can unregister only itself. */
+private class PlacedFrame { var coordinates: LayoutCoordinates? = null }
 
 /** A rounded rect inside the layer's bounds. */
 private class RoundRectShape(private val rect: Rect, private val radius: Float) : Shape {
@@ -1068,10 +1384,10 @@ private data class TransformFrame(
  * no row of the library shows between them ([bottom] says where that fade is).
  */
 @Composable
-internal fun PageTransformOverlay(pages: PageTransitions, live: LiveSurfaceState, bottom: BottomColumnState) {
+internal fun PageTransformOverlay(pages: PageTransitions, live: LiveSurfaceState, bottom: BottomColumnState, modifier: Modifier = Modifier) {
     // Always laid out, so its place in the window is known before a transform's first frame.
     val placement = remember { OverlayPlacement() }
-    Box(Modifier.fillMaxSize().onPlaced { placement.coordinates = it }) {
+    Box(modifier.fillMaxSize().onPlaced { placement.coordinates = it }) {
         val change = pages.change
         if (change != null && change.motion in PageTransitions.CONTAINERS) TransformLayers(pages, live, bottom, change, placement)
     }
@@ -1411,12 +1727,13 @@ private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: La
             else -> colors.stageInk
         }
     }
-    val pageCoordinates = pageTitle.coordinates?.takeIf { it.isAttached && pageTitle.noteId == (c.document as? Destination.Note)?.id }
+    val pageTitle = titleOf(c)
+    val pageCoordinates = pageTitle?.coordinates?.takeIf { it.isAttached }
     val p = titleProgress(c)
     // A pulled card's title rides the card with the rest of its content, and flies to the page from there.
     val ride = if (c.dragged) f.clip.topLeft - f.origin.topLeft else Offset.Zero
     // Opening, before the page has laid out its title: the title holds where the origin set it.
-    if (pageCoordinates == null || p >= 1f) {
+    if (pageTitle == null || pageCoordinates == null || p >= 1f) {
         // Its ink follows what is under it: the material while it lasts, then paper.
         val muted = originSlot.titleMuted
         return Flight(
@@ -1425,7 +1742,7 @@ private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: La
             topLeft = from.topLeft + ride, width = from.width, lines = originSlot.titleLines, pageTop = null, originTop = from.top,
         )
     }
-    var to = overlay.rectOf(pageCoordinates)
+    var to = pageTitleIn(c, pageCoordinates, overlay)
     val scale = previewScale(f.preview)
     if (f.preview > 0f) with(density) {
         val shift = previewShift(f.preview, overlay.size.width.toFloat(), f.edge)
@@ -1503,12 +1820,18 @@ internal fun rememberRowOrigin(noteId: String, titleLines: Int, titleText: Strin
 /** The page's title as the flight's landing place: its text, ink and how many lines it may take. */
 @Composable
 internal fun rememberPageTitle(noteId: String, text: String, muted: Boolean, lines: Int): PageTitle {
-    val title = LocalShell.current.pages.pageTitle
+    val pages = LocalShell.current.pages
+    // One per note's page: a page still on its way out that composes again never writes over the one opening.
+    val title = remember(pages, noteId) { PageTitle() }
     SideEffect {
         title.noteId = noteId
         title.text = text
         title.muted = muted
         title.lines = lines
+        pages.pageTitles[noteId] = title
+    }
+    DisposableEffect(pages, noteId, title) {
+        onDispose { if (pages.pageTitles[noteId] === title) pages.pageTitles.remove(noteId) }
     }
     return title
 }

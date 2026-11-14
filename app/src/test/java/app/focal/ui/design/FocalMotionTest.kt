@@ -85,6 +85,22 @@ class FocalMotionTest {
         assertTrue(curve.getInterpolation(0.25f) < curve.getInterpolation(0.5f))
     }
 
+    @Test fun aSpringLetGoMovingStartsWhereAndAsFastAsTheFinger() {
+        val damping = FocalMotion.SPATIAL_DAMPING
+        val stiffness = FocalMotion.STAGE_STIFFNESS
+        // At rest it is the step response.
+        for (t in listOf(16f, 80f, 200f)) {
+            assertEquals(FocalMotion.springFraction(damping, stiffness, t), FocalMotion.springTo(damping, stiffness, 0f, 1f, 0f, t), 1e-5f)
+        }
+        // It starts where it was let go, at the speed it was let go with (here 2 of its way per second).
+        assertEquals(0.4f, FocalMotion.springTo(damping, stiffness, 0.4f, 1f, 2f, 0f), 0f)
+        val slope = (FocalMotion.springTo(damping, stiffness, 0.4f, 1f, 2f, 1f) - 0.4f) / 0.001f
+        assertEquals(2f, slope, 0.1f)
+        // And it comes to rest at its target from either side, even moving away from it when let go.
+        assertEquals(1f, FocalMotion.springTo(damping, stiffness, 0.4f, 1f, 2f, 1_000f), 0.001f)
+        assertEquals(0f, FocalMotion.springTo(damping, stiffness, 0.3f, 0f, 1f, 1_000f), 0.001f)
+    }
+
     @Test fun smoothstepIsTheHermiteStep() {
         assertEquals(0f, smoothstep(0f, 0.5f, -1f), 0f)
         assertEquals(0.5f, smoothstep(0f, 1f, 0.5f), 1e-6f)

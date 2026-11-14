@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.Stable
@@ -154,9 +153,17 @@ fun LibraryHost(
     val currentArmed by rememberUpdatedState(armed)
     val expansion = shell.live.expansion
 
-    DisposableEffect(Unit) {
-        LibraryVisits.arrive()
-        onDispose { }
+    // A visit each time the library comes back on screen (it stays composed under the pages opened over it), and a new
+    // calm for the hint to wait for. A pull let go short, whose page never showed, was no visit.
+    LaunchedEffect(shell) {
+        var wasCovered = true
+        snapshotFlow { shell.libraryCovered }.collect { covered ->
+            if (wasCovered && !covered) {
+                touched = false
+                if (!shell.takeDroppedPull()) LibraryVisits.arrive()
+            }
+            wasCovered = covered
+        }
     }
     // Settings counts as opened the first time it is fully on screen; a pending Delete or Remove audio commits then.
     LaunchedEffect(strip) {
@@ -184,6 +191,10 @@ fun LibraryHost(
                     val previousTarget = strip.progress.targetValue
                     val start = strip.progress.value
                     val settling = strip.progress.isRunning
+                    // Its speed when caught: a stream that turns out not to be the swipe lets it go on at that speed.
+                    val previousVelocity = strip.progress.velocity
+                    // And on its own spring: a slide the keys or Back started goes on as slowly as it began.
+                    val previousSpring = strip.settleSpring
                     if (settling) scope.launch(start = CoroutineStart.UNDISPATCHED) { strip.progress.stop() }
                     val direction = if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr
                     val edge = edgeZone(gestures.getLeft(this, direction), gestures.getRight(this, direction))
@@ -201,7 +212,7 @@ fun LibraryHost(
                         else -> true
                     }
                     if (!inZone || !allowed) {
-                        if (settling) resume(scope, strip, previousTarget, reduced)
+                        if (settling) resume(scope, strip, previousTarget, previousVelocity, previousSpring, reduced)
                         return@awaitEachGesture
                     }
                     val travel = settingsTravel(size.width.toFloat(), this)
@@ -214,8 +225,12 @@ fun LibraryHost(
                         tracker.addPosition(change.uptimeMillis, change.position)
                         if (!change.pressed) {
                             if (lockX.isNaN()) {
-                                // A tap: the settle goes on to where it was heading.
-                                if (settling) resume(scope, strip, previousTarget, reduced)
+                                // A tap: the settle goes on to where it was heading. A tap that caught the pages in
+                                // flight only caught them (as a touch stops a fling): it presses nothing under them.
+                                if (settling) {
+                                    change.consume()
+                                    resume(scope, strip, previousTarget, previousVelocity, previousSpring, reduced)
+                                }
                             } else {
                                 change.consume()
                                 val velocity = tracker.calculateVelocity().x
@@ -236,7 +251,7 @@ fun LibraryHost(
                             if (delta.getDistance() <= slop) continue
                             if (!SettingsGesture.locks(delta.x, delta.y, start, opening)) {
                                 // The list, the expand drag and long-press keep this stream.
-                                if (settling) resume(scope, strip, previousTarget, reduced)
+                                if (settling) resume(scope, strip, previousTarget, previousVelocity, previousSpring, reduced)
                                 return@awaitEachGesture
                             }
                             lockX = change.position.x
@@ -267,8 +282,15 @@ private fun app.focal.ui.components.BottomColumnState.touchLimit(density: androi
     return if (top.isNaN()) Float.POSITIVE_INFINITY else top - with(density) { FocalGrid.x8.toPx() }
 }
 
-private fun resume(scope: kotlinx.coroutines.CoroutineScope, strip: SettingsStripState, target: Float, reduced: Boolean) {
-    scope.launch { strip.settle(target, reduced) }
+private fun resume(
+    scope: kotlinx.coroutines.CoroutineScope,
+    strip: SettingsStripState,
+    target: Float,
+    velocity: Float,
+    spring: androidx.compose.animation.core.AnimationSpec<Float>,
+    reduced: Boolean,
+) {
+    scope.launch { strip.settle(target, reduced, velocity = if (reduced) 0f else velocity, spring = spring) }
 }
 
 /**

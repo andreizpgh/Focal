@@ -30,6 +30,17 @@ class DestinationTest {
         assertEquals(listOf(Destination.Library, Destination.Note("b")), Destination.BackStackSaver.restore(listOf("note:b"))!!.toList())
         assertEquals(listOf(Destination.Library), Destination.BackStackSaver.restore(listOf("library", "library", "nonsense"))!!.toList())
     }
+
+    @Test fun aPageOnlyPulledAtIsNotSaved() {
+        val saver = Destination.backStackSaver { Destination.Note("pulled") }
+        val stack = SnapshotStateList<Destination>().apply {
+            add(Destination.Library)
+            add(Destination.Note("a"))
+            add(Destination.Note("pulled"))
+        }
+        val saved = with(saver) { scope.save(stack) }!!
+        assertEquals(listOf(Destination.Library, Destination.Note("a")), saver.restore(saved)!!.toList())
+    }
 }
 
 class SystemBarsTest {

@@ -64,6 +64,7 @@ import app.focal.R
 import app.focal.ui.components.BottomColumnState
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.Glyph
+import app.focal.ui.components.rememberRowPlacement
 import app.focal.ui.components.KeyboardRowMetrics
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.scrollEdgeFade
@@ -120,7 +121,7 @@ class LibrarySearchState internal constructor(open: Boolean, results: Boolean = 
         fieldShown = true
         dockHidden = true
         focusPending = true
-        grow.animateTo(1f, FocalMotion.move())
+        grow.animateTo(1f, FocalMotion.moveUnit())
     }
 
     /** The results take the page ([show]: search is open with a query), or give it back to the library. */
@@ -133,7 +134,7 @@ class LibrarySearchState internal constructor(open: Boolean, results: Boolean = 
         if (!open) return@coroutineScope
         open = false
         launch { content.animateTo(0f, FocalMotion.fade()) }
-        grow.animateTo(0f, FocalMotion.move())
+        grow.animateTo(0f, FocalMotion.moveUnit())
         dockHidden = false
         // The dock fades in on `fade` over the circle-sized field; the field leaves once it is covered.
         Animatable(0f).animateTo(1f, FocalMotion.fade())
@@ -302,30 +303,35 @@ fun SearchResults(
                             .padding(bottom = SearchMetrics.headGap),
                     )
                 }
-                ResultsShow.List -> LazyColumn(
-                    state = list,
-                    reverseLayout = true,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = side, end = side,
-                        top = with(LocalDensity.current) { status.getTop(this).toDp() } + FocalLayout.topFade,
-                        // The last row's hit area reaches 12 dp below its text: its text ends 24 dp above the field.
-                        bottom = SearchMetrics.resultsGap - RowMetrics.hitPad,
-                    ),
-                ) {
-                    items(results, key = { it.row.id }, contentType = { "result" }) { result ->
-                        SearchResultItem(
-                            result, dates, today, onOpen,
-                            Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = FocalMotion.move(), fadeOutSpec = FocalMotion.fadeFast()),
-                        )
-                    }
-                    item(key = "count", contentType = "head") {
-                        Text(
-                            pluralStringResource(R.plurals.search_count, results.size, results.size), style = FocalType.section,
-                            color = colors.recede,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = FocalLayout.gutter)
-                                .padding(bottom = SearchMetrics.headGap - RowMetrics.hitPad).semantics { heading() },
-                        )
+                ResultsShow.List -> {
+                    // Rows glide only while the results change, never while the keyboard resizes the list (see
+                    // rememberRowPlacement): glided then, the rows on screen trailed the field and overlapped the next.
+                    val placement = rememberRowPlacement(remember(results) { results.map { it.row.id } })
+                    LazyColumn(
+                        state = list,
+                        reverseLayout = true,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = side, end = side,
+                            top = with(LocalDensity.current) { status.getTop(this).toDp() } + FocalLayout.topFade,
+                            // The last row's hit area reaches 12 dp below its text: its text ends 24 dp above the field.
+                            bottom = SearchMetrics.resultsGap - RowMetrics.hitPad,
+                        ),
+                    ) {
+                        items(results, key = { it.row.id }, contentType = { "result" }) { result ->
+                            SearchResultItem(
+                                result, dates, today, onOpen,
+                                Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
+                            )
+                        }
+                        item(key = "count", contentType = "head") {
+                            Text(
+                                pluralStringResource(R.plurals.search_count, results.size, results.size), style = FocalType.section,
+                                color = colors.recede,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = FocalLayout.gutter)
+                                    .padding(bottom = SearchMetrics.headGap - RowMetrics.hitPad).semantics { heading() },
+                            )
+                        }
                     }
                 }
             }

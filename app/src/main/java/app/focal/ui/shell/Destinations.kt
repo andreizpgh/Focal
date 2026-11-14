@@ -49,8 +49,17 @@ sealed interface Destination {
         }
 
         /** Keeps the back stack across configuration changes and process death, always rooted at the library. */
-        val BackStackSaver: Saver<SnapshotStateList<Destination>, List<String>> = Saver(
-            save = { stack -> stack.map(::encode) },
+        val BackStackSaver: Saver<SnapshotStateList<Destination>, List<String>> = backStackSaver { null }
+
+        /**
+         * [BackStackSaver], leaving out the page [provisional] names: one on the stack only while a finger pulls the
+         * stage open (a pull ends with the activity, so the page it would have opened is not restored open).
+         */
+        fun backStackSaver(provisional: () -> Destination?): Saver<SnapshotStateList<Destination>, List<String>> = Saver(
+            save = { stack ->
+                val out = provisional()
+                stack.filter { it != out || it == Library }.map(::encode)
+            },
             restore = { saved ->
                 val stack = saved.mapNotNull(::decode).filterIndexed { index, it -> index == 0 || it != Library }
                 (if (stack.firstOrNull() == Library) stack else listOf(Library) + stack).toMutableStateList()

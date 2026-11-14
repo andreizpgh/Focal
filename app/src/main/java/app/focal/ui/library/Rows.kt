@@ -3,6 +3,8 @@ package app.focal.ui.library
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +45,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
@@ -115,6 +120,8 @@ class RowActions(
     val select: (NoteRow) -> Unit,
     /** The note's actions as TalkBack custom actions (spec 4.12.2): Copy text, Share, Rename, Remove audio, Delete. */
     val menuActions: (NoteRow) -> List<CustomAccessibilityAction>,
+    /** A finger landed on the row: its note may be read ahead of a tap (by note id). */
+    val prepare: (String) -> Unit = {},
 )
 
 /**
@@ -158,6 +165,8 @@ fun NoteRowItem(
     val menuActions = actions.menuActions(row)
     val pages = LocalShell.current.pages
     val origin = rememberRowOrigin(row.id, RowMetrics.TITLE_LINES, titleText, titleMuted = row.title.isBlank(), dock = pageDock(row, capturing))
+    val prepare by rememberUpdatedState(actions.prepare)
+    val platePath = remember { Path() }
     Box(
         modifier
             .fillMaxWidth()
@@ -171,7 +180,16 @@ fun NoteRowItem(
                 val top = if (joinsAbove && selected) CornerRadius.Zero else round
                 val bottom = if (joinsBelow && selected) CornerRadius.Zero else round
                 val plateRect = RoundRect(Rect(inset, 0f, size.width - inset, size.height), top, top, bottom, bottom)
-                drawPath(Path().apply { addRoundRect(plateRect) }, colors.s1, alpha = a)
+                platePath.reset()
+                platePath.addRoundRect(plateRect)
+                drawPath(platePath, colors.s1, alpha = a)
+            }
+            // Its note is read as the finger lands, so the page a tap opens has it in its first frame.
+            .pointerInput(row.id) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    prepare(row.id)
+                }
             }
             // While the title is renamed the row's actions are out of reach for touch, and so for TalkBack.
             .semantics {
