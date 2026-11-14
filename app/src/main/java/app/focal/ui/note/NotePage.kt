@@ -231,6 +231,11 @@ fun NotePage(
     val find = page.find
     val listFade = remember { Animatable(1f) }
     val scroller = remember(listState) { NoteScroller(listState, listFade) }
+    // A far jump cut short leaves the text faded: it comes back on `fade` (NoteScroller.restoresFade).
+    LaunchedEffect(scroller) {
+        // Latest: a new far jump that takes the fade over cancels only this restore, not the watch for the next one.
+        snapshotFlow { scroller.restoresFade }.collectLatest { stuck -> if (stuck) listFade.animateTo(1f, FocalMotion.fade()) }
+    }
     val status = WindowInsets.statusBars
     // Inside a container transform the chrome has the paper's alpha and the body arrives on its own (spec 6.1).
     val reveal = LocalPageReveal.current
@@ -354,6 +359,7 @@ fun NotePage(
     val currentCannotJoin by rememberUpdatedState(cannotJoin)
     val tooLate = stringResource(R.string.feedback_too_late)
     val currentTooLate by rememberUpdatedState(tooLate)
+    val hold = remember(session) { SessionHold() }
     SideEffect {
         // A field restored with the page is the session's once the page has taken up the session (below).
         session.field = { page.field?.takeIf { page.editing && page.fieldBound }?.let { FieldText(it.id, it.text.text.toString()) } }
@@ -380,6 +386,19 @@ fun NotePage(
                 }
             }
             scope.launch { bottom.feedback.show(currentCannotJoin) }
+        }
+        hold.field = session.field
+    }
+    // The session outlives the page (its view model is kept for the note's next visit): a page that goes lets go of
+    // what it lent it, which holds the page and its laid-out text, unless a page after it has taken the session up.
+    DisposableEffect(session, hold) {
+        onDispose {
+            if (session.field === hold.field) {
+                session.field = { null }
+                session.tooLate = {}
+                session.fieldMoved = { _, _ -> }
+                session.joinRefused = { _, _ -> }
+            }
         }
     }
     // The field stays on its paragraph when that paragraph's stored id changes (a split it was typed in reached the
@@ -856,8 +875,10 @@ fun NotePage(
         }
     }
 
-    // Back layers, lowest first: the player, Edit (= Done), Find, an inline rename (spec 2.8.5).
-    PredictiveBackHandler(enabled = page.stripShown && stripWanted) { events ->
+    // Back layers, lowest first: the player, Edit (= Done), Find, an inline rename (spec 2.8.5). None of them while
+    // settings covers this page beside the library (two panes): Back is the strip's then, which closes it.
+    val behindSettings by remember(shell) { derivedStateOf { shell.twoPane && shell.settings.progress.value > 0f } }
+    PredictiveBackHandler(enabled = page.stripShown && stripWanted && !behindSettings) { events ->
         try {
             events.collect { page.stripBack.snapTo(BackEase.transform(it.progress)) }
             // Committed: the strip leaves from where the gesture left it, and is reset once it is gone.
@@ -868,9 +889,9 @@ fun NotePage(
             throw cancelled
         }
     }
-    BackHandler(enabled = page.editing && !find.open) { done() }
-    BackHandler(enabled = find.open) { closeFind() }
-    BackHandler(enabled = page.renaming) { page.renaming = false }
+    BackHandler(enabled = page.editing && !find.open && !behindSettings) { done() }
+    BackHandler(enabled = find.open && !behindSettings) { closeFind() }
+    BackHandler(enabled = page.renaming && !behindSettings) { page.renaming = false }
 
     // The dock (spec 4.3) and the bottom column. While this note's own recording runs under a folded scene (it was
     // continued from this page), the dock is the recording's: Pause | Finish, as on the library.
@@ -959,7 +980,8 @@ fun NotePage(
         val line = lineBox(page.layouts[hit.paragraphId], hit.start)
         val target = bandTop() + (bandBottom() - bandTop()) * HALF - (line.second - line.first) * HALF
         val edge = EdgeSnap(topLines, bandTop, fadePx, { bandTop() + fadePx }, bandBottom)
-        scroller.bring(index, { lineBox(page.layouts[hit.paragraphId], hit.start).first }, target, lineHeight(hit.paragraphId, hit.start), edge)
+        // The page opens at the hit (it fades in over its first frames): placed there, not scrolled there in view.
+        scroller.bring(index, { lineBox(page.layouts[hit.paragraphId], hit.start).first }, target, lineHeight(hit.paragraphId, hit.start), edge, instant = true)
         page.hitShown = true
         focus.hit = hit
         focus.hitAlpha.snapTo(1f)
@@ -1191,3 +1213,6 @@ fun NotePage(
         Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite; contentDescription = announcement })
     }
 }
+
+/** What a page last lent its Edit session ([EditSession.field]): it takes it back as it goes, if it is still its own. */
+private class SessionHold { var field: (() -> FieldText?)? = null }

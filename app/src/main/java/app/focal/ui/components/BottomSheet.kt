@@ -68,9 +68,9 @@ fun FocalBottomSheet(visible: Boolean, onDismiss: () -> Unit, content: @Composab
         if (visible) {
             composed = true
             back.snapTo(0f)
-            shown.animateTo(1f, FocalMotion.move())
+            shown.animateTo(1f, FocalMotion.moveUnit())
         } else {
-            shown.animateTo(0f, FocalMotion.move())
+            shown.animateTo(0f, FocalMotion.moveUnit())
             composed = false
         }
     }

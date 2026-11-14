@@ -104,9 +104,12 @@ fun FocalMenu(expanded: Boolean, onDismiss: () -> Unit, above: Boolean = false, 
     val scale = remember { Animatable(MenuMetrics.ENTER_SCALE) }
     LaunchedEffect(expanded) {
         if (expanded) {
+            // Opened again while it fades out: it comes back from what is drawn, not from nothing.
+            if (!composed || alpha.value <= 0f) {
+                scale.snapTo(MenuMetrics.ENTER_SCALE)
+                alpha.snapTo(0f)
+            }
             composed = true
-            scale.snapTo(MenuMetrics.ENTER_SCALE)
-            alpha.snapTo(0f)
             snapshotFlow { drawn }.first { it }
             coroutineScope {
                 launch { scale.animateTo(1f, FocalMotion.press()) }
@@ -123,7 +126,9 @@ fun FocalMenu(expanded: Boolean, onDismiss: () -> Unit, above: Boolean = false, 
     val position = remember(density, above) { MenuPosition(density, above) }
     // Read in the app's window: inside the popup the window is the popup's own.
     val maxWidth = menuMaxWidth()
-    Popup(popupPositionProvider = position, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
+    // Focusable while it is open (it takes Back, Esc and the tap outside that dismisses it); while it fades out it is
+    // not, so a tap outside it, the next thing the person does, reaches what is under it instead of being swallowed.
+    Popup(popupPositionProvider = position, onDismissRequest = onDismiss, properties = PopupProperties(focusable = expanded)) {
         Box(
             Modifier
                 .drawBehind { if (!drawn) drawn = true }

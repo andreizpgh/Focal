@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
@@ -81,6 +82,7 @@ import app.focal.ui.shell.LocalPageReveal
 import app.focal.ui.state.ParagraphUi
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.max
@@ -138,6 +140,8 @@ private class Lens {
 
     suspend fun show(target: Rect?, reduced: Boolean) = coroutineScope {
         when {
+            // No lens, and none showing: nothing to animate (every paragraph of a page as it opens).
+            target == null && alpha.value == 0f && !alpha.isRunning -> Unit
             target == null -> if (reduced) alpha.snapTo(0f) else alpha.animateTo(0f, FocalMotion.fadeFast())
             alpha.targetValue == 0f -> {
                 rect.snapTo(target)
@@ -194,12 +198,17 @@ internal fun ParagraphText(
     val reduced = LocalReducedMotion.current
     val density = LocalDensity.current
     val id = paragraph.id
-    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    // Where the text is laid out, read only by the lens's effect, the drawing and the gestures: a new layout redraws
+    // the paragraph and moves its lens, and never composes it again (the first layout would otherwise compose every
+    // paragraph of a page that has just opened a second time, in the frames of its opening).
+    val layoutState = remember { mutableStateOf<TextLayoutResult?>(null) }
 
     val inks by remember(id, focus) { derivedStateOf { focus.inks(id) } }
     val receded = remember { Animatable(if (inks) 0f else 1f) }
     LaunchedEffect(inks, reduced) {
         val target = if (inks) 0f else 1f
+        // Already there (every paragraph of a page as it opens): nothing to wait a frame for.
+        if (receded.value == target && !receded.isRunning) return@LaunchedEffect
         if (reduced) receded.snapTo(target) else {
             if (inks) delay(focus.rackDelay(id))
             receded.animateTo(target, FocalMotion.develop())
@@ -213,9 +222,9 @@ internal fun ParagraphText(
     val rise = remember { Animatable(if (whole && !reduced) 1f else 0f) }
     LaunchedEffect(arrival, reduced) {
         if (arrival == null || reduced) {
-            developed.snapTo(1f)
-            shown.snapTo(1f)
-            rise.snapTo(0f)
+            if (developed.value != 1f || developed.isRunning) developed.snapTo(1f)
+            if (shown.value != 1f || shown.isRunning) shown.snapTo(1f)
+            if (rise.value != 0f || rise.isRunning) rise.snapTo(0f)
             return@LaunchedEffect
         }
         developed.snapTo(0f)
@@ -254,15 +263,17 @@ internal fun ParagraphText(
     val words = paragraph.words
     val lensWord by remember(id, focus) { derivedStateOf { if (focus.playingId == id) focus.playingWord else null } }
     val lens = remember { Lens() }
-    LaunchedEffect(lensWord, layout, words, reduced) {
-        val target = layout?.let { result ->
-            lensWord?.let { words.getOrNull(it) }?.let { word ->
-                with(density) {
-                    result.boxes(word.start until word.end, ParagraphMetrics.lensOutset.toPx(), ParagraphMetrics.markInset.toPx()).firstOrNull()
+    LaunchedEffect(lensWord, words, reduced) {
+        snapshotFlow { layoutState.value }.collectLatest { layout ->
+            val target = layout?.let { result ->
+                lensWord?.let { words.getOrNull(it) }?.let { word ->
+                    with(density) {
+                        result.boxes(word.start until word.end, ParagraphMetrics.lensOutset.toPx(), ParagraphMetrics.markInset.toPx()).firstOrNull()
+                    }
                 }
             }
+            lens.show(target, reduced)
         }
-        lens.show(target, reduced)
     }
     val tap by rememberUpdatedState(onTap)
     val sweep by rememberUpdatedState(onSweep)
@@ -280,7 +291,7 @@ internal fun ParagraphText(
         style = FocalType.bodyWords,
         color = color,
         onTextLayout = { result ->
-            layout = result
+            layoutState.value = result
             layouts.put(id, result)
         },
         modifier = modifier
@@ -290,7 +301,7 @@ internal fun ParagraphText(
                 translationY = rise.value * ParagraphMetrics.developRise.toPx()
             }
             .drawWithCache {
-                val result = layout
+                val result = layoutState.value
                 val inset = ParagraphMetrics.markInset.toPx()
                 val matchOutset = ParagraphMetrics.matchOutset.toPx()
                 val matchBoxes = if (result == null) emptyList() else matches.flatMap { result.boxes(it, matchOutset, inset) }
@@ -331,7 +342,7 @@ internal fun ParagraphText(
                         held = true
                         null
                     }
-                    val result = layout ?: return@awaitEachGesture
+                    val result = layoutState.value ?: return@awaitEachGesture
                     if (!held) {
                         // Lifted in time: a tap, unless the list took the gesture for a scroll.
                         if (up != null) tap?.invoke(result.getOffsetForPosition(up.position), result.wordUnder(up.position, wordAt, slop))

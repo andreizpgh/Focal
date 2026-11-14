@@ -41,7 +41,7 @@ import app.focal.ui.design.smoothstep
 /**
  * Content that swaps by fading through (spec 4.3): the outgoing content at 1 - smoothstep(0, 0.5, q), the incoming at
  * smoothstep(0.5, 1, q), q on `fadeFast`, so two words are never superimposed. The alphas are read in the layer
- * phase. A change during a swap restarts from the content that is most visible.
+ * phase. A change during a swap goes on from what is drawn: nothing that has faded comes back at full strength.
  */
 @Composable
 fun <K : Any> FadeThrough(target: K, modifier: Modifier = Modifier, contentAlignment: Alignment = Alignment.Center, content: @Composable BoxScope.(K) -> Unit) {
@@ -50,10 +50,26 @@ fun <K : Any> FadeThrough(target: K, modifier: Modifier = Modifier, contentAlign
     val q = remember { Animatable(1f) }
     LaunchedEffect(target) {
         if (target == shown) return@LaunchedEffect
-        // Keep whichever of the two was more visible as the one that leaves.
-        if (leaving == null || q.value >= HALF) leaving = shown
+        if (leaving == target && q.value < HALF) {
+            // Back to what was leaving before anything new showed: it comes back from where it was.
+            q.animateTo(0f, FocalMotion.fadeFast())
+            shown = target
+            leaving = null
+            q.snapTo(1f)
+            return@LaunchedEffect
+        }
+        val from = if (leaving != null && q.value < HALF) {
+            // The old content is still fading out and the one after it never showed: the newest takes that one's place,
+            // and the fade goes on from where it is.
+            q.value
+        } else {
+            // What is on screen leaves from the alpha it has now, never from full again.
+            val onScreen = if (leaving == null) 1f else smoothstep(HALF, 1f, q.value)
+            leaving = shown
+            leavingAt(onScreen)
+        }
         shown = target
-        q.snapTo(0f)
+        q.snapTo(from)
         q.animateTo(1f, FocalMotion.fadeFast())
         leaving = null
     }
@@ -68,6 +84,19 @@ fun <K : Any> FadeThrough(target: K, modifier: Modifier = Modifier, contentAlign
 }
 
 private const val HALF = 0.5f
+
+/** The q at which leaving content is drawn at [alpha] (1 - smoothstep(0, 0.5, q) = alpha), by bisection. */
+private fun leavingAt(alpha: Float): Float {
+    var low = 0f
+    var high = HALF
+    repeat(LEAVING_STEPS) {
+        val mid = (low + high) / 2
+        if (1 - smoothstep(0f, HALF, mid) > alpha) low = mid else high = mid
+    }
+    return (low + high) / 2
+}
+
+private const val LEAVING_STEPS = 12
 
 /**
  * The icon button (spec 4.2): a 48 dp target with a 24 dp glyph; pressed, a 40 dp `press` circle behind it.

@@ -2,6 +2,7 @@ package app.focal.ui.components
 
 import android.graphics.Paint
 import android.os.Build
+import android.os.SystemClock
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateBounds
@@ -442,7 +443,7 @@ private fun CircleSlot(
         }
         .pressScale(source)
         .focusRing(FocalShapes.pill)
-        .tapOrLabel(source, onClick, rail) { scope.launch { tooltip.show() } }
+        .tapOrLabel(source, settledTap(face, onClick), rail) { scope.launch { tooltip.show() } }
     RailTooltip(description.takeIf { rail }, tooltip) {
         DressWipe(edge, control) { dress ->
             SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
@@ -458,6 +459,29 @@ private fun CircleSlot(
         }
     }
 }
+
+/**
+ * [onClick] for a slot showing [face], unless the face changed a moment ago: the swap to a new face takes a fade, and a
+ * second tap of a double tap (or a tap repeated because the first seemed to do nothing) was meant for the face that
+ * was there. Double-tapping "Delete N" would otherwise start a recording on the Record that replaces it. Whether the
+ * tap counts is decided when it lands; null stays null, so the control is still disabled.
+ */
+@Composable
+private fun settledTap(face: Any, onClick: (() -> Unit)?): (() -> Unit)? {
+    val guard = remember { FaceGuard(face) }
+    if (guard.face != face) {
+        guard.face = face
+        guard.changedAt = SystemClock.uptimeMillis()
+    }
+    val click = onClick ?: return null
+    return { if (SystemClock.uptimeMillis() - guard.changedAt >= FACE_SETTLE_MS) click() }
+}
+
+/** When a slot's face last changed (see [settledTap]). */
+private class FaceGuard(var face: Any) { var changedAt = Long.MIN_VALUE / 2 }
+
+/** A tap this soon after a face change is the second tap of a double tap (ViewConfiguration's double-tap timeout). */
+private const val FACE_SETTLE_MS = 300L
 
 /**
  * A control's tap; in the rail also a long press that shows its label (spec 5.14), disabled controls included (the
@@ -612,7 +636,7 @@ private fun PillSlot(
         }
         .pressScale(source)
         .focusRing(FocalShapes.pill)
-        .tapOrLabel(source, onClick, rail) { scope.launch { tooltip.show() } }
+        .tapOrLabel(source, settledTap(face, onClick), rail) { scope.launch { tooltip.show() } }
     RailTooltip(description.takeIf { rail }, tooltip) {
         DressWipe(edge, control) { dress ->
             SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
