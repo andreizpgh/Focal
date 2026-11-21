@@ -133,6 +133,30 @@ and 30 ms p95 frame duration. Physical phone frame pacing is still unmeasured.
 The instrumentation tests also exercised correction, phrase splitting, a
 Greek question, joining paragraphs, undo and the store's stale-write guards.
 
+### 0.4.0
+
+The signed ARM64 APK was built from `c51fcd1`. The 63 core and 212 app JVM
+tests passed, as did lint and all 93 Python script tests with the research
+dependencies installed. The release checks verified the signing certificate,
+package, alignment, native libraries and bundled model. The three assets
+downloaded from GitHub matched the local APK, provenance and checksums byte
+for byte.
+
+All 170 instrumented tests passed on an Android 16 emulator with the model
+bundled. At 824 × 1830 and 320 dpi, 158 ran and 12 required a larger display.
+Those 12 passed on a separate 1600 × 2560 run with rotation, including nine
+two-pane interactions and the portrait tablet, landscape and wide galleries.
+The minified x86-64 QA build recorded, paused, resumed and recognized the
+public JFK fixture through the virtual microphone. The test then tapped Finish,
+found the expected words in the transcript and tapped Copy.
+
+The published 0.3.2 APK opened a synthetic two-paragraph note that contained
+a custom title and a manual correction. Installing the signed 0.4.0 APK over
+it preserved all three. Review offered the earlier spelling at its next
+occurrence. Applying and undoing the suggestion restored the second paragraph
+and kept the first correction. The [review screenshot](screenshots/word-review-light.png)
+comes from this signed build. Physical ARM phone measurements remain open.
+
 ### 0.3.2
 
 On the API 36 x86_64 emulator only. No build has run on a phone.

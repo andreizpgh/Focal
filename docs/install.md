@@ -43,7 +43,9 @@ each release is checked to carry the same certificate before it is published.
 
 - **Over 0.3.2:** install 0.4.0 in place. It uses the same application ID,
   signing certificate and note database format. Existing notes keep their text,
-  paragraph breaks, manual edits and recordings.
+  paragraph breaks, manual edits and recordings. On an Android 16 emulator,
+  the signed update preserved a test note's custom title, both paragraphs and
+  an earlier edit. The new review screen offered that spelling on its next occurrence.
 - **Over 0.3.1:** the notes stay as they are; nothing in them is converted.
   Tested on an Android emulator: the published 0.3.1 APK was installed, then
   0.3.2 over it.

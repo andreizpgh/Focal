@@ -21,7 +21,7 @@
   &nbsp;
   <img src="docs/screenshots/note-playing-dark.png" width="180" alt="A finished note in the dark theme playing back its recording: the current paragraph is bright, the spoken word is highlighted, and a progress bar sits above the Copy button">
   &nbsp;
-  <img src="docs/screenshots/find-replace-light.png" width="180" alt="Find and replace in a note, light theme: four matches of “screen” highlighted, the second selected, with “page” as the replacement and a Replace all (4) button">
+  <img src="docs/screenshots/word-review-light.png" width="180" alt="Reviewing “harbur” in a transcript. A previous edit in the same note offers the spelling “harbour”.">
 </p>
 
 Tap **Record** and talk. Text appears after each pause while you keep speaking.
@@ -48,7 +48,8 @@ Tap **Finish**, then **Copy**.
   it, from one note, several, or all of them. Copy gives you clean paragraphs,
   nothing else.
 
-Version 0.4.0 uses the same application ID, storage format and testing certificate as 0.3.2.
+You can install 0.4.0 over 0.3.2. On an Android emulator the update preserved
+a note's custom title, paragraphs and earlier spelling correction.
 
 **Status:** a testing release. It has been checked on Android emulators, not yet
 on phones: speed, memory, battery, heat, long background recordings and natural
