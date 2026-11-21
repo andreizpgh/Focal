@@ -1,12 +1,9 @@
 # Speech quality
 
-This page summarizes what has been measured about Focal's transcription, what the
-measurements chose, and what is still unknown. Every figure below comes from read
-speech on a desktop host or an Android emulator. None of it is a phone measurement
-or a test of natural dictation.
-
-Measured results and design decisions are kept apart: each section states the
-measurement first and then what the app does with it.
+Focal's speech measurements cover short read speech, continuous public
+recordings and a Russian classroom dictation. Recognition quality was measured
+on a desktop host and Android emulator. Physical phone performance and human
+proofreading time remain open.
 
 ## What Focal runs
 
@@ -16,8 +13,9 @@ measurement first and then what the app does with it.
   greedy TDT decoding.
 - **Language:** detected automatically. The exported model has no language input,
   so Focal cannot force a language. Parakeet TDT 0.6B v3 is published for 25
-  European languages; Focal has measured seven of them (English, Russian, German,
-  French, Spanish, Italian and Portuguese).
+  European languages. The initial engine comparison covered seven languages.
+  A [separate screen across all 25](benchmarks/2026-11-19-multilingual/README.md)
+  reports short-clip accuracy, long-recording reference coverage and review results by language.
 - **Segmentation:** Silero VAD v4 decides where windows end
   (see [architecture](architecture.md#segmentation)).
 
@@ -169,16 +167,71 @@ lower bound is 0.55–0.60. Every language had fewer than ten flags; German was 
 of 1 on both sets. Deleted words can never be flagged, and most errors are
 confident.
 
-**What the app does:** doubtful words get a subtle dotted underline. Tapping one
-plays it like any other word; editing the word clears the mark; copied text never
-contains it. This is provisional: it should be checked on real dictation, and one
-constant (`SpeechTuning.DOUBT_ENABLED`) turns it off.
+**Review in the app.** A dotted underline marks the spelling. Adjacent flags can
+be checked as a phrase. Changing a trailing sentence mark keeps the lexical
+flag. Changing the spelling clears it. Only an actual `<unk>` piece can mark
+the preceding word as incomplete. Other recognizer control pieces are ignored.
+
+Tap the words, or tap **Review** at the top of the note. The review
+can play the original audio with a little context. At window boundaries, the app
+can also show a second reading already present in the stored context tokens. It
+requires scored words above the doubt threshold and at least 60% time overlap
+(intersection over union). A separate list offers nearby spellings from this
+note within one insertion, deletion or substitution. Review can also reuse
+short wording from saved edits to the same doubtful spelling in this note.
+It requires an unchanged neighbouring word to identify a substitution, omits
+conflicting replacements, and recomputes the suggestion from the current text
+after a restore or undo. Applying any suggestion is an explicit, undoable edit.
+The [multilingual review measurement](benchmarks/2026-11-19-multilingual/README.md)
+counts matching and mismatching underlines, tests the nearby spelling menu
+and replays the alternative readings from overlapping audio. The time readers
+save and the accuracy of their final edits still need a study.
+
+A [wider-audio replay](benchmarks/2026-11-20-context-review/README.md) re-decoded
+a selected phrase with the same recognizer. On 343 held-out selections across
+109 recordings, the stricter rule added 34 spellings to the existing menu.
+Fifteen reduced word errors, 14 tied and five increased them. For 275 of 311
+selections with enough additional audio it would run inference and then
+offer no alternative. The wider pass is confined to the benchmark.
+
+The [first-pass alternative study](benchmarks/2026-11-21-first-pass/README.md)
+tested the next two acoustic token candidates while generating the original
+transcript. Strict filtering added a useful option at four of 343 held-out
+underlines. Of 19 new options, 12 tied and three increased word errors. The
+Android emulator took 0.63% longer across the paired runs with collection
+enabled. These options are confined to the benchmark.
+
+A [word-continuation experiment](benchmarks/2026-11-21-word-continuations/README.md)
+followed up to three alternatives from each uncertain lexical piece using the
+same encoder frames. On the same holdout, the complete candidate pool contained
+a helpful spelling at 52 of 343 selections. Of 145 strict first choices absent
+from the existing menu, 23 reduced errors, 97 tied and 25 increased errors.
+A small classifier trained on development languages offered 15 choices on the
+holdout. Three helped, nine tied and three harmed. The directly measured
+median cost of generating acoustic candidates was 73 ms per window on Android
+x86-64. The production decoder continues to use the original greedy path.
+
+A separate local-model screen tried generating a replacement for a selected
+span. Qwen3 0.6B and Qwen3.5 2B improved zero of 27 selections across 12 Russian
+and English DEV clips. Eight selections contained a word error. The 2B model
+made two suggestions that increased word errors. In a punctuation-only stress
+test it restored 16 of 18 removed marks and added one extra. Neither model
+improved punctuation on the original drafts at the scored boundaries.
+The [review experiment](benchmarks/2026-11-19-review/README.md) includes the
+synthetic word-choice and paragraph tasks, memory, timing and rerun instructions.
 
 ## Formatting
 
-Formatting never changes the recognized words. It removes a period at a window
-seam, splits paragraphs and derives a title. Raw recognizer output is stored
+Formatting never changes the recognized words. It repairs sentence boundaries,
+splits paragraphs and derives a title. Raw recognizer output is stored
 unchanged.
+
+A separate [Russian punctuation screen](benchmarks/2026-11-19-punctuation/README.md)
+tested a 29 MB INT8 token classifier on two long monologues and a classroom
+dictation. On Android, adding high-confidence missing marks reduced scored
+discrepancies from 158 to 150 on the monologues and left the complete dictation
+at 20. Replacing every mark increased errors overall. The model remains a
+research candidate for review suggestions.
 
 - **Seam repair.** A period before a lowercase continuation across a short pause
   (under 0.8 s) is removed. With the shipped segmentation it fixed 8 of 271 seams
@@ -187,22 +240,26 @@ unchanged.
   word after a seam was rejected: 14 fixed against 23 damaged.
 - **Duplicate guard.** On 86 forced hard cuts, words repeated near the cut fell
   from 16 to 2, and the guard removed no correct word.
-- **Paragraphs (provisional).** No reference paragraphs exist, and pauses measured
-  from token times run about 0.3–0.5 s longer than the acoustic gap. With the
-  experiment's 1.5 s threshold, 22 of 70 gaps in the normal streams (all shorter
-  than 0.8 s) measured as paragraph-length pauses. The app therefore closes a
-  paragraph only at a sentence end. The first thresholds (3.5 s; 2.0 s once the
-  paragraph held two sentences; 80 words) were set to avoid those false breaks,
-  and in two weeks of dictation on a phone they gave the opposite fault: people
-  speak a note without such pauses, so it read as one block. Since 0.3.1 a
-  paragraph closes after a pause of at least 3.0 s, after 1.5 s once it holds two
-  sentences, or once it holds 60 words; speech without punctuation closes at the
-  longest recent pause when a paragraph reaches 120 words. By the measurement
-  above, about a third of ordinary sentence gaps pass 1.5 s, so a paragraph is a
-  few sentences long: a break in a slightly wrong place costs less than none.
-  Notes recorded before are split once by the same rule, where their text is
-  still the recognizer's own; no word or time changes. These thresholds still
-  need calibration against reference paragraphs.
+- **Clause punctuation (provisional).** A few Russian constructions in ordinary
+  dictation can supply a missing comma, such as “я думаю, что” and “важно, чтобы”.
+  The rule requires the exact conjunction and a matching preceding word.
+- **Missing periods (provisional).** New dictation receives a period between
+  a word ending in a lowercase letter and a word beginning with a capital
+  after a measured pause of at least 3 seconds. A trailing function word
+  suppresses the period, as in “в Москву”. Explicit marks and letter
+  case are preserved. A capital can also begin a name. A pause alone does
+  not resolve commas or distinguish questions from statements.
+- **Paragraphs (provisional).** Timed gaps run about 0.3–0.5 seconds longer
+  than acoustic silence. In normal streams, 22 of 70 short acoustic gaps
+  measured at least 1.5 seconds. Earlier thresholds left ordinary phone
+  dictation in one block. The formatter now breaks at a sentence end after
+  3 seconds, after 1.5 seconds once two sentences have accumulated, or after
+  40 words. An unpunctuated passage can break after 12 words at a 3-second
+  pause. At 80 words it breaks at the longest recent pause. These new rules apply during
+  decoding. Readers can use **Start paragraph here** to split existing notes.
+  Selecting a paragraph's first word offers **Join previous paragraph** when
+  both passages can retain their source information. The multilingual benchmark
+  compares these automatic breaks to authored paragraphs in publisher readings.
 - **Title.** The first sentence, extended by the next if it is shorter than 12
   characters, at most 36 characters. A longer first sentence is shortened to
   whole words at a clause, never to a dangling function word, and carries no
@@ -296,8 +353,9 @@ no invented names, numbers or dates.
 
 ## Known limitations
 
-- Read speech only. Natural dictation, accents, crosstalk and Russian–English
-  mixing in real speech are untested.
+- Public readings, talks and a classroom dictation cover only some speaking
+  styles. Private spontaneous dictation, crosstalk and natural code-switching
+  still need representative tests.
 - The language is chosen per window by the model. Short replies, and windows that
   hold only a few words, can come out in the wrong language.
 - Quiet speech is the largest error source and can be missed entirely.

@@ -123,6 +123,16 @@ to end, so before publishing a release is checked on emulators in three parts:
 
 ## What has been verified
 
+**Wrapped title and inline review, 2026-11-19.** On a 320 × 640 Android 35
+emulator a truncated two-line card opened into a three-line heading. Consecutive
+screen-recorded frames showed the card text fading and the full heading appearing
+with its final line breaks. The trailing words stayed on their lines through
+the rest of the opening. A separate warm open/back run on the debug build
+rendered 130 frames. Android marked three as janky and reported 21 ms median
+and 30 ms p95 frame duration. Physical phone frame pacing is still unmeasured.
+The instrumentation tests also exercised correction, phrase splitting, a
+Greek question, joining paragraphs, undo and the store's stale-write guards.
+
 ### 0.3.2
 
 On the API 36 x86_64 emulator only. No build has run on a phone.

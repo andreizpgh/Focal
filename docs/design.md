@@ -264,19 +264,27 @@ region, and stays until dismissed while TalkBack is on.
 The note page: title, dateline and paragraphs on paper. The text is edited where
 it is read.
 
-- **Tap a word** to replace it: Edit opens with that word selected, so the next
-  key replaces it. Between words, the caret goes there.
+- **Tap a word** to review it in context. Listen to the audio, choose a local
+  suggestion, adjust punctuation, type a replacement or split the paragraph.
+  On the first word, **Join previous paragraph** combines adjacent passages.
+  Undo restores their wording, original recordings' time ranges and search entries.
+  Apply saves the wording and offers Undo. Cancel returns to reading.
+  If an earlier edit in this note replaced the same doubtful wording, review
+  offers that spelling or short phrase under **From your edits in this note**.
+  Conflicting replacements suppress the suggestion. Restoring the source
+  paragraph also removes suggestions derived from that edit.
 - **Paragraph times.** A note that still has its audio shows, over each paragraph
   after the first, the time it starts at; a tap plays from there. A setting turns
   them off.
 - **Long-press** to sweep a phrase: the word under the finger, growing word by
-  word as the finger moves; lifting it opens Edit with the phrase selected.
+  word as the finger moves. Lifting it opens review for that span.
 - **▶ in the dock** plays the note. The playing paragraph stays in ink, a soft
   lens follows the word, a player strip appears above the dock and the text
   follows playback within the middle third of the screen.
 - **Tap the title** to rename it.
-- Doubtful words have a row of faint dots under them; a tap selects them like any
-  other word.
+- Doubtful words have a row of faint dots under their spelling. Adjacent
+  marked words open together. **Review** in the top bar opens a flagged span and shows how many
+  there are. **Next unclear** moves on to the next flagged span.
 - **Delete** is hidden while a note is being transcribed or waits for the speech
   model; if it is reached another way, the pill asks to finish first.
 - **Copy and Share** refuse a note longer than 200,000 characters; the pill asks
@@ -288,16 +296,14 @@ it is read.
 
 The paragraph with the caret becomes a text field in place, with the same
 typography and the same line breaks, so nothing moves; nothing is drawn around
-it and nothing recedes. A tap means the same everywhere in Edit as it did on the
-way in: on a word it selects the word, so the next key replaces it; inside what
-is selected it puts the caret there, to change a letter; on bare paper it puts
-the caret there. Enter splits a paragraph and Backspace at its start joins it to
+it and nothing recedes. A tap selects a word for replacement. A tap within that selection
+or on bare paper places the caret. Enter splits a paragraph and Backspace at its start joins it to
 the one before; one undo and redo history covers the session. Changes save 600 ms
 after typing stops. ▶ in the edit bar plays just the audio of the selected words,
 or of the words around the caret, and stops: a word is checked against what was
 said without leaving it. **Restore original** for an edited paragraph is in the
 edit menu. Done or Back leaves Edit; nothing is discarded and there is no dialog.
-**Edit** in the note's menu is the way in without a pointer: the caret goes
+**Edit** in the note menu opens the full editor. The caret goes
 before the playing word, or to the start of the first paragraph on screen.
 
 The page moves for one reason only: the caret's line would otherwise be under the
@@ -351,10 +357,13 @@ ones stand in for amendments to the specification.
 - **Live text in the scene** starts at the top of its region and is
   bottom-anchored once it overflows (6.4 says bottom-anchored). While "↓ Latest"
   shows, the text fades out 8 dp above it.
-- **Page transitions** (T16, T16′). The page's text appears only once the flying
-  title has passed it, the page's chrome leaves before the stage's own text
-  returns, and paper covers the library under the clip. The live stage's top
-  mask grows with the font size.
+- **Page transitions** (T16, T16′). A single complete line travels between the
+  measured title baselines. Wrapped and truncated headings keep each screen's
+  own line breaks. When opening, the card text fades out in the first half
+  of the handoff and the page text appears in the second half. A flying title
+  reveals the page text as it passes. The page chrome leaves before the
+  stage text returns, and paper covers the library under the clip. The live
+  stage's top mask grows with the font size.
 - **Copy** centres "Copy" in its pill; "Copied" starts at the same place, so it
   sits up to 6.5 dp right of centre while it shows (4.5.1 reserves the wider
   label's slot instead).

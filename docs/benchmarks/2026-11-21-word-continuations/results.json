@@ -1,0 +1,2440 @@
+{
+  "exact_baseline": {
+    "total_windows": 415,
+    "windows": 415,
+    "seeds": 709,
+    "paths": 1553,
+    "joiner_calls": 5480,
+    "predictor_calls": 3534,
+    "completed": 1330,
+    "end_of_window": 3
+  },
+  "decision_model": {
+    "features": [
+      "initial_probability",
+      "initial_ratio",
+      "clipped_sequence_delta_div8",
+      "absolute_shift_div2",
+      "word_split",
+      "nearby_confirmation",
+      "relative_character_edit_distance"
+    ],
+    "class_order": [
+      "helpful",
+      "tie",
+      "harmful"
+    ],
+    "coefficients": [
+      [
+        -1.1755242095481344,
+        1.7095849932205982,
+        -0.5340607836724578
+      ],
+      [
+        0.6175734895383419,
+        -1.597979410822497,
+        0.9804059212841573
+      ],
+      [
+        0.47074501217430154,
+        -0.025105704090910997,
+        -0.44563930808338903
+      ],
+      [
+        0.5100115595495042,
+        0.03420944074615339,
+        -0.5442210002956578
+      ],
+      [
+        0.13502678638668072,
+        -0.2546693821424345,
+        0.11964259575575399
+      ],
+      [
+        0.3097085492802702,
+        -1.1643556749834256,
+        0.854647125703155
+      ],
+      [
+        0.40046013258584673,
+        -0.5455482559684499,
+        0.14508812338260307
+      ],
+      [
+        -0.17346373485111446,
+        0.1882964488027354,
+        -0.01483271395162021
+      ]
+    ],
+    "development_flags": 273,
+    "holdout_flags": 343,
+    "development_training_candidates": 457,
+    "ten_percent_budget": {
+      "threshold": 0.016842789406801097,
+      "development_out_of_fold": {
+        "offered": 27,
+        "recordings": 15,
+        "languages": 10,
+        "helpful": 0,
+        "tied": 17,
+        "harmful": 10,
+        "word_error_delta": 10
+      },
+      "holdout": {
+        "offered": 15,
+        "recordings": 8,
+        "languages": 7,
+        "helpful": 3,
+        "tied": 9,
+        "harmful": 3,
+        "word_error_delta": 0
+      }
+    },
+    "high_precision_gate": null
+  },
+  "splits": {
+    "dev": {
+      "notes": 123,
+      "flagged_spans": 273,
+      "spans_with_verified_windows": 271,
+      "notes_with_flags": 58,
+      "notes_with_new_helpful_option": 12,
+      "policies": {
+        "existing": {
+          "offered": 15,
+          "any_helpful": 4,
+          "first_helpful": 4,
+          "first_harmful": 1,
+          "first_error_delta": -3,
+          "helpful": 4,
+          "harmful": 1,
+          "neutral": 11
+        },
+        "piece_pool": {
+          "offered": 189,
+          "any_helpful": 19,
+          "first_helpful": 14,
+          "first_harmful": 33,
+          "first_error_delta": 19,
+          "neutral": 253,
+          "harmful": 41,
+          "helpful": 19
+        },
+        "fixed_pool": {
+          "offered": 204,
+          "any_helpful": 20,
+          "first_helpful": 14,
+          "first_harmful": 37,
+          "first_error_delta": 23,
+          "neutral": 476,
+          "harmful": 77,
+          "helpful": 20
+        },
+        "word_pool": {
+          "offered": 190,
+          "any_helpful": 40,
+          "first_helpful": 26,
+          "first_harmful": 31,
+          "first_error_delta": 5,
+          "helpful": 40,
+          "neutral": 365,
+          "helpful_beyond_comparison": 20,
+          "harmful": 57
+        },
+        "broad": {
+          "offered": 180,
+          "any_helpful": 35,
+          "first_helpful": 25,
+          "first_harmful": 27,
+          "first_error_delta": 3,
+          "helpful": 35,
+          "helpful_beyond_comparison": 17,
+          "neutral": 207,
+          "harmful": 35
+        },
+        "strict": {
+          "offered": 131,
+          "any_helpful": 18,
+          "first_helpful": 18,
+          "first_harmful": 17,
+          "first_error_delta": -1,
+          "helpful": 18,
+          "neutral": 96,
+          "harmful": 17
+        },
+        "strict_new": {
+          "offered": 128,
+          "any_helpful": 17,
+          "first_helpful": 17,
+          "first_harmful": 17,
+          "first_error_delta": 0,
+          "helpful": 17,
+          "new_helpful_span": 17,
+          "helpful_beyond_comparison": 7,
+          "neutral": 94,
+          "harmful": 17
+        },
+        "corroborated": {
+          "offered": 9,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 2,
+          "first_error_delta": 0,
+          "neutral": 5,
+          "helpful": 2,
+          "helpful_beyond_comparison": 0,
+          "harmful": 2
+        }
+      }
+    },
+    "holdout": {
+      "notes": 109,
+      "flagged_spans": 343,
+      "spans_with_verified_windows": 341,
+      "notes_with_flags": 49,
+      "notes_with_new_helpful_option": 14,
+      "policies": {
+        "existing": {
+          "offered": 23,
+          "any_helpful": 7,
+          "first_helpful": 7,
+          "first_harmful": 5,
+          "first_error_delta": -2,
+          "neutral": 11,
+          "harmful": 5,
+          "helpful": 7
+        },
+        "piece_pool": {
+          "offered": 231,
+          "any_helpful": 16,
+          "first_helpful": 13,
+          "first_harmful": 45,
+          "first_error_delta": 32,
+          "neutral": 364,
+          "harmful": 56,
+          "helpful": 17
+        },
+        "fixed_pool": {
+          "offered": 246,
+          "any_helpful": 21,
+          "first_helpful": 14,
+          "first_harmful": 50,
+          "first_error_delta": 36,
+          "neutral": 616,
+          "helpful": 22,
+          "harmful": 102
+        },
+        "word_pool": {
+          "offered": 222,
+          "any_helpful": 52,
+          "first_helpful": 32,
+          "first_harmful": 43,
+          "first_error_delta": 12,
+          "neutral": 443,
+          "helpful": 54,
+          "helpful_beyond_comparison": 30,
+          "harmful": 84
+        },
+        "broad": {
+          "offered": 205,
+          "any_helpful": 42,
+          "first_helpful": 30,
+          "first_harmful": 39,
+          "first_error_delta": 10,
+          "neutral": 225,
+          "helpful": 42,
+          "helpful_beyond_comparison": 25,
+          "harmful": 57
+        },
+        "strict": {
+          "offered": 151,
+          "any_helpful": 27,
+          "first_helpful": 27,
+          "first_harmful": 25,
+          "first_error_delta": -2,
+          "neutral": 99,
+          "helpful": 27,
+          "harmful": 25
+        },
+        "strict_new": {
+          "offered": 145,
+          "any_helpful": 23,
+          "first_helpful": 23,
+          "first_harmful": 25,
+          "first_error_delta": 2,
+          "neutral": 97,
+          "helpful": 23,
+          "new_helpful_span": 23,
+          "helpful_beyond_comparison": 13,
+          "harmful": 25
+        },
+        "corroborated": {
+          "offered": 15,
+          "any_helpful": 7,
+          "first_helpful": 7,
+          "first_harmful": 4,
+          "first_error_delta": -3,
+          "harmful": 4,
+          "helpful": 7,
+          "helpful_beyond_comparison": 2,
+          "neutral": 4
+        }
+      }
+    }
+  },
+  "by_holdout_language": {
+    "bg": {
+      "notes": 5,
+      "flagged_spans": 12,
+      "spans_with_verified_windows": 12,
+      "notes_with_flags": 2,
+      "notes_with_new_helpful_option": 1,
+      "policies": {
+        "existing": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "piece_pool": {
+          "offered": 11,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 1,
+          "first_error_delta": -1,
+          "harmful": 1,
+          "neutral": 17,
+          "helpful": 2
+        },
+        "fixed_pool": {
+          "offered": 11,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 1,
+          "first_error_delta": -1,
+          "harmful": 1,
+          "neutral": 22,
+          "helpful": 2
+        },
+        "word_pool": {
+          "offered": 9,
+          "any_helpful": 3,
+          "first_helpful": 3,
+          "first_harmful": 1,
+          "first_error_delta": -2,
+          "harmful": 3,
+          "helpful": 3,
+          "helpful_beyond_comparison": 1,
+          "neutral": 15
+        },
+        "broad": {
+          "offered": 9,
+          "any_helpful": 3,
+          "first_helpful": 3,
+          "first_harmful": 1,
+          "first_error_delta": -2,
+          "harmful": 2,
+          "helpful": 3,
+          "helpful_beyond_comparison": 1,
+          "neutral": 10
+        },
+        "strict": {
+          "offered": 7,
+          "any_helpful": 3,
+          "first_helpful": 3,
+          "first_harmful": 0,
+          "first_error_delta": -3,
+          "helpful": 3,
+          "neutral": 4
+        },
+        "strict_new": {
+          "offered": 7,
+          "any_helpful": 3,
+          "first_helpful": 3,
+          "first_harmful": 0,
+          "first_error_delta": -3,
+          "helpful": 3,
+          "new_helpful_span": 3,
+          "helpful_beyond_comparison": 1,
+          "neutral": 4
+        },
+        "corroborated": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "helpful": 1,
+          "helpful_beyond_comparison": 1
+        }
+      }
+    },
+    "cs": {
+      "notes": 3,
+      "flagged_spans": 1,
+      "spans_with_verified_windows": 1,
+      "notes_with_flags": 1,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "fixed_pool": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 5,
+          "helpful": 1
+        },
+        "word_pool": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 5,
+          "helpful": 1,
+          "helpful_beyond_comparison": 0
+        },
+        "broad": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1,
+          "helpful": 1,
+          "helpful_beyond_comparison": 1
+        },
+        "strict": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "strict_new": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "corroborated": {}
+      }
+    },
+    "da": {
+      "notes": 3,
+      "flagged_spans": 9,
+      "spans_with_verified_windows": 9,
+      "notes_with_flags": 2,
+      "notes_with_new_helpful_option": 2,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 7,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 1,
+          "first_error_delta": -1,
+          "neutral": 7,
+          "harmful": 1,
+          "helpful": 3
+        },
+        "fixed_pool": {
+          "offered": 8,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 1,
+          "first_error_delta": -1,
+          "neutral": 16,
+          "harmful": 2,
+          "helpful": 3
+        },
+        "word_pool": {
+          "offered": 8,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 1,
+          "first_error_delta": -1,
+          "neutral": 13,
+          "harmful": 2,
+          "helpful": 2,
+          "helpful_beyond_comparison": 0
+        },
+        "broad": {
+          "offered": 8,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 1,
+          "first_error_delta": -1,
+          "neutral": 9,
+          "harmful": 1,
+          "helpful": 2,
+          "helpful_beyond_comparison": 0
+        },
+        "strict": {
+          "offered": 4,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 0,
+          "first_error_delta": -2,
+          "neutral": 2,
+          "helpful": 2
+        },
+        "strict_new": {
+          "offered": 4,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 0,
+          "first_error_delta": -2,
+          "neutral": 2,
+          "helpful": 2,
+          "new_helpful_span": 2,
+          "helpful_beyond_comparison": 0
+        },
+        "corroborated": {}
+      }
+    },
+    "de": {
+      "notes": 3,
+      "flagged_spans": 2,
+      "spans_with_verified_windows": 2,
+      "notes_with_flags": 1,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "helpful": 1
+        },
+        "piece_pool": {
+          "offered": 2,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 1,
+          "first_error_delta": 0,
+          "helpful": 1,
+          "harmful": 1
+        },
+        "fixed_pool": {
+          "offered": 2,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 1,
+          "first_error_delta": 0,
+          "helpful": 1,
+          "harmful": 3
+        },
+        "word_pool": {
+          "offered": 2,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 1,
+          "first_error_delta": 0,
+          "helpful": 1,
+          "helpful_beyond_comparison": 0,
+          "harmful": 2
+        },
+        "broad": {
+          "offered": 2,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 1,
+          "first_error_delta": 0,
+          "helpful": 1,
+          "helpful_beyond_comparison": 0,
+          "harmful": 2
+        },
+        "strict": {
+          "offered": 2,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 1,
+          "first_error_delta": 0,
+          "helpful": 1,
+          "harmful": 1
+        },
+        "strict_new": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "corroborated": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "helpful": 1,
+          "helpful_beyond_comparison": 0
+        }
+      }
+    },
+    "el": {
+      "notes": 5,
+      "flagged_spans": 56,
+      "spans_with_verified_windows": 56,
+      "notes_with_flags": 4,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "piece_pool": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "neutral": 2,
+          "harmful": 2
+        },
+        "fixed_pool": {
+          "offered": 5,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "neutral": 7,
+          "harmful": 3
+        },
+        "word_pool": {
+          "offered": 5,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "neutral": 6,
+          "harmful": 3
+        },
+        "broad": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 2,
+          "neutral": 2
+        },
+        "strict": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "strict_new": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "corroborated": {}
+      }
+    },
+    "en": {
+      "notes": 5,
+      "flagged_spans": 0,
+      "spans_with_verified_windows": 0,
+      "notes_with_flags": 0,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {},
+        "fixed_pool": {},
+        "word_pool": {},
+        "broad": {},
+        "strict": {},
+        "strict_new": {},
+        "corroborated": {}
+      }
+    },
+    "es": {
+      "notes": 5,
+      "flagged_spans": 2,
+      "spans_with_verified_windows": 2,
+      "notes_with_flags": 2,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "fixed_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 2
+        },
+        "word_pool": {},
+        "broad": {},
+        "strict": {},
+        "strict_new": {},
+        "corroborated": {}
+      }
+    },
+    "et": {
+      "notes": 3,
+      "flagged_spans": 3,
+      "spans_with_verified_windows": 3,
+      "notes_with_flags": 1,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 4
+        },
+        "fixed_pool": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 8
+        },
+        "word_pool": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 7
+        },
+        "broad": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 4
+        },
+        "strict": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 3
+        },
+        "strict_new": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 3
+        },
+        "corroborated": {}
+      }
+    },
+    "fi": {
+      "notes": 5,
+      "flagged_spans": 10,
+      "spans_with_verified_windows": 10,
+      "notes_with_flags": 3,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 9,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 2,
+          "first_error_delta": 2,
+          "neutral": 13,
+          "harmful": 2
+        },
+        "fixed_pool": {
+          "offered": 6,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 2,
+          "first_error_delta": 2,
+          "neutral": 18,
+          "harmful": 2
+        },
+        "word_pool": {
+          "offered": 3,
+          "any_helpful": 1,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 15,
+          "helpful": 1,
+          "helpful_beyond_comparison": 1
+        },
+        "broad": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 6
+        },
+        "strict": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 3
+        },
+        "strict_new": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 3
+        },
+        "corroborated": {}
+      }
+    },
+    "fr": {
+      "notes": 5,
+      "flagged_spans": 1,
+      "spans_with_verified_windows": 1,
+      "notes_with_flags": 1,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1,
+          "neutral": 2
+        },
+        "fixed_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1,
+          "neutral": 3
+        },
+        "word_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 3,
+          "harmful": 1
+        },
+        "broad": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1,
+          "harmful": 1
+        },
+        "strict": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "strict_new": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "corroborated": {}
+      }
+    },
+    "hr": {
+      "notes": 5,
+      "flagged_spans": 17,
+      "spans_with_verified_windows": 17,
+      "notes_with_flags": 4,
+      "notes_with_new_helpful_option": 2,
+      "policies": {
+        "existing": {
+          "offered": 2,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "helpful": 1,
+          "neutral": 1
+        },
+        "piece_pool": {
+          "offered": 11,
+          "any_helpful": 1,
+          "first_helpful": 0,
+          "first_harmful": 3,
+          "first_error_delta": 3,
+          "neutral": 14,
+          "harmful": 5,
+          "helpful": 1
+        },
+        "fixed_pool": {
+          "offered": 16,
+          "any_helpful": 2,
+          "first_helpful": 1,
+          "first_harmful": 3,
+          "first_error_delta": 2,
+          "neutral": 32,
+          "helpful": 2,
+          "harmful": 7
+        },
+        "word_pool": {
+          "offered": 15,
+          "any_helpful": 3,
+          "first_helpful": 2,
+          "first_harmful": 3,
+          "first_error_delta": 1,
+          "neutral": 24,
+          "helpful": 3,
+          "helpful_beyond_comparison": 1,
+          "harmful": 10
+        },
+        "broad": {
+          "offered": 14,
+          "any_helpful": 3,
+          "first_helpful": 2,
+          "first_harmful": 3,
+          "first_error_delta": 1,
+          "neutral": 15,
+          "helpful": 3,
+          "helpful_beyond_comparison": 2,
+          "harmful": 5
+        },
+        "strict": {
+          "offered": 9,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 2,
+          "first_error_delta": 0,
+          "neutral": 5,
+          "helpful": 2,
+          "harmful": 2
+        },
+        "strict_new": {
+          "offered": 9,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 2,
+          "first_error_delta": 0,
+          "neutral": 5,
+          "helpful": 2,
+          "new_helpful_span": 2,
+          "helpful_beyond_comparison": 2,
+          "harmful": 2
+        },
+        "corroborated": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "helpful": 1,
+          "helpful_beyond_comparison": 0
+        }
+      }
+    },
+    "hu": {
+      "notes": 3,
+      "flagged_spans": 7,
+      "spans_with_verified_windows": 7,
+      "notes_with_flags": 2,
+      "notes_with_new_helpful_option": 1,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 2,
+          "first_error_delta": 2,
+          "neutral": 1,
+          "harmful": 2
+        },
+        "fixed_pool": {
+          "offered": 4,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 2,
+          "first_error_delta": 2,
+          "neutral": 3,
+          "harmful": 3
+        },
+        "word_pool": {
+          "offered": 2,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 1,
+          "first_error_delta": 0,
+          "helpful": 1,
+          "helpful_beyond_comparison": 1,
+          "harmful": 2
+        },
+        "broad": {
+          "offered": 2,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 1,
+          "first_error_delta": 0,
+          "helpful": 1,
+          "helpful_beyond_comparison": 1,
+          "harmful": 2
+        },
+        "strict": {
+          "offered": 2,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 1,
+          "first_error_delta": 0,
+          "helpful": 1,
+          "harmful": 1
+        },
+        "strict_new": {
+          "offered": 2,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 1,
+          "first_error_delta": 0,
+          "helpful": 1,
+          "new_helpful_span": 1,
+          "helpful_beyond_comparison": 1,
+          "harmful": 1
+        },
+        "corroborated": {}
+      }
+    },
+    "it": {
+      "notes": 5,
+      "flagged_spans": 2,
+      "spans_with_verified_windows": 2,
+      "notes_with_flags": 1,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "fixed_pool": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1,
+          "neutral": 2
+        },
+        "word_pool": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1,
+          "neutral": 1
+        },
+        "broad": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "strict": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "strict_new": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "corroborated": {}
+      }
+    },
+    "lt": {
+      "notes": 5,
+      "flagged_spans": 18,
+      "spans_with_verified_windows": 18,
+      "notes_with_flags": 3,
+      "notes_with_new_helpful_option": 2,
+      "policies": {
+        "existing": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "helpful": 1
+        },
+        "piece_pool": {
+          "offered": 17,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 5,
+          "first_error_delta": 4,
+          "harmful": 7,
+          "neutral": 20,
+          "helpful": 1
+        },
+        "fixed_pool": {
+          "offered": 17,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 5,
+          "first_error_delta": 4,
+          "harmful": 7,
+          "neutral": 30,
+          "helpful": 1
+        },
+        "word_pool": {
+          "offered": 14,
+          "any_helpful": 5,
+          "first_helpful": 3,
+          "first_harmful": 3,
+          "first_error_delta": 0,
+          "harmful": 4,
+          "neutral": 23,
+          "helpful": 5,
+          "helpful_beyond_comparison": 3
+        },
+        "broad": {
+          "offered": 14,
+          "any_helpful": 5,
+          "first_helpful": 3,
+          "first_harmful": 3,
+          "first_error_delta": 0,
+          "harmful": 4,
+          "neutral": 12,
+          "helpful": 5,
+          "helpful_beyond_comparison": 3
+        },
+        "strict": {
+          "offered": 11,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 3,
+          "first_error_delta": 1,
+          "harmful": 3,
+          "neutral": 6,
+          "helpful": 2
+        },
+        "strict_new": {
+          "offered": 11,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 3,
+          "first_error_delta": 1,
+          "harmful": 3,
+          "neutral": 6,
+          "helpful": 2,
+          "new_helpful_span": 2,
+          "helpful_beyond_comparison": 1
+        },
+        "corroborated": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "helpful": 1,
+          "helpful_beyond_comparison": 0
+        }
+      }
+    },
+    "lv": {
+      "notes": 5,
+      "flagged_spans": 35,
+      "spans_with_verified_windows": 35,
+      "notes_with_flags": 5,
+      "notes_with_new_helpful_option": 2,
+      "policies": {
+        "existing": {
+          "offered": 5,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 3,
+          "first_error_delta": 2,
+          "harmful": 3,
+          "helpful": 1,
+          "neutral": 1
+        },
+        "piece_pool": {
+          "offered": 32,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 6,
+          "first_error_delta": 4,
+          "neutral": 37,
+          "harmful": 6,
+          "helpful": 2
+        },
+        "fixed_pool": {
+          "offered": 33,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 6,
+          "first_error_delta": 4,
+          "neutral": 73,
+          "harmful": 11,
+          "helpful": 2
+        },
+        "word_pool": {
+          "offered": 28,
+          "any_helpful": 7,
+          "first_helpful": 4,
+          "first_harmful": 5,
+          "first_error_delta": 1,
+          "harmful": 10,
+          "neutral": 54,
+          "helpful": 7,
+          "helpful_beyond_comparison": 5
+        },
+        "broad": {
+          "offered": 27,
+          "any_helpful": 5,
+          "first_helpful": 4,
+          "first_harmful": 5,
+          "first_error_delta": 1,
+          "harmful": 6,
+          "neutral": 32,
+          "helpful": 5,
+          "helpful_beyond_comparison": 3
+        },
+        "strict": {
+          "offered": 19,
+          "any_helpful": 3,
+          "first_helpful": 3,
+          "first_harmful": 3,
+          "first_error_delta": 0,
+          "neutral": 13,
+          "helpful": 3,
+          "harmful": 3
+        },
+        "strict_new": {
+          "offered": 18,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 3,
+          "first_error_delta": 1,
+          "neutral": 13,
+          "helpful": 2,
+          "new_helpful_span": 2,
+          "helpful_beyond_comparison": 1,
+          "harmful": 3
+        },
+        "corroborated": {
+          "offered": 3,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 2,
+          "first_error_delta": 1,
+          "harmful": 2,
+          "helpful": 1,
+          "helpful_beyond_comparison": 0
+        }
+      }
+    },
+    "mt": {
+      "notes": 5,
+      "flagged_spans": 65,
+      "spans_with_verified_windows": 64,
+      "notes_with_flags": 3,
+      "notes_with_new_helpful_option": 1,
+      "policies": {
+        "existing": {
+          "offered": 4,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "neutral": 3,
+          "helpful": 1
+        },
+        "piece_pool": {
+          "offered": 46,
+          "any_helpful": 3,
+          "first_helpful": 2,
+          "first_harmful": 3,
+          "first_error_delta": 1,
+          "neutral": 104,
+          "helpful": 3,
+          "harmful": 4
+        },
+        "fixed_pool": {
+          "offered": 49,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 4,
+          "first_error_delta": 2,
+          "neutral": 173,
+          "helpful": 2,
+          "harmful": 10
+        },
+        "word_pool": {
+          "offered": 47,
+          "any_helpful": 10,
+          "first_helpful": 6,
+          "first_harmful": 6,
+          "first_error_delta": 1,
+          "helpful": 12,
+          "helpful_beyond_comparison": 7,
+          "neutral": 108,
+          "harmful": 11
+        },
+        "broad": {
+          "offered": 44,
+          "any_helpful": 8,
+          "first_helpful": 5,
+          "first_harmful": 6,
+          "first_error_delta": 2,
+          "helpful": 8,
+          "helpful_beyond_comparison": 5,
+          "neutral": 53,
+          "harmful": 8
+        },
+        "strict": {
+          "offered": 27,
+          "any_helpful": 3,
+          "first_helpful": 3,
+          "first_harmful": 2,
+          "first_error_delta": -1,
+          "helpful": 3,
+          "neutral": 22,
+          "harmful": 2
+        },
+        "strict_new": {
+          "offered": 25,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 2,
+          "first_error_delta": 0,
+          "helpful": 2,
+          "new_helpful_span": 2,
+          "helpful_beyond_comparison": 1,
+          "neutral": 21,
+          "harmful": 2
+        },
+        "corroborated": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "helpful": 1,
+          "helpful_beyond_comparison": 1
+        }
+      }
+    },
+    "nl": {
+      "notes": 5,
+      "flagged_spans": 6,
+      "spans_with_verified_windows": 6,
+      "notes_with_flags": 1,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 5,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "neutral": 5,
+          "harmful": 2
+        },
+        "fixed_pool": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "neutral": 2,
+          "harmful": 2
+        },
+        "word_pool": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 2,
+          "neutral": 1
+        },
+        "broad": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 2,
+          "neutral": 1
+        },
+        "strict": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1,
+          "neutral": 1
+        },
+        "strict_new": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1,
+          "neutral": 1
+        },
+        "corroborated": {}
+      }
+    },
+    "pl": {
+      "notes": 5,
+      "flagged_spans": 1,
+      "spans_with_verified_windows": 1,
+      "notes_with_flags": 1,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 2
+        },
+        "fixed_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 3
+        },
+        "word_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 3
+        },
+        "broad": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 2
+        },
+        "strict": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "strict_new": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "corroborated": {}
+      }
+    },
+    "pt": {
+      "notes": 3,
+      "flagged_spans": 4,
+      "spans_with_verified_windows": 4,
+      "notes_with_flags": 1,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "piece_pool": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1,
+          "neutral": 6
+        },
+        "fixed_pool": {
+          "offered": 4,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1,
+          "neutral": 10
+        },
+        "word_pool": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 9
+        },
+        "broad": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 4
+        },
+        "strict": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 2
+        },
+        "strict_new": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 2
+        },
+        "corroborated": {}
+      }
+    },
+    "ro": {
+      "notes": 3,
+      "flagged_spans": 4,
+      "spans_with_verified_windows": 4,
+      "notes_with_flags": 2,
+      "notes_with_new_helpful_option": 1,
+      "policies": {
+        "existing": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "helpful": 1
+        },
+        "piece_pool": {
+          "offered": 4,
+          "any_helpful": 2,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "neutral": 4,
+          "helpful": 2
+        },
+        "fixed_pool": {
+          "offered": 4,
+          "any_helpful": 2,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "neutral": 9,
+          "helpful": 2
+        },
+        "word_pool": {
+          "offered": 4,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 0,
+          "first_error_delta": -2,
+          "neutral": 7,
+          "helpful": 2,
+          "helpful_beyond_comparison": 0
+        },
+        "broad": {
+          "offered": 4,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 0,
+          "first_error_delta": -2,
+          "neutral": 3,
+          "helpful": 2,
+          "helpful_beyond_comparison": 0
+        },
+        "strict": {
+          "offered": 4,
+          "any_helpful": 2,
+          "first_helpful": 2,
+          "first_harmful": 0,
+          "first_error_delta": -2,
+          "neutral": 2,
+          "helpful": 2
+        },
+        "strict_new": {
+          "offered": 3,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "neutral": 2,
+          "helpful": 1,
+          "new_helpful_span": 1,
+          "helpful_beyond_comparison": 0
+        },
+        "corroborated": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "helpful": 1,
+          "helpful_beyond_comparison": 0
+        }
+      }
+    },
+    "ru": {
+      "notes": 5,
+      "flagged_spans": 1,
+      "spans_with_verified_windows": 1,
+      "notes_with_flags": 1,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 2
+        },
+        "fixed_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 2
+        },
+        "word_pool": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1,
+          "helpful": 1,
+          "helpful_beyond_comparison": 1
+        },
+        "broad": {
+          "offered": 1,
+          "any_helpful": 1,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1,
+          "helpful": 1,
+          "helpful_beyond_comparison": 1
+        },
+        "strict": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "strict_new": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "corroborated": {}
+      }
+    },
+    "sk": {
+      "notes": 5,
+      "flagged_spans": 12,
+      "spans_with_verified_windows": 12,
+      "notes_with_flags": 1,
+      "notes_with_new_helpful_option": 1,
+      "policies": {
+        "existing": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "piece_pool": {
+          "offered": 11,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 4,
+          "first_error_delta": 3,
+          "helpful": 1,
+          "harmful": 4,
+          "neutral": 14
+        },
+        "fixed_pool": {
+          "offered": 11,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 4,
+          "first_error_delta": 3,
+          "helpful": 1,
+          "neutral": 29,
+          "harmful": 8
+        },
+        "word_pool": {
+          "offered": 11,
+          "any_helpful": 4,
+          "first_helpful": 3,
+          "first_harmful": 4,
+          "first_error_delta": 1,
+          "helpful": 4,
+          "neutral": 23,
+          "helpful_beyond_comparison": 3,
+          "harmful": 6
+        },
+        "broad": {
+          "offered": 11,
+          "any_helpful": 4,
+          "first_helpful": 3,
+          "first_harmful": 4,
+          "first_error_delta": 1,
+          "helpful": 4,
+          "neutral": 10,
+          "helpful_beyond_comparison": 3,
+          "harmful": 5
+        },
+        "strict": {
+          "offered": 10,
+          "any_helpful": 4,
+          "first_helpful": 4,
+          "first_harmful": 3,
+          "first_error_delta": -1,
+          "helpful": 4,
+          "harmful": 3,
+          "neutral": 3
+        },
+        "strict_new": {
+          "offered": 10,
+          "any_helpful": 4,
+          "first_helpful": 4,
+          "first_harmful": 3,
+          "first_error_delta": -1,
+          "helpful": 4,
+          "new_helpful_span": 4,
+          "helpful_beyond_comparison": 3,
+          "harmful": 3,
+          "neutral": 3
+        },
+        "corroborated": {}
+      }
+    },
+    "sl": {
+      "notes": 5,
+      "flagged_spans": 47,
+      "spans_with_verified_windows": 47,
+      "notes_with_flags": 2,
+      "notes_with_new_helpful_option": 1,
+      "policies": {
+        "existing": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 2
+        },
+        "piece_pool": {
+          "offered": 41,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 8,
+          "first_error_delta": 7,
+          "harmful": 10,
+          "neutral": 89,
+          "helpful": 1
+        },
+        "fixed_pool": {
+          "offered": 43,
+          "any_helpful": 5,
+          "first_helpful": 1,
+          "first_harmful": 11,
+          "first_error_delta": 10,
+          "harmful": 27,
+          "neutral": 123,
+          "helpful": 5
+        },
+        "word_pool": {
+          "offered": 40,
+          "any_helpful": 9,
+          "first_helpful": 5,
+          "first_harmful": 11,
+          "first_error_delta": 6,
+          "harmful": 19,
+          "neutral": 89,
+          "helpful": 9,
+          "helpful_beyond_comparison": 5
+        },
+        "broad": {
+          "offered": 34,
+          "any_helpful": 5,
+          "first_helpful": 4,
+          "first_harmful": 7,
+          "first_error_delta": 3,
+          "harmful": 10,
+          "neutral": 38,
+          "helpful": 5,
+          "helpful_beyond_comparison": 4
+        },
+        "strict": {
+          "offered": 27,
+          "any_helpful": 4,
+          "first_helpful": 4,
+          "first_harmful": 4,
+          "first_error_delta": 0,
+          "harmful": 4,
+          "neutral": 19,
+          "helpful": 4
+        },
+        "strict_new": {
+          "offered": 27,
+          "any_helpful": 4,
+          "first_helpful": 4,
+          "first_harmful": 4,
+          "first_error_delta": 0,
+          "harmful": 4,
+          "neutral": 19,
+          "helpful": 4,
+          "new_helpful_span": 4,
+          "helpful_beyond_comparison": 3
+        },
+        "corroborated": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "neutral": 2,
+          "harmful": 1
+        }
+      }
+    },
+    "sv": {
+      "notes": 5,
+      "flagged_spans": 17,
+      "spans_with_verified_windows": 16,
+      "notes_with_flags": 4,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {
+          "offered": 3,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 0,
+          "first_error_delta": -1,
+          "neutral": 2,
+          "helpful": 1
+        },
+        "piece_pool": {
+          "offered": 9,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 2,
+          "first_error_delta": 2,
+          "neutral": 10,
+          "harmful": 3
+        },
+        "fixed_pool": {
+          "offered": 12,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 3,
+          "first_error_delta": 3,
+          "neutral": 26,
+          "harmful": 8
+        },
+        "word_pool": {
+          "offered": 12,
+          "any_helpful": 2,
+          "first_helpful": 0,
+          "first_harmful": 3,
+          "first_error_delta": 3,
+          "neutral": 20,
+          "harmful": 5,
+          "helpful": 2,
+          "helpful_beyond_comparison": 2
+        },
+        "broad": {
+          "offered": 11,
+          "any_helpful": 1,
+          "first_helpful": 0,
+          "first_harmful": 3,
+          "first_error_delta": 3,
+          "neutral": 10,
+          "harmful": 4,
+          "helpful": 1,
+          "helpful_beyond_comparison": 1
+        },
+        "strict": {
+          "offered": 7,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 2,
+          "first_error_delta": 2,
+          "neutral": 5,
+          "harmful": 2
+        },
+        "strict_new": {
+          "offered": 6,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 2,
+          "first_error_delta": 2,
+          "neutral": 4,
+          "harmful": 2
+        },
+        "corroborated": {
+          "offered": 3,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "neutral": 2,
+          "harmful": 1
+        }
+      }
+    },
+    "uk": {
+      "notes": 3,
+      "flagged_spans": 11,
+      "spans_with_verified_windows": 11,
+      "notes_with_flags": 1,
+      "notes_with_new_helpful_option": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 8,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 2,
+          "neutral": 10
+        },
+        "fixed_pool": {
+          "offered": 8,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 3,
+          "neutral": 20
+        },
+        "word_pool": {
+          "offered": 8,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 3,
+          "neutral": 16
+        },
+        "broad": {
+          "offered": 8,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 2,
+          "neutral": 11
+        },
+        "strict": {
+          "offered": 6,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1,
+          "neutral": 5
+        },
+        "strict_new": {
+          "offered": 6,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1,
+          "neutral": 5
+        },
+        "corroborated": {}
+      }
+    }
+  },
+  "russian_checks": [
+    {
+      "id": "russian-intro",
+      "split": "holdout",
+      "language": "ru",
+      "source": "Russian Progress",
+      "flags": 1,
+      "scored": 1,
+      "matched": 1,
+      "policies": {
+        "existing": {},
+        "piece_pool": {},
+        "fixed_pool": {},
+        "word_pool": {},
+        "broad": {},
+        "strict": {},
+        "strict_new": {},
+        "corroborated": {}
+      }
+    },
+    {
+      "id": "russian-listen",
+      "split": "holdout",
+      "language": "ru",
+      "source": "Russian Progress",
+      "flags": 4,
+      "scored": 4,
+      "matched": 4,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "fixed_pool": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 4
+        },
+        "word_pool": {
+          "offered": 2,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 3
+        },
+        "broad": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "strict": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "strict_new": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 0,
+          "first_error_delta": 0,
+          "neutral": 1
+        },
+        "corroborated": {}
+      }
+    },
+    {
+      "id": "russian-reading",
+      "split": "holdout",
+      "language": "ru",
+      "source": "Tarantella",
+      "flags": 0,
+      "scored": 0,
+      "matched": 0,
+      "policies": {
+        "existing": {},
+        "piece_pool": {},
+        "fixed_pool": {},
+        "word_pool": {},
+        "broad": {},
+        "strict": {},
+        "strict_new": {},
+        "corroborated": {}
+      }
+    },
+    {
+      "id": "russian-dictation-repeated",
+      "split": "holdout",
+      "language": "ru",
+      "source": "Tarantella repeated",
+      "flags": 7,
+      "scored": 6,
+      "matched": 7,
+      "policies": {
+        "existing": {},
+        "piece_pool": {
+          "offered": 4,
+          "unscored_offers": 1,
+          "any_helpful": 1,
+          "first_helpful": 1,
+          "first_harmful": 1,
+          "first_error_delta": 0,
+          "harmful": 1,
+          "helpful": 1,
+          "neutral": 2
+        },
+        "fixed_pool": {
+          "offered": 2,
+          "unscored_offers": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 2
+        },
+        "word_pool": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "broad": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        },
+        "strict": {},
+        "strict_new": {},
+        "corroborated": {
+          "offered": 1,
+          "any_helpful": 0,
+          "first_helpful": 0,
+          "first_harmful": 1,
+          "first_error_delta": 1,
+          "harmful": 1
+        }
+      }
+    }
+  ],
+  "android_x86_64": {
+    "measurements": [
+      {
+        "key": "long-ru-dev:6",
+        "duration_ms": 13660,
+        "off_ms": [
+          4061,
+          4002
+        ],
+        "on_ms": [
+          3878,
+          4060
+        ],
+        "observation_us": [
+          115,
+          113
+        ],
+        "continuation_us": [
+          0,
+          0
+        ],
+        "branch_starts": 0
+      },
+      {
+        "key": "reading-lv-holdout:30",
+        "duration_ms": 8590,
+        "off_ms": [
+          2853,
+          2587
+        ],
+        "on_ms": [
+          2623,
+          2713
+        ],
+        "observation_us": [
+          4286,
+          166
+        ],
+        "continuation_us": [
+          0,
+          0
+        ],
+        "branch_starts": 0
+      },
+      {
+        "key": "reading-el-dev:18",
+        "duration_ms": 9830,
+        "off_ms": [
+          3516,
+          3122
+        ],
+        "on_ms": [
+          3051,
+          3345
+        ],
+        "observation_us": [
+          152,
+          139
+        ],
+        "continuation_us": [
+          54634,
+          62351
+        ],
+        "branch_starts": 2
+      },
+      {
+        "key": "long-mt-holdout:4",
+        "duration_ms": 8420,
+        "off_ms": [
+          2952,
+          2659
+        ],
+        "on_ms": [
+          2634,
+          2716
+        ],
+        "observation_us": [
+          170,
+          168
+        ],
+        "continuation_us": [
+          94451,
+          80272
+        ],
+        "branch_starts": 4
+      },
+      {
+        "key": "long-en-dev:16",
+        "duration_ms": 12190,
+        "off_ms": [
+          4061,
+          3858
+        ],
+        "on_ms": [
+          3810,
+          3849
+        ],
+        "observation_us": [
+          271,
+          240
+        ],
+        "continuation_us": [
+          118812,
+          94861
+        ],
+        "branch_starts": 12
+      },
+      {
+        "key": "long-de-dev:5",
+        "duration_ms": 14050,
+        "off_ms": [
+          4778,
+          4301
+        ],
+        "on_ms": [
+          4253,
+          4252
+        ],
+        "observation_us": [
+          424,
+          176
+        ],
+        "continuation_us": [
+          54233,
+          37811
+        ],
+        "branch_starts": 2
+      },
+      {
+        "key": "short-ro-validation-3:1",
+        "duration_ms": 3730,
+        "off_ms": [
+          1235,
+          1190
+        ],
+        "on_ms": [
+          1290,
+          1292
+        ],
+        "observation_us": [
+          179,
+          161
+        ],
+        "continuation_us": [
+          145889,
+          122729
+        ],
+        "branch_starts": 6
+      },
+      {
+        "key": "long-el-holdout:8",
+        "duration_ms": 20740,
+        "off_ms": [
+          6748,
+          6915
+        ],
+        "on_ms": [
+          6789,
+          6747
+        ],
+        "observation_us": [
+          279,
+          8318
+        ],
+        "continuation_us": [
+          7958,
+          10872
+        ],
+        "branch_starts": 2
+      },
+      {
+        "key": "long-mt-holdout:17",
+        "duration_ms": 7460,
+        "off_ms": [
+          2394,
+          2489
+        ],
+        "on_ms": [
+          2424,
+          2452
+        ],
+        "observation_us": [
+          409,
+          455
+        ],
+        "continuation_us": [
+          131276,
+          158423
+        ],
+        "branch_starts": 11
+      },
+      {
+        "key": "reading-lv-dev:4",
+        "duration_ms": 8170,
+        "off_ms": [
+          2534,
+          2822
+        ],
+        "on_ms": [
+          2702,
+          2807
+        ],
+        "observation_us": [
+          219,
+          239
+        ],
+        "continuation_us": [
+          160926,
+          168351
+        ],
+        "branch_starts": 9
+      }
+    ],
+    "paired_median_delta_ms": -63.0,
+    "combined_time_delta_percent": -2.0122472023973215,
+    "max_rss_kib": {
+      "off": 952588,
+      "on": 952440
+    },
+    "identical_on_off_receipts": true,
+    "windows_with_identical_receipts_all_four": 10,
+    "stock_reference_windows": 10,
+    "windows_with_identical_stock_tokens": 10,
+    "guest_api": 35,
+    "guest_memory_kib": 2532896,
+    "packaged_receipts_equal_in_all_rounds": true,
+    "median_direct_cost_ms": 73.08425,
+    "max_direct_cost_ms": 164.8675
+  }
+}

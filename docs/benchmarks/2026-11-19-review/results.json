@@ -1,0 +1,361 @@
+{
+  "runtime": "Ollama 0.21.2",
+  "host_cpu": "AMD Ryzen 5 5500U",
+  "threads": 2,
+  "context_tokens": 512,
+  "temperature": 0,
+  "seed": 42,
+  "cpu_only": true,
+  "thinking": false,
+  "input_sha256": {
+    "fleurs-dev-words.json": "3a6eabae6bd0ea0848cac1f306d56eb83d0fa0a66a4c1347ac08c97e29d6b826",
+    "fixtures.json": "e298b95419ef85e28ac2c5d388a59642a82fc87fb3dfde8f794719b1ff3423b2"
+  },
+  "speech_baseline": {
+    "en": {
+      "clips": 6,
+      "reference_words": 88,
+      "word_errors": 5,
+      "low_tap_with_unmatched_word": 3,
+      "high_tap_with_unmatched_word": 0
+    },
+    "ru": {
+      "clips": 6,
+      "reference_words": 105,
+      "word_errors": 13,
+      "low_tap_with_unmatched_word": 3,
+      "high_tap_with_unmatched_word": 0,
+      "flag_with_unmatched_word": 2
+    }
+  },
+  "models": {
+    "Qwen3 0.6B Q4_K_M": {
+      "gguf_file": "Qwen3-0.6B-Q4_K_M.gguf",
+      "gguf_bytes": 396705472,
+      "gguf_sha256": "ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a",
+      "template_sha256": "790aae76aa0a2bbdb8bde833cf46a7169825353d3bc3ebafa174d7f6fb6a3980",
+      "sampled_warm_runner_rss_kib": 678276,
+      "speech": {
+        "scores": {
+          "en": {
+            "high_tap": {
+              "queries": 6,
+              "changed": 0,
+              "rejected": 0,
+              "improved": 0,
+              "harmed": 0,
+              "changed_tie": 0,
+              "error_delta": 0
+            },
+            "low_tap": {
+              "queries": 6,
+              "changed": 0,
+              "rejected": 0,
+              "improved": 0,
+              "harmed": 0,
+              "changed_tie": 0,
+              "error_delta": 0
+            },
+            "punct_asr": {
+              "clips": 6,
+              "rejected": 0,
+              "boundaries": 80,
+              "gold_marks": 5,
+              "before_errors": 1,
+              "after_errors": 1,
+              "fixed": 0,
+              "damaged": 0
+            },
+            "punct_stripped": {
+              "clips": 6,
+              "rejected": 0,
+              "boundaries": 80,
+              "gold_marks": 5,
+              "before_errors": 5,
+              "after_errors": 2,
+              "fixed": 4,
+              "damaged": 1
+            }
+          },
+          "ru": {
+            "flag": {
+              "queries": 3,
+              "changed": 0,
+              "rejected": 0,
+              "improved": 0,
+              "harmed": 0,
+              "changed_tie": 0,
+              "error_delta": 0
+            },
+            "high_tap": {
+              "queries": 6,
+              "changed": 0,
+              "rejected": 0,
+              "improved": 0,
+              "harmed": 0,
+              "changed_tie": 0,
+              "error_delta": 0
+            },
+            "low_tap": {
+              "queries": 6,
+              "changed": 0,
+              "rejected": 0,
+              "improved": 0,
+              "harmed": 0,
+              "changed_tie": 0,
+              "error_delta": 0
+            },
+            "punct_asr": {
+              "clips": 6,
+              "rejected": 1,
+              "boundaries": 81,
+              "gold_marks": 13,
+              "before_errors": 0,
+              "after_errors": 0,
+              "fixed": 0,
+              "damaged": 0
+            },
+            "punct_stripped": {
+              "clips": 6,
+              "rejected": 1,
+              "boundaries": 81,
+              "gold_marks": 13,
+              "before_errors": 13,
+              "after_errors": 8,
+              "fixed": 5,
+              "damaged": 0
+            }
+          }
+        },
+        "warm_median_seconds": {
+          "word": 0.728,
+          "punct": 1.287
+        },
+        "requests": {
+          "word": 27,
+          "punct": 24
+        }
+      },
+      "synthetic_text": {
+        "scores": {
+          "word_choice": {
+            "queries": 16,
+            "rejected": 15,
+            "fixed": 0,
+            "damaged": 0
+          },
+          "paragraphs": {
+            "rejected": 8,
+            "notes": 8,
+            "boundaries": 22,
+            "gold_breaks": 5,
+            "found": 0,
+            "extra": 0,
+            "missed": 5,
+            "exact_notes": 4
+          }
+        },
+        "warm_median_seconds": {
+          "choice": 0.688,
+          "paragraph": 1.493
+        },
+        "requests": {
+          "choice": 16,
+          "paragraph": 8
+        }
+      },
+      "synthetic_schema": {
+        "scores": {
+          "word_choice": {
+            "queries": 16,
+            "rejected": 0,
+            "fixed": 2,
+            "damaged": 2
+          },
+          "paragraphs": {
+            "rejected": 0,
+            "notes": 8,
+            "boundaries": 22,
+            "gold_breaks": 5,
+            "found": 5,
+            "extra": 17,
+            "missed": 0,
+            "exact_notes": 0
+          }
+        },
+        "warm_median_seconds": {
+          "choice": 0.723,
+          "paragraph": 1.602
+        },
+        "requests": {
+          "choice": 16,
+          "paragraph": 8
+        }
+      }
+    },
+    "Qwen3.5 2B Q4_K_M": {
+      "gguf_file": "Qwen3.5-2B-Q4_K_M.gguf",
+      "gguf_bytes": 1280835840,
+      "gguf_sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+      "template_sha256": "aed6d0ca933bd1a0d9036c2c391c79196b85dc571fed5bce481c55e157e836c3",
+      "sampled_warm_runner_rss_kib": 2319064,
+      "speech": {
+        "scores": {
+          "en": {
+            "high_tap": {
+              "queries": 6,
+              "changed": 1,
+              "rejected": 4,
+              "improved": 0,
+              "harmed": 1,
+              "changed_tie": 0,
+              "error_delta": 1
+            },
+            "low_tap": {
+              "queries": 6,
+              "changed": 0,
+              "rejected": 3,
+              "improved": 0,
+              "harmed": 0,
+              "changed_tie": 0,
+              "error_delta": 0
+            },
+            "punct_asr": {
+              "clips": 6,
+              "rejected": 0,
+              "boundaries": 80,
+              "gold_marks": 5,
+              "before_errors": 1,
+              "after_errors": 1,
+              "fixed": 0,
+              "damaged": 0
+            },
+            "punct_stripped": {
+              "clips": 6,
+              "rejected": 0,
+              "boundaries": 80,
+              "gold_marks": 5,
+              "before_errors": 5,
+              "after_errors": 1,
+              "fixed": 5,
+              "damaged": 1
+            }
+          },
+          "ru": {
+            "flag": {
+              "queries": 3,
+              "changed": 0,
+              "rejected": 2,
+              "improved": 0,
+              "harmed": 0,
+              "changed_tie": 0,
+              "error_delta": 0
+            },
+            "high_tap": {
+              "queries": 6,
+              "changed": 0,
+              "rejected": 6,
+              "improved": 0,
+              "harmed": 0,
+              "changed_tie": 0,
+              "error_delta": 0
+            },
+            "low_tap": {
+              "queries": 6,
+              "changed": 1,
+              "rejected": 3,
+              "improved": 0,
+              "harmed": 1,
+              "changed_tie": 0,
+              "error_delta": 1
+            },
+            "punct_asr": {
+              "clips": 6,
+              "rejected": 0,
+              "boundaries": 81,
+              "gold_marks": 13,
+              "before_errors": 0,
+              "after_errors": 0,
+              "fixed": 0,
+              "damaged": 0
+            },
+            "punct_stripped": {
+              "clips": 6,
+              "rejected": 0,
+              "boundaries": 81,
+              "gold_marks": 13,
+              "before_errors": 13,
+              "after_errors": 2,
+              "fixed": 11,
+              "damaged": 0
+            }
+          }
+        },
+        "warm_median_seconds": {
+          "word": 5.427,
+          "punct": 6.372
+        },
+        "requests": {
+          "word": 27,
+          "punct": 24
+        }
+      },
+      "synthetic_text": {
+        "scores": {
+          "word_choice": {
+            "queries": 16,
+            "rejected": 0,
+            "fixed": 8,
+            "damaged": 5
+          },
+          "paragraphs": {
+            "rejected": 6,
+            "notes": 8,
+            "boundaries": 22,
+            "gold_breaks": 5,
+            "found": 3,
+            "extra": 3,
+            "missed": 2,
+            "exact_notes": 4
+          }
+        },
+        "warm_median_seconds": {
+          "choice": 3.893,
+          "paragraph": 6.565
+        },
+        "requests": {
+          "choice": 16,
+          "paragraph": 8
+        }
+      },
+      "synthetic_schema": {
+        "scores": {
+          "word_choice": {
+            "queries": 16,
+            "rejected": 0,
+            "fixed": 6,
+            "damaged": 6
+          },
+          "paragraphs": {
+            "rejected": 0,
+            "notes": 8,
+            "boundaries": 22,
+            "gold_breaks": 5,
+            "found": 5,
+            "extra": 16,
+            "missed": 0,
+            "exact_notes": 0
+          }
+        },
+        "warm_median_seconds": {
+          "choice": 5.061,
+          "paragraph": 6.628
+        },
+        "requests": {
+          "choice": 16,
+          "paragraph": 8
+        }
+      }
+    }
+  }
+}

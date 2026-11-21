@@ -1,0 +1,55 @@
+--- a/sherpa-onnx/csrc/offline-transducer-greedy-search-nemo-decoder.cc
++++ b/sherpa-onnx/csrc/offline-transducer-greedy-search-nemo-decoder.cc
+@@ -6,4 +6,8 @@
+
+ #include <algorithm>
++#include <chrono>
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
+ #include <iterator>
+ #include <utility>
+@@ -102,4 +106,6 @@
+ }
+
++#include "word-paths.inc"
++
+ static OfflineTransducerDecoderResult DecodeOneTDT(
+     const float *p, int32_t num_rows, int32_t num_cols,
+@@ -109,4 +115,5 @@
+
+   OfflineTransducerDecoderResult ans;
++  WordPaths review;
+
+   int32_t vocab_size = model->VocabSize();
+@@ -165,4 +172,9 @@
+         std::max_element(duration_logits, duration_logits + num_durations)));
+
++    if (review.enabled()) {
++      review.observe(model, ans.tokens.size(), t, tokens_this_frame, y, skip,
++                     token_logits_copy.data(), duration_logits, decoder_output_pair.second);
++    }
++
+     if (y != blank_id) {
+       ans.tokens.push_back(y);
+@@ -196,4 +208,5 @@
+   }  // for (int32_t t = 0; t < num_rows; t += skip)
+
++  review.finish(model, p, num_rows, num_cols, ans);
+   return ans;
+ }
+--- a/sherpa-onnx/csrc/offline-transducer-nemo-model.cc
++++ b/sherpa-onnx/csrc/offline-transducer-nemo-model.cc
+@@ -27,4 +27,6 @@
+ #include "sherpa-onnx/csrc/text-utils.h"
+ #include "sherpa-onnx/csrc/transpose.h"
++
++#include "replay.h"
+
+ namespace sherpa_onnx {
+@@ -77,4 +79,5 @@
+   std::vector<Ort::Value> RunEncoder(Ort::Value features,
+                                      Ort::Value features_length) {
++    if (const char *path = std::getenv("FOCAL_WORD_REPLAY")) return replay_encoding(allocator_, path);
+     // (B, T, C) -> (B, C, T)
+     features = Transpose12(allocator_, &features);
