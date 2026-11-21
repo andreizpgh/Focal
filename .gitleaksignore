@@ -1,0 +1,6 @@
+# Public benchmark crop ID followed by its start and end in milliseconds.
+cd859d62264499043fcffcaefb4a79a8ceba62e2:docs/benchmarks/2026-11-20-context-review/results.json:generic-api-key:1714
+# SHA-256 digest of a public verification key in a historical apksigner output fixture.
+66b4ab676f9d04c3c034b5ed6320205d6b6bf53a:scripts/tests/test_release.py:generic-api-key:48
+# SHA-256 digest of a public verification key in a historical apksigner output fixture.
+812e447766939068c05cfd3093b5d60512d02776:scripts/tests/test_release.py:generic-api-key:48
