@@ -3,7 +3,7 @@ package app.focal.core
 /**
  * A word of an edited paragraph. [start] and [end] are its char range in the edited text. Times come from
  * the source word it was matched to and are null for changed or inserted words: they are never invented.
- * [doubtful] survives only when the word is literally unchanged, so editing a word clears its doubt.
+ * [doubtful] survives changes to surrounding punctuation. A spelling or case change clears it.
  */
 data class AlignedWord(
     val text: String,
@@ -53,7 +53,7 @@ object Alignment {
                 sourceIndex = s,
                 startMs = word?.startMs,
                 endMs = word?.endMs,
-                doubtful = word != null && word.text == text && Doubt.isDoubtful(word),
+                doubtful = word != null && Doubt.isDoubtful(word) && spelling(word.text) == spelling(text),
             )
         }
     }
@@ -71,6 +71,8 @@ object Alignment {
         }
         return null
     }
+
+    private fun spelling(text: String) = TextWords.lexicalRange(text, 0, text.length)?.let(text::substring) ?: text
 
     private fun key(text: String): String = TextRules.core(text).ifEmpty { "\u0000$text" }
 
@@ -104,6 +106,36 @@ object Alignment {
  * too, the same on the JVM and on Android (a `\s` regex class differs between them).
  */
 object TextWords {
+    /** The last letter determines whether an ASCII semicolon is the Greek question mark. */
+    fun endsInGreek(text: CharSequence): Boolean {
+        val last = text.lastOrNull(Char::isLetter) ?: return false
+        return last in '\u0370'..'\u03ff' || last in '\u1f00'..'\u1fff'
+    }
+
+    /** Closing quotes may follow a terminal, including the two spellings of a Greek question mark. */
+    fun endsSentence(word: String): Boolean {
+        val bare = TextRules.stripClosers(word)
+        return when (bare.lastOrNull()) {
+            '.', '!', '?', '…', '\u037e' -> true
+            ';' -> endsInGreek(bare)
+            else -> false
+        }
+    }
+
+    /** Select the lexical content but retain combining accents belonging to its last letter. */
+    fun lexicalRange(text: CharSequence, from: Int, until: Int): IntRange? {
+        var first = from
+        var end = until
+        while (first < end && !text[first].isLetterOrDigit()) first++
+        if (first == end) return null
+        while (end > first && !text[end - 1].isLetterOrDigit() && text[end - 1].category !in combiningMarks) end--
+        return first until end
+    }
+
+    private val combiningMarks = setOf(CharCategory.NON_SPACING_MARK, CharCategory.COMBINING_SPACING_MARK, CharCategory.ENCLOSING_MARK)
+
+    fun isLetterOrMark(char: Char): Boolean = char.isLetter() || char.category in combiningMarks
+
     fun isSpace(c: Char): Boolean = Character.isWhitespace(c) || Character.isSpaceChar(c)
 
     /** Char ranges of the words of [text], in order. */

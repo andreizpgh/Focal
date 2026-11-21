@@ -61,10 +61,14 @@ object SpeechTuning {
     const val PARAGRAPH_PAUSE_MS = 1_500L
     /** Provisional: pause after a sentence end that always starts a paragraph. */
     const val LONG_PAUSE_MS = 3_000L
+    /** A long pause can separate unpunctuated thoughts once the current one has this many words. */
+    const val UNPUNCTUATED_MIN_WORDS = 12
+    /** A capitalized restart after a gap this long can supply a missing period. */
+    const val SENTENCE_RESTART_MS = 3_000L
     /** Provisional. */
     const val PARAGRAPH_MIN_SENTENCES = 2
     /** Provisional: a paragraph closes at the first sentence end once it holds this many words (some six lines on a phone). */
-    const val PARAGRAPH_MAX_WORDS = 60
+    const val PARAGRAPH_MAX_WORDS = 40
     /**
      * A paragraph that reaches this many words without closing at a sentence end closes anyway (speech the
      * recognizer did not punctuate), so no paragraph grows without bound.
@@ -81,6 +85,8 @@ object SpeechTuning {
     const val TITLE_MIN_CHARS = 12
 
     // Doubtful words (provisional GO): min content-token probability below the threshold.
+    /** Provisional intersection over union for two timed readings offered for manual review. */
+    const val REVIEW_MIN_TIME_OVERLAP = 0.6
     const val DOUBT_ENABLED = true
     const val DOUBT_THRESHOLD = 0.5
 }

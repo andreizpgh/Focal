@@ -47,7 +47,7 @@ class Preferences(context: Context) {
 
     companion object {
         val THEMES = listOf("system", "light", "dark")
-        /** The current paragraph rules (SpeechTuning's paragraph constants): 2 since 0.3.1. */
+        /** The one-time paragraph migration introduced in 0.3.1. */
         const val PARAGRAPH_RULES = 2
     }
 }

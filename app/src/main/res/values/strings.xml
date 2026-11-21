@@ -105,6 +105,20 @@
     <!-- Menus (design 7.2). -->
     <string name="menu_copy_text">Copy text</string>
     <string name="menu_share">Share</string>
+    <string name="review_count">Review (%d)</string>
+    <string name="review_selection">Review wording</string>
+    <string name="review_wording">Wording</string>
+    <string name="review_split">Start paragraph here</string>
+    <string name="review_join">Join previous paragraph</string>
+    <string name="review_join_saved">Paragraphs joined</string>
+    <string name="review_split_saved">Paragraph split</string>
+    <string name="review_next">Next unclear</string>
+    <string name="review_apply">Apply</string>
+    <string name="review_saved">Wording updated</string>
+    <string name="review_stale">The note changed. Select the words again.</string>
+    <string name="review_other_reading">Also heard in this audio</string>
+    <string name="review_previous_wording">From your edits in this note</string>
+    <string name="review_from_note">Similar spelling in this note</string>
     <string name="menu_edit">Edit</string>
     <string name="menu_rename">Rename</string>
     <string name="menu_remove_audio">Remove audio</string>

@@ -8,6 +8,7 @@ import app.focal.Synthetic.commit
 import app.focal.Synthetic.plan
 import app.focal.Synthetic.savedAudio
 import app.focal.Synthetic.speech
+import app.focal.Synthetic.tokens
 import app.focal.core.EndKind
 import app.focal.core.SpeechTuning
 import app.focal.core.WindowGate
@@ -135,6 +136,19 @@ class NoteStoreTest {
         assertEquals("Write about local speech recognition.", app.focal.core.Title.remainder(note.preview))
     }
 
+    @Test fun reviewOffersOnlyASecondReadingCoveringTheSelectedAudio() {
+        val id = store.create()
+        savedAudio(store, id, 10_000)
+        commit(store, id, plan(0, 0, 6_000, EndKind.PAUSE), tokens(
+            Triple("First", 1.0, 0.3), Triple("harbour.", 6.1, 0.3),
+        ))
+        commit(store, id, plan(1, 6_000, 10_000, EndKind.FINAL, EndKind.PAUSE), tokens(Triple("Harber", 0.35, 0.3)))
+        assertEquals(listOf("harbour"), store.overlapReadings(id, 6_100, 6_400))
+        assertTrue(store.overlapReadings(id, 1_000, 1_300).isEmpty())
+        assertTrue(store.overlapReadings(id, 6_300, 6_650).isEmpty())
+        assertEquals("First harbour.", store.windows(id).first().rawText)
+    }
+
     @Test fun windowsCommitRawResultsAndParagraphsTogether() {
         val id = transcribedNote()
         val windows = store.windows(id)
@@ -254,6 +268,23 @@ class NoteStoreTest {
         assertFalse(restored.edited)
         assertEquals(EditResult.Missing, store.editParagraph(-5, 0, "Nothing"))
         assertSearchIndexIntact(store)
+    }
+
+    @Test fun undoReadingMergeRestoresBothRowsExactlyAndRejectsInterveningChanges() {
+        val id = transcribedNote()
+        store.markReady(id)
+        val first = store.paragraphs(id).first()
+        store.editParagraph(first.id, first.revision, "Changed wording.")
+        val (left, right) = store.paragraphs(id)
+        val merged = store.mergeParagraphs(left.id, left.revision, right.id, right.revision) as EditResult.Saved
+        val restored = (store.undoMerge(merged.mergeUndo!!) as EditResult.Saved).paragraphs
+        assertEquals(listOf(left, right), restored.zip(listOf(left, right)) { now, old -> now.copy(revision = old.revision) })
+        assertEquals(EditResult.Conflict, store.undoMerge(merged.mergeUndo!!))
+        val (a, b) = restored
+        val again = store.mergeParagraphs(a.id, a.revision, b.id, b.revision) as EditResult.Saved
+        store.editParagraph(b.id, again.paragraphs.single().revision, "A subsequent edit")
+        assertEquals(EditResult.Conflict, store.undoMerge(again.mergeUndo!!))
+        assertEquals("A subsequent edit", store.paragraphs(id).single().text)
     }
 
     @Test fun splitAndMergeRedistributeSourceWordsWithoutInventingTimes() {

@@ -11,6 +11,8 @@ data class FormatConfig(
     val minWordEndMs: Long = SpeechTuning.MIN_WORD_END_MS,
     val capWords: Int = SpeechTuning.PARAGRAPH_CAP_WORDS,
     val capLookbackWords: Int = SpeechTuning.PARAGRAPH_CAP_LOOKBACK_WORDS,
+    val sentenceRestartMs: Long = SpeechTuning.SENTENCE_RESTART_MS,
+    val unpunctuatedMinWords: Int = SpeechTuning.UNPUNCTUATED_MIN_WORDS,
 ) {
     init {
         require(capWords >= 1 && capLookbackWords >= 0) { "A paragraph cap needs at least one word." }
@@ -52,19 +54,41 @@ object SeamRepair {
     }
 }
 
+/** Display punctuation from a narrow lexical cue or a long, capitalized restart. Existing marks take precedence. */
+private object BoundaryPunctuation {
+    private val beforeChto = setOf("думаю", "считаю", "кажется", "оказалось", "выяснилось")
+    private val beforeChtoby = setOf("хочу", "хотим", "прошу", "просим", "важно", "нужно")
+
+    fun apply(previous: Word, next: Word, config: FormatConfig): Word {
+        val last = previous.text.lastOrNull() ?: return previous
+        if (!last.isLowerCase()) return previous
+        val cues = when (next.text) {
+            "что" -> beforeChto
+            "чтобы" -> beforeChtoby
+            else -> null
+        }
+        if (cues != null && previous.text.lowercase() in cues) return previous.copy(text = previous.text + ",")
+        if (next.startMs - previous.endMs < config.sentenceRestartMs || next.text.firstOrNull()?.isUpperCase() != true) return previous
+        val pair = listOf(previous.text, next.text)
+        if (TextRules.danglingWord(previous.text, TextRules.functionWords(pair))) return previous
+        return previous.copy(text = previous.text + ".")
+    }
+}
+
 /**
  * Paragraph breaks from pauses and sentence ends. A sentence end closes a paragraph after a long pause, after
  * a shorter pause once the paragraph holds enough sentences, or once it holds enough words. Any '.', '!', '?'
- * or '…' counts ([TextRules.endsSentence]): a pause that long after '3.' or 'Dr.' is a sentence end in speech.
+ * or '…' counts ([TextWords.endsSentence]): a pause that long after '3.' or 'Dr.' is a sentence end in speech.
  * Only the title knows ordinals and abbreviations.
  *
  * Speech the recognizer did not punctuate has no sentence ends, so a paragraph that reaches
  * [FormatConfig.capWords] closes anyway, at the longest pause near its end ([capCut]).
  */
 object Paragraphs {
-    /** Whether a paragraph closes between [previous] and [next] (call only when [previous] ends a sentence). */
+    /** A marked sentence boundary, or a long pause in a sufficiently long unpunctuated passage. */
     internal fun breaks(previous: Word, next: Word, sentences: Int, words: Int, config: FormatConfig): Boolean {
         val pause = next.startMs - previous.endMs
+        if (!TextWords.endsSentence(previous.text)) return words >= config.unpunctuatedMinWords && pause >= config.longPauseMs
         return pause >= config.longPauseMs || (pause >= config.paragraphPauseMs && sentences >= config.minSentences) ||
             words >= config.maxWords
     }
@@ -91,21 +115,19 @@ object Paragraphs {
         var sentences = 0
         for (j in 1 until words.size) {
             val previous = words[j - 1]
-            val end = TextRules.endsSentence(previous.text)
-            if (end) {
-                sentences++
-                if (breaks(previous, words[j], sentences, j - start, config)) {
-                    out += start until j
-                    start = j
-                    sentences = 0
-                    continue
-                }
+            val end = TextWords.endsSentence(previous.text)
+            if (end) sentences++
+            if (breaks(previous, words[j], sentences, j - start, config)) {
+                out += start until j
+                start = j
+                sentences = 0
+                continue
             }
             if (j - start >= config.capWords) {
                 val cut = start + capCut(j - start, config.capLookbackWords) { words[start + it] }
                 out += start until cut
                 start = cut
-                sentences = (cut until j).count { TextRules.endsSentence(words[it].text) }
+                sentences = (cut until j).count { TextWords.endsSentence(words[it].text) }
             }
         }
         if (start < words.size) out += start until words.size
@@ -245,7 +267,8 @@ data class FormattedTranscript(
 object Formatter {
     fun format(windows: List<DecodedWindow>, config: FormatConfig = FormatConfig()): FormattedTranscript {
         val raw = WindowMerge.merge(windows, config.dedupeMs, config.minWordEndMs)
-        val (words, ops) = SeamRepair.repairAll(raw, config.seamPauseMs)
+        val (repaired, ops) = SeamRepair.repairAll(raw, config.seamPauseMs)
+        val words = repaired.mapIndexed { i, word -> repaired.getOrNull(i + 1)?.let { BoundaryPunctuation.apply(word, it, config) } ?: word }
         return FormattedTranscript(raw, words, ops, Paragraphs.split(words, config), Title.of(words.map { it.text }))
     }
 }
@@ -266,7 +289,7 @@ class TranscriptAssembler(
     openParagraph: List<Word> = emptyList(),
 ) {
     private val open = openParagraph.toMutableList()
-    private var sentences = openParagraph.dropLast(1).count { TextRules.endsSentence(it.text) }
+    private var sentences = openParagraph.dropLast(1).count { TextWords.endsSentence(it.text) }
 
     /**
      * The result of one window. [paragraphs] is empty when nothing changed. Otherwise its first entry
@@ -291,9 +314,10 @@ class TranscriptAssembler(
             }
         }
         for (word in fresh) {
-            val previous = open.lastOrNull()
-            if (previous != null && TextRules.endsSentence(previous.text)) {
-                sentences++
+            if (open.isNotEmpty()) {
+                val previous = BoundaryPunctuation.apply(open.last(), word, config)
+                open[open.lastIndex] = previous
+                if (TextWords.endsSentence(previous.text)) sentences++
                 if (Paragraphs.breaks(previous, word, sentences, open.size, config)) {
                     result += open.toList()
                     open.clear()
@@ -307,7 +331,7 @@ class TranscriptAssembler(
                 val carried = open.subList(cut, open.size).toList()
                 open.clear()
                 open += carried
-                sentences = carried.count { TextRules.endsSentence(it.text) }
+                sentences = carried.count { TextWords.endsSentence(it.text) }
             }
             open += word
         }

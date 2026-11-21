@@ -7,10 +7,15 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import androidx.annotation.VisibleForTesting
 import androidx.core.database.sqlite.transaction
+import app.focal.core.DecodedWindow
+import app.focal.core.Doubt
+import app.focal.core.WordBuilder
+import app.focal.core.SpeechTuning
 import app.focal.core.AsrToken
 import app.focal.core.EndKind
 import app.focal.core.FormatConfig
 import app.focal.core.Paragraphs
+import app.focal.core.TextWords
 import app.focal.core.Title
 import app.focal.core.Transcript
 import app.focal.core.TranscriptAssembler
@@ -502,6 +507,33 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         "SELECT tokens FROM windows WHERE id=?", arrayOf(windowId.toString()),
     ).use { if (it.moveToFirst() && !it.isNull(0)) TranscriptJson.decodeTokens(it.getString(0)) else null }
 
+    /** A second reading of the same audio, already decoded as context across a window boundary. */
+    fun overlapReadings(noteId: String, start: Long, end: Long): List<String> {
+        if (end <= start) return emptyList()
+        val middle = start + (end - start) / 2
+        return readableDatabase.rawQuery(
+            """SELECT audio_start,idx,tokens FROM windows WHERE note_id=? AND state='DONE' AND hidden=0
+                AND tokens IS NOT NULL AND audio_start<=? AND audio_end>=? AND (keep_hi<=? OR keep_lo>?)
+                ORDER BY idx LIMIT 2""",
+            arrayOf(noteId, start.toString(), end.toString(), middle.toString(), middle.toString()),
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    val tokens = TranscriptJson.decodeTokens(cursor.getString(2))
+                    val decoded = DecodedWindow(cursor.getLong(0), null, null, tokens)
+                    val words = WordBuilder.build(decoded, cursor.getInt(1)).filter { (it.startMs + it.endMs) / 2 in start until end }
+                    if (words.isEmpty() || words.any { it.confidence == null || Doubt.isDoubtful(it) }) continue
+                    val overlap = minOf(end, words.last().endMs) - maxOf(start, words.first().startMs)
+                    val union = maxOf(end, words.last().endMs) - minOf(start, words.first().startMs)
+                    if (overlap >= SpeechTuning.REVIEW_MIN_TIME_OVERLAP * union) {
+                        val reading = words.joinToString(" ") { it.text }
+                        TextWords.lexicalRange(reading, 0, reading.length)?.let { add(reading.substring(it)) }
+                    }
+                }
+            }
+        }
+    }
+
     private fun storedWindow(c: Cursor) = StoredWindow(
         id = c.long("id"), noteId = c.string("note_id"), index = c.int("idx"),
         ownStartMs = c.long("own_start"), ownEndMs = c.long("own_end"),
@@ -710,13 +742,15 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     }
 
     /**
-     * Splits the paragraphs of ready notes where the current paragraph rules ([FormatConfig]) would now close them:
+     * Splits the paragraphs of ready notes under the rules of the one-time 0.3.1 migration:
      * notes recorded under earlier, looser rules read as one block of text. Only a paragraph that still is the
      * recognizer's own text with its word times is touched (an edited one is the person's), and only by
      * [splitParagraph], so no word, time or original changes: the same step as Enter in the editor. Returns how many
      * paragraphs were split off. Safe to run again: a paragraph already within the rules stays whole.
      */
     fun reparagraph(): Int {
+        // A manual join can have exactly the same words as its source. Do not reflow existing notes on each retune.
+        val migrationRules = format.copy(maxWords = 60, capWords = 120, unpunctuatedMinWords = Int.MAX_VALUE)
         var added = 0
         for (note in library()) {
             if (note.state != NoteState.READY) continue
@@ -724,7 +758,7 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
                 if (paragraph.edited || paragraph.hidden || paragraph.open) continue
                 val words = paragraph.sourceWords() ?: continue
                 if (paragraph.text != words.joinToString(" ") { it.text }) continue
-                val parts = Paragraphs.split(words, format)
+                val parts = Paragraphs.split(words, migrationRules)
                 var revision = paragraph.revision
                 // Each split takes the text before it into a new paragraph; this one keeps its id with the rest.
                 for (part in parts.dropLast(1)) {
@@ -791,7 +825,32 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         delete("paragraphs", "id=?", arrayOf(first.id.toString()))
         writeContent(this, second.id, merged, hidden = first.hidden && second.hidden)
         refreshTitle(this, second.noteId)
-        EditResult.Saved(paragraphsIn(this, "id=?", listOf(secondId.toString())))
+        val stored = paragraphsIn(this, "id=?", listOf(secondId.toString()))
+        EditResult.Saved(stored, mergeUndo = MergeUndo(first, second, stored.single().revision))
+    }
+
+    /** Restore both original rows, including timing, whitespace, original JSON and search entries. */
+    fun undoMerge(undo: MergeUndo): EditResult = edit {
+        val (first, second, mergedRevision) = undo
+        val current = paragraphsIn(this, "id=?", listOf(second.id.toString())).singleOrNull()
+        editable(this, current, mergedRevision)?.let { return@edit it }
+        if (current!!.ord != second.ord || current.noteId != second.noteId ||
+            paragraphsIn(this, "id=? OR (note_id=? AND ord=?)",
+                listOf(first.id.toString(), first.noteId, first.ord.toString())).isNotEmpty()) return@edit EditResult.Conflict
+        fun values(row: Paragraph, revision: Long) = ContentValues().apply {
+            put("text", row.text); put("source_text", row.sourceText); put("words", row.wordsJson)
+            put("start_ms", row.startMs); put("end_ms", row.endMs); put("edited", if (row.edited) 1 else 0)
+            put("hidden", if (row.hidden) 1 else 0); put("open", if (row.open) 1 else 0); put("revision", revision)
+        }
+        insertOrThrow("paragraphs", null, values(first, first.revision + 1).apply {
+            put("id", first.id); put("note_id", first.noteId); put("ord", first.ord)
+        })
+        unindexParagraph(second.id)
+        update("paragraphs", values(second, current.revision + 1), "id=?", arrayOf(second.id.toString()))
+        indexParagraph(first.id)
+        indexParagraph(second.id)
+        refreshTitle(this, second.noteId)
+        EditResult.Saved(paragraphsIn(this, "id IN (?,?)", listOf(first.id.toString(), second.id.toString())))
     }
 
     private fun Paragraph.content() = ParagraphContent(text, sourceText, sourceWords(), startMs, endMs, edited)

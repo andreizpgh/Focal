@@ -47,7 +47,7 @@ object WordBuilder {
     private val SPECIAL = Regex("^<\\|?[^<>]*\\|?>$")
 
     /** Closing punctuation: after a space it still joins the word on its left (audit L6). */
-    private const val ATTACH_LEFT = ",.;:!?%)]}"
+    private const val ATTACH_LEFT = ",.;;·:!?…%)]}"
 
     /** Seconds to integer milliseconds, rounding half up. */
     fun ms(seconds: Double): Long = floor(seconds * 1000 + 0.5).toLong()
@@ -58,11 +58,11 @@ object WordBuilder {
         val special = texts.map { SPECIAL.matches(it.trim()) }
         val logProbs = all.mapTo(ArrayList()) { it.logProb }
         val unknown = BooleanArray(all.size)
-        // A special piece (<unk>) right after a letter/digit piece stands for part of that word: the word is
+        // An unknown piece (<unk>) right after a letter/digit piece stands for part of that word: the word is
         // marked and the piece lends its probability. After a space or punctuation piece (how Ultra emits a
         // dash) it has no effect.
         for (k in 1 until all.size) {
-            if (!special[k] || special[k - 1] || !TextRules.hasAlnum(texts[k - 1])) continue
+            if (texts[k].trim() != "<unk>" || special[k - 1] || !TextRules.hasAlnum(texts[k - 1])) continue
             unknown[k - 1] = true
             val lent = logProbs[k]
             val own = logProbs[k - 1]

@@ -8,9 +8,8 @@ import java.util.Locale
  * `str.isalnum`, `str.isupper` and `re` classes as used by the reference implementation.
  */
 internal object TextRules {
-    private const val SENTENCE_END = ".!?…"
-    const val CLOSERS = "\"'»”’)]"
-    const val OPENERS = "\"'«„“(¿¡"
+    const val CLOSERS = "\"'»«”’“‘›‹)]}"
+    const val OPENERS = "\"'«»„“‘‚‹›([{¿¡"
 
     /** Abbreviations whose period never ends a sentence (compared case-insensitively, letters only). */
     private val ABBREVIATIONS = setOf(
@@ -128,9 +127,6 @@ internal object TextRules {
 
     fun stripClosers(text: String): String = text.trimEnd { it in CLOSERS }
 
-    /** Ends with '.', '!', '?' or '…', closing quotes and brackets allowed after it. */
-    fun endsSentence(text: String): Boolean = stripClosers(text).lastOrNull()?.let { it in SENTENCE_END } == true
-
     /** The text before a final single '.' (closers stripped), or null when it does not end that way. */
     fun periodStem(text: String): String? {
         val t = stripClosers(text)
@@ -150,7 +146,7 @@ internal object TextRules {
     /**
      * The title's sentence guard: the period of an ordinal ('3.', '15.'; not '2002.'), a single capital
      * initial, a dotted letter abbreviation ('z.B.', 'p.m.'; not '15.30.', '3.14.' or 'example.com.') or a
-     * listed one ('Dr.') does not end a sentence. ALLCAPS words do. Paragraphs use [endsSentence].
+     * listed one ('Dr.') does not end a sentence. ALLCAPS words do. Paragraphs use [TextWords.endsSentence].
      */
     fun sentenceAbbreviation(stem: String): Boolean {
         val letters = wordChars(stem)
@@ -161,7 +157,7 @@ internal object TextRules {
 
     /** A sentence end for the title: not an ordinal or abbreviation period ([sentenceAbbreviation]). */
     fun sentenceEnd(text: String): Boolean {
-        if (!endsSentence(text)) return false
+        if (!TextWords.endsSentence(text)) return false
         val stem = periodStem(text) ?: return true
         return !sentenceAbbreviation(stem)
     }

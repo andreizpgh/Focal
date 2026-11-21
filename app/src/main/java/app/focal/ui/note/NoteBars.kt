@@ -40,6 +40,7 @@ import app.focal.ui.components.FadeThrough
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.FocalIconButton
 import app.focal.ui.components.FocalMenu
+import app.focal.ui.components.FocalTextButton
 import app.focal.ui.components.FocalMenuDivider
 import app.focal.ui.components.FocalMenuItem
 import app.focal.ui.components.focusRing
@@ -108,6 +109,8 @@ internal fun NoteTopBar(
     onBack: () -> Unit,
     chrome: () -> Float,
     modifier: Modifier = Modifier,
+    reviewCount: Int = 0,
+    onReview: () -> Unit = {},
 ) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
@@ -127,6 +130,7 @@ internal fun NoteTopBar(
                 .graphicsLayer { alpha = titleAlpha.value }
                 .clearAndSetSemantics { },
         )
+        if (reviewCount > 0) FocalTextButton(stringResource(R.string.review_count, reviewCount), onReview)
         Box {
             FocalIconButton(FocalIcon.More, stringResource(R.string.cd_more), { onMenu(true) })
             FocalMenu(expanded = menuOpen, onDismiss = { onMenu(false) }) {

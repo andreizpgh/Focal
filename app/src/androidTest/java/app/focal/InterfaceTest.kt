@@ -9,6 +9,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -29,6 +30,8 @@ import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
@@ -43,6 +46,7 @@ import androidx.window.layout.FoldingFeature
 import androidx.window.testing.layout.FoldingFeature
 import androidx.window.testing.layout.TestWindowLayoutInfo
 import androidx.window.testing.layout.WindowLayoutInfoPublisherRule
+import app.focal.core.EndKind
 import app.focal.data.NoteState
 import app.focal.data.NoteStore
 import app.focal.data.StoredWindow
@@ -163,6 +167,13 @@ class InterfaceTest {
         await("the note page", hasText(firstParagraph))
     }
 
+    private fun openEditor() {
+        compose.onNodeWithContentDescription("More options").performClick()
+        val edit = hasText("Edit") and hasClickAction()
+        await("Edit in the note menu", edit)
+        compose.onNode(edit).performClick()
+    }
+
     @Test fun aNoteOpensFromTheLibraryAndBackReturns() {
         val title = "Library fixture $tag"
         val words = listOf("A synthetic first paragraph for the library.", "A synthetic second paragraph.")
@@ -173,6 +184,24 @@ class InterfaceTest {
         compose.onNodeWithText(words[1]).assertIsDisplayed()
         back()
         await("the library again", inLibrary(title))
+    }
+
+    @Test fun openingAWrappedTitleShowsItsFullHeading() {
+        assumeTrue("Phone portrait fixture", app.resources.configuration.screenWidthDp in 300..480)
+        val title = "A morning walk past the old harbour and observatory"
+        val body = "Meet at the library before the walk."
+        note(title, listOf(body))
+        launch()
+        openFromLibrary(title, body)
+        val heading = compose.onNode(hasText(title) and isHeading())
+        heading.assertIsDisplayed()
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        heading.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single { it.layoutInput.text.text == title }
+        assertTrue("The fixture must wrap on a phone", layout.lineCount > 1)
+        assertFalse("The expanded heading must show every word", layout.isLineEllipsized(layout.lineCount - 1))
+        back()
+        await("the original library entry", inLibrary(title))
     }
 
     @Test fun copyPutsTheNoteOnTheClipboardAndConfirms() {
@@ -354,8 +383,7 @@ class InterfaceTest {
         val id = note(title, words)
         launch()
         openFromLibrary(title, words[0])
-        // A tap on the text opens Edit there (spec 5.7): there is no Edit button.
-        compose.onNodeWithText(words[0]).performClick()
+        openEditor()
         await("the edit bar", hasContentDescription("Done"))
         await("the paragraph's field", hasSetTextAction())
         compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
@@ -386,24 +414,100 @@ class InterfaceTest {
         assertEquals(REVISED, stored())
     }
 
-    @Test fun editSavesTheParagraphThroughTheStore() {
-        val title = "Edit fixture $tag"
-        val words = listOf("The paragraph before an edit.", "A paragraph that stays.")
+    @Test fun aWordCanBeCorrectedAndUndoneWhileReading() {
+        val title = "Review fixture $tag"
+        val words = listOf("Harbur lights.", "The Harbour is quiet.")
         val id = note(title, words)
         launch()
         openFromLibrary(title, words[0])
-        // A tap on a word opens Edit with that word selected, so the next key replaces it (spec 5.7).
-        compose.onNodeWithText(words[0]).performClick()
-        await("the edit bar", hasContentDescription("Done"))
-        await("the paragraph's field", hasSetTextAction())
-        val selection = compose.onNode(hasSetTextAction()).fetchSemanticsNode().config[SemanticsProperties.TextSelectionRange]
-        assertFalse("The tapped word is selected", selection.collapsed)
-        compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
-        compose.onNode(hasContentDescription("Done")).performClick()
-        awaitGone("the field", hasSetTextAction())
-        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).firstOrNull()?.text == REVISED }
-        assertEquals(listOf(REVISED, words[1]), app.store.paragraphs(id).filterNot { it.hidden }.map { it.text })
-        await("the saved paragraph", hasText(REVISED))
+        compose.onNodeWithText(words[0]).performTouchInput { click(Offset(8f, 15f)) }
+        await("word review", hasText("Review wording"))
+        compose.onNode(hasText("Harbour") and hasClickAction()).performClick()
+        compose.onNode(hasText("Apply") and hasClickAction()).performClick()
+        await("the saved text", hasText("Harbour lights."))
+        assertEquals("Harbour lights.\n\nThe Harbour is quiet.", app.store.transcript(id))
+        compose.onNode(hasText("Undo") and hasClickAction()).performClick()
+        await("the restored wording", hasText(words[0]))
+        assertEquals(words, app.store.paragraphs(id).map { it.text })
+    }
+
+    @Test fun repeatCorrectionUsesThisNotesSavedEditAndCanBeUndone() {
+        val title = "Repeated wording $tag"
+        val text = "Вчера ждали семен дома. Сегодня семен встретили."
+        val store = app.store
+        val id = store.create().also { created += it }
+        Synthetic.savedAudio(store, id, 6_000)
+        val tokens = Synthetic.speech(text).map { if (it.text.trim() == "семен") it.copy(logProb = -1.2) else it }
+        Synthetic.commit(store, id, Synthetic.plan(0, 0, 6_000, EndKind.FINAL), tokens)
+        assertTrue(store.markReady(id))
+        store.rename(id, title)
+        launch()
+        openFromLibrary(title, text)
+        compose.onNodeWithText("Review (2)").performClick()
+        compose.onNode(hasSetTextAction()).performTextReplacement("Семёна")
+        compose.onNodeWithText("Apply").performClick()
+        val firstEdit = text.replaceFirst("семен", "Семёна")
+        await("the first correction", hasText(firstEdit))
+        compose.onNodeWithText("Review (1)").performClick()
+        await("the correction source", hasText("From your edits in this note"))
+        compose.onNode(hasText("Семёна") and hasClickAction()).performClick()
+        assertEquals(firstEdit, store.transcript(id))
+        compose.onNodeWithText("Apply").performClick()
+        await("both saved corrections", hasText(firstEdit.replace("семен", "Семёна")))
+        compose.onNode(hasText("Undo") and hasClickAction()).performClick()
+        await("only the earlier correction", hasText(firstEdit))
+        assertEquals(tokens, store.windowTokens(store.windows(id).single().id))
+    }
+
+    @Test fun joinAndUndoFromTheFirstWordOfAGreekParagraph() {
+        val title = "Greek review $tag"
+        val paragraphs = listOf("Είμαστε εδώ.", "Πάμε;")
+        val id = note(title, paragraphs)
+        launch()
+        openFromLibrary(title, paragraphs[0])
+        compose.onNodeWithText(paragraphs[1]).performTouchInput { click(Offset(8f, 15f)) }
+        await("Greek question mark", hasText(";") and hasClickAction())
+        compose.onNodeWithText("Join previous paragraph").performClick()
+        await("joined reading text", hasText("Είμαστε εδώ. Πάμε;"))
+        assertEquals("Είμαστε εδώ. Πάμε;", app.store.transcript(id))
+        compose.onNode(hasText("Undo") and hasClickAction()).performClick()
+        await("restored reading text", hasText(paragraphs[1]))
+        assertEquals(paragraphs, app.store.paragraphs(id).map { it.text })
+    }
+
+    @Test fun reviewGroupsUnclearWordsAndCanSplitTheNextPhraseWhileReading() {
+        val title = "Marked phrase fixture $tag"
+        val text = "Первая мысль. Проект готов сегодня."
+        val store = app.store
+        val id = store.create().also { created += it }
+        Synthetic.savedAudio(store, id, 6_000)
+        val tokens = Synthetic.speech(text).mapIndexed { i, token ->
+            if (i == 0 || i == 1 || i == 3) token.copy(logProb = -1.2) else token
+        }
+        Synthetic.commit(store, id, Synthetic.plan(0, 0, 6_000, EndKind.FINAL), tokens)
+        assertTrue(store.markReady(id))
+        store.rename(id, title)
+        launch()
+        openFromLibrary(title, text)
+        compose.onNodeWithText("Review (2)").performClick()
+        await("the marked phrase", hasSetTextAction() and hasText("Первая мысль."))
+        compose.onNodeWithText("Next unclear").performClick()
+        await("the next marked word", hasSetTextAction() and hasText("готов"))
+        compose.onNodeWithText("Start paragraph here").performClick()
+        await("the split", hasText("готов сегодня."))
+        assertEquals("Первая мысль. Проект\n\nготов сегодня.", store.transcript(id))
+        compose.onNode(hasText("Undo") and hasClickAction()).performClick()
+        await("the original paragraph", hasText(text))
+        val body = compose.onNodeWithText(text)
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        body.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val middleWord = layouts.single().getBoundingBox(text.indexOf("Проект") + 2).center
+        body.performTouchInput { click(middleWord) }
+        await("the manually selected word", hasSetTextAction() and hasText("Проект"))
+        compose.onNodeWithText("Next unclear").performClick()
+        await("the flagged word after the selection", hasSetTextAction() and hasText("готов"))
+        compose.onNodeWithText("Done").performClick()
+        assertEquals(tokens, store.windowTokens(store.windows(id).single().id))
     }
 
     @Test fun searchOpensANoteAtItsParagraph() {
@@ -543,7 +647,7 @@ class InterfaceTest {
         val id = note(title, words)
         launch()
         openFromLibrary(title, words[0])
-        compose.onNodeWithText(words[0]).performClick()
+        openEditor()
         await("the edit bar", hasContentDescription("Done"))
         await("the paragraph's field", hasSetTextAction())
         compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)
@@ -601,8 +705,7 @@ class InterfaceTest {
         turn(landscape = false)
         openFromLibrary(title, words[0])
         // Edit: one saved step (Undo on), then a draft typed just before the turn.
-        // A tap on the text opens Edit there (spec 5.7): there is no Edit button.
-        compose.onNodeWithText(words[0]).performClick()
+        openEditor()
         await("the edit bar", hasContentDescription("Done"))
         await("the paragraph's field", hasSetTextAction())
         compose.onNode(hasSetTextAction()).performTextReplacement(REVISED)

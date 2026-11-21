@@ -176,9 +176,11 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
             audioSize = { Formatter.formatShortFileSize(context, library.audioBytes(id)) },
             find = note::find,
             replaceAll = note::replaceAll,
+            undoMerge = note::undoMerge,
             undoReplace = note::undoReplace,
             writes = note.writes,
             session = note.editSession,
+            overlapReadings = note::overlapReadings,
         )
     }
     val settings by (context.applicationContext as FocalApplication).preferences.settings.collectAsStateWithLifecycle()

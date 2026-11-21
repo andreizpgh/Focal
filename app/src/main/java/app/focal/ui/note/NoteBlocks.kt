@@ -139,9 +139,7 @@ internal fun NoteHead(
     // T7's develop, counted from Finish: the title from +120 and the meta from +200 (`fade`).
     val titleShown = { if (entrance) FocalClock.fade(reveal.develop() - FocalTiming.SETTLE_TITLE_DELAY_MS) else 1f }
     val metaShown = { if (entrance) FocalClock.fade(reveal.develop() - FocalTiming.SETTLE_META_DELAY_MS) else 1f }
-    val flight = rememberPageTitle(
-        noteId, head.title, head.titleFallback, if (large) NoteBlockMetrics.TITLE_LINES_LARGE else NoteBlockMetrics.TITLE_LINES,
-    )
+    val flight = rememberPageTitle(noteId, head.titleFallback)
     val lines = remember { HeadLines() }
     SideEffect { lines.keep(head.notices.size) }
     Column(modifier.fillMaxWidth().padding(horizontal = FocalLayout.gutter).padding(bottom = NoteBlockMetrics.bodyGap - ParagraphMetrics.gap)) {
@@ -172,6 +170,7 @@ internal fun NoteHead(
             BasicText(
                 head.title,
                 style = TitleStyle,
+                onTextLayout = { flight.layout = it },
                 color = { lerp(base, colors.recede, receded.value) },
                 maxLines = if (large) NoteBlockMetrics.TITLE_LINES_LARGE else NoteBlockMetrics.TITLE_LINES,
                 overflow = TextOverflow.Ellipsis,

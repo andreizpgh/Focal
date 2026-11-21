@@ -11,6 +11,79 @@ class FormattingTest {
     }
 
     @Test
+    fun greekQuestionsAndRegionalQuotesCloseSentencesWithoutSplittingLatinSemicolons() {
+        for (ending in listOf("έτοιμοι;", "έτοιμοι;", "έτοιμοι;»")) {
+            assertTrue(TextWords.endsSentence(ending))
+            val input = words("Είμαστε", ending, "Συνεχίζουμε.")
+            assertEquals("Είμαστε " + ending, Title.of(input.map { it.text }, minChars = 1))
+            assertEquals(listOf(0..1, 2..2), Paragraphs.split(input, FormatConfig(longPauseMs = 500)))
+        }
+        assertTrue(TextWords.endsSentence("fertig!“"))
+        assertEquals(false, TextWords.endsSentence("ready;"))
+        assertEquals(false, TextWords.endsSentence("κόσμος·"))
+        assertEquals(1..3, TextWords.lexicalRange("¿si\u0301?", 0, 5))
+        assertNull(TextWords.lexicalRange("¿?", 0, 2))
+    }
+
+    @Test
+    fun aLongCapitalizedRestartSuppliesAPeriodAcrossWindowsAndSurvivesRecovery() {
+        val first = DecodedWindow(0, null, null, listOf(AsrToken(" Вернусь", 0.0, 0.3), AsrToken(" завтра", 0.4, 0.3)))
+        val second = DecodedWindow(4_000, null, null, listOf(AsrToken(" Нужно", 0.0, 0.3), AsrToken(" успеть", 0.4, 0.3)))
+        val batch = Formatter.format(listOf(first, second))
+        assertEquals("Вернусь завтра.\n\nНужно успеть", batch.copyText)
+        assertEquals("завтра", batch.rawWords[1].text)
+        val stored = TranscriptAssembler().append(first, 0).paragraphs.last()
+        val recovered = TranscriptAssembler(openParagraph = stored).append(second, 1)
+        assertEquals(batch.words, recovered.paragraphs.flatten())
+        assertEquals(batch.paragraphs.size, recovered.paragraphs.size)
+        val short = Formatter.format(listOf(first, second.copy(audioStartMs = 1_000)))
+        assertEquals("завтра", short.words[1].text)
+    }
+
+    @Test
+    fun russianClauseCuesAddOnlyTheMissingCommaAndKeepTheRawAudioWords() {
+        fun window(at: Long, text: String) = DecodedWindow(at, null, null, text.split(' ').mapIndexed { i, word ->
+            AsrToken(" $word", 0.3 * i, 0.2)
+        })
+        val first = window(0, "Я думаю")
+        val second = window(600, "что важно чтобы ответ пришёл вовремя.")
+        val result = Formatter.format(listOf(first, second))
+        assertEquals("Я думаю, что важно, чтобы ответ пришёл вовремя.", result.copyText)
+        assertEquals("думаю", result.rawWords[1].text)
+        val open = TranscriptAssembler().append(first, 0).paragraphs.last()
+        assertEquals(result.words, TranscriptAssembler(openParagraph = open).append(second, 1).paragraphs.flatten())
+        val other = "Я думаю, что-то изменилось."
+        assertEquals(other, Formatter.format(listOf(window(0, other))).copyText)
+        assertEquals("Еду в Москву", Formatter.format(listOf(window(0, "Еду в"), window(5_000, "Москву"))).copyText)
+    }
+
+    @Test
+    fun aLongPauseCanBreakLowercaseDictationWithoutInsertingAPeriod() {
+        val count = SpeechTuning.UNPUNCTUATED_MIN_WORDS
+        val words = List(count + 1) { i ->
+            val at = i * 350L + if (i == count) 4_000 else 0
+            Word("потом", at, at + 250, 1.0, false, 0)
+        }
+        assertEquals(listOf(0 until count, count..count), Paragraphs.split(words))
+    }
+
+    @Test
+    fun onlyAnUnknownPieceMarksThePrecedingWordAndPunctuationKeepsLexicalDoubt() {
+        fun build(marker: String) = WordBuilder.build(DecodedWindow(0, null, null, listOf(
+            AsrToken(" ответ", 0.0, 0.3, -0.1), AsrToken(marker, 0.32, 0.04, -2.0),
+        )), 0).single()
+        assertTrue(!Doubt.isDoubtful(build("<|endoftext|>")))
+        val unknown = build("<unk>")
+        assertTrue(Doubt.isDoubtful(unknown))
+        assertTrue(Alignment.align(listOf(unknown), "ответ?").single().doubtful)
+        assertTrue(!Alignment.align(listOf(unknown), "отчёт?").single().doubtful)
+        val greek = unknown.copy(text = "Πού")
+        assertTrue(Alignment.align(listOf(greek), "«Πού;»").single().doubtful)
+        val spanish = unknown.copy(text = "Quién")
+        assertTrue(Alignment.align(listOf(spanish), "¿Quién?").single().doubtful)
+    }
+
+    @Test
     fun alignmentKeepsTimesOfUnchangedWordsOnly() {
         val source = words("We", "met", "Pablo", "in", "Madrid.")
         val aligned = Alignment.align(source, "We  met paolo in sunny Madrid!")
@@ -178,7 +251,7 @@ class FormattingTest {
         val batch = Formatter.format(windows, config)
         assertEquals(35_000, batch.words.size)
         assertTrue(batch.words.last().endMs > 13_990_000)
-        assertTrue(batch.words.none { TextRules.endsSentence(it.text) })
+        assertTrue(batch.words.none { TextWords.endsSentence(it.text) })
         val sizes = batch.paragraphs.map { it.count() }
         assertTrue(sizes.all { it <= config.capWords }, "largest paragraph ${sizes.max()}")
         assertTrue(sizes.dropLast(1).all { it >= config.capWords - config.capLookbackWords }, "smallest closed ${sizes.dropLast(1).min()}")

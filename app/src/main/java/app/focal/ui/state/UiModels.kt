@@ -295,6 +295,7 @@ data class ParagraphUi(
     val open: Boolean,
     val originKnown: Boolean = true,
     val hasOriginal: Boolean = false,
+    val reviewedWording: List<ReviewWording> = emptyList(),
 ) {
     /** Where a tap at [charOffset] plays from: the word's start (null: play from the paragraph start). */
     fun seekMs(charOffset: Int): Long? {
@@ -313,11 +314,7 @@ data class ParagraphUi(
      */
     fun wordAt(charOffset: Int): IntRange? {
         val word = words.firstOrNull { charOffset >= it.start && charOffset <= it.end } ?: return null
-        var start = word.start.coerceIn(0, text.length)
-        var end = word.end.coerceIn(start, text.length)
-        while (start < end && !text[start].isLetterOrDigit()) start++
-        while (end > start && !text[end - 1].isLetterOrDigit()) end--
-        return if (start < end) start until end else null
+        return TextWords.lexicalRange(text, word.start.coerceIn(0, text.length), word.end.coerceIn(0, text.length))
     }
 
     /**
@@ -336,6 +333,7 @@ data class ParagraphUi(
         /** Words with times and doubt flags via [Alignment] (identity for unedited text). Off the main thread. */
         fun of(paragraph: Paragraph): ParagraphUi {
             val source = paragraph.sourceWords()
+            var reviewed = emptyList<ReviewWording>()
             val words = if (source == null) {
                 TextWords.ranges(paragraph.text).map { WordUi(it.first, it.last + 1, null, null, false) }
             } else if (!paragraph.edited && source.joinToString(" ") { it.text } == paragraph.text) {
@@ -346,7 +344,9 @@ data class ParagraphUi(
                     WordUi(start, start + word.text.length, word.startMs, word.endMs, Doubt.isDoubtful(word))
                 }
             } else {
-                Alignment.align(source, paragraph.text).map { WordUi(it.start, it.end, it.startMs, it.endMs, it.doubtful) }
+                val aligned = Alignment.align(source, paragraph.text)
+                if (paragraph.edited && paragraph.canRestore && !paragraph.open) reviewed = reviewWording(source, aligned)
+                aligned.map { WordUi(it.start, it.end, it.startMs, it.endMs, it.doubtful) }
             }
             return ParagraphUi(
                 id = paragraph.id, revision = paragraph.revision, text = paragraph.text,
@@ -354,6 +354,7 @@ data class ParagraphUi(
                 exactTimes = words.isNotEmpty() && words.all { it.startMs != null },
                 edited = paragraph.edited, canRestore = paragraph.canRestore, open = paragraph.open,
                 originKnown = paragraph.sourceText != null, hasOriginal = !paragraph.sourceText.isNullOrEmpty(),
+                reviewedWording = reviewed,
             )
         }
     }

@@ -32,7 +32,10 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -182,9 +185,7 @@ private val ShortCaretMargin = FocalGrid.x8
  * The note page (spec 5.4 to 5.9): a document. Its title, meta and notices, then the paragraphs in a lazy list, with
  * gap rows where a part could not be transcribed and the writing head while the tail transcribes. With
  * [paragraphTimes], a note that has audio carries a small time over each paragraph after the first: where it starts in
- * the recording; a tap plays from there. The text is edited
- * where it is read: a tap on a word opens Edit with that word selected, so the next key replaces it, and a long press
- * sweeps a phrase the same way; the paragraphs are fields in place while Edit lasts. ▶ in the dock plays the note (the
+ * the recording. A word tap opens review and a long press selects a phrase. The menu opens the full editor. ▶ in the dock plays the note (the
  * playing paragraph stays in ink while the rest recede and the lens follows the word), and Edit's own ▶ plays just the
  * words at the caret. ⋮ opens Find and replace, Rename, Share, Remove audio and Delete. The dock is Play | Copy (or the
  * progress pill); the player strip, the find rows and the feedback pill share the bottom column.
@@ -806,24 +807,31 @@ fun NotePage(
         }
     }
 
-    // Restore original outside Edit (TalkBack's paragraph action): "Original restored · Undo".
+    // All reading-mode edits use the saved revision for Undo. A later change cannot be overwritten.
+    fun offerUndo(before: ParagraphUi, saved: EditOutcome.Saved, label: String) {
+        session.applySaved(saved.paragraphs)
+        val after = saved.paragraphs.firstOrNull { it.id == before.id } ?: return
+        scope.launch {
+            if (bottom.feedback.show(label, FeedbackAction(undoLabel, FocalIcon.Undo)) != FeedbackResult.ActionPerformed) return@launch
+            write {
+                if (page.editing && !session.save()) {
+                    scope.launch { bottom.feedback.show(notSaved) }
+                    return@write
+                }
+                val since = mark()
+                val outcome = edits.edit(after.id, after.revision, before.text)
+                if (outcome is EditOutcome.Saved) {
+                    session.applySaved(outcome.paragraphs)
+                    if (page.editing && untouched(since)) reseedField()
+                } else report(outcome, words.tooLate)
+            }
+        }
+    }
     val restoredLabel = stringResource(R.string.feedback_restored)
     val restoreOutside: (ParagraphUi) -> Unit = { paragraph ->
         write {
             val outcome = edits.restore(paragraph.id, paragraph.revision)
-            if (outcome !is EditOutcome.Saved) {
-                report(outcome, words.restore)
-                return@write
-            }
-            session.applySaved(outcome.paragraphs)
-            val restored = outcome.paragraphs.firstOrNull { it.id == paragraph.id } ?: return@write
-            scope.launch {
-                if (bottom.feedback.show(restoredLabel, FeedbackAction(undoLabel, FocalIcon.Undo)) != FeedbackResult.ActionPerformed) return@launch
-                write {
-                    val undone = edits.edit(restored.id, restored.revision, paragraph.text)
-                    if (undone is EditOutcome.Saved) session.applySaved(undone.paragraphs) else report(undone, words.tooLate)
-                }
-            }
+            if (outcome is EditOutcome.Saved) offerUndo(paragraph, outcome, restoredLabel) else report(outcome, words.restore)
         }
     }
 
@@ -834,24 +842,45 @@ fun NotePage(
         playback.playWord(paragraph, offset)
     }
 
-    // Taps (spec 5.5, 5.7). A tap on a word selects it, so typing replaces it; on bare paper (past a line's last word)
-    // it puts the caret there, to write on. Reading, that opens Edit; in Edit it is the same in every paragraph, the
-    // one with the caret included (the field does it there). A note that cannot be edited yet (it is still being
-    // transcribed) plays from the word instead.
     val canPlay = note.canPlay && note.audioPresent
     val canEdit = note.editable
+    var review by rememberSaveable(note.noteId) { mutableStateOf<ReviewSpan?>(null) }
+    var reviewIndex by rememberSaveable(note.noteId) { mutableIntStateOf(0) }
+    var savingReview by remember { mutableStateOf(false) }
+    var reviewError by remember(review) { mutableStateOf<String?>(null) }
+    val unclear = remember(paragraphs, canEdit, page.editing) {
+        if (canEdit && !page.editing) paragraphs.flatMap { it.unclearSpans() } else emptyList()
+    }
+    fun openReview(span: ReviewSpan) {
+        val index = unclear.indexOf(span)
+        if (index >= 0) reviewIndex = index
+        playback.stop()
+        page.playerDismissed = true
+        page.rangeEndMs = null
+        page.listening = false
+        page.menu = false
+        review = span
+    }
+    fun closeReview() {
+        if (page.listening) playback.stop()
+        page.rangeEndMs = null
+        page.listening = false
+        review = null
+    }
     val onTap: (ParagraphUi, Int, IntRange?) -> Unit = { paragraph, offset, word ->
         when {
             find.open || page.renaming -> Unit
             page.editing -> focusField(wordOrCaret(paragraph.id, offset, word), refresh = false, commit = true)
-            canEdit -> enterEdit(wordOrCaret(paragraph.id, offset, word))
-            canPlay -> playFromWord(paragraph, offset)
+            canEdit && word != null -> openReview(
+                unclear.firstOrNull { it.paragraphId == paragraph.id && word.first in it.start until it.end }
+                    ?: paragraph.reviewSpan(word),
+            )
+            !canEdit && canPlay -> playFromWord(paragraph, offset)
         }
     }
-    // A long press swept these chars: they are selected in the paragraph's field, in Edit (entered if need be).
     val onSweep: ((ParagraphUi, IntRange) -> Unit)? = if (!canEdit || find.open || page.renaming) null else { paragraph, range ->
-        val at = CaretAt(paragraph.id, range.first, range.last + 1)
-        if (page.editing) focusField(at, refresh = false, commit = true) else enterEdit(at)
+        if (page.editing) focusField(CaretAt(paragraph.id, range.first, range.last + 1), refresh = false, commit = true)
+        else openReview(paragraph.reviewSpan(range))
     }
     // Edit's ▶ (spec 5.7): plays just the audio of the selected words, or of the words around the caret, and stops. It
     // is how a doubtful word is checked against what was said without leaving the place being corrected. The strip and
@@ -1038,7 +1067,7 @@ fun NotePage(
     // The page's shortcuts (spec 8.5): each where it applies; false leaves the key to whoever else wants it.
     val reading = (mode == NoteMode.Reading || mode == NoteMode.Playing) && !page.renaming
     val onKey: (PageKey) -> Boolean = { key ->
-        when (key) {
+        if (review != null) false else when (key) {
             PageKey.Undo -> page.editing.also { if (it) undo() }
             PageKey.Redo -> page.editing.also { if (it) redo() }
             PageKey.Find -> (!find.open).also { if (it) openFind() }
@@ -1059,6 +1088,97 @@ fun NotePage(
     PageKeysEffect { key ->
         val covered = shell.live.visible || shell.twoPane && shell.settings.isOpen
         shell.current == destination && !covered && onKey(key)
+    }
+
+    val changedMessage = stringResource(R.string.review_stale)
+    val appliedLabel = stringResource(R.string.review_saved)
+    val splitLabel = stringResource(R.string.review_split_saved)
+    val joinedLabel = stringResource(R.string.review_join_saved)
+    fun saveReview(change: suspend () -> EditOutcome, accepted: (EditOutcome.Saved) -> Unit) {
+        if (savingReview) return
+        savingReview = true
+        write {
+            try {
+                when (val result = change()) {
+                    is EditOutcome.Saved -> { closeReview(); accepted(result) }
+                    is EditOutcome.Failed -> reviewError = result.message
+                    EditOutcome.TooLarge -> reviewError = words.tooLarge
+                    else -> { closeReview(); report(result, changedMessage) }
+                }
+            } finally { savingReview = false }
+        }
+    }
+    fun joinInReview(previous: ParagraphUi, paragraph: ParagraphUi) {
+        saveReview({ edits.merge(previous.id, previous.revision, paragraph.id, paragraph.revision) }) { saved ->
+            val receipt = saved.mergeUndo ?: return@saveReview
+            scope.launch {
+                if (bottom.feedback.show(joinedLabel, FeedbackAction(undoLabel, FocalIcon.Undo)) == FeedbackResult.ActionPerformed) {
+                    write { report(if (page.editing) EditOutcome.Stale else actions.undoMerge(receipt), words.tooLate) }
+                }
+            }
+        }
+    }
+    fun splitInReview(paragraph: ParagraphUi, at: Int) {
+        saveReview({ edits.split(paragraph.id, paragraph.revision, at) }) { saved ->
+            val origin = saved.origin ?: return@saveReview
+            val kept = saved.paragraphs.first { it.id == paragraph.id }
+            val added = saved.paragraphs.first { it.id != paragraph.id }
+            scope.launch {
+                if (bottom.feedback.show(splitLabel, FeedbackAction(undoLabel, FocalIcon.Undo)) != FeedbackResult.ActionPerformed) return@launch
+                write {
+                    // An open editor owns the paragraph order and drafts until Done.
+                    val result = if (page.editing) EditOutcome.Stale
+                        else edits.unsplit(kept.id, kept.revision, added.id, added.revision, at, origin)
+                    report(result, words.tooLate)
+                }
+            }
+        }
+    }
+    review?.let { span ->
+        val paragraph = paragraphs.firstOrNull { it.id == span.paragraphId && it.revision == span.revision }
+        if (note.loaded && (!canEdit || paragraph == null) && !savingReview) {
+            LaunchedEffect(span) {
+                closeReview()
+                bottom.feedback.show(changedMessage)
+            }
+        } else if (paragraph != null) key(span) {
+            val next = unclear.firstOrNull { candidate ->
+                if (candidate.paragraphId == span.paragraphId) candidate.start >= span.end
+                else indexOf.getValue(candidate.paragraphId) > indexOf.getValue(span.paragraphId)
+            }
+            val boundary = paragraph.words.firstOrNull { span.start in it.start until it.end }?.start
+            LaunchedEffect(span) {
+                val index = indexOf[span.paragraphId] ?: return@LaunchedEffect
+                if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
+            }
+            val previous = if (boundary == paragraph.words.firstOrNull()?.start && boundary != null) {
+                paragraphs.getOrNull(paragraphs.indexOfFirst { it.id == paragraph.id } - 1)?.takeIf { before ->
+                    note.gaps.none { it.afterParagraphId == before.id } &&
+                        (before.originKnown || !paragraph.hasOriginal) &&
+                        (paragraph.originKnown || !before.hasOriginal)
+                }
+            } else null
+            val nearby = remember(span, paragraphs) { nearbySpellings(paragraphs, span) }
+            val earlierWording = remember(span, paragraphs) { previousWording(paragraphs, span.text(paragraph)) }
+            WordReview(paragraph, span, earlierWording, nearby, actions.overlapReadings, listening,
+                listen = if (!canPlay) null else { {
+                    if (listening) playback.pause() else {
+                        val clip = paragraph.listenRange(span.start, span.end, FocalTiming.LISTEN_SELECTION_MS)
+                        val end = minOf(clip.last + 1, note.durationMs)
+                        if (end > clip.first) {
+                            page.listening = true
+                            page.rangeEndMs = end
+                            playback.playRange(clip.first, end)
+                        }
+                    }
+                } },
+                next = next?.let { { openReview(it) } },
+                split = boundary?.takeIf { it > 0 }?.let { at -> { splitInReview(paragraph, at) } },
+                join = previous?.let { { joinInReview(it, paragraph) } },
+                saving = savingReview, error = reviewError, dismiss = ::closeReview,
+                save = { text -> saveReview({ edits.edit(paragraph.id, span.revision, text) }) { offerUndo(paragraph, it, appliedLabel) } },
+            )
+        }
     }
 
     Box(
@@ -1093,6 +1213,8 @@ fun NotePage(
         if (topBarShown) {
             NoteTopBar(
                 title = head.title, titleMuted = head.titleFallback, collapsed = collapsed && mode != NoteMode.Editing,
+                reviewCount = if (find.open || page.renaming) 0 else unclear.size,
+                onReview = { (unclear.getOrNull(reviewIndex) ?: unclear.firstOrNull())?.let(::openReview) },
                 menuItems = menuItems, menuOpen = page.menu, onMenu = { page.menu = it }, menu = menuActions,
                 onBack = actions.back,
                 chrome = { chrome() * (1 - editT.value) },

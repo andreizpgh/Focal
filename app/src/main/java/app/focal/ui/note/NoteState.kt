@@ -13,6 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.TextRange
+import app.focal.data.MergeUndo
 import app.focal.data.TextMatch
 import app.focal.ui.state.EditOutcome
 import app.focal.ui.state.ParagraphUi
@@ -51,6 +52,7 @@ class NoteActions(
     val audioSize: suspend () -> String? = { null },
     val find: suspend (String) -> List<TextMatch> = { emptyList() },
     val replaceAll: suspend (query: String, replacement: String) -> EditOutcome = { _, _ -> EditOutcome.NotEditable },
+    val undoMerge: suspend (MergeUndo) -> EditOutcome = { EditOutcome.Stale },
     val undoReplace: suspend () -> EditOutcome = { EditOutcome.Stale },
     /**
      * Edit's writes, in order, in the note's view model's scope: a sequence running when the page goes (an undo, then
@@ -69,6 +71,7 @@ class NoteActions(
      * which ends with it (the gallery, tests).
      */
     val session: EditSession? = null,
+    val overlapReadings: suspend (Long, Long) -> List<String> = { _, _ -> emptyList() },
 )
 
 /** The paragraph holding the caret in Edit: its field's text and focus. */

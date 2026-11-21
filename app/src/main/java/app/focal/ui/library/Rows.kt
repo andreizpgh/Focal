@@ -164,7 +164,7 @@ fun NoteRowItem(
     val titleText = noteTitle(row, dates)
     val menuActions = actions.menuActions(row)
     val pages = LocalShell.current.pages
-    val origin = rememberRowOrigin(row.id, RowMetrics.TITLE_LINES, titleText, titleMuted = row.title.isBlank(), dock = pageDock(row, capturing))
+    val origin = rememberRowOrigin(row.id, titleMuted = row.title.isBlank(), dock = pageDock(row, capturing))
     val prepare by rememberUpdatedState(actions.prepare)
     val platePath = remember { Path() }
     Box(
@@ -215,7 +215,7 @@ fun NoteRowItem(
                 title = title ?: {
                     // Balanced, so a title never ends on a lone word; hidden while a copy of it flies to the page.
                     Text(
-                        titleText, style = RowTitleStyle, color = if (row.title.isBlank()) colors.recede else colors.ink,
+                        titleText, style = RowTitleStyle, onTextLayout = { origin.layout = it }, color = if (row.title.isBlank()) colors.recede else colors.ink,
                         maxLines = RowMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .fillMaxWidth()

@@ -1,11 +1,16 @@
 package app.focal.ui.note
 
+import app.focal.core.Alignment
+import app.focal.core.Word
 import app.focal.data.TextMatch
 import app.focal.ui.library.DatePatterns
 import app.focal.ui.library.DayWords
 import app.focal.ui.library.LibraryDates
 import app.focal.ui.library.SpokenDateline
 import app.focal.ui.state.ParagraphUi
+import app.focal.ui.state.ReviewWording
+import app.focal.ui.state.WordUi
+import app.focal.ui.state.reviewWording
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -20,6 +25,39 @@ internal fun paragraph(id: Long, text: String, revision: Long = 1) = ParagraphUi
     id = id, revision = revision, text = text, startMs = id * 1000, endMs = id * 1000 + 999, words = emptyList(),
     exactTimes = false, edited = false, canRestore = false, open = false,
 )
+
+class ReadingChoicesTest {
+    @Test fun onlyAnAnchoredSavedReplacementOfDoubtfulWordingIsReused() {
+        val source = listOf("Lors", "du", "rodévou,", "hier.").mapIndexed { i, text ->
+            Word(text, i * 100L, i * 100L + 90, if (i == 2) 0.2 else 0.99, false, 0)
+        }
+        fun changes(text: String) = reviewWording(source, Alignment.align(source, text))
+        val saved = changes("Lors du rendez-vous, hier.")
+        assertEquals(listOf(ReviewWording("rodévou", "rendez-vous")), saved)
+        assertEquals(listOf(ReviewWording("rodévou", "grand rendez-vous")), changes("Lors du grand rendez-vous, hier."))
+        assertTrue(changes("Lors du rodévou, hier.").isEmpty())
+        assertTrue(changes("Lors du rodévou, hier soir.").isEmpty())
+        assertTrue(changes("Lors du hier.").isEmpty())
+        assertTrue(changes("Un autre texte.").isEmpty())
+        val p = paragraph(1, "").copy(reviewedWording = saved)
+        assertEquals("rendez-vous", previousWording(listOf(p), "RODE\u0301VOU"))
+        val other = paragraph(2, "").copy(reviewedWording = listOf(ReviewWording("rodévou", "rendez-vous manqué")))
+        assertNull(previousWording(listOf(p, other), "rodévou"))
+        assertNull(previousWording(emptyList(), "rodévou"))
+    }
+
+    @Test fun nearbySpellingsPreserveAccentsAndSkipEquivalentUnicodeSpellings() {
+        val words = listOf("cafe\u0301", "«cale\u0301»", "Calé", "Café")
+        val text = words.joinToString(" ")
+        var offset = 0
+        val ui = paragraph(1, text).copy(words = words.mapIndexed { index, word ->
+            val start = offset
+            offset += word.length + 1
+            WordUi(start, offset - 1, null, null, doubtful = index == 0)
+        })
+        assertEquals(listOf("cale\u0301"), nearbySpellings(listOf(ui), ui.unclearSpans().single()))
+    }
+}
 
 class FindStateTest {
     private fun match(paragraph: Long, start: Int) = TextMatch(paragraph, start, start + 6)

@@ -390,7 +390,8 @@ private fun doubtDots(layout: TextLayoutResult, paragraph: ParagraphUi, density:
     val out = ArrayList<Offset>()
     for (word in paragraph.words) {
         if (!word.doubtful || word.end > layout.layoutInput.text.length) continue
-        for (box in layout.boxes(word.start until word.end, 0f, 0f)) {
+        val range = TextWords.lexicalRange(paragraph.text, word.start, word.end) ?: continue
+        for (box in layout.boxes(range, 0f, 0f)) {
             val line = layout.getLineForVerticalPosition(box.center.y)
             val y = layout.getLineBaseline(line) + drop
             var x = box.left + radius
@@ -410,11 +411,7 @@ private fun doubtDots(layout: TextLayoutResult, paragraph: ParagraphUi, density:
  */
 internal fun wordIn(text: CharSequence, offset: Int): IntRange? {
     val word = TextWords.ranges(text).firstOrNull { offset >= it.first && offset <= it.last + 1 } ?: return null
-    var start = word.first
-    var end = word.last + 1
-    while (start < end && !text[start].isLetterOrDigit()) start++
-    while (end > start && !text[end - 1].isLetterOrDigit()) end--
-    return if (start < end) start until end else null
+    return TextWords.lexicalRange(text, word.first, word.last + 1)
 }
 
 /**

@@ -22,7 +22,8 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextInputSelection
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.text.TextRange
@@ -111,13 +112,12 @@ class LongNoteTest {
         }
         report("scroll")
 
-        // Edit a paragraph three hundred in: a tap on it enters Edit, the field takes the caret and the text changes.
+        // Edit a paragraph three hundred in: the menu opens Edit at the top visible paragraph, the field takes the caret and the text changes.
         list.performScrollToIndex(DEEP_ITEM)
         rule.waitForIdle()
-        // On the paragraph's own text: the list's centre may be the gap between two paragraphs, where a tap is no tap.
-        val paragraph = rule.onNodeWithText(store.note.paragraphs[DEEP_ITEM].text)
         record {
-            paragraph.performTouchInput { click(center) }
+            rule.onNode(hasContentDescription("More options")).performClick()
+            rule.onNodeWithText("Edit").performClick()
             rule.waitForIdle()
             val field = rule.onNode(hasSetTextAction() and SemanticsMatcher.expectValue(SemanticsProperties.Focused, true))
             field.performTextInputSelection(TextRange(0))

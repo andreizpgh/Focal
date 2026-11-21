@@ -67,16 +67,11 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.LineBreak
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.util.lerp
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigationevent.NavigationEvent
@@ -90,7 +85,6 @@ import app.focal.ui.design.FocalSettle
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
-import app.focal.ui.design.FocalType
 import app.focal.ui.design.TriggerClock
 import app.focal.ui.design.smoothstep
 import kotlin.math.abs
@@ -186,9 +180,7 @@ internal class Origin {
     var text: LayoutCoordinates? = null
     /** The note the stage holds (null while it is live); a row's own note. */
     var noteId: String? = null
-    var titleLines: Int = 2
-    /** The title as the origin sets it: the flight starts as this text before the page has laid out its own. */
-    var titleText: String = ""
+    var layout: TextLayoutResult? = null
     var titleMuted: Boolean = false
     /** The dock the note's page will show: the dock holds it from the tap, before the page has loaded its note. */
     var dock: DockState? = null
@@ -197,10 +189,8 @@ internal class Origin {
 /** The page title a flight lands on or leaves from (spec 6.1 T16, T16′: a shared element). */
 internal class PageTitle {
     var coordinates: LayoutCoordinates? = null
-    var noteId: String? = null
-    var text: String = ""
+    var layout: TextLayoutResult? = null
     var muted: Boolean = false
-    var lines: Int = 3
 }
 
 /**
@@ -281,9 +271,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     private var titleFrom = Float.NaN
 
     /**
-     * Opening (T16, T16′): the clock time at which the flying title came within [BODY_LANDING] of its line. The
-     * page's meta and text wait for it, then arrive whole on `fade`, so no part of a paragraph shows below a title
-     * that is still in flight.
+     * Opening (T16, T16′): when the stationary heading is ready, or the flying title comes within
+     * [BODY_LANDING] of its line. The page text starts fading in at that time.
      */
     private var bodyFrom = Float.NaN
 
@@ -679,12 +668,19 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         val titled = c.motion == PageMotion.Stage || c.motion == PageMotion.Row
         // Only between two titles that are both on screen. A page reopened where it was read has its title above the
         // window: the origin's title then leaves with the rest of the origin's content instead of flying to nowhere.
-        flightReady = resolved && titled && originTitle(c) != null && titleFlies(c)
+        val stationary = c.push && titleFrom.isNaN() && (!bodyFrom.isNaN() || elapsed > TITLE_WAIT_MS)
+        flightReady = resolved && titled && !stationary && originTitle(c) != null && titleFlies(c)
         if (c.dragged && pageFromP.isNaN() && c.document in readied) pageFromP = progress(c).coerceAtLeast(MIN_PAGE_FROM)
-        if (c.push && titleFrom.isNaN() && flightReady && titleFlies(c)) titleFrom = elapsed
-        if (c.push && bodyFrom.isNaN() && !titleFrom.isNaN()) {
-            val gap = titleGap(c)
-            if (gap == null || gap <= with(density) { BODY_LANDING.toPx() }) bodyFrom = elapsed
+        if (c.push && titleFrom.isNaN() && flightReady) titleFrom = elapsed
+        if (c.push && resolved && titled && bodyFrom.isNaN()) {
+            if (!titleFrom.isNaN()) {
+                val gap = titleGap(c)
+                if (gap == null || gap <= with(density) { BODY_LANDING.toPx() }) bodyFrom = elapsed
+            } else if (originOf(c)?.layout != null && titleOf(c)?.layout != null) {
+                // A stationary heading can arrive as soon as it is laid out. Waiting for a flight here
+                // leaves a blank frame between the fading card and a page whose title wraps.
+                bodyFrom = minOf(elapsed, TITLE_WAIT_MS)
+            }
         }
         return waited
     }
@@ -818,8 +814,15 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     }
 
     private fun titleFlies(c: PageChange): Boolean {
-        val origin = originOf(c)?.title?.takeIf { it.isAttached } ?: return false
-        val page = titleOf(c)?.coordinates?.takeIf { it.isAttached } ?: return false
+        val slot = originOf(c) ?: return false
+        val destination = titleOf(c) ?: return false
+        val origin = slot.title?.takeIf { it.isAttached } ?: return false
+        val page = destination.coordinates?.takeIf { it.isAttached } ?: return false
+        val sourceLayout = slot.layout ?: return false
+        val pageLayout = destination.layout ?: return false
+        // A wrapped or truncated heading rides its own surface. Both surfaces keep their final line breaks.
+        if (sourceLayout.lineCount != 1 || pageLayout.lineCount != 1 || sourceLayout.isLineEllipsized(0) ||
+            pageLayout.isLineEllipsized(0) || sourceLayout.layoutInput.text.text != pageLayout.layoutInput.text.text) return false
         if (origin.size.width <= 0 || page.size.width <= 0) return false
         // Some of it on screen: inside its frame, as far as the page's list shows it.
         val shown = inPage(c, page, clip = true) ?: return page.boundsInWindowOrEmpty().height > 0f
@@ -907,7 +910,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
 
     /**
      * The page's meta and text in a transform (spec 6.1): opening, they arrive whole on `fade` once the flying title is
-     * within [BODY_LANDING] of its line (T16, T16′; [bodyFrom]), or from +80 when no title flies; folding, they leave on
+     * within [BODY_LANDING] of its line (T16, T16′; [bodyFrom]), or once the stationary title is laid out. Folding, they leave on
      * `fadeFast`, and folding into a row they fade through with the returning rows ([rows]). Two typesettings are
      * never drawn over each other, and no paragraph shows in part below a title still in flight.
      */
@@ -925,14 +928,25 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
                     !bodyFrom.isNaN() -> bodyFrom
                     // The title flies: the body waits for it.
                     !titleFrom.isNaN() -> return from
-                    // No title has flown by now (the page's title was never laid out): the spec's +80.
+                    // A scrolled page can keep its heading outside the list's measured items.
                     elapsed > TITLE_WAIT_MS -> TITLE_WAIT_MS
                     else -> return from
                 }
-                from + (1 - from) * fade(elapsed - at)
+                val arrival = headingHandoff(c)?.let { smoothstep(HALF, 1f, it) } ?: fade(elapsed - at)
+                from + (1 - from) * arrival
             }
             else -> 1f
         }
+    }
+
+    /** Two fixed text layouts share one fade-through clock, so their glyphs never print over one another. */
+    private fun headingHandoff(c: PageChange): Float? =
+        if (c.push && !c.dragged && titleFrom.isNaN() && !bodyFrom.isNaN()) fadeFast(elapsed - bodyFrom) else null
+
+    private fun leavingOrigin(c: PageChange): Float {
+        val fade = 1 - fadeFast(elapsed)
+        val handoff = headingHandoff(c) ?: return fade
+        return fade * (1 - smoothstep(0f, HALF, handoff))
     }
 
     /**
@@ -941,7 +955,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      */
     private fun rows(c: PageChange): Float {
         val from = c.start.rows
-        if (c.push) return from * (1 - fadeFast(elapsed))
+        if (c.push) return from * leavingOrigin(c)
         // They wait for as much of the page's text as was there: none when Back turned an opening around before its
         // text arrived, so the library never blanks between a page that showed nothing and the rows.
         return from + (1 - from) * smoothstep(HALF * c.start.body, 1f, fadeFast(elapsed))
@@ -949,7 +963,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
 
     /** The origin's own content as the page opens out of it (T16′, T7b): the time, text and footer leave on `fadeFast`. */
     internal fun content(c: PageChange): Float = when {
-        !c.dragged -> c.start.content * (1 - fadeFast(elapsed))
+        !c.dragged -> c.start.content * leavingOrigin(c)
         // Pulled, it follows the travel: whole over the first fifth of the way, gone before the material.
         else -> smoothstep(PULLED_CONTENT_FROM, PULLED_CONTENT_TO, progress(c))
     }
@@ -1375,7 +1389,7 @@ private data class TransformFrame(
  * commit): one clip from the page's window (or its predictive preview) to the origin's bounds, radius 0 → 28 dp for the
  * stage; inside it, paper, the stage's material (it crossfades to paper over the first 60 % of the travel), the page
  * at its own layout, the origin's own content at the clip's top-left, and the title flying between its two places
- * and sizes, set at every frame in the interpolated style so both ends match their real typesetting.
+ * and sizes when both layouts show the same complete line. Other titles fade with their surfaces.
  *
  * Where the clip's edge runs through the page's text on paper, the text fades out toward it (the page's own bottom
  * fade, riding the edge) instead of being cut mid-glyph; where the flying title has still to pass, neither the page's
@@ -1398,7 +1412,6 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
     LaunchedEffect(change) { pages.play(change) }
     val colors = FocalTheme.colors
     val density = LocalDensity.current
-    val measurer = rememberTextMeasurer()
     val frame: () -> TransformFrame? = {
         // Read the progress first: every layout, layer and draw lambda below follows it, whatever returns early.
         pages.observe()
@@ -1406,20 +1419,11 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
         if (coordinates == null || !coordinates.isAttached || !pages.transforms(change) || !pages.active(change)) null
         else pages.frameIn(change, coordinates, density)
     }
-    // The title in flight this frame, laid out at its interpolated size (the measurer caches it for the second read).
-    val titleInFlight: DrawScope.(TransformFrame) -> FlightText? = { f ->
+    val titleInFlight: DrawScope.(TransformFrame) -> Flight? = { f ->
         val id = (change.document as? Destination.Note)?.id
         val coordinates = placement.coordinates
         if (id == null || coordinates == null || !pages.flying(id)) null
-        else pages.flight(change, f, coordinates, this, colors)?.let { title ->
-            // At its box's whole width, as both ends set it: the text aligns in its own direction inside the box.
-            val width = max(1, title.width.roundToInt())
-            val layout = measurer.measure(
-                title.text, title.style, overflow = TextOverflow.Ellipsis, maxLines = title.lines,
-                constraints = Constraints(minWidth = width, maxWidth = width), density = this, layoutDirection = layoutDirection,
-            )
-            FlightText(title, layout)
-        }
+        else pages.flight(change, f, coordinates, this, colors)
     }
     val stageLike = change.motion != PageMotion.Row
     // Paper over the library under the clip, once the clip's bottom has reached the library's bottom fade.
@@ -1530,7 +1534,10 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
             Modifier.fillMaxSize().drawBehind {
                 val f = frame() ?: return@drawBehind
                 val title = titleInFlight(f) ?: return@drawBehind
-                drawText(title.layout, color = title.flight.color, topLeft = title.flight.topLeft)
+                withTransform({
+                    translate(title.topLeft.x, title.topLeft.y)
+                    scale(title.scaleX, title.scaleY, pivot = Offset.Zero)
+                }) { drawText(title.layout, color = title.color, topLeft = Offset.Zero) }
             },
         )
     }
@@ -1563,9 +1570,6 @@ private fun DrawScope.clearEdges(f: TransformFrame, soft: ClipEdges) {
     }
 }
 
-/** The flying title laid out for this frame. */
-private class FlightText(val flight: Flight, val layout: TextLayoutResult)
-
 /**
  * A span of the page or the library the flying title has still to pass, from [top] to [bottom]: solid, with [feather]
  * of soft edge on the side the title has already left ([softBelow]: below it while it rises, above it while it sinks).
@@ -1589,8 +1593,8 @@ private class TitlePath(val top: Float, val bottom: Float, val feather: Float, v
  * Folding into a row: a day label just above the sinking title heads a row still under paper, so it stays under
  * paper too, and returns as the title leaves it ([LABEL_CLEARANCE] below its bottom), never sitting on the title.
  */
-private fun DrawScope.coverLabelsAbove(pages: PageTransitions, overlay: LayoutCoordinates, title: FlightText, paper: Color) {
-    val titleTop = title.flight.topLeft.y
+private fun DrawScope.coverLabelsAbove(pages: PageTransitions, overlay: LayoutCoordinates, title: Flight, paper: Color) {
+    val titleTop = title.topLeft.y
     val clearance = LABEL_CLEARANCE.toPx()
     val gone = ArrayList<String>()
     for ((key, label) in pages.labels) {
@@ -1619,14 +1623,14 @@ internal fun Modifier.foldLabel(pages: PageTransitions, key: String): Modifier =
  * above the text's capitals (at the stage the boxes are 8 dp apart). The whole text waits, never a slice of a line;
  * the time and the footer arrive on their own.
  */
-private fun DrawScope.stageTextHeld(stage: Origin, title: FlightText, f: TransformFrame): Pair<Rect, Float>? {
+private fun DrawScope.stageTextHeld(stage: Origin, title: Flight, f: TransformFrame): Pair<Rect, Float>? {
     val card = stage.card?.takeIf { it.isAttached } ?: return null
     val text = stage.text?.takeIf { it.isAttached } ?: return null
     val layout = title.layout
     if (layout.lineCount == 0) return null
     val local = card.localBoundingBoxOf(text, clipBounds = false)
     val rect = local.translate(f.clip.topLeft)
-    val titleBottom = title.flight.topLeft.y + layout.getLineBottom(layout.lineCount - 1)
+    val titleBottom = title.topLeft.y + layout.getLineBottom(layout.lineCount - 1) * title.scaleY
     val clearance = STAGE_CLEARANCE.toPx()
     val held = 1 - ((rect.top - titleBottom) / clearance).coerceIn(0f, 1f)
     return if (held <= 0f) null else rect to held
@@ -1636,9 +1640,9 @@ private fun DrawScope.stageTextHeld(stage: Origin, title: FlightText, f: Transfo
 private val STAGE_CLEARANCE = 4.dp
 
 /** Opening: the page's text from its title's line down to the rising title. */
-private fun titleWake(title: FlightText, feather: Float): TitlePath? {
-    val top = title.flight.pageTop ?: return null
-    val bottom = title.flight.topLeft.y + title.layout.size.height
+private fun titleWake(title: Flight, feather: Float): TitlePath? {
+    val top = title.pageTop
+    val bottom = title.topLeft.y + title.layout.size.height * title.scaleY
     return if (bottom <= top) null else TitlePath(top, bottom, feather, softBelow = true)
 }
 
@@ -1647,9 +1651,9 @@ private fun titleWake(title: FlightText, feather: Float): TitlePath? {
  * ahead of it: the title stops on its own line, beside the duration and above the preview, so that row returns
  * whole (its duration with its preview) with the other rows' `fadeFast`.
  */
-private fun titleAhead(title: FlightText, feather: Float): TitlePath? {
-    val top = title.flight.topLeft.y
-    val bottom = title.flight.originTop
+private fun titleAhead(title: Flight, feather: Float): TitlePath? {
+    val top = title.topLeft.y
+    val bottom = title.originTop
     return if (bottom <= top) null else TitlePath(top, bottom, feather, softBelow = false)
 }
 
@@ -1659,18 +1663,15 @@ private class OverlayPlacement {
 }
 
 /**
- * The flying title in one frame. [pageTop] is the top of the page's own title, where the page's text begins (null
- * while the page has not laid it out: the title still holds at its origin); [originTop] the top of the title at its
- * origin, the line a folding title lands on.
+ * The flying title in one frame, between the measured page heading and the line on its origin card.
  */
 private class Flight(
-    val text: String,
-    val style: TextStyle,
+    val layout: TextLayoutResult,
     val color: Color,
     val topLeft: Offset,
-    val width: Float,
-    val lines: Int,
-    val pageTop: Float?,
+    val scaleX: Float,
+    val scaleY: Float,
+    val pageTop: Float,
     val originTop: Float,
 )
 
@@ -1708,40 +1709,18 @@ private fun PageTransitions.frameIn(c: PageChange, overlay: LayoutCoordinates, d
     )
 }
 
-/**
- * The title between its origin (the stage's `headline` 22/28 or a row's `rowTitle` 17/24) and the page's `title`
- * 28/34: position, width, size, line height and tracking all follow p, and the colour follows the material (stageInk
- * on the material, ink on paper). Laid out every frame, so it lands on each end's own line breaks.
- */
+/** Moves one shaped line between its actual baselines and ink bounds without remeasuring text during drawing. */
 private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: LayoutCoordinates, density: Density, colors: app.focal.ui.design.FocalColors): Flight? {
-    val originSlot = (if (c.motion == PageMotion.Row) rows[(c.document as? Destination.Note)?.id] else stage) ?: return null
-    val originTitle = originSlot.title?.takeIf { it.isAttached } ?: return null
     val row = c.motion == PageMotion.Row
-    val originStyle = if (row) FocalType.rowTitle else FocalType.headline
-    val from = overlay.rectOf(originTitle)
-    val pageInkFor = { muted: Boolean -> if (muted) colors.recede else colors.ink }
-    val originInkFor = { muted: Boolean ->
-        when {
-            row -> pageInkFor(muted)
-            muted -> colors.stageRecede
-            else -> colors.stageInk
-        }
-    }
-    val pageTitle = titleOf(c)
-    val pageCoordinates = pageTitle?.coordinates?.takeIf { it.isAttached }
-    val p = titleProgress(c)
-    // A pulled card's title rides the card with the rest of its content, and flies to the page from there.
+    val slot = (if (row) rows[(c.document as? Destination.Note)?.id] else stage) ?: return null
+    val originTitle = slot.title?.takeIf { it.isAttached } ?: return null
+    val origin = slot.layout ?: return null
+    val page = titleOf(c) ?: return null
+    val layout = page.layout ?: return null
+    val pageCoordinates = page.coordinates?.takeIf { it.isAttached } ?: return null
     val ride = if (c.dragged) f.clip.topLeft - f.origin.topLeft else Offset.Zero
-    // Opening, before the page has laid out its title: the title holds where the origin set it.
-    if (pageTitle == null || pageCoordinates == null || p >= 1f) {
-        // Its ink follows what is under it: the material while it lasts, then paper.
-        val muted = originSlot.titleMuted
-        return Flight(
-            text = originSlot.titleText, style = originStyle.copy(lineBreak = LineBreak.Heading),
-            color = lerp(pageInkFor(muted), originInkFor(muted), if (row) 1f else f.material),
-            topLeft = from.topLeft + ride, width = from.width, lines = originSlot.titleLines, pageTop = null, originTop = from.top,
-        )
-    }
+    val from = overlay.rectOf(originTitle).translate(ride)
+    val p = titleProgress(c)
     var to = pageTitleIn(c, pageCoordinates, overlay)
     val scale = previewScale(f.preview)
     if (f.preview > 0f) with(density) {
@@ -1750,28 +1729,21 @@ private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: La
         val cy = overlay.size.height / 2f
         to = Rect(cx + (to.left - cx) * scale + shift, cy + (to.top - cy) * scale, cx + (to.right - cx) * scale + shift, cy + (to.bottom - cy) * scale)
     }
-    val pageStyle = FocalType.title
-    val style = with(density) {
-        val size = lerp(pageStyle.fontSize.toPx() * scale, originStyle.fontSize.toPx(), p)
-        val line = lerp(pageStyle.lineHeight.toPx() * scale, originStyle.lineHeight.toPx(), p)
-        pageStyle.copy(
-            fontSize = size.toSp(),
-            lineHeight = line.toSp(),
-            letterSpacing = lerp(pageStyle.letterSpacing.value, originStyle.letterSpacing.value, p).em,
-            lineBreak = LineBreak.Heading,
-        )
+    val pageWidth = layout.getLineRight(0) - layout.getLineLeft(0)
+    val originWidth = origin.getLineRight(0) - origin.getLineLeft(0)
+    val sx = lerp(scale, if (pageWidth > 0f) originWidth / pageWidth else 1f, p)
+    val sy = with(density) { lerp(scale, origin.layoutInput.style.fontSize.toPx() / layout.layoutInput.style.fontSize.toPx(), p) }
+    val left = lerp(to.left + layout.getLineLeft(0) * scale, from.left + origin.getLineLeft(0), p)
+    val baseline = lerp(to.top + layout.firstBaseline * scale, from.top + origin.firstBaseline, p)
+    val ink = if (page.muted) colors.recede else colors.ink
+    val originInk = when {
+        row -> if (slot.titleMuted) colors.recede else colors.ink
+        slot.titleMuted -> colors.stageRecede
+        else -> colors.stageInk
     }
-    val muted = pageTitle.muted
-    return Flight(
-        text = pageTitle.text,
-        style = style,
-        color = lerp(pageInkFor(muted), originInkFor(muted), if (row) p else f.material),
-        topLeft = lerp(to.topLeft, from.topLeft + ride, p),
-        width = lerp(to.width, from.width, p),
-        lines = if (p < PageTransitions.HALF) pageTitle.lines else originSlot.titleLines,
-        pageTop = to.top,
-        originTop = from.top,
-    )
+    return Flight(layout, lerp(ink, originInk, if (row) p else f.material),
+        Offset(left - layout.getLineLeft(0) * sx, baseline - layout.firstBaseline * sy),
+        sx, sy, to.top, from.top)
 }
 
 /** Reports where the stage or a row (its card, or its [title]) sits, for the transforms that open its note. */
@@ -1783,16 +1755,13 @@ internal fun Modifier.pageOrigin(origin: Origin, title: Boolean = false): Modifi
 internal fun Modifier.stageText(origin: Origin): Modifier = onPlaced { origin.text = it }
 
 /**
- * The stage's origin (one per library): which note it holds, its title and how many lines that may take, and the
- * dock its note's page will show.
+ * The stage's origin, title ink and dock for its current note.
  */
 @Composable
-internal fun rememberStageOrigin(noteId: String?, titleLines: Int, titleText: String, titleMuted: Boolean, dock: DockState?): Origin {
+internal fun rememberStageOrigin(noteId: String?, titleMuted: Boolean, dock: DockState?): Origin {
     val origin = LocalShell.current.pages.stage
     SideEffect {
         origin.noteId = noteId
-        origin.titleLines = titleLines
-        origin.titleText = titleText
         origin.titleMuted = titleMuted
         origin.dock = dock
     }
@@ -1801,12 +1770,10 @@ internal fun rememberStageOrigin(noteId: String?, titleLines: Int, titleText: St
 
 /** A row's origin, registered while the row is composed. */
 @Composable
-internal fun rememberRowOrigin(noteId: String, titleLines: Int, titleText: String, titleMuted: Boolean, dock: DockState?): Origin {
+internal fun rememberRowOrigin(noteId: String, titleMuted: Boolean, dock: DockState?): Origin {
     val pages = LocalShell.current.pages
     val origin = remember(noteId) { Origin().also { it.noteId = noteId } }
     SideEffect {
-        origin.titleLines = titleLines
-        origin.titleText = titleText
         origin.titleMuted = titleMuted
         origin.dock = dock
     }
@@ -1817,17 +1784,14 @@ internal fun rememberRowOrigin(noteId: String, titleLines: Int, titleText: Strin
     return origin
 }
 
-/** The page's title as the flight's landing place: its text, ink and how many lines it may take. */
+/** The measured page heading is the landing place for a single-line flight. */
 @Composable
-internal fun rememberPageTitle(noteId: String, text: String, muted: Boolean, lines: Int): PageTitle {
+internal fun rememberPageTitle(noteId: String, muted: Boolean): PageTitle {
     val pages = LocalShell.current.pages
     // One per note's page: a page still on its way out that composes again never writes over the one opening.
     val title = remember(pages, noteId) { PageTitle() }
     SideEffect {
-        title.noteId = noteId
-        title.text = text
         title.muted = muted
-        title.lines = lines
         pages.pageTitles[noteId] = title
     }
     DisposableEffect(pages, noteId, title) {
