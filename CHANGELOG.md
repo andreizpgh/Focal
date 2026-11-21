@@ -5,6 +5,30 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
+## [0.4.0] - 2026-11-21
+
+### Added
+
+- Review words and phrases directly while reading. Listen to the original audio,
+  check alternate readings from overlapping audio, reuse wording from an earlier
+  edit in the same note, or type a correction. Apply and Undo work on wording,
+  punctuation and paragraph boundaries.
+- A Review button visits underlined phrases in reading order. Adjacent uncertain
+  words can be checked together.
+
+### Changed
+
+- Wrapped and truncated headings keep their own line breaks during page
+  transitions. Complete single-line headings travel between measured baselines.
+- New transcripts break sooner at sentence boundaries and long pauses. Review
+  handles Greek questions, Spanish opening punctuation and combining accents.
+- A recognizer control token no longer marks its neighbour as incomplete.
+  Punctuation-only edits preserve uncertainty about the spelling.
+
+The [research and follow-up priorities](docs/review-and-research.md) cover all
+25 speech languages, compact punctuation models, local language models and
+acoustic alternatives. The shipped recognizer and its model weights are unchanged.
+
 ## [0.3.2] - 2026-11-14
 
 Changes after a third round on a phone: transitions that left a mess on screen,
@@ -343,6 +367,7 @@ recovery of interrupted recordings.
 First public alpha: background recording and local transcription with the
 bundled Whisper Base model.
 
+[0.4.0]: https://github.com/andreizpgh/Focal/releases/tag/v0.4.0
 [0.3.2]: https://github.com/andreizpgh/Focal/releases/tag/v0.3.2
 [0.3.1]: https://github.com/andreizpgh/Focal/releases/tag/v0.3.1
 [0.3.0]: https://github.com/andreizpgh/Focal/releases/tag/v0.3.0
