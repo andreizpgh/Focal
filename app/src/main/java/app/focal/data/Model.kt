@@ -250,7 +250,7 @@ data class SplitOrigin(
 )
 
 /** Exact paragraph rows removed or overwritten by a merge. Undo is valid only at the resulting revision. */
-data class MergeUndo internal constructor(val first: Paragraph, val second: Paragraph, val mergedRevision: Long)
+class MergeUndo internal constructor(internal val first: Paragraph, internal val second: Paragraph, internal val mergedRevision: Long)
 
 sealed interface EditResult {
     /**

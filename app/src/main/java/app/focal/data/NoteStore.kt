@@ -831,9 +831,10 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
 
     /** Restore both original rows, including timing, whitespace, original JSON and search entries. */
     fun undoMerge(undo: MergeUndo): EditResult = edit {
-        val (first, second, mergedRevision) = undo
+        val first = undo.first
+        val second = undo.second
         val current = paragraphsIn(this, "id=?", listOf(second.id.toString())).singleOrNull()
-        editable(this, current, mergedRevision)?.let { return@edit it }
+        editable(this, current, undo.mergedRevision)?.let { return@edit it }
         if (current!!.ord != second.ord || current.noteId != second.noteId ||
             paragraphsIn(this, "id=? OR (note_id=? AND ord=?)",
                 listOf(first.id.toString(), first.noteId, first.ord.toString())).isNotEmpty()) return@edit EditResult.Conflict
