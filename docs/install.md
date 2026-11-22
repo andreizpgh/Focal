@@ -1,96 +1,48 @@
 # Install Focal
 
-**[Download Focal-0.5.0.apk](https://github.com/andreizpgh/Focal/releases/download/v0.5.0/Focal-0.5.0.apk)**
+**[Download Focal-0.5.1.apk](https://github.com/andreizpgh/Focal/releases/download/v0.5.1/Focal-0.5.1.apk)**
 
-Focal is distributed as an APK on its
-[release page](https://github.com/andreizpgh/Focal/releases/tag/v0.5.0), under
-**Assets**. You don’t need a GitHub account, Android Studio or a ZIP archive.
-Earlier versions stay on their own release pages.
+Focal is distributed as a single APK on its [release page](https://github.com/andreizpgh/Focal/releases/tag/v0.5.1) under **Assets** — no GitHub account, Android Studio, or ZIP extraction required. Earlier versions stay available on their own release pages.
 
 ## Requirements
 
-- Android 8.0 or newer on an ARM64 phone.
-- About 0.7 GB for the download. The speech model is inside the APK; nothing else
-  is downloaded, ever.
-- About 0.7 GB more of free storage for the model’s working copy, which Focal makes
-  once, in the background, on first launch. The copy starts only when there is
-  also 200 MB to spare. Installing and updating need temporary space too.
-- Room for your recordings: audio takes about 115 MB per hour until you remove it
-  from a note.
+- **Android 8.0+** on an **ARM64** phone.
+- **~0.7 GB download** — the speech model is bundled inside the APK; Focal never downloads anything after install.
+- **~0.9 GB free storage** on first launch — Focal copies the speech model once into private app storage (requiring model size + 200 MB headroom).
+- **~115 MB per hour** for saved recordings until you remove audio from a note (keeping its text).
 
 ## Install
 
 1. Open the download link on your phone.
-2. Open **Focal-0.5.0.apk** from your browser’s downloads or the Files app.
-3. If Android asks, allow **Install unknown apps** for that browser or file
-   manager, go back and tap **Install**. You can turn the permission off
-   afterwards.
+2. Open **Focal-0.5.1.apk** from your browser downloads or the Files app.
+3. If prompted, allow **Install unknown apps** for that browser or file manager, go back, and tap **Install**. You can disable that permission afterwards.
 
-Open Focal and tap **Record**. Android asks for the microphone. On Android 13 and
-later it then asks once whether Focal may show notifications, which carry Pause
-and Finish. Talk; text appears after each pause. Tap **Finish**, wait for
-the last part to be transcribed, then **Copy**.
+Open Focal and tap **Record**. Grant microphone access (and, on Android 13+, notifications so Pause and Finish stay reachable from the shade). Speak normally; paragraphs appear after each pause. Tap **Finish**, review any flagged word if needed, and **Copy**.
 
-On first launch the recording screen may say **Preparing speech model** while the
-model is copied. Recording works during that time, and the text catches up when
-the copy is done.
+> On first launch, the recording screen may show **Preparing speech model** while the bundled weights unpack in the background. You can start recording immediately — transcription catches up automatically once the copy finishes.
 
 ## Updating from an earlier version
 
-Android updates an app in place only when the new APK is signed with the same
-key. Alpha 2 to Alpha 9 and every release since share one development key, and
-each release is checked to carry the same certificate before it is published.
+- **From 0.5.0, 0.4.0, or 0.3.2:** install **Focal-0.5.1.apk** directly in place. Same application ID, signing certificate, and SQLite schema — all notes, custom titles, edits, review confirmations, and recordings are preserved.
 
-- **Over 0.4.0 or 0.3.2:** install 0.5.0 in place. It uses the same application ID,
-  signing certificate, and SQLite schema version (the new per-word `reviewed` bit
-  is backward-compatible in the existing `words` JSON). Existing notes keep their
-  text, paragraph breaks, manual edits, and recordings.
-- **Over 0.3.1:** the notes stay as they are; nothing in them is converted.
-  Tested on an Android emulator: the published 0.3.1 APK was installed, then
-  0.3.2 over it.
-- **Over 0.3.0:** the notes stay. On first launch, notes recorded before are
-  split into shorter paragraphs once, by the rule new recordings follow; no word
-  changes, and paragraphs you edited are left as they are. Tested on an Android
-  emulator: the published 0.3.0 APK was installed, then 0.3.1 over it.
-- **Over 0.2.0:** the notes stay as they are. Titles that 0.2.0 made from a long
-  first sentence are made again by the new rule, once; titles you gave stay.
-  Tested on an Android emulator: the published 0.2.0 APK was installed, then
-  0.3.0 over it. The conversion of 0.2.0's notes is covered by a database test.
-- **Over Alpha 9:** tested on Android emulators with 0.2.0. Every note, edit,
-  custom title and audio file was kept.
-- **Over Alpha 2 to Alpha 8:** same key, and migration tests cover their older
-  database formats, but installing over them has not been tried.
+<details>
+<summary>Upgrading from older testing builds (0.3.1 down to Alpha 1)</summary>
 
-What changes on the first launch after an alpha:
+All builds from Alpha 2 onward share the same development signing certificate (verified on every release):
 
-- Your notes are converted to the new format. Text, edits, custom titles and
-  audio are kept. Older notes have no word timings, so playback starts at the
-  beginning of the paragraph you tap.
-- **Restore original** works where the earlier version saved the original text.
-  Where it did not, your edits stay but there is no original to restore.
-- A note that was still waiting for transcription is finished with the new speech
-  model, for the parts that were missing.
-- Model files that earlier versions copied to the phone, such as the Whisper
-  model, are deleted, which frees space.
-- The speech-language setting is gone: the model detects the language itself.
+- **Over 0.3.1:** installs in place with no note conversion.
+- **Over 0.3.0:** unedited notes are split once into shorter paragraphs under the current formatter rules; manual edits are untouched.
+- **Over 0.2.0:** automatic titles from long first sentences are re-derived once; custom titles stay.
+- **Over Alpha 2 – Alpha 9:** notes migrate automatically to the current schema (text, edits, custom titles, and audio are kept; legacy Whisper files are cleaned up; language selection is replaced by automatic detection). Migrated notes lack per-word timestamps, so playback starts at the tapped paragraph.
+- **Over Alpha 1:** signed with a different cloud key. Copy out any text you want to keep before uninstalling Alpha 1.
 
-Alpha 1 was built in the cloud with its own development key, and installing
-a later version over it has not been checked. If Android refuses the update, copy out any
-text you want to keep before you uninstall Alpha 1: uninstalling deletes Focal’s
-notes and audio.
+</details>
 
-## While testing
+## Notes while testing
 
-- Recording continues when you leave the app, lock the phone or dismiss Focal from
-  recent apps. Force-stopping Focal or restarting the phone ends the recording;
-  everything saved until then is kept, and the note says where it stopped. Some
-  manufacturers stop background apps more aggressively.
-- A call, another app taking the microphone or nearly full storage pauses the
-  recording and says why; tap **Resume** when ready.
-- On Android 15 and later, Android may pause a long transcription in the
-  background. Open Focal and it continues.
-- Quiet speech can be missed, and a very short reply can come out in the wrong
-  language. Check important text against the audio.
+- Recording continues with the screen off or in the background; aggressive OEM battery savers may still restrict long background sessions.
+- Calls, another app taking the microphone, or low storage pause recording automatically and tell you why.
+- On Android 15+, the system may pause very long background transcriptions — reopening Focal resumes them automatically.
+- Quiet speech and very short one-word replies are the main error sources; verify important transcripts against the original audio.
 
-Phone performance, battery use and long recordings have not been measured yet;
-see [testing](testing.md#phone-validation).
+Physical phone performance, battery draw, and thermal behavior have not been formally profiled yet — see the [phone validation checklist](testing.md#phone-validation).

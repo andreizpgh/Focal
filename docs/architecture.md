@@ -286,8 +286,8 @@ so the range widens to its timed neighbours. Times are never invented.
 
 ## Playback
 
-`SpeechPlayer` streams the note's PCM file through `AudioTrack` at 1×, 1.5×, or
-2× speed (`PlaybackParams`) and reports the actual playback head. Losing audio
+`SpeechPlayer` streams the note's PCM file through `AudioTrack` at 0.5× to 2×
+speed in 0.25× steps (`PlaybackParams`) and reports the actual playback head. Losing audio
 focus or unplugging headphones pauses it. The player refuses to start while a
 recording is live, and leaving a note stops it.
 

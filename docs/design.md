@@ -273,21 +273,23 @@ it is read, with no modal dialogs.
   word as the finger moves. Lifting it opens Edit with that phrase selected.
 - **Reviewing unclear words.** Doubtful words carry a faint dotted underline, and
   a quiet **Review · N** pill sits in the top bar. Tapping **Review · N** enters
-  Edit immediately on the first unclear span with a compact **‹ 1 of N ›** stepper
+  Review immediately on the first unclear span with a compact **‹ 1 of N ›** stepper
   in the edit bar. A single-row companion strip rides above the keyboard with
-  **Listen**, one-tap suggestions from earlier edits or nearby spellings in the
-  same note, and **Keep** (which confirms the word, clears its underline, offers
-  Undo, and steps straight to the next unclear word without closing the keyboard).
-  Once you type a replacement, **Keep** flips to **Next** (or **Apply** on the
-  final span). **Mark all as reviewed** in the overflow menu clears all remaining
-  underlines at once, with Undo.
+  **Listen**, one-tap suggestions (earlier edits, nearby spellings in the same
+  note, and Android's offline system spell-checker for misspelled non-words), and
+  **Keep** (which confirms the word, clears its underline, offers Undo, and steps
+  straight to the next unclear word without closing the keyboard). Once you type a
+  replacement, **Keep** flips to **Next** (or **Done** on the final span). **Mark
+  all as reviewed** in the review overflow menu clears all remaining underlines at
+  once, with Undo. Tapping any non-underlined word opens quick editing with
+  **Listen** and **Done** right above the keyboard and no review clutter.
 - **Paragraph times.** A note that still has its audio shows, over each paragraph
   after the first, the time it starts at; a tap plays from there. A setting turns
   them off.
 - **▶ in the dock** plays the note. The playing paragraph stays in ink, a soft
-  lens follows the word, a player strip with a **1× / 1.5× / 2×** speed toggle
-  appears above the dock, and the text follows playback within the middle third
-  of the screen.
+  lens follows the word (including across edited paragraphs), a player strip with
+  a **0.5×–2×** (`0.25×` step, tap-or-drag) speed picker appears above the dock,
+  and the text follows playback within the middle third of the screen.
 - **Tap the title** to rename it.
 - **Delete** is hidden while a note is being transcribed or waits for the speech
   model; if it is reached another way, the pill asks to finish first.

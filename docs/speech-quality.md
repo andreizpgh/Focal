@@ -174,17 +174,16 @@ as reviewed**) clears it without modifying the original recognizer tokens. Only
 an actual `<unk>` piece can mark the preceding word as incomplete. Other
 recognizer control pieces are ignored.
 
-Tap any word, or tap **Review · N** at the top of the note, to edit in place with
-the keyboard open immediately. A single-row companion strip rides above the
-keyboard with **Listen** (original audio around the selection), one-tap
-suggestions from nearby spellings in the same note (within one edit) or earlier
-short manual edits in the same note, and **Keep** / **Next** / **Apply**. Reused
-edits require an unchanged neighbouring word to identify a substitution, omit
-conflicting replacements, and recompute from the current text after a restore or
-undo. Window-overlap alternative readings were removed after the multilingual
-benchmark showed they fired on only 4 of 227 holdout spans and harmed more
-often than they helped (2 harmful vs 1 helpful). Applying any edit or
-confirmation is explicit and undoable.
+Tap any word to edit in place with **Listen** and **Done** riding directly above
+the keyboard, or tap **Review · N** (or an underlined word) to step through low-confidence
+spans with **Listen**, one-tap suggestions (nearby spellings in the same note, earlier
+short manual edits in the same note, and Android's offline system spell-checker for
+misspelled non-words), and **Keep** / **Next** / **Done**. Reused edits require an
+unchanged neighbouring word to identify a substitution, omit conflicting replacements,
+and recompute from the current text after a restore or undo. Window-overlap alternative
+readings were removed after the multilingual benchmark showed they fired on only 4 of
+227 holdout spans and harmed more often than they helped (2 harmful vs 1 helpful).
+Applying any edit or confirmation is explicit and undoable.
 The [multilingual review measurement](benchmarks/2026-11-19-multilingual/README.md)
 counts matching and mismatching underlines and evaluates nearby-spelling hints.
 The time readers save and the accuracy of their final edits still need a study.

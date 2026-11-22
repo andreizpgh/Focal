@@ -123,6 +123,29 @@ to end, so before publishing a release is checked on emulators in three parts:
 
 ## What has been verified
 
+### 0.5.1
+
+Checked on host JVM and an API 36 (Android 16) x86_64 emulator (`fintrail36`) with
+the verified speech model bundled.
+
+- **JVM, lint, and builds:** `:core:test`, `:app:testDebugUnitTest`, `:app:lintDebug`
+  (0 errors), `:app:assembleDebug`, and `:app:assembleDebugAndroidTest` all passed.
+- **Instrumented suite (`-e focal.requireModel true`):** 111 of 111 phone-sized tests
+  passed on Android 16 (`NoteStoreTest`, `RecordingServiceTest`, `UltraServiceTest`,
+  `EngineGuardServiceTest`, `LegacyDatabaseUpgradeTest`, `NoteEditTest`,
+  `NoteEditInputTest`, `NoteEditSessionTest`, `InterfaceTest`, and `SpeechWorkflowTest`,
+  covering real Parakeet Ultra INT8 decoding of the public JFK fixture). Nine wide-display
+  `InterfaceTest` cases skipped on the phone emulator.
+- **Visual and frame review:** Re-rendered `GalleryTest` (`library`, `note`, `transitions`)
+  and inspected `copied-light`, `select-light`, `edit-light`, `playing-light`,
+  `library-light` (`idle-light`), and `t16-row-back-120-light` to verify centered `Copied`,
+  the full-width `Record` dock, the bottom `Listen` / `Done` strip, and removal of the Back
+  transition surface artifact.
+- **Release build:** Signed ARM64 APK verified with `scripts/release.py` (v2/v3 signing
+  certificate `3e407a18…a3bc`, 16 KB zipalign, aapt2 badging, `arm64-v8a` only, and all
+  five locked model files byte for byte) plus full-history Gitleaks scan (0 findings).
+  Formal ARM phone profiling remains open below.
+
 ### 0.5.0
 
 Checked on host JVM and an API 36 (Android 16) x86_64 emulator (`fintrail36`) with
