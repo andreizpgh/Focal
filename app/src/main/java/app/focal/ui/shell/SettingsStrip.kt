@@ -71,19 +71,19 @@ class SettingsStripState internal constructor(open: Boolean) {
     var armed by mutableStateOf(true)
 
     /** The spring of the last settle: a touch that catches it and lets it go on resumes on the same one. */
-    internal var settleSpring: AnimationSpec<Float> = FocalMotion.moveUnit()
+    internal var settleSpring: AnimationSpec<Float> = FocalMotion.pageUnit()
         private set
 
     /**
-     * Opens from wherever s is with no finger on it (the hint's Open, the keyboard, Back's close): the whole window
-     * slides, so on `stage`, which `move` would cross in a blink (the reduced-motion crossfade under [reducedMotion]).
+     * Opens or closes from wherever s is on the unified page spring (same critically damped cadence as every
+     * full-screen navigation transition in the app; reduced-motion crossfade under [reducedMotion]).
      */
-    suspend fun open(reducedMotion: Boolean = false) = settle(1f, reducedMotion, spring = FocalMotion.stageUnit())
+    suspend fun open(reducedMotion: Boolean = false) = settle(1f, reducedMotion, spring = FocalMotion.pageUnit())
 
-    suspend fun close(reducedMotion: Boolean = false) = settle(0f, reducedMotion, spring = FocalMotion.stageUnit())
+    suspend fun close(reducedMotion: Boolean = false) = settle(0f, reducedMotion, spring = FocalMotion.pageUnit())
 
-    /** For the swipe's release: `move` with the finger's velocity, in s per second, clamped at the bounds. */
-    suspend fun settle(target: Float, reducedMotion: Boolean, velocity: Float = 0f, spring: AnimationSpec<Float> = FocalMotion.moveUnit()) {
+    /** For the swipe's release: unified page spring carrying the finger's velocity, clamped at the bounds. */
+    suspend fun settle(target: Float, reducedMotion: Boolean, velocity: Float = 0f, spring: AnimationSpec<Float> = FocalMotion.pageUnit()) {
         composedSettings = composedSettings || target > 0f
         settleSpring = spring
         if (reducedMotion) withContext(FocalFullMotion) { progress.animateTo(target, FocalMotion.reducedCrossfade) }

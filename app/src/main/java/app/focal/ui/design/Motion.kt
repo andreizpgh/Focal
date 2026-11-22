@@ -71,6 +71,7 @@ object FocalMotion {
      * which the last 10-20 px would land in one frame.
      */
     fun moveUnit(): SpringSpec<Float> = spring(SPATIAL_DAMPING, MOVE_STIFFNESS, visibilityThreshold = UNIT_THRESHOLD)
+    fun pageUnit(): SpringSpec<Float> = spring(PAGE_DAMPING, PAGE_STIFFNESS, visibilityThreshold = UNIT_THRESHOLD)
     fun stageUnit(): SpringSpec<Float> = spring(SPATIAL_DAMPING, STAGE_STIFFNESS, visibilityThreshold = UNIT_THRESHOLD)
     const val UNIT_THRESHOLD = 0.001f
     /** Icon and label swaps, menu exit, feedback exit, press plates. */

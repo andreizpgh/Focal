@@ -7,6 +7,7 @@ import app.focal.ui.library.LibraryActions
 import app.focal.ui.library.LibraryHost
 import app.focal.ui.library.LibraryPage
 import app.focal.ui.library.SettingsLayerState
+import app.focal.ui.library.rememberLibrarySearchState
 import app.focal.ui.settings.LicensesPage
 import app.focal.ui.settings.SettingsActions
 import app.focal.ui.settings.SettingsPage
@@ -36,6 +37,10 @@ object TransitionShots {
         add(Shot("t16-row-back-120-dark", dark = true, settleMs = after(AT_MS + OPEN_MS, 120)) { RowToNote(back = true) })
         for (t in listOf(60L, 140L, 260L)) add(Shot("t7b-$t-light", dark = false, settleMs = after(AT_MS, t)) { LiveToNote() })
         add(Shot("t7b-140-dark", dark = true, settleMs = after(AT_MS, 140)) { LiveToNote() })
+        for (t in listOf(80L, 160L)) add(Shot("note-sheet-back-$t-light", dark = false, settleMs = after(AT_MS + OPEN_MS, t)) { SheetBackNote() })
+        add(Shot("note-sheet-back-120-dark", dark = true, settleMs = after(AT_MS + OPEN_MS, 120)) { SheetBackNote() })
+        add(Shot("t16-scrolled-back-120-light", dark = false, settleMs = after(AT_MS + OPEN_MS, 120)) { ScrolledStageBack() })
+        for (t in listOf(80L, 160L)) add(Shot("search-close-$t-light", dark = false, settleMs = after(AT_MS, t)) { SearchClosing() })
         add(Shot("licenses-fade-90-light", dark = false, settleMs = after(AT_MS, 90)) { SettingsToLicenses() })
         add(Shot("licenses-fade-180-light", dark = false, settleMs = after(AT_MS, 180)) { SettingsToLicenses() })
     }
@@ -110,6 +115,55 @@ private fun LiveToNote() {
     }
     FocalShell(shell, destination = { d ->
         if (d is Destination.Note) NotePageOf(note, d, landing = true) else LibraryDestination(liveModel(paused = false))
+    })
+}
+
+/** Non-origin Note exit (Delete note, Search result back, off-screen row): elevated sheet recedes over dimmed Library (zero blank flash). */
+@Composable
+private fun SheetBackNote() {
+    val shell = rememberShellState()
+    val note = remember { stageNote }
+    LaunchedEffect(shell) {
+        waitFrames(AT_MS)
+        shell.open(Destination.Note(note.noteId), PageMotion.Stage)
+        waitFrames(OPEN_MS)
+        shell.back(PageMotion.FadeThrough)
+    }
+    FocalShell(shell, destination = { d ->
+        if (d is Destination.Note) NotePageOf(note, d) else LibraryDestination(idleModel())
+    })
+}
+
+/** Scrolled-down Note (title scrolled off screen) folding cleanly back into the Stage card on Back. */
+@Composable
+private fun ScrolledStageBack() {
+    val shell = rememberShellState()
+    val note = remember { stageNote }
+    LaunchedEffect(shell) {
+        waitFrames(AT_MS)
+        shell.open(Destination.Note(note.noteId), PageMotion.Stage)
+        waitFrames(OPEN_MS)
+        shell.back()
+    }
+    FocalShell(shell, destination = { d ->
+        if (d is Destination.Note) NoteDestination(
+            note, d, playing = false, edit = false, find = null, nextMatch = false, replaced = false,
+            captureElsewhere = false, scroll = 2 to 0, landing = false,
+        ) else LibraryDestination(idleModel())
+    })
+}
+
+/** Closing Search: the pill shrinks smoothly left into the Search circle while Record unveils cleanly beside it. */
+@Composable
+private fun SearchClosing() {
+    val shell = rememberShellState()
+    val search = rememberLibrarySearchState(open = true)
+    LaunchedEffect(search) {
+        waitFrames(AT_MS)
+        search.close {}
+    }
+    FocalShell(shell, destination = {
+        LibraryPage(idleModel(), SearchUiState(), meter, dates, today, remember { LibraryActions() }, searchState = search)
     })
 }
 

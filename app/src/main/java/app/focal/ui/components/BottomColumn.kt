@@ -48,7 +48,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
-import androidx.compose.ui.util.lerp as floatLerp
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
@@ -210,7 +209,6 @@ fun BottomColumn(
     rail: Boolean = false,
 ) {
     val density = LocalDensity.current
-    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val ime = WindowInsets.ime
     val imeTarget = WindowInsets.imeAnimationTarget
     val navigation = WindowInsets.navigationBars
@@ -253,12 +251,6 @@ fun BottomColumn(
                             maxOf(keyboard, fade.value)
                         }
                         alpha = 1f - hide
-                        if (dockHideProgress != null && !rail) {
-                            val s = floatLerp(1f, 0.94f, hide)
-                            scaleX = s
-                            scaleY = s
-                            translationX = (if (rtl) 1f else -1f) * FocalGrid.x12.toPx() * hide
-                        }
                     }
                 Box(graphics) { dock() }
             },

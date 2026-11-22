@@ -124,7 +124,9 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
         if (!state.missing || frozenState != null) return@LaunchedEffect
         if (note.exists()) note.reload() else {
             frozenState = lastValid.value
-            leave(PageMotion.FadeThrough)
+            // If an empty/no-speech recording is discarded while the dark scene is still landing over it, swap
+            // directly to the library underneath with zero double transition or blank note flash.
+            leave(if (shell.live.landingNote == id) PageMotion.Cut else PageMotion.FadeThrough)
         }
     }
     val tryAgain = stringResource(R.string.action_try_again)

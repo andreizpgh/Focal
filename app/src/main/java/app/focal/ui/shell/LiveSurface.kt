@@ -253,7 +253,7 @@ class LiveSurfaceState internal constructor(open: Boolean) {
         if (reducedMotion || !spatial) {
             withContext(FocalFullMotion) { expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.reducedCrossfade)) }
         } else {
-            expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.stageUnit()), initialVelocity = velocity)
+            expansion.animateTo(target, FocalMotion.fromTrigger(FocalMotion.pageUnit()), initialVelocity = velocity)
         }
     }
 
@@ -287,7 +287,7 @@ class LiveSurfaceState internal constructor(open: Boolean) {
                     snapshotFlow { landing.value >= HALF }.first { it }
                     landingAlpha.animateTo(0f, FocalMotion.fade())
                 }
-                landing.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.stageUnit()))
+                landing.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.pageUnit()))
             }
         } finally {
             withContext(NonCancellable) {

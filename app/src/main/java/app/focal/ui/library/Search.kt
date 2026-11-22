@@ -130,7 +130,7 @@ class LibrarySearchState internal constructor(open: Boolean, results: Boolean = 
     }
 
     /** Synchronized 0..1 dock-hide progress read in the draw phase while [fieldShown] is true. */
-    fun dockHideProgress(): Float = smoothstep(0.04f, 0.68f, grow.value)
+    fun dockHideProgress(): Float = smoothstep(0.10f, 0.65f, grow.value)
 
     /** Closes back into the circle while unveiling Record smoothly beside it; [clear] then empties the query. */
     suspend fun close(clear: () -> Unit) = coroutineScope {

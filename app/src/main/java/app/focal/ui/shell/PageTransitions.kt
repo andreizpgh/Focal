@@ -699,25 +699,39 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     private fun originTitle(c: PageChange): LayoutCoordinates? = originOf(c)?.title?.takeIf { it.isAttached && it.size.width > 0 }
 
     /**
-     * The flying title's progress, 0 = the page's title, 1 = the origin's: locked directly to the unified container
-     * progress across tap Open, pull-down, Back, and Predictive Back so title and card always travel as one unit.
+     * The flying title's progress, 0 = the page's title, 1 = the origin's: locked 1:1 to the unified container
+     * progress across tap Open, Stage pull-down (and cancel), Back, and Predictive Back so title, card, and origin
+     * content always travel as one unit.
      */
-    internal fun titleProgress(c: PageChange): Float =
-        if (c.dragged && c.push) pageTravel(c) else progress(c)
+    internal fun titleProgress(c: PageChange): Float = progress(c)
 
-    /** How long a change's clock runs: one unified snappy spring cadence for all container opens and backs. */
-    private fun clockEnd(c: PageChange): Float = when (c.motion) {
-        PageMotion.Cut -> 0f
-        PageMotion.FadeThrough -> FocalSettle.FADE_MS.toFloat()
-        PageMotion.Stage, PageMotion.Row, PageMotion.LiveStage -> FocalSettle.PAGE_MS.toFloat()
+    /** True when a Note page uses the unified elevated-sheet transition over the Library (no on-screen Stage/Row origin). */
+    private fun isNoteSheet(c: PageChange): Boolean =
+        c.document is Destination.Note && c.other == Destination.Library
+
+    /** True while an active non-origin Note transition (Delete, Search hit, off-screen row, notification) is drawing. */
+    internal fun sheetFade(c: PageChange? = change): Boolean =
+        c != null && !reduced && !c.predictive && isNoteSheet(c) && c.motion != PageMotion.Cut &&
+            !transforms(c) && !undecided(c) && active(c)
+
+    /** True while a predictive-back gesture is previewing or committing without a container transform overlay. */
+    internal fun predictiveSheet(c: PageChange? = change): Boolean =
+        c != null && !reduced && c.predictive && isNoteSheet(c) && (!c.committed || !transforms(c)) &&
+            (preview(c) > 0f || (c.committed && active(c)))
+
+    /** How long a change's clock runs: one unified snappy spring cadence for all Note opens and backs. */
+    private fun clockEnd(c: PageChange): Float = when {
+        c.motion == PageMotion.Cut -> 0f
+        c.motion == PageMotion.FadeThrough && !isNoteSheet(c) -> FocalSettle.FADE_MS.toFloat()
+        else -> FocalSettle.PAGE_MS.toFloat()
     }
 
     /** The upper page's progress v on the clock: 0 → 1 as it opens, 1 → 0 as it folds (from where it started). */
     private fun clockProgress(c: PageChange): Float {
-        val t = when (c.motion) {
-            PageMotion.Cut -> 1f
-            PageMotion.FadeThrough -> fade(elapsed)
-            PageMotion.Stage, PageMotion.Row, PageMotion.LiveStage -> move(elapsed)
+        val t = when {
+            c.motion == PageMotion.Cut -> 1f
+            c.motion == PageMotion.FadeThrough && !isNoteSheet(c) -> fade(elapsed)
+            else -> move(elapsed)
         }
         val from = c.start.v
         return if (c.push) from + (1 - from) * t else from * (1 - t)
@@ -942,8 +956,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
             return if (commitAt <= 0f) 0f else (v / commitAt).coerceIn(0f, 1f)
         }
         if (transforms(c)) return if (active(c)) (1f - progress(c)).coerceIn(0f, 1f) else 0f
-        val v = documentProgress()
-        return if (!c.push) smoothstep(HALF, 1f, v) * 0.6f else (v * 0.6f).coerceIn(0f, 1f)
+        if (sheetFade(c)) return documentProgress().coerceIn(0f, 1f)
+        return 0f
     }
 
     /** Library scale matching [libraryDepth] (`1.0` at rest → `0.96` behind a full page). */
@@ -1040,14 +1054,17 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
                 else -> PageLook.Gone
             }
         }
-        // Non-transforming Back (Row, deleted note, off-screen origin): outgoing sheet recedes and clears before the
-        // library fades in (Q7: two typesettings never overlap, brisk FADE_MS cadence).
-        if (!c.push) {
-            if (!upper) return PageLook(alpha = smoothstep(HALF, 1f, 1f - v))
-            val recede = ((1f - v) / HALF).coerceIn(0f, 1f)
-            return PageLook(alpha = smoothstep(HALF, 1f, v), recede = recede)
+        // Unified elevated-sheet transition for Note <-> Library without an on-screen Stage/Row origin (Delete,
+        // Search hit, off-screen row, notification): strict two-phase Q7 handoff — Note content clears while the
+        // rounded paper sheet is still 100 % opaque, then the blank elevated sheet dissolves over the visible Library.
+        if (sheetFade(c)) {
+            if (!upper) return PageLook.Shown
+            val r = (1f - v).coerceIn(0f, 1f)
+            val sheetAlpha = if (c.push) smoothstep(0.02f, 0.42f, v) else smoothstep(0.04f, 0.52f, v)
+            val contentAlpha = if (c.push) smoothstep(0.42f, 0.88f, v) else smoothstep(0.52f, 0.96f, v)
+            return PageLook(alpha = sheetAlpha, recede = r, contentAlpha = contentAlpha)
         }
-        // Opening fade-through: the outgoing page is gone before the incoming one appears.
+        // Standard fade-through for Licenses and two-pane detail swaps: outgoing page clears before incoming appears.
         return PageLook(alpha = if (upper) smoothstep(HALF, 1f, v) else smoothstep(HALF, 1f, 1 - v))
     }
 
@@ -1231,6 +1248,7 @@ internal data class PageLook(
     val edge: Int = NavigationEvent.EDGE_LEFT,
     val recorded: Boolean = false,
     val recede: Float = 0f,
+    val contentAlpha: Float = 1f,
 ) {
     companion object {
         val Shown = PageLook()
@@ -1272,7 +1290,10 @@ internal fun PageFrame(
         if (state == EnterExitState.Visible) 1f else 0f
     }
     val layer = rememberGraphicsLayer()
-    val paper = FocalTheme.colors.paper
+    val colors = FocalTheme.colors
+    val paper = colors.paper
+    val dark = paper.luminance() < 0.5f
+    val shadowColor = if (dark) Color.Black else Color.Black.copy(alpha = 0.28f)
     val reveal = remember(pages, destination) { pages.reveal(destination) }
     val upper = pages.change?.document == destination
     SideEffect {
@@ -1309,9 +1330,17 @@ internal fun PageFrame(
                 scaleX = previewScale(e) * (1f - RECEDE_SCALE * r)
                 scaleY = scaleX
                 translationX = if (aside) ASIDE * size.width else previewShift(e, size.width, look.edge)
+                translationY = if (aside || look.recorded) 0f else RecedeShift.toPx() * r
                 val corner = max(FocalShapes.sheetRadius.value * e, RecedeRadius.value * r).dp
                 shape = if (corner > 0.dp) RoundedCornerShape(corner) else androidx.compose.ui.graphics.RectangleShape
                 clip = corner > 0.dp
+                val elevated = !aside && !look.recorded && (e > 0f || r > 0f)
+                shadowElevation = if (elevated) {
+                    val arc = max(sin(PI.toFloat() * r.coerceIn(0f, 1f)), e.coerceIn(0f, 1f))
+                    arc * PageTransitions.CardShadowElevation.toPx()
+                } else 0f
+                ambientShadowColor = shadowColor
+                spotShadowColor = shadowColor
             }
             // Inside the layer: the frame's own space, where the transforms find the page's title even while it is aside.
             .onPlaced {
@@ -1332,15 +1361,38 @@ internal fun PageFrame(
                 val look = pages.look(destination)
                 if (look.recorded) layer.record { this@drawWithContent.drawContent() }
                 else if (look.alpha > 0f) {
-                    // A previewed or receding page is a solid sheet of paper over the page it returns to.
-                    if (look.preview > 0f || look.recede > 0f) drawRect(paper)
+                    val elevated = look.preview > 0f || look.recede > 0f
+                    // A previewed or receding page is a solid elevated sheet of paper over the receding library.
+                    if (elevated) drawRect(paper)
                     drawContent()
+                    if (elevated) {
+                        val rimAlpha = max(sin(PI.toFloat() * look.recede.coerceIn(0f, 1f)) * 0.85f, look.preview.coerceIn(0f, 1f) * 0.75f)
+                        if (rimAlpha > 0.001f && colors.stageIdleBorder.alpha > 0f) {
+                            val w = RingWidth.toPx()
+                            val corner = max(FocalShapes.sheetRadius.value * look.preview, RecedeRadius.value * look.recede).dp.toPx()
+                            drawRoundRect(
+                                colors.stageIdleBorder,
+                                topLeft = Offset(w / 2, w / 2),
+                                size = Size(max(0f, size.width - w), max(0f, size.height - w)),
+                                cornerRadius = CornerRadius(max(0f, corner - w / 2)),
+                                style = Stroke(w),
+                                alpha = rimAlpha,
+                            )
+                        }
+                    }
                 }
             }
             // Its own paper, if it brings one, is part of the page: it fades and moves with it.
             .then(if (background.isSpecified) Modifier.background(background) else Modifier),
     ) {
-        CompositionLocalProvider(LocalPageReveal provides reveal) { content() }
+        Box(
+            Modifier.fillMaxSize().graphicsLayer {
+                val look = pages.look(destination)
+                alpha = if (look.recorded) 1f else look.contentAlpha
+            },
+        ) {
+            CompositionLocalProvider(LocalPageReveal provides reveal) { content() }
+        }
     }
 }
 
@@ -1359,33 +1411,50 @@ internal fun LibraryFrame(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    Box(
-        Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                val change = pages.change
-                if (twoPane) {
-                    alpha = if (change?.document == Destination.Licenses) pages.look(Destination.Library, under = true).alpha else 1f
-                    return@graphicsLayer
+    val paper = FocalTheme.colors.paper
+    val scrimMax = if (paper.luminance() < 0.5f) DARK_SCRIM else LIGHT_SCRIM
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val change = pages.change
+                    if (twoPane) {
+                        alpha = if (change?.document == Destination.Licenses) pages.look(Destination.Library, under = true).alpha else 1f
+                        return@graphicsLayer
+                    }
+                    val look = when {
+                        change != null -> pages.look(Destination.Library)
+                        covered() -> PageLook.Gone
+                        else -> PageLook.Shown
+                    }
+                    alpha = look.alpha
+                    val s = if (look.alpha > 0f) pages.libraryScale() else 1f
+                    scaleX = s
+                    scaleY = s
                 }
-                val look = when {
-                    change != null -> pages.look(Destination.Library)
-                    covered() -> PageLook.Gone
-                    else -> PageLook.Shown
-                }
-                alpha = look.alpha
-                val s = if (look.alpha > 0f) pages.libraryScale() else 1f
-                scaleX = s
-                scaleY = s
-            }
-            .then(modifier),
-    ) { content() }
+                .then(modifier),
+        ) { content() }
+        // Depth scrim for non-origin Note sheet transitions and predictive-back previews (mutually exclusive with TransformLayers's scrim).
+        if (!twoPane) {
+            Spacer(
+                Modifier.fillMaxSize().drawBehind {
+                    pages.observe()
+                    if (pages.sheetFade() || pages.predictiveSheet()) {
+                        val scrim = pages.libraryDepth() * scrimMax
+                        if (scrim > 0.001f) drawRect(Color.Black, alpha = scrim)
+                    }
+                },
+            )
+        }
+    }
 }
 
 /** A page that is not drawn is placed this many widths aside (see [PageFrame]). */
 private const val ASIDE = 2f
-private const val RECEDE_SCALE = 0.05f
-private val RecedeRadius = 16.dp
+private const val RECEDE_SCALE = 0.06f
+private val RecedeRadius = 24.dp
+private val RecedeShift = 24.dp
 
 /** Where one page's frame was laid out, so it can unregister only itself. */
 private class PlacedFrame { var coordinates: LayoutCoordinates? = null }

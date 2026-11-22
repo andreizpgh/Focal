@@ -273,6 +273,7 @@ private val SPEED_MENU_GAP = 8.dp
 private val SPEED_MENU_WIDTH = 68.dp
 private val SPEED_PILL_MIN_WIDTH = 56.dp
 private val SPEED_MENU_RADIUS = 18.dp
+private val SPEED_SHADOW_ROOM = 12.dp
 private const val SPEED_HOLD_MS = 180L
 
 /**
@@ -429,74 +430,88 @@ private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
                 softWrap = false,
             )
         }
-        if (open) {
+        var menuComposed by remember { mutableStateOf(open) }
+        val menuReveal = remember { Animatable(if (open) 1f else 0f) }
+        LaunchedEffect(open, reduced) {
+            if (open) {
+                menuComposed = true
+                if (reduced) menuReveal.snapTo(1f) else menuReveal.animateTo(1f, FocalMotion.press())
+            } else if (menuComposed) {
+                if (reduced) menuReveal.snapTo(0f) else menuReveal.animateTo(0f, FocalMotion.fadeFast())
+                menuComposed = false
+            }
+        }
+        if (menuComposed) {
             val gapPx = with(density) { SPEED_MENU_GAP.roundToPx() }
-            val provider = remember(gapPx) { SpeedMenuPositionProvider(gapPx) }
+            val shadowRoomPx = with(density) { SPEED_SHADOW_ROOM.roundToPx() }
+            val provider = remember(gapPx, shadowRoomPx) { SpeedMenuPositionProvider(gapPx, shadowRoomPx) }
             Popup(
                 popupPositionProvider = provider,
                 onDismissRequest = { if (!dragging) open = false },
-                properties = PopupProperties(focusable = !dragging),
+                properties = PopupProperties(focusable = open && !dragging),
             ) {
-                val reveal = remember { Animatable(if (reduced) 1f else 0f) }
-                LaunchedEffect(Unit) {
-                    if (!reduced) reveal.animateTo(1f, FocalMotion.press())
-                }
                 val highlighted = hovered ?: speed
                 val shape = RoundedCornerShape(SPEED_MENU_RADIUS)
-                Column(
+                Box(
                     Modifier
                         .graphicsLayer {
-                            val t = reveal.value
+                            val t = menuReveal.value
                             alpha = t.coerceIn(0f, 1f)
-                            val s = lerp(0.88f, 1f, t)
+                            val s = lerp(0.90f, 1f, t)
                             scaleX = s
                             scaleY = s
                             transformOrigin = TransformOrigin(0.5f, 1f)
                         }
-                        .shadow(8.dp, shape, ambientColor = colors.ink.copy(alpha = 0.14f), spotColor = colors.ink.copy(alpha = 0.18f))
-                        .background(colors.paper, shape)
-                        .border(1.dp, colors.stageIdleBorder, shape)
-                        .padding(SPEED_MENU_PAD)
-                        .width(SPEED_MENU_WIDTH),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                        .padding(SPEED_SHADOW_ROOM),
                 ) {
-                    SPEEDS_DESC.forEach { option ->
-                        val active = abs(option - highlighted) < 0.02f
-                        val label = speedLabel(option)
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(SPEED_ROW_HEIGHT)
-                                .background(if (active) colors.inv else colors.paper.copy(alpha = 0f), FocalShapes.pill)
-                                .clearAndSetSemantics {
-                                    contentDescription = label
-                                    role = Role.RadioButton
-                                    selected = active
-                                    this.onClick {
+                    Column(
+                        Modifier
+                            .shadow(8.dp, shape, ambientColor = colors.ink.copy(alpha = 0.14f), spotColor = colors.ink.copy(alpha = 0.18f))
+                            .background(colors.paper, shape)
+                            .border(1.dp, colors.stageIdleBorder, shape)
+                            .padding(SPEED_MENU_PAD)
+                            .width(SPEED_MENU_WIDTH),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        SPEEDS_DESC.forEach { option ->
+                            val active = abs(option - highlighted) < 0.02f
+                            val label = speedLabel(option)
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(SPEED_ROW_HEIGHT)
+                                    .background(if (active) colors.inv else colors.paper.copy(alpha = 0f), FocalShapes.pill)
+                                    .clearAndSetSemantics {
+                                        contentDescription = label
+                                        role = Role.RadioButton
+                                        selected = active
+                                        this.onClick {
+                                            select(option)
+                                            open = false
+                                            true
+                                        }
+                                    }
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        enabled = open,
+                                    ) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         select(option)
                                         open = false
-                                        true
-                                    }
-                                }
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                ) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    select(option)
-                                    open = false
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                label,
-                                style = FocalType.caption.copy(
-                                    fontWeight = if (active) FocalWeight.Semibold else FocalWeight.Medium,
-                                ).tabular(),
-                                color = if (active) colors.onInv else colors.ink,
-                                maxLines = 1,
-                                softWrap = false,
-                            )
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    label,
+                                    style = FocalType.caption.copy(
+                                        fontWeight = if (active) FocalWeight.Semibold else FocalWeight.Medium,
+                                    ).tabular(),
+                                    color = if (active) colors.onInv else colors.ink,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
                         }
                     }
                 }
@@ -506,7 +521,7 @@ private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
 }
 
 /** Places the speed popover directly above its anchor pill, horizontally centred on it and clamped inside the window. */
-private class SpeedMenuPositionProvider(private val gapPx: Int) : PopupPositionProvider {
+private class SpeedMenuPositionProvider(private val gapPx: Int, private val shadowRoomPx: Int) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect,
         windowSize: IntSize,
@@ -515,7 +530,7 @@ private class SpeedMenuPositionProvider(private val gapPx: Int) : PopupPositionP
     ): IntOffset {
         val x = (anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2)
             .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
-        val y = (anchorBounds.top - popupContentSize.height - gapPx)
+        val y = (anchorBounds.top - popupContentSize.height + shadowRoomPx - gapPx)
             .coerceIn(0, (windowSize.height - popupContentSize.height).coerceAtLeast(0))
         return IntOffset(x, y)
     }

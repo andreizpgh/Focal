@@ -18,18 +18,25 @@ pre-release.
 
 ### Changed
 
-- **Unified page transitions.** Stage tap, Stage pull-down, library row tap,
-  Back, Predictive Back, and folded-stage **Finish** now share one spatial
-  container transform: a single critically damped spring, subtle library depth
-  recession, rounded elevated paper sheet with hairline border, and universal
-  title flight across both Stage cards and library rows regardless of line
-  wrapping.
-- **Smooth Search ↔ Record dock transition.** Closing Search now unveils the
-  **Record** button continuously as the search bar contracts instead of popping
-  it in after the close animation finishes.
+- **Unified page and surface motion (`359 ms` critically damped spring).**
+  Stage tap, Stage pull-down (and cancel), library row tap, Back, Predictive
+  Back, folded and fullscreen recording expand/collapse/**Finish**, and
+  Settings slide now share one critically damped spring cadence, subtle library
+  depth recession, rounded elevated paper sheets with hairline borders, and
+  universal title flight across both Stage cards and library rows regardless of
+  line wrapping.
+- **No blank midpoint flash on non-origin note transitions.** Deleting an open
+  note, opening or closing a note from Search, or returning to an off-screen
+  library row now uses a two-phase elevated paper sheet over the visible
+  receding library instead of flashing blank paper mid-transition.
+- **Smooth Search ↔ Record dock transition.** Closing Search unveils the
+  **Record** button continuously behind the retracting search pill without
+  shifting or duplicating the Search circle.
 - **Stage delete-and-promote motion.** Deleting the latest note in the library
   now animates the departing card out and glides the next note up into the Stage
   card, while deleting an open note settles the library quietly behind the exit.
+- **Playback speed popover exit and shadow.** The speed picker popover now
+  fades and scales out smoothly on close with unclipped shadow margins.
 - **Compact Settings footer.** Removed the decorative waveform logo below
   **Version** and tightened vertical rhythm so the Settings screen fits cleanly
   in one portrait viewport at default font scale.
@@ -40,6 +47,9 @@ pre-release.
   development to the exact first transform frame and prevented solid-paper top
   and bottom fades from drawing a bright band over the dark-to-paper material
   crossfade.
+- **Empty recording instant discard exit.** Discarding an empty recording right
+  after tapping **Finish** while the recording surface is still settling now
+  clears the transient note cleanly underneath without a double exit transition.
 
 ## [0.5.2] - 2026-11-22
 
