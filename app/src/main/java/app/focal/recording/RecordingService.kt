@@ -24,6 +24,7 @@ import androidx.core.content.ContextCompat
 import app.focal.BuildConfig
 import app.focal.FocalApplication
 import app.focal.R
+import app.focal.ui.state.UndoableActions
 import app.focal.core.DecodePolicy
 import app.focal.core.LevelMeter
 import app.focal.core.MeterMath
@@ -927,8 +928,8 @@ class RecordingService : Service() {
         stopSelfResult(lastStartId)
     }
 
-    /** A note to transcribe; [automatic] when the drain picked it, not the person or a recording. */
-    private class Target(val noteId: String, val live: Boolean, val automatic: Boolean = false)
+    /** A note to transcribe; [automatic] when the drain picked it, [fromFinish] when just finished from capture. */
+    private class Target(val noteId: String, val live: Boolean, val automatic: Boolean = false, val fromFinish: Boolean = false)
 
     /** The live recording, then the finished one, then retries, then (from the visible app) waiting notes. */
     private fun nextTarget(): Target? {
@@ -938,7 +939,7 @@ class RecordingService : Service() {
                 if (id != null && !session.ended) return Target(id, live = true)
                 if (id == null && !session.ended) return Target("", live = true)
             }
-            finishing.firstOrNull()?.let { return Target(it, live = false) }
+            finishing.firstOrNull()?.let { return Target(it, live = false, fromFinish = true) }
             requested.firstOrNull()?.let { return Target(it, live = false) }
             if (!drainWaiting) return null
             // This scan answers every DRAIN so far; a later one makes the worker look again.
@@ -1129,7 +1130,7 @@ class RecordingService : Service() {
                 if (planned) continue
                 if (!live && feed.complete) {
                     if (pending != null) return Outcome.Blocked(engine.failure ?: "Saved audio can be transcribed later.", engine.cause)
-                    return complete(id)
+                    return complete(id, fromFinish = target.fromFinish)
                 }
                 delay(if (live) LIVE_POLL_MS else 50)
             }
@@ -1141,10 +1142,25 @@ class RecordingService : Service() {
         }
     }
 
-    /** Every window is decided: the note is ready (possibly with failed parts) and "Note ready" is posted. */
-    private fun complete(id: String): Outcome {
+    /** Every window is decided: freshly finished empty recordings are discarded (with Undo if long & app visible), else "Note ready" is posted. */
+    private fun complete(id: String, fromFinish: Boolean): Outcome {
         if (!store.markReady(id)) return Outcome.Blocked("Saved audio can still be transcribed.")
-        store.note(id)?.let { note -> notifications.ready(id, note.title, note.created, partial = note.failedWindows > 0) }
+        val note = store.note(id)
+        if (fromFinish && note != null && !note.legacy && note.failedWindows == 0 && store.paragraphs(id).isEmpty()) {
+            if (note.duration < SHORT_NO_SPEECH_MS) {
+                runCatching { store.delete(id) }
+                RecordingState.events.tryEmit(ServiceEvent.NothingRecorded)
+                updateLive { if (it.noteId == id) it.copy(progress = 1f, pending = 0) else it }
+                return Outcome.Done
+            }
+            if (AppPresence.visible && runCatching { store.deleteWithUndo(id) }.getOrDefault(false)) {
+                UndoableActions.trackTrashed(app, id)
+                RecordingState.events.tryEmit(ServiceEvent.NoSpeechDiscarded(id))
+                updateLive { if (it.noteId == id) it.copy(progress = 1f, pending = 0) else it }
+                return Outcome.Done
+            }
+        }
+        note?.let { notifications.ready(id, it.title, it.created, partial = it.failedWindows > 0) }
         updateLive { if (it.noteId == id) it.copy(progress = 1f, pending = 0) else it }
         return Outcome.Done
     }
@@ -1464,6 +1480,8 @@ class RecordingService : Service() {
         /** The recorder's own buffer: two seconds of 16 kHz PCM16. */
         private const val RECORDER_BUFFER_BYTES = 64_000
         private const val LIVE_POLL_MS = 200L
+        /** Recordings shorter than this with zero recognized speech are discarded silently as accidental taps. */
+        private const val SHORT_NO_SPEECH_MS = 2_000L
         /** Consecutive failed windows after which the recognizer is treated as broken. */
         private const val BROKEN_AFTER_FAILURES = 2
         @Volatile internal var inputFactoryForTests: (() -> RecordingInput)? = null

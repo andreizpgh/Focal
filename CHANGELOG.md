@@ -5,6 +5,58 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
+## [0.5.1] - 2026-11-22
+
+### Added
+
+- **Playback speed picker (`0.5×`–`2×` in `0.25×` steps).** Tapping the speed
+  pill in the note player opens a compact popover menu (`0.5×`, `0.75×`, `1×`,
+  `1.25×`, `1.5×`, `1.75×`, `2×`); pressing and dragging upward selects a speed
+  in a single gesture with subtle haptic detents on each step.
+- **Bulk Copy and Share in library selection.** The selection dock's overflow
+  menu now offers **Copy text** and **Share** (joining the selected notes in
+  selection order) alongside **Remove audio**.
+- **Offline spell-checker suggestions in Review.** When Android's offline system
+  spell-checker flags an unclear word as misspelled, up to two dictionary
+  suggestions appear as optional chips in the Review strip (zero added weights
+  or permissions).
+
+### Changed
+
+- **One-thumb Edit vs. Review ergonomics.** Quick editing (tapping any normal
+  word) now keeps **Listen** and **Done** right above the keyboard in the
+  bottom companion strip and removes **Mark all as reviewed** from the regular
+  edit menu, keeping Review strictly focused on underlined words.
+- **Full-width Record button in the library dock.** Restored the full-width
+  **Record** pill beside **Search** so the bottom dock aligns with the Stage
+  card margins above.
+- **Empty and no-speech recording handling.** Accidental instant stop recordings
+  (`< 2 s`, no recognized words) are discarded silently with `"Nothing was
+  recorded"`; longer recordings with zero recognized speech finished in the
+  visible app move to the trash with an `"No speech was recognized · Undo"`
+  banner so the library stays clean without risking accidental audio loss.
+- **Cold-start splash hand-off.** Holds the system splash briefly (capped at
+  280 ms) while SQLite loads the first library frame eagerly, then exits with a
+  subtle icon scale-and-fade so the library appears without an empty-paper flash.
+- **Centered Copy → Copied morph.** Optically centers both **Copy** and
+  **✓ Copied** on the Stage card and Note dock with a smooth icon cross-scale
+  and 3 dp label micro-slide.
+
+### Fixed
+
+- **Back-button rectangle artifact on note pages.** Removed the tinted surface
+  slab and faded the clipped paper backing with the outgoing note during row
+  Back transitions, with a feathered title clearance and clean fade-through for
+  differently wrapped headings.
+- **Stage pull-down drag reversal.** Reversing a pull-down gesture on the Stage
+  card back past its resting position now stays locked to the gesture until lift
+  instead of leaking upward scroll into the library list behind the active
+  overlay.
+- **Disappearing spoken-word highlight during playback.** Fixed `Lens` losing
+  opacity when rapid short words interrupted its fade-in on the same line, and
+  kept spoken-word highlighting active across edited paragraphs instead of
+  disabling the entire paragraph after a single word edit.
+
 ## [0.5.0] - 2026-11-21
 
 ### Added

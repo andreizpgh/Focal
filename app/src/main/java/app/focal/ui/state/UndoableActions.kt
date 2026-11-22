@@ -78,6 +78,21 @@ object UndoableActions {
         return true
     }
 
+    /** Tracks a note already moved to the trash by the service (e.g. a no-speech recording) for Undo / purge. */
+    fun trackTrashed(app: FocalApplication, noteId: String) {
+        ServiceNotifications.cancelReady(app, noteId)
+        synchronized(this) {
+            removals.remove(noteId)?.cancel()
+            pendingRemovals.update { it - noteId }
+            deletions.remove(noteId)?.cancel()
+            deletions[noteId] = app.scope.launch {
+                delay(FALLBACK_COMMIT_MS)
+                val job = currentCoroutineContext().job
+                if (synchronized(this@UndoableActions) { deletions.remove(noteId, job) }) purge(app, noteId)
+            }
+        }
+    }
+
     /** The "Note deleted" snackbar closed without Undo: the note is deleted for good now. */
     fun commitDelete(app: FocalApplication, noteId: String) {
         synchronized(this) { deletions.remove(noteId)?.cancel() ?: return }

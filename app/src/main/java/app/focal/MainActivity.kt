@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.SystemClock
+import android.provider.Settings
 import android.view.KeyEvent
 import android.view.KeyboardShortcutGroup
 import android.view.KeyboardShortcutInfo
@@ -29,6 +31,7 @@ import app.focal.ui.shell.PageKeys
 import app.focal.ui.shell.ShellCommand
 import app.focal.ui.state.EntryRequest
 import app.focal.ui.state.EntryRequests
+import app.focal.ui.state.LibraryViewModel
 import app.focal.ui.state.RecordingViewModel
 import app.focal.ui.state.ThemeMode
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -43,6 +46,8 @@ class MainActivity : ComponentActivity() {
     private val pageKeys = PageKeys()
     /** The same view model the interface uses: a start from here is STARTING there too (the tick, spec 5.13). */
     private val recording: RecordingViewModel by viewModels()
+    /** Shared with Compose so SQLite loading starts in onCreate and the splash reveals the real first frame. */
+    private val library: LibraryViewModel by viewModels()
 
     /** API 26-30: the theme setting reaches values-night before any resource is read (no flash on a cold start). */
     override fun attachBaseContext(newBase: Context) {
@@ -54,11 +59,34 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
-        // The splash leaves on the first frame with `fadeFast` (spec 5.13).
+        val createdAt = SystemClock.uptimeMillis()
+        // Touch library eagerly so SQLite loads in parallel with Compose setup; hold splash briefly until ready.
+        library
+        splash.setKeepOnScreenCondition {
+            !library.state.value.loaded && SystemClock.uptimeMillis() - createdAt < SPLASH_MAX_HOLD_MS
+        }
+        // Subtle, quiet exit once the first real library frame is ready: icon recedes slightly as paper dissolves.
         splash.setOnExitAnimationListener { exit ->
-            exit.view.animate().alpha(0f)
-                .setDuration(FocalSettle.FADE_FAST_MS)
-                .setInterpolator(FocalMotion.springInterpolator(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS, FocalSettle.FADE_FAST_MS))
+            val animScale = runCatching {
+                Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+            }.getOrDefault(1f)
+            if (animScale <= 0f) {
+                exit.remove()
+                return@setOnExitAnimationListener
+            }
+            val duration = (FocalSettle.FADE_FAST_MS * 1.15f).toLong()
+            val interpolator = FocalMotion.springInterpolator(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS, duration)
+            runCatching { exit.iconView }.getOrNull()?.animate()
+                ?.alpha(0f)
+                ?.scaleX(SPLASH_ICON_EXIT_SCALE)
+                ?.scaleY(SPLASH_ICON_EXIT_SCALE)
+                ?.setDuration((duration * 0.85f).toLong())
+                ?.setInterpolator(interpolator)
+                ?.start()
+            exit.view.animate()
+                .alpha(0f)
+                .setDuration(duration)
+                .setInterpolator(interpolator)
                 .withEndAction { exit.remove() }
                 .start()
         }
@@ -182,5 +210,8 @@ class MainActivity : ComponentActivity() {
         const val ACTION_FROM_SHORTCUT = "app.focal.action.FROM_SHORTCUT"
         /** The recording notification: show the recording screen. */
         const val ACTION_SHOW_RECORDING = "app.focal.action.SHOW_RECORDING"
+        /** Hard ceiling for holding the system splash while SQLite emits the first library frame. */
+        private const val SPLASH_MAX_HOLD_MS = 280L
+        private const val SPLASH_ICON_EXIT_SCALE = 0.90f
     }
 }

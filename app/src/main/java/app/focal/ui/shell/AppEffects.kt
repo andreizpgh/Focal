@@ -79,7 +79,9 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
             undo = stringResource(R.string.action_undo), storage = stringResource(R.string.action_storage),
             tryAgain = stringResource(R.string.action_try_again), deleted = stringResource(R.string.feedback_deleted),
             audioRemoved = stringResource(R.string.feedback_audio_removed), tooLate = stringResource(R.string.feedback_too_late),
-            nothingRecorded = stringResource(R.string.feedback_nothing_recorded), storageShort = stringResource(R.string.feedback_storage),
+            nothingRecorded = stringResource(R.string.feedback_nothing_recorded),
+            noSpeechDiscarded = stringResource(R.string.feedback_no_speech_discarded),
+            storageShort = stringResource(R.string.feedback_storage),
             storageResume = stringResource(R.string.feedback_storage_resume), micBusy = stringResource(R.string.feedback_mic_busy),
             interrupted = stringResource(R.string.feedback_interrupted),
         ),
@@ -112,6 +114,12 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
             scope.launch {
                 when (event) {
                     ServiceEvent.NothingRecorded -> feedback.show(words.nothingRecorded)
+                    is ServiceEvent.NoSpeechDiscarded -> feedback.showDeferred(
+                        words.noSpeechDiscarded,
+                        FeedbackAction(words.undo, FocalIcon.Undo),
+                        undo = { library.undoDelete(event.noteId) },
+                        commit = { library.commitDelete(event.noteId) },
+                    )
                     is ServiceEvent.StartFailed -> when (event.reason) {
                         StartFailure.STORAGE -> {
                             val amount = Formatter.formatShortFileSize(context, event.storageShortBytes)
@@ -211,8 +219,8 @@ fun AppEffects(shell: ShellState, library: LibraryViewModel, recording: Recordin
 /** The feedback pill's words, resolved in composition. */
 private data class FeedbackWords(
     val undo: String, val storage: String, val tryAgain: String, val deleted: String, val audioRemoved: String,
-    val tooLate: String, val nothingRecorded: String, val storageShort: String, val storageResume: String, val micBusy: String,
-    val interrupted: String,
+    val tooLate: String, val nothingRecorded: String, val noSpeechDiscarded: String, val storageShort: String,
+    val storageResume: String, val micBusy: String, val interrupted: String,
 )
 
 private fun Context.openStorageSettings() {

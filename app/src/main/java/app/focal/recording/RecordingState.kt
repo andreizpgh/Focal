@@ -44,8 +44,11 @@ data class LiveSession(
 
 /** One-off outcomes of service commands that have no note to show them on. */
 sealed interface ServiceEvent {
-    /** Finish found no sound at all (no bytes or exactly constant samples): the note was discarded. */
+    /** Finish found no sound at all (no bytes, constant samples, or an instant tap with no speech): the note was discarded. */
     data object NothingRecorded : ServiceEvent
+
+    /** Transcription finished with no recognized speech: the note went to the trash with an Undo window. */
+    data class NoSpeechDiscarded(val noteId: String) : ServiceEvent
 
     /** Record could not start. [storageShortBytes] is set when free space was the reason. */
     data class StartFailed(val reason: StartFailure, val message: String, val storageShortBytes: Long = 0) : ServiceEvent
