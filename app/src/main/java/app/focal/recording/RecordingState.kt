@@ -37,6 +37,8 @@ data class LiveSession(
     val storageShortBytes: Long = 0,
     val progress: Float? = null,
     val speech: SpeechAvailability = SpeechAvailability.READY,
+    /** In-memory live preview of the currently open window while recording and visible; empty when settled. */
+    val preview: String = "",
 ) {
     /** True while the microphone session lasts (recording or paused). */
     val capturing: Boolean get() = noteId != null && !processing

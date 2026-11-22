@@ -244,7 +244,11 @@ object FocalTiming {
      * longest wait from a tap to the next frame.
      */
     const val TRIGGER_LEAD_MS = 16L
-    const val FEEDBACK_MS = 8000
+    /** Informational feedback pill without an action ("Text copied", "Nothing was recorded"). */
+    const val FEEDBACK_SHORT_MS = 2800
+    /** Feedback pill with an action ("Note deleted · Undo", "Try again"). */
+    const val FEEDBACK_ACTION_MS = 5000
+    const val FEEDBACK_MS = FEEDBACK_ACTION_MS
     const val HINT_RECORDINGS = 3
     const val LIGHT_UP_STAGGER_MS = 24L
     const val LIGHT_UP_GLOW_DELAY_MS = 60L

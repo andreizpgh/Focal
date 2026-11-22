@@ -63,11 +63,11 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
 
     private data class Session(
         val noteId: String?, val capturing: Boolean, val paused: Boolean, val processing: Boolean, val seconds: Long,
-        val pauseReason: String?, val storageShort: Long, val speech: SpeechAvailability,
+        val pauseReason: String?, val storageShort: Long, val speech: SpeechAvailability, val preview: String,
     )
 
     private val session: Flow<Session> = RecordingState.live.map {
-        Session(it.noteId, it.capturing, it.paused, it.processing, it.duration / 1000, it.pauseReason, it.storageShortBytes, it.speech)
+        Session(it.noteId, it.capturing, it.paused, it.processing, it.duration / 1000, it.pauseReason, it.storageShortBytes, it.speech, it.preview)
     }.distinctUntilChanged()
 
     /** The live note's paragraphs, re-read when the store changes while a recording runs. */
@@ -88,6 +88,9 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
             isStarting -> RecordingPhase.STARTING
             else -> RecordingPhase.IDLE
         }
+        val liveParagraphs = if (!live.capturing) emptyList()
+        else if (live.preview.isNotBlank()) text + LiveParagraph(LIVE_PREVIEW_ID, live.preview, open = true, tentative = true)
+        else text
         RecordingUiState(
             phase = phase,
             noteId = live.noteId.takeIf { phase != RecordingPhase.IDLE && phase != RecordingPhase.STARTING },
@@ -96,7 +99,7 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
             pauseReason = PauseReason.of(live.pauseReason).takeIf { live.capturing && live.paused },
             storageShortBytes = if (live.capturing) live.storageShort else 0,
             speech = live.speech,
-            paragraphs = if (live.capturing) text else emptyList(),
+            paragraphs = liveParagraphs,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecordingUiState())
 
@@ -156,5 +159,9 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
             if (error is CancellationException) throw error
             RecordingState.events.tryEmit(ServiceEvent.StartFailed(StartFailure.OTHER, app.getString(R.string.error_recording_unreachable)))
         }
+    }
+
+    private companion object {
+        const val LIVE_PREVIEW_ID = -1L
     }
 }

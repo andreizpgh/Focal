@@ -114,7 +114,7 @@ internal sealed interface NoteItem {
     data object Head : NoteItem { override val key: Any = "head" }
     data class Text(val paragraph: ParagraphUi, val index: Int) : NoteItem { override val key: Any = paragraph.id }
     /** The time the paragraph under it starts at in the recording. */
-    data class Time(val paragraph: ParagraphUi) : NoteItem { override val key: Any = timeKey(paragraph.id) }
+    data class Time(val paragraph: ParagraphUi, val index: Int = 0) : NoteItem { override val key: Any = timeKey(paragraph.id) }
     data class Gap(val gap: GapUi) : NoteItem { override val key: Any = "gap:${gap.startMs}" }
     data object Writing : NoteItem { override val key: Any = "writing" }
     data object NoSpeech : NoteItem { override val key: Any = "no-speech" }
@@ -737,7 +737,7 @@ fun NotePage(
     fun report(outcome: EditOutcome, otherwise: String) {
         val message = when (outcome) {
             is EditOutcome.Saved -> return
-            is EditOutcome.Failed -> outcome.message
+            is EditOutcome.Failed -> outcome.message.ifBlank { otherwise }
             else -> otherwise
         }
         scope.launch { bottom.feedback.show(message) }
@@ -852,9 +852,9 @@ fun NotePage(
         span.text(paragraph)
     }
     var spellSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
-    LaunchedEffect(inReview, activeSpanWord) {
+    LaunchedEffect(page.editing, find.open, activeSpanWord) {
         spellSuggestions = emptyList()
-        val word = activeSpanWord?.takeIf { inReview } ?: return@LaunchedEffect
+        val word = activeSpanWord?.takeIf { page.editing && !find.open } ?: return@LaunchedEffect
         spellSuggestions = SpellSuggestions.forWord(context, word)
     }
     val reviewSuggestions = remember(activeSpan, paragraphs, spellSuggestions) {
@@ -956,23 +956,18 @@ fun NotePage(
     }
     fun keepCurrent(span: ReviewSpan) {
         write {
-            if (!session.save()) {
-                if (session.failures >= 2) scope.launch { bottom.feedback.show(saveFailed) }
-                return@write
-            }
             val id = session.resolve(span.paragraphId)
-            val stored = session.paragraph(id) ?: return@write
-            val outcome = actions.confirmDoubt(stored.id, stored.revision, span.start, span.end)
+            val outcome = session.confirmDoubt(id, span.start, span.end)
             if (outcome !is EditOutcome.Saved) {
-                report(outcome, notSaved)
+                if (session.failures >= 2) scope.launch { bottom.feedback.show(saveFailed) }
+                else report(outcome, notSaved)
                 return@write
             }
-            session.applySaved(outcome.paragraphs)
             val fresh = freshParagraphs()
             val remaining = fresh.flatMap { it.unclearSpans() }
             if (page.reviewing && remaining.isNotEmpty()) {
-                nextSpanIn(fresh, stored.id, span.end)?.let(::focusSpan)
-                offerConfirmUndo(outcome, wordConfirmedLabel)
+                // Top-bar Undo handles Keep cleanly while staying in Review; no bottom pill obscuring the next word.
+                nextSpanIn(fresh, id, span.end)?.let(::focusSpan)
             } else {
                 val allDone = page.reviewing && remaining.isEmpty()
                 exitEdit()
@@ -1390,7 +1385,7 @@ fun NotePage(
                         .graphicsLayer {
                             val bodyReveal = reveal.body()
                             alpha = listFade.value * bodyReveal
-                            translationY = (1f - bodyReveal) * settleLiftPx
+                            translationY = if (reveal.opening()) (1f - bodyReveal) * settleLiftPx else 0f
                         },
                 ) {
                     // The text column is at most 600 dp and centred (spec 2.5); the list itself spans the page, so it
@@ -1445,6 +1440,7 @@ fun NotePage(
                                     // Not from Edit or Find: playback would scroll the text under the caret.
                                     onPlay = if (canPlay && !page.editing && !find.open) { { playFromWord(item.paragraph, 0) } } else null,
                                     modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
+                                    entrance = entranceDelay(landing, item.index, paragraphs.size),
                                 )
                                 is NoteItem.Gap -> GapRow(
                                     // Not from Edit or Find: playback would scroll the text under the caret.

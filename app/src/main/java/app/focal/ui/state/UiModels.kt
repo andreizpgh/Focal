@@ -242,9 +242,9 @@ enum class RecordingPhase {
     FINISHING,
 }
 
-/** A paragraph of the live recording ([open] is still growing). */
+/** A paragraph of the live recording ([open] is still growing; [tentative] is the in-memory live tail preview). */
 @Immutable
-data class LiveParagraph(val id: Long, val text: String, val open: Boolean)
+data class LiveParagraph(val id: Long, val text: String, val open: Boolean, val tentative: Boolean = false)
 
 /**
  * The recording screen. [elapsedSeconds] ticks once a second (the meter level is NOT here: read
@@ -433,7 +433,7 @@ enum class ThemeMode(val key: String) {
     }
 }
 
-/** Settings: [audioBytes] is the space the kept audio of [notesWithAudio] notes uses. */
+/** Settings: [audioBytes] is the space the kept audio of [notesWithAudio] notes uses; [noteCount] is settled notes. */
 @Immutable
 data class SettingsUiState(
     val theme: ThemeMode = ThemeMode.SYSTEM,
@@ -442,6 +442,10 @@ data class SettingsUiState(
     val versionName: String = "",
     /** A note with audio shows the time each paragraph starts at. */
     val paragraphTimes: Boolean = true,
-    /** Whether [audioBytes] and [notesWithAudio] have been read yet. */
+    /** Whether [audioBytes], [notesWithAudio], and [noteCount] have been read yet. */
     val usageKnown: Boolean = true,
+    /** Settled notes available for export, backup, or bulk deletion. */
+    val noteCount: Int = notesWithAudio,
+    /** An export, backup, restore, or delete-all operation is currently running. */
+    val busy: Boolean = false,
 )

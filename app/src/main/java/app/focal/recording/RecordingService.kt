@@ -29,6 +29,7 @@ import app.focal.core.DecodePolicy
 import app.focal.core.LevelMeter
 import app.focal.core.MeterMath
 import app.focal.core.SpeechDetector
+import app.focal.core.SpeechTuning
 import app.focal.data.CaptureReason
 import app.focal.data.MAX_DECODE_ATTEMPTS
 import app.focal.data.NoteState
@@ -84,6 +85,9 @@ internal interface RecordingDecoder : AutoCloseable {
 
     /** Decodes one persisted window and commits it with [NoteStore.commitDecoded]. */
     suspend fun transcribe(store: NoteStore, window: StoredWindow, threads: Int)
+
+    /** Ephemeral read-only preview of an open recording tail (in-memory only, never persisted). */
+    suspend fun preview(store: NoteStore, noteId: String, startMs: Long, endMs: Long, threads: Int): String? = null
     fun cancel()
 }
 
@@ -778,7 +782,7 @@ class RecordingService : Service() {
             notifications.cancelAutoPause()
             session.claim.finishCapture()
             updateLive {
-                if (it.noteId == id) it.copy(processing = true, paused = false, pauseReason = null, storageShortBytes = 0) else it
+                if (it.noteId == id) it.copy(processing = true, paused = false, pauseReason = null, storageShortBytes = 0, preview = "") else it
             }
             // The microphone and original file are closed before waiting on any database work.
             withContext(NonCancellable + Dispatchers.IO) {
@@ -1048,6 +1052,8 @@ class RecordingService : Service() {
         }
         try {
             var lastProgress = -1f
+            var previewFromMs = -1L
+            var previewEndMs = -1L
             while (true) {
                 currentCoroutineContext().ensureActive()
                 reconcileWake()
@@ -1108,7 +1114,10 @@ class RecordingService : Service() {
                     if (!live) lastProgress = publishProgress(id, lastProgress)
                     else {
                         val pending = store.pendingCount(id)
-                        updateLive { if (it.noteId == id) it.copy(pending = pending) else it }
+                        // A committed window replaced the open tail: clear stale ephemeral preview until the next tail speaks.
+                        previewFromMs = -1L
+                        previewEndMs = -1L
+                        updateLive { if (it.noteId == id) it.copy(pending = pending, preview = "") else it }
                     }
                     val warm = DeviceSpeechPolicy.warm(this)
                     val cooldown = DecodePolicy.cooldownMs(SystemClock.elapsedRealtime() - started, power.isPowerSaveMode, warm)
@@ -1131,6 +1140,39 @@ class RecordingService : Service() {
                 if (!live && feed.complete) {
                     if (pending != null) return Outcome.Blocked(engine.failure ?: "Saved audio can be transcribed later.", engine.cause)
                     return complete(id, fromFinish = target.fromFinish)
+                }
+                // Ephemeral in-memory live preview while recording and visible on screen (zero battery cost in background).
+                if (live && decoder != null && !note.legacy && AppPresence.visible && session?.paused?.get() != true &&
+                    !power.isPowerSaveMode && !DeviceSpeechPolicy.warm(this)
+                ) {
+                    val tailStart = store.lastWindow(id)?.ownEndMs ?: 0L
+                    val tailEnd = note.duration
+                    val tailLen = tailEnd - tailStart
+                    val maxTail = SpeechTuning.MAX_WINDOW_MS + SpeechTuning.RIGHT_CONTEXT_MS
+                    val readyForPreview = tailLen in SpeechTuning.LIVE_PREVIEW_MIN_MS..maxTail &&
+                        feed.openSpeechMs >= SpeechTuning.LIVE_PREVIEW_MIN_SPEECH_MS &&
+                        (tailStart != previewFromMs || tailEnd - previewEndMs >= SpeechTuning.LIVE_PREVIEW_STEP_MS)
+                    if (readyForPreview) {
+                        val text = try {
+                            transcriber = decoder
+                            app.engineGuard.inside(EngineStage.DECODE) {
+                                decoder.preview(store, id, tailStart, tailEnd, engine.threads)
+                            }
+                        } catch (error: OutOfMemoryError) {
+                            Log.w(TAG, "Live preview ran out of memory", error)
+                            engine.outOfMemory(EngineStage.DECODE)
+                            null
+                        } catch (error: Exception) {
+                            if (error is CancellationException) throw error
+                            null
+                        }
+                        previewFromMs = tailStart
+                        previewEndMs = tailEnd
+                        if (!text.isNullOrBlank()) {
+                            updateLive { if (it.noteId == id && it.capturing) it.copy(preview = text) else it }
+                        }
+                        continue
+                    }
                 }
                 delay(if (live) LIVE_POLL_MS else 50)
             }

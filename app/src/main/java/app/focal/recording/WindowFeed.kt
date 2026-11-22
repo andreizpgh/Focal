@@ -32,6 +32,9 @@ internal class WindowFeed(
     var complete = false
         private set
 
+    /** Detected speech milliseconds in the currently open, uncommitted window. */
+    val openSpeechMs: Long get() = segmenter?.openSpeechMs ?: 0L
+
     /**
      * Plans windows from saved audio: up to [durableMs] (the synced watermark) and any synced Pause while
      * recording, the whole file once [finished]. Returns true when it saved at least one window.

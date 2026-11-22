@@ -170,9 +170,10 @@ fun FeedbackPill(state: FeedbackHostState, modifier: Modifier = Modifier) {
         if (message == null) return@LaunchedEffect
         val platform = context.getSystemService(AccessibilityManager::class.java)
         if (platform?.isTouchExplorationEnabled == true) return@LaunchedEffect
+        val baseTimeout = if (message.action != null) FocalTiming.FEEDBACK_ACTION_MS.toLong() else FocalTiming.FEEDBACK_SHORT_MS.toLong()
         val timeout = accessibility?.calculateRecommendedTimeoutMillis(
-            FocalTiming.FEEDBACK_MS.toLong(), containsIcons = false, containsText = true, containsControls = message.action != null,
-        ) ?: FocalTiming.FEEDBACK_MS.toLong()
+            baseTimeout, containsIcons = false, containsText = true, containsControls = message.action != null,
+        ) ?: baseTimeout
         delay(timeout)
         state.dismiss()
     }

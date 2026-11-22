@@ -53,6 +53,7 @@ internal object SpellSuggestions {
                     }
                     session = runCatching {
                         manager.newSpellCheckerSession(null, locale, listener, false)
+                            ?: manager.newSpellCheckerSession(null, null, listener, true)
                     }.getOrNull()
                     if (session == null) {
                         finish(emptyList())
@@ -75,7 +76,7 @@ internal object SpellSuggestions {
         val attrs = info.suggestionsAttributes
         val inDict = (attrs and SuggestionsInfo.RESULT_ATTR_IN_THE_DICTIONARY) != 0
         val typo = (attrs and SuggestionsInfo.RESULT_ATTR_LOOKS_LIKE_TYPO) != 0
-        if (inDict || !typo) return emptyList()
+        if (inDict || (!typo && info.suggestionsCount <= 0)) return emptyList()
         val originalLower = original.lowercase(Locale.ROOT)
         val out = ArrayList<String>(MAX_SUGGESTIONS)
         val count = info.suggestionsCount
@@ -91,9 +92,9 @@ internal object SpellSuggestions {
     }
 
     private fun detectLocale(word: String): Locale {
-        if (word.any { it in '\u0400'..'\u04FF' }) return Locale.forLanguageTag("ru")
+        if (word.any { it in '\u0400'..'\u04FF' }) return Locale.forLanguageTag("ru-RU")
         val default = Locale.getDefault()
-        if (default.language.equals("ru", ignoreCase = true)) return Locale.ENGLISH
+        if (default.language.equals("ru", ignoreCase = true)) return Locale.US
         return default
     }
 }

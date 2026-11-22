@@ -115,6 +115,9 @@ class Segmenter(
 
     val isFinished: Boolean get() = planner.finished
 
+    /** Detected speech milliseconds in the currently open, uncommitted window (used for live tail preview gating). */
+    val openSpeechMs: Long get() = planner.openSpeechMs()
+
     private val planner = CutPlanner(config, start, feedFromSample / SLOT_SAMPLES, feedFromSample / FRAME_SAMPLES)
     private val flagSamples = if (detector != null) SpeechTuning.VAD_WINDOW_SAMPLES else FRAME_SAMPLES
     private val energy = if (detector == null) RelativeEnergyDetector(ENERGY_TRAIL_FRAMES.toInt()) else null
@@ -315,6 +318,12 @@ internal class CutPlanner(
     }
 
     fun takeReady(): List<WindowPlan> = ready.toList().also { ready.clear() }
+
+    fun openSpeechMs(): Long {
+        var speechSlots = 0L
+        for (j in 0 until slotCount) if (!quiet[j]) speechSlots++
+        return speechSlots * SLOT_MS
+    }
 
     private fun cut(at: Long, kind: EndKind, trigger: Long, endSlot: Long, extraPeak: Int) {
         val owned = (endSlot - windowFirstSlot).toInt().coerceIn(0, slotCount)

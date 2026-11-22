@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.focal.data.ConfirmUndo
 import app.focal.data.SplitOrigin
 import app.focal.ui.state.BlankParagraph
 import app.focal.ui.state.EditOutcome
@@ -31,6 +32,12 @@ interface EditBackend {
     suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditOutcome
 
     suspend fun restore(id: Long, revision: Long): EditOutcome
+
+    /** Marks doubtful words overlapping [start]..<[end] in [id] as reviewed without changing text. */
+    suspend fun confirmDoubt(id: Long, revision: Long, start: Int, end: Int): EditOutcome = EditOutcome.Stale
+
+    /** Restores doubt flags cleared by [confirmDoubt]. */
+    suspend fun undoConfirmDoubt(undo: ConfirmUndo): EditOutcome = EditOutcome.Stale
 }
 
 /** One undoable step of an edit session (spec 5.7: typing, split, merge, restore and Replace all share one log). */
@@ -52,6 +59,9 @@ sealed interface EditStep {
 
     /** Replace all, inside Edit: every paragraph it changed. */
     data class Replace(val changes: List<Text>) : EditStep
+
+    /** "Keep" on an unclear word inside Edit/Review: clears doubt flags without changing text. */
+    data class Confirm(val id: Long, val start: Int, val end: Int, val text: String, val receipt: ConfirmUndo) : EditStep
 }
 
 /**
@@ -96,6 +106,8 @@ data class EditLog(
         fun keep(steps: List<EditStep>): List<EditStep> {
             val kept = ArrayList<EditStep>()
             for (step in steps.asReversed()) {
+                // Confirm receipts are in-memory session undo entries, not serialized across process death.
+                if (step is EditStep.Confirm) continue
                 val cost = step.textLength()
                 if (cost > left) break
                 left -= cost
@@ -148,6 +160,7 @@ private fun EditStep.textLength(): Int = when (this) {
     is EditStep.Split -> origin.text.length + origin.sourceText.orEmpty().length + origin.wordsJson.orEmpty().length
     is EditStep.Merge -> text.length
     is EditStep.Replace -> changes.sumOf { it.before.length + it.after.length }
+    is EditStep.Confirm -> 0
 }
 
 private fun EditChange.textLength(): Int = when (this) {
@@ -184,6 +197,7 @@ private fun EditStep.ids(): List<Long> = when (this) {
     is EditStep.Split -> listOf(id, newId)
     is EditStep.Merge -> listOf(firstId, secondId)
     is EditStep.Replace -> changes.map { it.id }
+    is EditStep.Confirm -> listOf(id)
 }
 
 private fun EditStep.encodeInto(out: ArrayList<Any>) {
@@ -202,6 +216,7 @@ private fun EditStep.encodeInto(out: ArrayList<Any>) {
             out += changes.size
             changes.forEach { out += it.id; out += it.before; out += it.after }
         }
+        is EditStep.Confirm -> Unit
     }
 }
 
@@ -549,6 +564,19 @@ class EditSession(private val backend: EditBackend) {
         undoLocked() != null
     }
 
+    /** Confirming a doubtful word ("Keep") as one undoable step in this edit session's top-bar Undo/Redo stack. */
+    suspend fun confirmDoubt(id: Long, start: Int, end: Int): EditOutcome = mutex.withLock {
+        if (!saveLocked()) return@withLock EditOutcome.Failed("")
+        val target = resolve(id)
+        val stored = paragraphLocked(target) ?: return@withLock EditOutcome.Stale
+        val outcome = backend.confirmDoubt(target, revision(target), start, end)
+        if (outcome !is EditOutcome.Saved) return@withLock outcome
+        apply(outcome.paragraphs)
+        outcome.confirmUndo?.let { receipt -> push(EditStep.Confirm(target, start, end, stored.text, receipt)) }
+        succeed()
+        outcome
+    }
+
     /** Undoes the last step once everything shown is stored; the caret goes where it happened. Null: nothing undone. */
     suspend fun undo(): CaretAt? = mutex.withLock { if (saveLocked()) undoLocked() else null }
 
@@ -561,9 +589,9 @@ class EditSession(private val backend: EditBackend) {
             tooLate()
             return@withLock null
         }
-        val caret = run(step, forward = true) ?: return@withLock null
+        val (caret, refreshed) = runStep(step, forward = true) ?: return@withLock null
         redoSteps.removeAt(redoSteps.lastIndex)
-        undoSteps.add(step)
+        undoSteps.add(refreshed)
         caret
     }
 
@@ -619,6 +647,7 @@ class EditSession(private val backend: EditBackend) {
             is EditStep.Merge -> if (forward) text(step.firstId)?.length == step.offset && text(step.secondId) != null
                 else text(step.secondId)?.let { joined -> step.text.isEmpty() || joined == step.text } == true
             is EditStep.Replace -> step.changes.all { text(it.id) == if (forward) it.before else it.after }
+            is EditStep.Confirm -> text(step.id) == step.text
         }
     }
 
@@ -629,9 +658,9 @@ class EditSession(private val backend: EditBackend) {
             tooLate()
             return null
         }
-        val caret = run(step, forward = false) ?: return null
+        val (caret, refreshed) = runStep(step, forward = false) ?: return null
         undoSteps.removeAt(undoSteps.lastIndex)
-        redoSteps.add(step)
+        redoSteps.add(refreshed)
         return caret
     }
 
@@ -732,6 +761,28 @@ class EditSession(private val backend: EditBackend) {
         return Merge.Done
     }
 
+    private suspend fun runStep(step: EditStep, forward: Boolean): Pair<CaretAt, EditStep>? = when (step) {
+        is EditStep.Confirm -> if (forward) {
+            val target = resolve(step.id)
+            val outcome = backend.confirmDoubt(target, revision(target), step.start, step.end)
+            if (outcome !is EditOutcome.Saved) fail() else {
+                apply(outcome.paragraphs)
+                succeed()
+                val updated = outcome.confirmUndo?.let { step.copy(id = target, receipt = it) } ?: step
+                CaretAt(target, step.start, step.end) to updated
+            }
+        } else {
+            val target = resolve(step.id)
+            val outcome = backend.undoConfirmDoubt(step.receipt)
+            if (outcome !is EditOutcome.Saved) fail() else {
+                apply(outcome.paragraphs)
+                succeed()
+                CaretAt(target, step.start, step.end) to step
+            }
+        }
+        else -> run(step, forward)?.let { it to step }
+    }
+
     private suspend fun run(step: EditStep, forward: Boolean): CaretAt? = when (step) {
         is EditStep.Text -> {
             val text = if (forward) step.after else step.before
@@ -764,6 +815,7 @@ class EditSession(private val backend: EditBackend) {
             val ok = step.changes.all { write(it.id, if (forward) it.after else it.before) }
             if (ok) CaretAt(resolve(step.changes.first().id), 0) else null
         }
+        is EditStep.Confirm -> null
     }
 
     /** Undo of Enter: the paragraph as it was before the split, written back whole; the caret where Enter was. */

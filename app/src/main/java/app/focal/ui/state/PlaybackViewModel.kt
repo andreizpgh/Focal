@@ -66,11 +66,9 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
     /** Sets playback speed directly (e.g. from the speed picker popover or drag gesture). */
     fun setSpeed(speed: Float) = player.setSpeed(speed)
 
-    /** Cycles playback speed through [SPEEDS]. */
+    /** Cycles playback speed through [QUICK_SPEEDS] (1× → 1.5× → 2× → 1×). */
     fun cycleSpeed() {
-        val current = player.playback.value.speed
-        val index = SPEEDS.indexOfFirst { kotlin.math.abs(it - current) < 0.05f }
-        player.setSpeed(SPEEDS[(index + 1) % SPEEDS.size])
+        player.setSpeed(nextQuickSpeed(player.playback.value.speed))
     }
 
     /** Stops playback of [noteId] only (its audio is being removed, or it was deleted). */
@@ -90,6 +88,15 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
         /** Playback starts this long before the tapped word. */
         const val PREROLL_MS = 500L
         val SPEEDS = floatArrayOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+        /** Quick tap cycle presets; long-press / drag offers every 0.25× step in [SPEEDS]. */
+        val QUICK_SPEEDS = floatArrayOf(1f, 1.5f, 2f)
+
+        fun nextQuickSpeed(current: Float): Float = when {
+            current < 0.98f -> 1f
+            current < 1.48f -> 1.5f
+            current < 1.98f -> 2f
+            else -> 1f
+        }
     }
 }
 

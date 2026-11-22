@@ -113,6 +113,10 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         override suspend fun merge(firstId: Long, firstRevision: Long, secondId: Long, secondRevision: Long): EditOutcome =
             this@NoteViewModel.merge(firstId, firstRevision, secondId, secondRevision)
         override suspend fun restore(id: Long, revision: Long): EditOutcome = restoreOriginal(id, revision)
+        override suspend fun confirmDoubt(id: Long, revision: Long, start: Int, end: Int): EditOutcome =
+            this@NoteViewModel.confirmDoubt(id, revision, start, end)
+        override suspend fun undoConfirmDoubt(undo: ConfirmUndo): EditOutcome =
+            this@NoteViewModel.undoConfirmDoubt(undo)
     }
 
     /**

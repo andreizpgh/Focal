@@ -55,11 +55,13 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
@@ -269,12 +271,14 @@ private val SPEED_ROW_HEIGHT = 36.dp
 private val SPEED_MENU_PAD = 4.dp
 private val SPEED_MENU_GAP = 8.dp
 private val SPEED_MENU_WIDTH = 68.dp
+private val SPEED_PILL_MIN_WIDTH = 56.dp
 private val SPEED_MENU_RADIUS = 18.dp
 private const val SPEED_HOLD_MS = 180L
 
 /**
- * Playback speed control supporting both tap-to-open-menu and press-hold-drag-release selection over
- * 0.5×..2× in 0.25× steps, with crisp haptic ticks on each step.
+ * Playback speed control with a fixed-width pill (zero horizontal shift across values):
+ * short tap cycles quick steps (1× → 1.5× → 2× → 1×), while press-and-hold or dragging upward
+ * opens a stationary 0.5×..2× (0.25× step) popover with haptic ticks on each step.
  */
 @Composable
 private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
@@ -291,6 +295,13 @@ private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
     val text = speedLabel(displaySpeed)
     val description = stringResource(R.string.cd_playback_speed, speedLabel(speed))
     val isDefault = abs(displaySpeed - 1f) < 0.05f
+    val pillStyle = remember { FocalType.caption.copy(fontWeight = FocalWeight.Medium).tabular() }
+    val measurer = rememberTextMeasurer()
+    // Fixed pill width matched to the widest speed ("1.75×") so neither the pill nor the popover jitters.
+    val pillWidth = remember(measurer, density, pillStyle) {
+        val widestPx = measurer.measure("1.75×", style = pillStyle, maxLines = 1, softWrap = false).size.width
+        with(density) { widestPx.toDp() + FocalGrid.x8 * 2 }.coerceAtLeast(SPEED_PILL_MIN_WIDTH)
+    }
 
     Box(
         Modifier
@@ -298,7 +309,14 @@ private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
             .clearAndSetSemantics {
                 contentDescription = description
                 role = Role.Button
-                this.onClick { open = !open; true }
+                this.onClick {
+                    if (open) open = false else select(PlaybackViewModel.nextQuickSpeed(currentSpeed))
+                    true
+                }
+                this.onLongClick {
+                    open = true
+                    true
+                }
             }
             .focusRing(FocalShapes.pill)
             .pointerInput(Unit) {
@@ -310,7 +328,9 @@ private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     down.consume()
+                    val wasOpen = open
                     var dragActive = false
+                    var movedIntoMenu = false
                     var lastHovered: Float? = null
                     fun enterDrag() {
                         if (dragActive) return
@@ -322,7 +342,9 @@ private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     }
                     fun updateHover(y: Float) {
-                        val candidate = if (y >= -gapPx / 2f) {
+                        val inMenu = y < -gapPx / 2f
+                        if (inMenu) movedIntoMenu = true
+                        val candidate = if (!inMenu) {
                             currentSpeed
                         } else {
                             val idx = ((y - listTopY) / rowPx).toInt().coerceIn(0, SPEEDS_DESC.lastIndex)
@@ -334,7 +356,7 @@ private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
                     }
-                    // Wait up to SPEED_HOLD_MS for either an up (tap) or vertical drag past touchSlop.
+                    // Wait up to SPEED_HOLD_MS for either a quick tap or a vertical drag past touchSlop.
                     var lifted = false
                     try {
                         withTimeout(SPEED_HOLD_MS) {
@@ -358,16 +380,26 @@ private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
                         enterDrag()
                     }
                     if (lifted && !dragActive) {
-                        open = !open
+                        if (wasOpen) {
+                            open = false
+                        } else {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            select(PlaybackViewModel.nextQuickSpeed(currentSpeed))
+                        }
                         return@awaitEachGesture
                     }
+                    var keepOpenForTap = false
                     try {
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
                             change.consume()
                             if (!change.pressed) {
-                                lastHovered?.let { chosen -> select(chosen) }
+                                if (movedIntoMenu) {
+                                    lastHovered?.let { chosen -> select(chosen) }
+                                } else {
+                                    keepOpenForTap = true
+                                }
                                 break
                             }
                             updateHover(change.position.y)
@@ -375,7 +407,7 @@ private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
                     } finally {
                         dragging = false
                         hovered = null
-                        open = false
+                        if (!keepOpenForTap) open = false
                     }
                 }
             },
@@ -383,7 +415,7 @@ private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
     ) {
         Box(
             Modifier
-                .widthIn(min = 48.dp)
+                .width(pillWidth)
                 .heightIn(min = 32.dp)
                 .background(if (open || !isDefault) colors.s2 else colors.s1, FocalShapes.pill)
                 .padding(horizontal = FocalGrid.x8),
@@ -391,7 +423,7 @@ private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
         ) {
             Text(
                 text,
-                style = FocalType.caption.copy(fontWeight = FocalWeight.Medium).tabular(),
+                style = pillStyle,
                 color = if (open || !isDefault) colors.ink else colors.recede,
                 maxLines = 1,
                 softWrap = false,

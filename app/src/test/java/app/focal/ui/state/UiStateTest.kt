@@ -238,4 +238,15 @@ class NotePhasesTest {
         assertEquals(ThemeMode.SYSTEM, ThemeMode.of("unknown"))
         assertEquals(ThemeMode.DARK, ThemeMode.of("dark"))
     }
+
+    @Test fun quickSpeedCyclesOneToTwoAndJumpsFromFineSteps() {
+        assertEquals(1.5f, PlaybackViewModel.nextQuickSpeed(1f), 0.001f)
+        assertEquals(2f, PlaybackViewModel.nextQuickSpeed(1.5f), 0.001f)
+        assertEquals(1f, PlaybackViewModel.nextQuickSpeed(2f), 0.001f)
+        // Fine steps from the long-press menu step cleanly up to the next quick preset.
+        assertEquals(1f, PlaybackViewModel.nextQuickSpeed(0.5f), 0.001f)
+        assertEquals(1f, PlaybackViewModel.nextQuickSpeed(0.75f), 0.001f)
+        assertEquals(1.5f, PlaybackViewModel.nextQuickSpeed(1.25f), 0.001f)
+        assertEquals(2f, PlaybackViewModel.nextQuickSpeed(1.75f), 0.001f)
+    }
 }

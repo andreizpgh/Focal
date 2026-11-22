@@ -99,11 +99,11 @@ internal class ServiceNotifications(private val context: Context) {
     fun cancelAutoPause() = runCatching { manager.cancel(PAUSE_ALERT_ID) }
 
     /**
-     * "Note ready" (or the partial-failure line) over the note's title, unless the note is on screen. Several are
-     * bundled under one summary; a single one stands alone.
+     * "Note ready" (or the partial-failure line) over the note's title, only when Focal is in the background.
+     * Several are bundled under one summary; a single one stands alone.
      */
     fun ready(noteId: String, title: String, created: Long, partial: Boolean) {
-        if (AppPresence.isShowing(noteId)) return
+        if (AppPresence.visible) return
         val headline = if (partial) R.string.n_partial else R.string.n_ready
         val builder = base(READY, openApp(noteId, recording = false)).setAutoCancel(true)
             .setContentTitle(context.getString(headline))
@@ -116,6 +116,7 @@ internal class ServiceNotifications(private val context: Context) {
 
     /** Android stopped background transcription (onTimeout): it continues when Focal is opened. */
     fun timedOut(noteId: String?) {
+        if (AppPresence.visible) return
         val builder = base(TRANSCRIPTION, openApp(noteId, recording = false)).setAutoCancel(true)
             .setContentTitle(context.getString(R.string.n_timeout_title))
             .setContentText(context.getString(R.string.n_timeout_text))

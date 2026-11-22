@@ -9,6 +9,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.focal.data.CaptureReason
+import app.focal.recording.AppPresence
 import app.focal.recording.ServiceNotifications
 import app.focal.ui.state.UndoableActions
 import kotlinx.coroutines.runBlocking
@@ -139,6 +140,25 @@ class NotificationsTest {
         ServiceNotifications.cancelReady(app, second)
         awaitState("Note ready for the last note", false) { posted(second) }
         awaitState("the summary without notes", false, ::summaryShown)
+    }
+
+    @Test fun readyAndTimedOutAreSuppressedWhileFocalIsVisible() {
+        val id = app.store.insertNoteForTests(listOf("Quiet foreground note."), 1000).also { created += it }
+        var dummy: android.app.Activity? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            dummy = android.app.Activity().also { AppPresence.onActivityStarted(it) }
+        }
+        try {
+            assertTrue(AppPresence.visible)
+            notifications.ready(id, "Quiet foreground note", 0, partial = false)
+            notifications.timedOut(id)
+            SystemClock.sleep(SETTLE_MS)
+            assertFalse("Note ready must not fire while Focal is open", posted(id))
+            assertFalse("Timeout alert must not fire while Focal is open",
+                manager.activeNotifications.any { it.id == ServiceNotifications.TIMEOUT_ID })
+        } finally {
+            dummy?.let { act -> InstrumentationRegistry.getInstrumentation().runOnMainSync { AppPresence.onActivityStopped(act) } }
+        }
     }
 
     private fun assertPrivate(notification: Notification, publicTitle: String) {

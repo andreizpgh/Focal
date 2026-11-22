@@ -213,8 +213,14 @@ private fun LiveParagraphText(
     style: TextStyle,
     inks: TranscriptInks,
     motion: TranscriptMotion,
+    tentative: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    if (tentative) {
+        val color = lerp(inks.muted, inks.ink, 0.45f)
+        BasicText(text, modifier, style, color = { color })
+        return
+    }
     val length = text.length
     when {
         recede >= length -> BasicText(text, modifier, style, color = { inks.muted })
@@ -303,7 +309,7 @@ fun StageTranscript(
             androidx.compose.runtime.key(paragraph.id) {
                 val (bright, recede) = view.spans(index)
                 Arriving(view.opens(index, SystemClock.uptimeMillis()), Modifier.fillMaxWidth()) {
-                    LiveParagraphText(paragraph.text, bright, recede, style, inks, motion)
+                    LiveParagraphText(paragraph.text, bright, recede, style, inks, motion, tentative = paragraph.tentative)
                 }
             }
         }
@@ -354,7 +360,7 @@ fun SceneTranscript(
             val index = view.paragraphs.lastIndex - position
             val (bright, recede) = view.spans(index)
             Arriving(view.opens(index, SystemClock.uptimeMillis()), Modifier.fillMaxWidth()) {
-                LiveParagraphText(paragraph.text, bright, recede, style, inks, motion)
+                LiveParagraphText(paragraph.text, bright, recede, style, inks, motion, tentative = paragraph.tentative)
             }
         }
     }

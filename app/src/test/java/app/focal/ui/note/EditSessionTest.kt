@@ -1,5 +1,6 @@
 package app.focal.ui.note
 
+import app.focal.data.ConfirmUndo
 import app.focal.data.SplitOrigin
 import app.focal.ui.state.BlankParagraph
 import app.focal.ui.state.EditOutcome
@@ -99,10 +100,28 @@ private class FakeStore(vararg texts: String) : EditBackend {
         return EditOutcome.Saved(listOf(ui(secondId)))
     }
 
+    val confirmed = HashSet<Long>()
+
     override suspend fun restore(id: Long, revision: Long): EditOutcome {
         check(id, revision)?.let { return it }
         write(id, source[id] ?: return EditOutcome.NoOriginal)
         return EditOutcome.Saved(listOf(ui(id)))
+    }
+
+    override suspend fun confirmDoubt(id: Long, revision: Long, start: Int, end: Int): EditOutcome {
+        check(id, revision)?.let { return it }
+        confirmed += id
+        this.revision[id] = this.revision.getValue(id) + 1
+        val receipt = ConfirmUndo(listOf(ConfirmUndo.Row(id, "[]", this.revision.getValue(id))))
+        return EditOutcome.Saved(listOf(ui(id)), confirmUndo = receipt)
+    }
+
+    override suspend fun undoConfirmDoubt(undo: ConfirmUndo): EditOutcome {
+        val row = undo.rows.single()
+        check(row.id, row.resultingRevision)?.let { return it }
+        confirmed -= row.id
+        this.revision[row.id] = this.revision.getValue(row.id) + 1
+        return EditOutcome.Saved(listOf(ui(row.id)))
     }
 }
 
@@ -964,5 +983,34 @@ class EditSessionTest {
         assertEquals(CaretAt(4, 0), caret)
         // Find open over Edit has no field to put the caret in.
         assertEquals(listOf("Copy paragraph"), actions(editing = true, finding = true).map { it.label })
+    }
+
+    /** "Keep" in Review pushes onto the EditSession Undo/Redo stack so top-bar Undo restores the word without a toast. */
+    @Test fun confirmDoubtUndoAndRedoThroughEditSession() = runBlocking {
+        val store = FakeStore("Check harbor schedule.")
+        val page = Page(store)
+        val start = "Check ".length
+        val end = start + "harbor".length
+        assertTrue(page.edit.confirmDoubt(1, start, end) is EditOutcome.Saved)
+        assertTrue(1L in store.confirmed)
+        assertTrue(page.edit.canUndo)
+        assertFalse(page.edit.canRedo)
+
+        val undoneAt = page.edit.undo()
+        assertEquals(CaretAt(1, start, end), undoneAt)
+        assertFalse(1L in store.confirmed)
+        assertFalse(page.edit.canUndo)
+        assertTrue(page.edit.canRedo)
+
+        val redoneAt = page.edit.redo()
+        assertEquals(CaretAt(1, start, end), redoneAt)
+        assertTrue(1L in store.confirmed)
+        assertTrue(page.edit.canUndo)
+        assertFalse(page.edit.canRedo)
+
+        // A second undo after redo must use the refreshed revision receipt.
+        val undoneAgain = page.edit.undo()
+        assertEquals(CaretAt(1, start, end), undoneAgain)
+        assertFalse(1L in store.confirmed)
     }
 }

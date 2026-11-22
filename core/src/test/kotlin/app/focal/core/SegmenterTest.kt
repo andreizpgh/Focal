@@ -263,4 +263,22 @@ class SegmenterTest {
         assertTrue(!WindowGate.hidesResult(plan(5_000, 900, speech = 0), wordCount = 3))
         assertTrue(!WindowGate.hidesResult(plan(5_000, 900, speech = 10), wordCount = 1))
     }
+
+    @Test
+    fun openSpeechMsTracksOpenWindowAndResetsAfterCut() {
+        val segmenter = Segmenter(detector)
+        val quiet = Pcm().apply { silence(1_500) }.array()
+        segmenter.accept(quiet)
+        assertEquals(0L, segmenter.openSpeechMs)
+
+        val spoken = Pcm().apply { speech(2_000) }.array()
+        segmenter.accept(spoken)
+        assertTrue(segmenter.openSpeechMs >= 1_800L)
+
+        // Complete a 6+ s window with pause and right context so the cut happens and openSpeechMs resets.
+        val finishWin = Pcm().apply { speech(4_500); silence(1_600) }.array()
+        val planned = segmenter.accept(finishWin)
+        assertEquals(1, planned.size)
+        assertEquals(0L, segmenter.openSpeechMs)
+    }
 }

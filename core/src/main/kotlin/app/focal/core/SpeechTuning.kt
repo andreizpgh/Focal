@@ -85,4 +85,12 @@ object SpeechTuning {
     // Doubtful words (provisional GO): min content-token probability below the threshold.
     const val DOUBT_ENABLED = true
     const val DOUBT_THRESHOLD = 0.5
+
+    // Ephemeral live tail preview (in-memory only while recording with app visible; never alters committed windows).
+    /** Minimum durable audio in the open window before the first live preview runs. */
+    const val LIVE_PREVIEW_MIN_MS = 1_200L
+    /** Additional durable audio required before refreshing an open-window live preview. */
+    const val LIVE_PREVIEW_STEP_MS = 1_400L
+    /** Minimum detected speech in the open window before running a live preview decode. */
+    const val LIVE_PREVIEW_MIN_SPEECH_MS = 250L
 }
