@@ -221,8 +221,6 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     internal val rows = HashMap<String, Origin>()
     /** Each composed note page's title, by note id: where the flight lands ([rememberPageTitle]). */
     internal val pageTitles = HashMap<String, PageTitle>()
-    /** The library's day labels where they are laid out (a detached one is gone): T16's fold keeps them off the title. */
-    internal val labels = HashMap<String, LayoutCoordinates>()
 
     private var serial = 0
 
@@ -849,12 +847,16 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         return BackEase.transform((1 - v).coerceIn(0f, 1f))
     }
 
-    /** The origin surface's alpha: dark instrument for a live stage, subtle tonal card for a resting stage or row. */
+    /** The origin surface's alpha: dark instrument for a live stage, tonal card for a resting stage, none for a bare row. */
     internal fun material(c: PageChange): Float = when {
-        c.motion == PageMotion.Row -> smoothstep(ROW_TINT_FROM, ROW_TINT_TO, progress(c)) * ROW_TINT_PEAK
+        c.motion == PageMotion.Row -> 0f
         c.dragged -> smoothstep(PULLED_MATERIAL_FROM, PULLED_MATERIAL_TO, progress(c))
         else -> smoothstep(MATERIAL_FROM, 1f, progress(c))
     }
+
+    /** The paper backing inside the clip: full for stage/opening, fading smoothly with the outgoing page on a row fold. */
+    internal fun paperAlpha(c: PageChange): Float =
+        if (c.motion == PageMotion.Row && !c.push) body(c) else 1f
 
     internal fun reveal(destination: Destination): PageReveal = PageReveal(
         chrome = {
@@ -1131,9 +1133,6 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         const val PULLED_CHROME_FROM = 0.42f
         const val PULLED_BODY_TO = 0.72f
         const val PULLED_BODY_FROM = 0.28f
-        const val ROW_TINT_FROM = 0.15f
-        const val ROW_TINT_TO = 0.85f
-        const val ROW_TINT_PEAK = 0.55f
         val RowRadius = 16.dp
         /** A card let go has landed at either end once this little of its way is left, and stays so (a pixel or two). */
         const val PULL_LANDED = 0.002f
@@ -1367,7 +1366,7 @@ private data class TransformFrame(
     val clip: Rect,
     val radius: Float,
     val p: Float,
-    val paper: Boolean,
+    val paperAlpha: Float,
     val material: Float,
     val content: Float,
     val origin: Rect,
@@ -1441,8 +1440,14 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                 clip = true
             },
     ) {
-        // Paper under the origin's surface, so the library never shows through as a card or row opens into the page.
-        Spacer(Modifier.fillMaxSize().drawBehind { if (frame()?.paper == true) drawRect(colors.paper) })
+        // Paper under the origin's surface: solid while a card opens or folds, fading with the outgoing page on row Back
+        // so no opaque slab ever sits over the returning row and snaps away at landing.
+        Spacer(
+            Modifier.fillMaxSize().drawBehind {
+                val a = frame()?.paperAlpha ?: 0f
+                if (a > 0f) drawRect(colors.paper, alpha = a)
+            },
+        )
         if (change.motion == PageMotion.LiveStage) {
             Spacer(
                 Modifier
@@ -1466,13 +1471,13 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                     )
                 },
             )
-        } else {
+        } else if (stageLike) {
             Spacer(
                 Modifier.fillMaxSize().drawBehind {
                     val f = frame() ?: return@drawBehind
                     if (f.material <= 0f) return@drawBehind
                     drawRect(colors.stageIdleSurface, alpha = f.material)
-                    if (change.motion == PageMotion.Stage && colors.stageIdleBorder.alpha > 0f) {
+                    if (colors.stageIdleBorder.alpha > 0f) {
                         val width = RingWidth.toPx()
                         drawRoundRect(
                             colors.stageIdleBorder, topLeft = f.clip.topLeft + Offset(width / 2, width / 2),
@@ -1486,17 +1491,12 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
         // The page at its own layout (its preview's transform after a predictive release), its text faded toward the
         // clip's edges and, opening, not yet shown where the flying title has still to pass (from its landing line
         // down to the title), so it comes in behind a title that rises from a row and is never drawn under it.
-        // Folding into a row, the returning rows stay under paper where the title has still to pass on its way down.
         Spacer(
             Modifier.fillMaxSize().drawBehind {
                 val f = frame() ?: return@drawBehind
                 val layer = pages.layer ?: return@drawBehind
                 val title = titleInFlight(f)
                 val feather = pages.flightFeather(change)
-                if (title != null && !stageLike && !change.push) {
-                    titleAhead(title, feather)?.let { ahead -> drawRect(ahead.brush(colors.paper), ahead.topLeft(), ahead.size(size.width)) }
-                    placement.coordinates?.let { overlay -> coverLabelsAbove(pages, overlay, title, colors.paper) }
-                }
                 val wake = if (change.push) title?.let { titleWake(it, feather) } else null
                 drawIntoCanvas { canvas ->
                     canvas.saveLayer(Rect(Offset.Zero, size), Paint())
@@ -1538,29 +1538,68 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                     }
                 },
         )
-        // The title, a shared element between the origin and the page (dual-layout uniform-scale flight, zero remeasurement).
+        // For a stage card, the flying title stays inside the card's rounded clip.
+        if (stageLike) {
+            Spacer(
+                Modifier.fillMaxSize().drawBehind {
+                    val f = frame() ?: return@drawBehind
+                    val title = titleInFlight(f) ?: return@drawBehind
+                    drawFlyingTitle(title)
+                },
+            )
+        }
+    }
+    // For a bare row, draw the flying title unclipped (with a soft, fading paper halo only during mid-flight on Back)
+    // so neither a hard clip edge nor a paper slab ever flashes over the returning library rows.
+    if (!stageLike) {
         Spacer(
             Modifier.fillMaxSize().drawBehind {
                 val f = frame() ?: return@drawBehind
                 val title = titleInFlight(f) ?: return@drawBehind
-                if (title.originLayout != null && title.originAlpha > 0.001f) {
-                    withTransform({
-                        translate(title.originTopLeft.x, title.originTopLeft.y)
-                        scale(title.originScale, title.originScale, pivot = Offset.Zero)
-                    }) {
-                        drawText(title.originLayout, color = title.color.copy(alpha = title.color.alpha * title.originAlpha), topLeft = Offset.Zero)
+                if (!change.push) {
+                    val haloAlpha = smoothstep(0.02f, 0.14f, f.p) * (1f - smoothstep(0.80f, 0.96f, f.p))
+                    if (haloAlpha > 0.001f) {
+                        val pad = PageTransitions.TITLE_CLEARANCE.toPx()
+                        val top = (title.topY - pad).coerceAtLeast(0f)
+                        val bottomY = (title.bottomY + pad).coerceAtMost(size.height)
+                        val span = bottomY - top
+                        if (span > 1f) {
+                            val edge = (pad / span).coerceIn(0.05f, 0.40f)
+                            val paper = colors.paper.copy(alpha = haloAlpha)
+                            val brush = Brush.verticalGradient(
+                                0f to paper.copy(alpha = 0f),
+                                edge to paper,
+                                1f - edge to paper,
+                                1f to paper.copy(alpha = 0f),
+                                startY = top,
+                                endY = bottomY,
+                            )
+                            drawRect(brush, topLeft = Offset(0f, top), size = Size(size.width, span))
+                        }
                     }
                 }
-                if (title.pageAlpha > 0.001f) {
-                    withTransform({
-                        translate(title.pageTopLeft.x, title.pageTopLeft.y)
-                        scale(title.pageScale, title.pageScale, pivot = Offset.Zero)
-                    }) {
-                        drawText(title.pageLayout, color = title.color.copy(alpha = title.color.alpha * title.pageAlpha), topLeft = Offset.Zero)
-                    }
-                }
+                drawFlyingTitle(title)
             },
         )
+    }
+}
+
+private fun DrawScope.drawFlyingTitle(title: Flight) {
+    if (title.originLayout != null && title.originAlpha > 0.001f) {
+        withTransform({
+            translate(title.originTopLeft.x, title.originTopLeft.y)
+            scale(title.originScale, title.originScale, pivot = Offset.Zero)
+        }) {
+            drawText(title.originLayout, color = title.color.copy(alpha = title.color.alpha * title.originAlpha), topLeft = Offset.Zero)
+        }
+    }
+    if (title.pageAlpha > 0.001f) {
+        withTransform({
+            translate(title.pageTopLeft.x, title.pageTopLeft.y)
+            scale(title.pageScale, title.pageScale, pivot = Offset.Zero)
+        }) {
+            drawText(title.pageLayout, color = title.color.copy(alpha = title.color.alpha * title.pageAlpha), topLeft = Offset.Zero)
+        }
     }
 }
 
@@ -1611,33 +1650,6 @@ private class TitlePath(val top: Float, val bottom: Float, val feather: Float, v
 }
 
 /**
- * Folding into a row: a day label just above the sinking title heads a row still under paper, so it stays under
- * paper too, and returns as the title leaves it ([LABEL_CLEARANCE] below its bottom), never sitting on the title.
- */
-private fun DrawScope.coverLabelsAbove(pages: PageTransitions, overlay: LayoutCoordinates, title: Flight, paper: Color) {
-    val titleTop = title.topY
-    val clearance = LABEL_CLEARANCE.toPx()
-    val gone = ArrayList<String>()
-    for ((key, label) in pages.labels) {
-        if (!label.isAttached) {
-            gone += key
-            continue
-        }
-        val r = overlay.rectOf(label)
-        if (r.top >= titleTop || r.bottom <= titleTop - clearance) continue
-        val cover = 1 - smoothstep(0f, clearance, titleTop - r.bottom)
-        drawRect(paper, r.topLeft, Size(r.width, min(r.bottom, titleTop) - r.top), alpha = cover)
-    }
-    gone.forEach { pages.labels.remove(it) }
-}
-
-/** A day label returns once the folding title is this far below it. */
-private val LABEL_CLEARANCE = 24.dp
-
-/** Reports where a library day label sits, for T16's fold (see [coverLabelsAbove]). */
-internal fun Modifier.foldLabel(pages: PageTransitions, key: String): Modifier = onPlaced { pages.labels[key] = it }
-
-/**
  * T16′: where the stage's text is drawn this frame (it rides the clip) and how much of it the flying title holds
  * back (0 to 1), or null when none. The text waits while the title's last line box reaches into its first (their
  * glyphs would touch) and fades in as the boxes part by [STAGE_CLEARANCE], when the title's descenders are some 7 dp
@@ -1663,17 +1675,6 @@ private fun titleWake(title: Flight, feather: Float): TitlePath? {
     val top = title.pageTop
     val bottom = title.bottomY
     return if (bottom <= top) null else TitlePath(top, bottom, feather, softBelow = true)
-}
-
-/**
- * Folding into a row: the rows from the sinking title down to the line it lands on. The row it lands in is not
- * ahead of it: the title stops on its own line, beside the duration and above the preview, so that row returns
- * whole (its duration with its preview) with the other rows' `fadeFast`.
- */
-private fun titleAhead(title: Flight, feather: Float): TitlePath? {
-    val top = title.topY
-    val bottom = title.originTop
-    return if (bottom <= top) null else TitlePath(top, bottom, feather, softBelow = false)
 }
 
 /** Where the overlay sits in the window. */
@@ -1739,7 +1740,7 @@ private fun PageTransitions.frameIn(c: PageChange, overlay: LayoutCoordinates, d
         else -> smoothstep(PageTransitions.CONTENT_FROM, 1f, p)
     }
     return TransformFrame(
-        clip = lerp(base, origin, p), radius = radius, p = p, paper = true, material = material(c),
+        clip = lerp(base, origin, p), radius = radius, p = p, paperAlpha = paperAlpha(c), material = material(c),
         content = content, origin = origin, preview = e, edge = c.edge,
     )
 }
@@ -1790,12 +1791,12 @@ private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: La
     val originAlpha = when {
         identicalSingleLine -> 0f
         sameWrap -> 1f - smoothstep(0.28f, 0.68f, v)
-        else -> 1f - smoothstep(0.14f, 0.42f, v)
+        else -> 1f - smoothstep(0.16f, 0.42f, v)
     }
     val pageAlpha = when {
         identicalSingleLine -> 1f
         sameWrap -> smoothstep(0.18f, 0.58f, v)
-        else -> smoothstep(0.28f, 0.56f, v)
+        else -> smoothstep(0.44f, 0.70f, v)
     }
     val ink = if (page.muted) colors.recede else colors.ink
     val originInk = if (slot.titleMuted) colors.recede else colors.ink

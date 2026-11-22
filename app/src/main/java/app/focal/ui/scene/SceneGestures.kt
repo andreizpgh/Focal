@@ -101,8 +101,9 @@ class ExpandDrag(live: LiveSurfaceState, scope: CoroutineScope) : SurfaceDrag(li
     }
 
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-        if (!tracking || available.y >= 0f || live.expansion.value <= 0f) return Offset.Zero
-        return Offset(0f, moveBy(available.y))
+        if (!tracking || available.y >= 0f) return Offset.Zero
+        moveBy(available.y)
+        return Offset(0f, available.y)
     }
 
     override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {

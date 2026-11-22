@@ -67,9 +67,10 @@ internal class StagePull(private val pages: PageTransitions) : NestedScrollConne
 
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
         if (!tracking || available.y >= 0f) return Offset.Zero
-        // The finger going back up takes the card back with it before the list scrolls; once the card is the stage
-        // again, the rest of the way up scrolls the list.
-        return Offset(0f, moveBy(available.y))
+        // Reversing the finger back up returns the card to rest and stays locked to this gesture until lift,
+        // so the library list never starts scrolling underneath the active stage overlay.
+        moveBy(available.y)
+        return Offset(0f, available.y)
     }
 
     override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {

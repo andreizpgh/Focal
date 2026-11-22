@@ -96,7 +96,6 @@ import app.focal.ui.scene.ExpandDrag
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.DestinationBottom
 import app.focal.ui.shell.LocalShell
-import app.focal.ui.shell.foldLabel
 import app.focal.ui.state.NoteRow
 import app.focal.ui.state.SearchRow
 import app.focal.ui.state.SearchUiState
@@ -125,6 +124,10 @@ class LibraryActions(
     val delete: (NoteRow) -> Unit = {},
     /** "Delete N": the selected notes go to the trash together, with one Undo. */
     val deleteAll: (List<NoteRow>) -> Unit = { rows -> rows.forEach(delete) },
+    /** ⋮ "Copy text" over a selection: copies the combined text of the selected notes. */
+    val copyAll: (List<NoteRow>) -> Unit = { rows -> rows.firstOrNull()?.let(copyText) },
+    /** ⋮ "Share" over a selection: shares the combined text of the selected notes. */
+    val shareAll: (List<NoteRow>) -> Unit = { rows -> rows.firstOrNull()?.let(share) },
     /** ⋮ "Remove audio" over a selection: these notes keep their text and lose their audio, with one Undo. */
     val removeAudioAll: (List<NoteRow>) -> Unit = { rows -> rows.forEach(removeAudio) },
     /** What the audio of these notes takes together ("42 MB"), for that menu item. */
@@ -221,6 +224,16 @@ fun LibraryPage(
                     selection.clear()
                     if (rows.isNotEmpty()) actions.deleteAll(rows)
                 },
+                copySelected = {
+                    val rows = selection.ids.mapNotNull { currentSelectable[it] }
+                    selection.clear()
+                    if (rows.isNotEmpty()) actions.copyAll(rows)
+                },
+                shareSelected = {
+                    val rows = selection.ids.mapNotNull { currentSelectable[it] }
+                    selection.clear()
+                    if (rows.isNotEmpty()) actions.shareAll(rows)
+                },
                 removeSelectedAudio = {
                     val rows = selection.ids.mapNotNull { currentSelectable[it] }.filter { it.canRemoveAudio }
                     selection.clear()
@@ -229,10 +242,13 @@ fun LibraryPage(
                 selectedAudioSize = { actions.audioSize(selection.ids.mapNotNull { currentSelectable[it] }.filter { it.canRemoveAudio }) },
             )
         }
-        // ⋮ is there only while a selected note has audio that can go.
-        val selectedAudio = selecting && selection.ids.any { selectable[it]?.canRemoveAudio == true }
+        val selectedRows = if (selecting) selection.ids.mapNotNull { selectable[it] } else emptyList()
+        val selectedAudio = selectedRows.any { it.canRemoveAudio }
+        val selectedHasText = selectedRows.any { it.title.isNotBlank() || it.preview.isNotBlank() }
         DestinationBottom(
-            Destination.Library, if (selecting && model.live == null) DockState.Selecting(selection.count, selectedAudio) else model.dock, dockActions,
+            Destination.Library,
+            if (selecting && model.live == null) DockState.Selecting(selection.count, selectedAudio, selectedHasText) else model.dock,
+            dockActions,
             rows = if (searchState.fieldShown) { { SearchField(searchState, query, onClose = closeSearch) } } else null,
             dockHidden = searchState.dockHidden || renaming != null,
         )
@@ -590,7 +606,6 @@ private fun LibraryList(
                             .padding(horizontal = FocalLayout.gutter)
                             .padding(top = if (index == 0) firstLabelGap(model.stage != null) else SECTION_GAP, bottom = LABEL_TO_TITLE)
                             .stickyLabelSource(labels, key)
-                            .foldLabel(shell.pages, key)
                             .animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
                     )
                 }

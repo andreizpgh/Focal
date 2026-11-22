@@ -39,4 +39,14 @@ class PageTransitionsTest {
         assertFalse(pages.blocks(a))
         assertEquals(null, pages.provisional())
     }
+
+    @Test fun rowTransformDrawsNoGraySurfaceAndFadesPaperOnBack() {
+        val open = PageChange(PageMotion.Row, a, push = true, other = Destination.Library)
+        val back = PageChange(PageMotion.Row, a, push = false, other = Destination.Library)
+        assertEquals(0f, pages.material(open), 0.0001f)
+        assertEquals(0f, pages.material(back), 0.0001f)
+        assertEquals(1f, pages.paperAlpha(open), 0.0001f)
+        // Once a row Back transition has completed, its clipped paper alpha is 0 so no slab snaps off at landing.
+        assertEquals(0f, pages.paperAlpha(back), 0.0001f)
+    }
 }

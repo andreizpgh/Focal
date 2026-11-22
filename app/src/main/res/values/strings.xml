@@ -138,7 +138,12 @@
     </plurals>
     <string name="feedback_too_late">Too late to undo</string>
     <string name="feedback_text_copied">Text copied</string>
+    <plurals name="feedback_notes_copied">
+        <item quantity="one">%d note copied</item>
+        <item quantity="other">%d notes copied</item>
+    </plurals>
     <string name="feedback_nothing_recorded">Nothing was recorded</string>
+    <string name="feedback_no_speech_discarded">No speech was recognized</string>
     <string name="feedback_interrupted">The recording stopped early. What was recorded is saved.</string>
     <string name="feedback_storage">Free up about %s to record.</string>
     <string name="feedback_storage_resume">Free up about %s, then resume.</string>

@@ -163,6 +163,26 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
             removeAudio = { row -> library.removeAudio(row.id) },
             delete = { row -> library.delete(row.id) },
             deleteAll = { rows -> library.deleteAll(rows.map { it.id }) },
+            copyAll = { rows ->
+                scope.launch {
+                    val combined = library.copyCombinedText(rows)
+                    val label = if (rows.size == 1) rows[0].title else context.resources.getQuantityString(R.plurals.feedback_notes_copied, rows.size, rows.size)
+                    val result = copyNoteText(context, rows.firstOrNull()?.id.orEmpty(), label, combined)
+                    if (result == Transfer.Done) {
+                        rows.forEach { FreshNotes.copied(it.id) }
+                        haptics.copy()
+                        val msg = if (rows.size == 1) textCopied else context.resources.getQuantityString(R.plurals.feedback_notes_copied, rows.size, rows.size)
+                        shell.bottom.feedback.show(msg)
+                    } else say(transfers.copy(result))
+                }
+            },
+            shareAll = { rows ->
+                scope.launch {
+                    val combined = library.copyCombinedText(rows)
+                    val title = if (rows.size == 1) rows[0].title else ""
+                    say(transfers.share(shareNoteText(context, title, combined)))
+                }
+            },
             removeAudioAll = { rows -> library.removeAudioAll(rows.map { it.id }) },
             audioSize = { rows -> Formatter.formatShortFileSize(context, library.audioBytes(rows.map { it.id })) },
             query = library::setQuery,

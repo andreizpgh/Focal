@@ -134,10 +134,10 @@ sealed interface DockState {
      */
     data class Note(val circle: PlayCircle, val pill: NotePill, val append: Boolean = false, val noteId: String? = null) : DockState
     /**
-     * Notes are selected in the library: ✕ "Done selecting" + "Delete N". With [audio] (a selected note has audio that
-     * can go), ⋮ between them offers "Remove audio": the notes stay, as text only.
+     * Notes are selected in the library: ✕ "Done selecting" + "Delete N". With [audio] or [hasText], ⋮ between them
+     * offers bulk actions ("Copy text", "Share", "Remove audio").
      */
-    data class Selecting(val count: Int, val audio: Boolean = false) : DockState
+    data class Selecting(val count: Int, val audio: Boolean = false, val hasText: Boolean = false) : DockState
 }
 
 enum class PlayCircle { Play, PausePlayback, Unavailable, None }
@@ -174,6 +174,10 @@ class DockActions(
     val closeSelection: () -> Unit = {},
     /** "Delete N": the selected notes go to the trash (with Undo). */
     val deleteSelected: () -> Unit = {},
+    /** ⋮ "Copy text": copies the combined text of the selected notes. */
+    val copySelected: () -> Unit = {},
+    /** ⋮ "Share": shares the combined text of the selected notes. */
+    val shareSelected: () -> Unit = {},
     /** ⋮ "Remove audio": the selected notes keep their text and lose their audio (with Undo). */
     val removeSelectedAudio: () -> Unit = {},
     /** What that audio takes, for "Remove audio · 42 MB". */
@@ -213,9 +217,6 @@ object DockMetrics {
     val gap = FocalGrid.x12
     /** The labelled Resume pill that the circle widens into while paused (x 24-172). */
     val resume = 148.dp
-    /** Sculpted centered width of the idle library Record pill, keeping the bottom balanced with the tonal stage. */
-    val recordPillWidth = 176.dp
-    val recordPillPadding = FocalGrid.x32
     /** The landscape rail (spec 5.14): the circle above the primary circle, centred in this box. */
     val railHeight = circle * 2 + gap
     /** Glyph-only controls in the rail: the record dot and the finish square in a circle (spec 2.7). */
@@ -256,11 +257,11 @@ private fun circleFace(state: DockState) = when (state) {
 
 /**
  * The second circle, between the first and the pill: ● "Continue recording" on a note that can take more, ⋮ over a
- * selection whose audio can be removed.
+ * selection that has text to copy/share or audio to remove.
  */
 private fun secondFace(state: DockState) = when {
     state is DockState.Note && state.append -> CircleFace.Append
-    state is DockState.Selecting && state.audio -> CircleFace.More
+    state is DockState.Selecting && (state.audio || state.hasText) -> CircleFace.More
     else -> CircleFace.None
 }
 
@@ -344,12 +345,11 @@ fun Dock(
         }
         return
     }
-    val centered = pill == PillFace.Record
-    val recordWidth = if (centered) recordPillWidth() else 0.dp
+    val selecting = state as? DockState.Selecting
     LookaheadScope {
         Row(
             modifier.fillMaxWidth(),
-            horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start,
+            horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.Bottom,
         ) {
             CircleSlot(
@@ -387,21 +387,40 @@ fun Dock(
                 requests = requests,
                 selected = selected,
                 modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
-                    .then(if (centered) Modifier.weight(1f, fill = false).widthIn(min = recordWidth, max = recordWidth) else Modifier.weight(1f))
+                    .weight(1f)
                     .heightIn(min = DockMetrics.height),
             )
             // Anchored to the dock's row: it opens above it, its end on the dock's end.
             FocalMenu(expanded = selectionMenu, onDismiss = { selectionMenu = false }, above = true) {
-                val size = remember { mutableStateOf<String?>(null) }
-                LaunchedEffect(Unit) { size.value = actions.selectedAudioSize() }
-                FocalMenuItem(
-                    stringResource(R.string.menu_remove_audio),
-                    onClick = {
-                        selectionMenu = false
-                        actions.removeSelectedAudio()
-                    },
-                    trailing = size.value,
-                )
+                if (selecting?.hasText == true) {
+                    FocalMenuItem(
+                        stringResource(R.string.menu_copy_text),
+                        onClick = {
+                            selectionMenu = false
+                            actions.copySelected()
+                        },
+                    )
+                    FocalMenuItem(
+                        stringResource(R.string.menu_share),
+                        onClick = {
+                            selectionMenu = false
+                            actions.shareSelected()
+                        },
+                    )
+                }
+                if (selecting?.audio == true) {
+                    if (selecting.hasText) FocalMenuDivider()
+                    val size = remember { mutableStateOf<String?>(null) }
+                    LaunchedEffect(Unit) { size.value = actions.selectedAudioSize() }
+                    FocalMenuItem(
+                        stringResource(R.string.menu_remove_audio),
+                        onClick = {
+                            selectionMenu = false
+                            actions.removeSelectedAudio()
+                        },
+                        trailing = size.value,
+                    )
+                }
             }
         }
     }
@@ -520,18 +539,6 @@ private fun RailTooltip(label: String?, state: TooltipState, content: @Composabl
         enableUserInput = false,
         content = content,
     )
-}
-
-/** The idle library Record pill: [DockMetrics.recordPillWidth], or wider when large text needs it. */
-@Composable
-private fun recordPillWidth(): Dp {
-    val label = stringResource(R.string.action_record)
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    return remember(label, density) {
-        val text = with(density) { measurer.measure(label, FocalType.label, maxLines = 1).size.width.toDp() }
-        maxOf(DockMetrics.recordPillWidth, text + GlyphSize.recordDot + DockMetrics.glyphGap + DockMetrics.recordPillPadding * 2)
-    }
 }
 
 /** The rail's labelled Resume: [DockMetrics.railResume], or wider when "Resume" needs it (a large font). */

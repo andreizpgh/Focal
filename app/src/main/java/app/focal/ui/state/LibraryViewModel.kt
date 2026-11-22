@@ -94,7 +94,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             .groupBy { Instant.ofEpochMilli(it.created).atZone(zone).toLocalDate().toEpochDay() }
             .map { (day, rows) -> LibraryDay(day, rows) }
         LibraryUiState(loaded = true, error = error, days = days, liveNoteId = liveId, empty = list.isEmpty() && liveId == null)
-    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, LibraryUiState())
 
     val search: StateFlow<SearchUiState> = combine(
         combine(query.debounce(SEARCH_DEBOUNCE_MS).distinctUntilChanged(), store.changes) { text, _ -> text }.mapLatest { text ->
@@ -192,6 +192,24 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     /** The note's body as Copy puts it (visible paragraphs joined by a blank line; no title). */
     suspend fun copyText(noteId: String): String = withContext(Dispatchers.IO) { store.transcript(noteId) }
+
+    /**
+     * Combined text of multiple selected notes (in [notes] order) for bulk Copy and Share. A single non-empty note
+     * returns its body verbatim; multiple notes include each note's heading above its text, separated by blank lines.
+     */
+    suspend fun copyCombinedText(notes: List<NoteRow>): String = withContext(Dispatchers.IO) {
+        val entries = notes.mapNotNull { row ->
+            val body = store.transcript(row.id).trim()
+            if (body.isEmpty()) null else row to body
+        }
+        when (entries.size) {
+            0 -> ""
+            1 -> entries[0].second
+            else -> entries.joinToString("\n\n") { (row, body) ->
+                if (row.title.isNotBlank()) "${row.title}\n$body" else body
+            }
+        }
+    }
 
     /** Retries a failed recovery of storage at startup. */
     fun retryLoad() { app.retryStorage(); refresh.value++ }
