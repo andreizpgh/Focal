@@ -261,6 +261,7 @@ internal fun EditBar(
     reviewPosition: Int = 0,
     reviewTotal: Int = 0,
     canMarkAllReviewed: Boolean = false,
+    showTopDone: Boolean = false,
 ) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
@@ -311,9 +312,11 @@ internal fun EditBar(
                 FocalMenuItem(stringResource(R.string.menu_find), run(actions.find))
             }
         }
-        Spacer(Modifier.width(NoteBarMetrics.doneGap))
-        DonePill(if (failed) stringResource(R.string.action_retry) else stringResource(R.string.action_done), actions.done)
-        Spacer(Modifier.width(NoteBarMetrics.doneEnd))
+        if (showTopDone) {
+            Spacer(Modifier.width(NoteBarMetrics.doneGap))
+            DonePill(if (failed) stringResource(R.string.action_retry) else stringResource(R.string.action_done), actions.done)
+            Spacer(Modifier.width(NoteBarMetrics.doneEnd))
+        }
     }
 }
 

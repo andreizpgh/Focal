@@ -34,6 +34,7 @@ interface NotePlayback {
     fun toggle()
     fun pause()
     fun stop()
+    fun setSpeed(speed: Float) {}
     fun cycleSpeed() {}
 }
 

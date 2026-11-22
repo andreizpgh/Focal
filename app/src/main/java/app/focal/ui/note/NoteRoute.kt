@@ -222,6 +222,7 @@ private class RoutePlayback(private val player: PlaybackViewModel, private val n
     override fun toggle() = player.toggle(noteId)
     override fun pause() = player.pause()
     override fun stop() = player.stopNote(noteId)
+    override fun setSpeed(speed: Float) = player.setSpeed(speed)
     override fun cycleSpeed() = player.cycleSpeed()
 }
 

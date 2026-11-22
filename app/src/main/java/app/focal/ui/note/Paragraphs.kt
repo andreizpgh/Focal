@@ -143,29 +143,43 @@ private class Lens {
             // No lens, and none showing: nothing to animate (every paragraph of a page as it opens).
             target == null && alpha.value == 0f && !alpha.isRunning -> Unit
             target == null -> if (reduced) alpha.snapTo(0f) else alpha.animateTo(0f, FocalMotion.fadeFast())
-            alpha.targetValue == 0f -> {
+            alpha.value < VISIBLE_EPSILON -> {
                 rect.snapTo(target)
                 if (reduced) {
                     alpha.snapTo(1f)
                     scale.snapTo(1f)
                 } else {
-                    // Playback starts: the lens fades in at the word, growing from 0.92.
+                    // Playback starts (or enters a new paragraph): fade in at the word, growing from 0.92.
                     scale.snapTo(ParagraphMetrics.LENS_START_SCALE)
                     launch { scale.animateTo(1f, FocalMotion.press()) }
                     alpha.animateTo(1f, FocalMotion.fadeFast())
                 }
             }
-            abs(rect.targetValue.top - target.top) < LINE_EPSILON ->
-                if (reduced) rect.snapTo(target) else rect.animateTo(target, FocalMotion.press())
+            abs(rect.targetValue.top - target.top) < LINE_EPSILON -> {
+                if (reduced) {
+                    rect.snapTo(target)
+                    alpha.snapTo(1f)
+                    scale.snapTo(1f)
+                } else {
+                    // A rapid word advance on the same line may interrupt the fade-in: always finish revealing the lens.
+                    if (alpha.value < 1f || alpha.targetValue < 1f) launch { alpha.animateTo(1f, FocalMotion.fadeFast()) }
+                    if (scale.value < 1f || scale.targetValue < 1f) launch { scale.animateTo(1f, FocalMotion.press()) }
+                    rect.animateTo(target, FocalMotion.press())
+                }
+            }
             else -> {
                 if (!reduced) alpha.animateTo(0f, FocalMotion.fadeFast())
                 rect.snapTo(target)
+                scale.snapTo(1f)
                 if (reduced) alpha.snapTo(1f) else alpha.animateTo(1f, FocalMotion.fadeFast())
             }
         }
     }
 
-    private companion object { const val LINE_EPSILON = 1f }
+    private companion object {
+        const val LINE_EPSILON = 1f
+        const val VISIBLE_EPSILON = 0.05f
+    }
 }
 
 /**

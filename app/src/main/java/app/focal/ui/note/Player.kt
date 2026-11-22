@@ -2,11 +2,13 @@ package app.focal.ui.note
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,14 +33,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -48,12 +57,20 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import app.focal.R
 import app.focal.ui.components.BottomColumnState
 import app.focal.ui.components.FocalIcon
@@ -71,9 +88,11 @@ import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.tabular
 import app.focal.ui.library.spokenDuration
+import app.focal.ui.state.PlaybackViewModel
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 /** Player strip geometry (spec 4.10) and the jump pill's (4.11). */
 object PlayerMetrics {
@@ -129,7 +148,7 @@ internal fun PlayerStrip(
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
     speed: Float = 1f,
-    onCycleSpeed: (() -> Unit)? = null,
+    onSelectSpeed: ((Float) -> Unit)? = null,
 ) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
@@ -237,55 +256,248 @@ internal fun PlayerStrip(
                 modifier = Modifier.widthIn(min = PlayerMetrics.timeMin),
             )
         }
-        if (onCycleSpeed != null) {
+        if (onSelectSpeed != null) {
             Spacer(Modifier.width(FocalGrid.x8))
-            SpeedPill(speed = speed, onClick = onCycleSpeed)
+            SpeedPicker(speed = speed, onSelect = onSelectSpeed)
         }
     }
 }
 
+/** Descending order in the vertical popover: dragging upward speeds up, dragging downward slows down. */
+private val SPEEDS_DESC = PlaybackViewModel.SPEEDS.reversed()
+private val SPEED_ROW_HEIGHT = 36.dp
+private val SPEED_MENU_PAD = 4.dp
+private val SPEED_MENU_GAP = 8.dp
+private val SPEED_MENU_WIDTH = 68.dp
+private val SPEED_MENU_RADIUS = 18.dp
+private const val SPEED_HOLD_MS = 180L
+
+/**
+ * Playback speed control supporting both tap-to-open-menu and press-hold-drag-release selection over
+ * 0.5×..2× in 0.25× steps, with crisp haptic ticks on each step.
+ */
 @Composable
-private fun SpeedPill(speed: Float, onClick: () -> Unit) {
+private fun SpeedPicker(speed: Float, onSelect: (Float) -> Unit) {
     val colors = FocalTheme.colors
-    val source = remember { MutableInteractionSource() }
-    val text = speedLabel(speed)
-    val description = stringResource(R.string.cd_playback_speed, text)
+    val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
+    val reduced = LocalReducedMotion.current
+    val currentSpeed by rememberUpdatedState(speed)
+    val select by rememberUpdatedState(onSelect)
+    var open by remember { mutableStateOf(false) }
+    var dragging by remember { mutableStateOf(false) }
+    var hovered by remember { mutableStateOf<Float?>(null) }
+    val displaySpeed = hovered ?: speed
+    val text = speedLabel(displaySpeed)
+    val description = stringResource(R.string.cd_playback_speed, speedLabel(speed))
+    val isDefault = abs(displaySpeed - 1f) < 0.05f
+
     Box(
         Modifier
             .heightIn(min = FocalLayout.target)
             .clearAndSetSemantics {
                 contentDescription = description
                 role = Role.Button
-                this.onClick { onClick(); true }
+                this.onClick { open = !open; true }
             }
-            .pressScale(source)
             .focusRing(FocalShapes.pill)
-            .clickable(source, indication = null, onClick = onClick),
+            .pointerInput(Unit) {
+                val gapPx = with(density) { SPEED_MENU_GAP.toPx() }
+                val padPx = with(density) { SPEED_MENU_PAD.toPx() }
+                val rowPx = with(density) { SPEED_ROW_HEIGHT.toPx() }
+                val listTopY = -(gapPx + padPx + SPEEDS_DESC.size * rowPx)
+                val slop = viewConfiguration.touchSlop
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    down.consume()
+                    var dragActive = false
+                    var lastHovered: Float? = null
+                    fun enterDrag() {
+                        if (dragActive) return
+                        dragActive = true
+                        dragging = true
+                        open = true
+                        lastHovered = currentSpeed
+                        hovered = currentSpeed
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                    fun updateHover(y: Float) {
+                        val candidate = if (y >= -gapPx / 2f) {
+                            currentSpeed
+                        } else {
+                            val idx = ((y - listTopY) / rowPx).toInt().coerceIn(0, SPEEDS_DESC.lastIndex)
+                            SPEEDS_DESC[idx]
+                        }
+                        if (candidate != lastHovered) {
+                            lastHovered = candidate
+                            hovered = candidate
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    }
+                    // Wait up to SPEED_HOLD_MS for either an up (tap) or vertical drag past touchSlop.
+                    var lifted = false
+                    try {
+                        withTimeout(SPEED_HOLD_MS) {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: run { lifted = true; break }
+                                if (!change.pressed) {
+                                    change.consume()
+                                    lifted = true
+                                    break
+                                }
+                                if (abs(change.position.y - down.position.y) > slop) {
+                                    change.consume()
+                                    enterDrag()
+                                    updateHover(change.position.y)
+                                    break
+                                }
+                            }
+                        }
+                    } catch (_: PointerEventTimeoutCancellationException) {
+                        enterDrag()
+                    }
+                    if (lifted && !dragActive) {
+                        open = !open
+                        return@awaitEachGesture
+                    }
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            change.consume()
+                            if (!change.pressed) {
+                                lastHovered?.let { chosen -> select(chosen) }
+                                break
+                            }
+                            updateHover(change.position.y)
+                        }
+                    } finally {
+                        dragging = false
+                        hovered = null
+                        open = false
+                    }
+                }
+            },
         contentAlignment = Alignment.Center,
     ) {
         Box(
             Modifier
-                .widthIn(min = 42.dp)
+                .widthIn(min = 48.dp)
                 .heightIn(min = 32.dp)
-                .background(if (speed == 1f) colors.s1 else colors.s2, FocalShapes.pill)
+                .background(if (open || !isDefault) colors.s2 else colors.s1, FocalShapes.pill)
                 .padding(horizontal = FocalGrid.x8),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text,
                 style = FocalType.caption.copy(fontWeight = FocalWeight.Medium).tabular(),
-                color = if (speed == 1f) colors.recede else colors.ink,
+                color = if (open || !isDefault) colors.ink else colors.recede,
                 maxLines = 1,
                 softWrap = false,
             )
         }
+        if (open) {
+            val gapPx = with(density) { SPEED_MENU_GAP.roundToPx() }
+            val provider = remember(gapPx) { SpeedMenuPositionProvider(gapPx) }
+            Popup(
+                popupPositionProvider = provider,
+                onDismissRequest = { if (!dragging) open = false },
+                properties = PopupProperties(focusable = !dragging),
+            ) {
+                val reveal = remember { Animatable(if (reduced) 1f else 0f) }
+                LaunchedEffect(Unit) {
+                    if (!reduced) reveal.animateTo(1f, FocalMotion.press())
+                }
+                val highlighted = hovered ?: speed
+                val shape = RoundedCornerShape(SPEED_MENU_RADIUS)
+                Column(
+                    Modifier
+                        .graphicsLayer {
+                            val t = reveal.value
+                            alpha = t.coerceIn(0f, 1f)
+                            val s = lerp(0.88f, 1f, t)
+                            scaleX = s
+                            scaleY = s
+                            transformOrigin = TransformOrigin(0.5f, 1f)
+                        }
+                        .shadow(8.dp, shape, ambientColor = colors.ink.copy(alpha = 0.14f), spotColor = colors.ink.copy(alpha = 0.18f))
+                        .background(colors.paper, shape)
+                        .border(1.dp, colors.stageIdleBorder, shape)
+                        .padding(SPEED_MENU_PAD)
+                        .width(SPEED_MENU_WIDTH),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    SPEEDS_DESC.forEach { option ->
+                        val active = abs(option - highlighted) < 0.02f
+                        val label = speedLabel(option)
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(SPEED_ROW_HEIGHT)
+                                .background(if (active) colors.inv else colors.paper.copy(alpha = 0f), FocalShapes.pill)
+                                .clearAndSetSemantics {
+                                    contentDescription = label
+                                    role = Role.RadioButton
+                                    selected = active
+                                    this.onClick {
+                                        select(option)
+                                        open = false
+                                        true
+                                    }
+                                }
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                ) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    select(option)
+                                    open = false
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                label,
+                                style = FocalType.caption.copy(
+                                    fontWeight = if (active) FocalWeight.Semibold else FocalWeight.Medium,
+                                ).tabular(),
+                                color = if (active) colors.onInv else colors.ink,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
-internal fun speedLabel(speed: Float): String = when {
-    speed >= 1.75f -> "2×"
-    speed >= 1.25f -> "1.5×"
-    else -> "1×"
+/** Places the speed popover directly above its anchor pill, horizontally centred on it and clamped inside the window. */
+private class SpeedMenuPositionProvider(private val gapPx: Int) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val x = (anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2)
+            .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+        val y = (anchorBounds.top - popupContentSize.height - gapPx)
+            .coerceIn(0, (windowSize.height - popupContentSize.height).coerceAtLeast(0))
+        return IntOffset(x, y)
+    }
+}
+
+internal fun speedLabel(speed: Float): String = when ((speed * 100f).roundToInt()) {
+    50 -> "0.5×"
+    75 -> "0.75×"
+    100 -> "1×"
+    125 -> "1.25×"
+    150 -> "1.5×"
+    175 -> "1.75×"
+    200 -> "2×"
+    else -> "${(speed * 100f).roundToInt() / 100f}×"
 }
 
 private const val MS = 1000L

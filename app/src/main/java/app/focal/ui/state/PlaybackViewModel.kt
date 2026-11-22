@@ -63,7 +63,10 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
 
     fun pause() = player.pause()
 
-    /** Cycles playback speed through 1× → 1.5× → 2× → 1×. */
+    /** Sets playback speed directly (e.g. from the speed picker popover or drag gesture). */
+    fun setSpeed(speed: Float) = player.setSpeed(speed)
+
+    /** Cycles playback speed through [SPEEDS]. */
     fun cycleSpeed() {
         val current = player.playback.value.speed
         val index = SPEEDS.indexOfFirst { kotlin.math.abs(it - current) < 0.05f }
@@ -86,7 +89,7 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
     companion object {
         /** Playback starts this long before the tapped word. */
         const val PREROLL_MS = 500L
-        val SPEEDS = floatArrayOf(1f, 1.5f, 2f)
+        val SPEEDS = floatArrayOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
     }
 }
 
@@ -96,8 +99,9 @@ data class WordLocation(val paragraphIndex: Int, val wordIndex: Int?)
 object PlayingWord {
     /**
      * Locates [positionMs] in [paragraphs] (ordered by time): the paragraph containing it (or the last one
-     * that started before it) and, when that paragraph has [ParagraphUi.exactTimes], the word being spoken
-     * (or the last one that started). Binary searches: cheap enough to call every frame.
+     * that started before it) and the word being spoken. Unedited paragraphs binary-search directly; edited
+     * paragraphs keep highlighting every timed word and bridge single-word replacements between timed neighbours,
+     * while legacy paragraphs with no word times return a null word index.
      */
     fun locate(paragraphs: List<ParagraphUi>, positionMs: Long): WordLocation? {
         var low = 0
@@ -109,15 +113,37 @@ object PlayingWord {
         }
         if (found < 0) return null
         val paragraph = paragraphs[found]
-        if (!paragraph.exactTimes) return WordLocation(found, null)
         val words = paragraph.words
-        var lo = 0
-        var hi = words.lastIndex
-        var word = -1
-        while (lo <= hi) {
-            val mid = (lo + hi) ushr 1
-            if (checkNotNull(words[mid].startMs) <= positionMs) { word = mid; lo = mid + 1 } else hi = mid - 1
+        if (words.isEmpty()) return WordLocation(found, null)
+        if (paragraph.exactTimes) {
+            var lo = 0
+            var hi = words.lastIndex
+            var word = -1
+            while (lo <= hi) {
+                val mid = (lo + hi) ushr 1
+                if (checkNotNull(words[mid].startMs) <= positionMs) { word = mid; lo = mid + 1 } else hi = mid - 1
+            }
+            return WordLocation(found, word.takeIf { it >= 0 })
         }
-        return WordLocation(found, word.takeIf { it >= 0 })
+        // Partially timed (edited) paragraph: scan timed words in order so a single edit never kills the paragraph lens.
+        var lastTimed = -1
+        var nextTimed = -1
+        for (i in words.indices) {
+            val start = words[i].startMs ?: continue
+            if (start <= positionMs) lastTimed = i else {
+                nextTimed = i
+                break
+            }
+        }
+        if (lastTimed < 0) {
+            if (nextTimed == 1 && positionMs >= paragraph.startMs) return WordLocation(found, 0)
+            return WordLocation(found, null)
+        }
+        val prevEnd = words[lastTimed].endMs
+        if (prevEnd != null && positionMs >= prevEnd) {
+            val gap = if (nextTimed >= 0) nextTimed - lastTimed - 1 else words.size - lastTimed - 1
+            if (gap == 1) return WordLocation(found, lastTimed + 1)
+        }
+        return WordLocation(found, lastTimed)
     }
 }

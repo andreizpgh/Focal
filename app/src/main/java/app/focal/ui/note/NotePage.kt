@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -211,6 +212,7 @@ fun NotePage(
 ) {
     val shell = LocalShell.current
     val bottom = shell.bottom
+    val context = LocalContext.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -843,7 +845,19 @@ fun NotePage(
             wordIn(focusedParagraph.text, fieldSelection.start)?.let { focusedParagraph.reviewSpan(it) }
         }
     } else null
-    val reviewSuggestions = remember(activeSpan, paragraphs) {
+    val inReview = page.reviewing || activeUnclear != null
+    val activeSpanWord = remember(activeSpan, paragraphs) {
+        val span = activeSpan ?: return@remember null
+        val paragraph = paragraphs.firstOrNull { it.id == span.paragraphId } ?: return@remember null
+        span.text(paragraph)
+    }
+    var spellSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(inReview, activeSpanWord) {
+        spellSuggestions = emptyList()
+        val word = activeSpanWord?.takeIf { inReview } ?: return@LaunchedEffect
+        spellSuggestions = SpellSuggestions.forWord(context, word)
+    }
+    val reviewSuggestions = remember(activeSpan, paragraphs, spellSuggestions) {
         val span = activeSpan ?: return@remember emptyList()
         val paragraph = paragraphs.firstOrNull { it.id == span.paragraphId } ?: return@remember emptyList()
         val selected = span.text(paragraph)
@@ -851,22 +865,24 @@ fun NotePage(
         buildList {
             previousWording(paragraphs, selected)?.takeIf { seen.add(spellingKey(it)) }?.let(::add)
             nearbySpellings(paragraphs, span).filter { seen.add(spellingKey(it)) }.forEach(::add)
+            spellSuggestions.filter { seen.add(spellingKey(it)) }.forEach(::add)
         }
     }
     val reviewPrimary = when {
         !page.editing || find.open -> null
+        session.failed -> ReviewPrimary.Retry
         activeUnclear != null -> ReviewPrimary.Keep
         page.reviewing -> {
             val others = if (!fieldDirty) unclear.isNotEmpty() else unclear.any { span ->
                 span.paragraphId != focusedParagraph.id ||
                     (fieldSelection != null && (span.end <= fieldSelection.min || span.start >= fieldSelection.max))
             }
-            if (others) ReviewPrimary.Next else ReviewPrimary.Apply
+            if (others) ReviewPrimary.Next else ReviewPrimary.Done
         }
-        else -> null
+        else -> ReviewPrimary.Done
     }
-    val reviewStripShown = page.editing && !find.open && page.field != null &&
-        (page.reviewing || activeUnclear != null || reviewSuggestions.isNotEmpty())
+    // Always ride a single 48 dp companion strip above the keyboard in Edit & Review so Listen and Done stay in thumb reach.
+    val reviewStripShown = page.editing && !find.open
     val reviewPosition = if (activeUnclear != null) unclear.indexOf(activeUnclear) + 1 else 0
     val reviewTotal = if (page.reviewing) unclear.size else 0
 
@@ -1157,7 +1173,7 @@ fun NotePage(
                                 playback.playFrom(ms)
                             },
                             speed = audio.speed,
-                            onCycleSpeed = playback::cycleSpeed,
+                            onSelectSpeed = playback::setSpeed,
                         )
                     }
                 }
@@ -1168,7 +1184,7 @@ fun NotePage(
             reviewStripShown -> {
                 {
                     ReviewStrip(
-                        canListen = canPlay,
+                        canListen = canPlay && page.field != null,
                         listening = listening,
                         onListen = listen,
                         suggestions = reviewSuggestions,
@@ -1178,7 +1194,7 @@ fun NotePage(
                             when (reviewPrimary) {
                                 ReviewPrimary.Keep -> activeUnclear?.let(::keepCurrent)
                                 ReviewPrimary.Next -> advanceReview(+1)
-                                ReviewPrimary.Apply -> done()
+                                ReviewPrimary.Done, ReviewPrimary.Retry -> done()
                                 null -> Unit
                             }
                         },
@@ -1352,10 +1368,11 @@ fun NotePage(
                 canUndo = session.canUndo, canRedo = session.canRedo,
                 canRestore = focusedParagraph?.let { it.edited && it.canRestore } == true,
                 failed = session.failed, menuOpen = page.editMenu, onMenu = { page.editMenu = it }, actions = editBarActions,
-                canListen = canPlay && page.field != null && !reviewStripShown, listening = listening,
+                canListen = false, listening = listening,
                 reviewPosition = reviewPosition,
                 reviewTotal = reviewTotal,
-                canMarkAllReviewed = unclear.isNotEmpty(),
+                canMarkAllReviewed = inReview && unclear.isNotEmpty(),
+                showTopDone = inReview && reviewPrimary != ReviewPrimary.Done && reviewPrimary != ReviewPrimary.Retry,
                 modifier = Modifier.zIndex(BARS_Z).graphicsLayer { alpha = editT.value * chrome() }.inertBar(!page.editing || find.open),
             )
         }

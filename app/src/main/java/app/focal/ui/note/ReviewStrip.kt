@@ -21,9 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -42,14 +40,16 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
 
-/** The primary right-hand action of [ReviewStrip]. */
+/** The primary right-hand action of [ReviewStrip] (shown directly above the keyboard for one-thumb reach). */
 internal enum class ReviewPrimary {
     /** Confirm the current doubtful word as spoken and clear its underline. */
     Keep,
     /** Save edits and jump straight to the next unclear word in the queue. */
     Next,
-    /** Save edits and finish reviewing. */
-    Apply,
+    /** Save edits and close the editor / finish reviewing. */
+    Done,
+    /** Retry saving after a failed write. */
+    Retry,
 }
 
 /** Companion strip geometry: one quiet 48 dp row riding directly above the keyboard. */
@@ -115,10 +115,9 @@ private fun ListenPill(listening: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
             .heightIn(min = FocalLayout.target)
-            .clearAndSetSemantics {
+            .semantics(mergeDescendants = true) {
                 contentDescription = description
                 role = Role.Button
-                this.onClick { onClick(); true }
             }
             .pressScale(source)
             .focusRing(FocalShapes.pill)
@@ -182,10 +181,19 @@ private fun SuggestionPill(text: String, onClick: () -> Unit) {
 private fun PrimaryReviewPill(primary: ReviewPrimary, onClick: () -> Unit) {
     val colors = FocalTheme.colors
     val source = remember { MutableInteractionSource() }
+    val description = when (primary) {
+        ReviewPrimary.Keep -> stringResource(R.string.review_keep)
+        ReviewPrimary.Next -> stringResource(R.string.review_next_step)
+        ReviewPrimary.Done -> stringResource(R.string.action_done)
+        ReviewPrimary.Retry -> stringResource(R.string.action_retry)
+    }
     Box(
         Modifier
             .heightIn(min = FocalLayout.target)
-            .semantics(mergeDescendants = true) { role = Role.Button }
+            .semantics(mergeDescendants = true) {
+                contentDescription = description
+                role = Role.Button
+            }
             .pressScale(source)
             .focusRing(FocalShapes.pill)
             .clickable(source, indication = null, onClick = onClick),
@@ -202,10 +210,11 @@ private fun PrimaryReviewPill(primary: ReviewPrimary, onClick: () -> Unit) {
                 val text = when (mode) {
                     ReviewPrimary.Keep -> stringResource(R.string.review_keep)
                     ReviewPrimary.Next -> stringResource(R.string.review_next_step)
-                    ReviewPrimary.Apply -> stringResource(R.string.review_apply)
+                    ReviewPrimary.Done -> stringResource(R.string.action_done)
+                    ReviewPrimary.Retry -> stringResource(R.string.action_retry)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (mode != ReviewPrimary.Next) {
+                    if (mode == ReviewPrimary.Keep || mode == ReviewPrimary.Done) {
                         Glyph(FocalIcon.Check, colors.onInv, size = GlyphSize.small)
                         Spacer(Modifier.width(ReviewStripMetrics.iconGap))
                     }

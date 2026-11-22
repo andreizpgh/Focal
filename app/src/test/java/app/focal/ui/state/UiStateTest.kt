@@ -101,14 +101,35 @@ class PlayingWordTest {
     )
 
     @Test fun locatesTheParagraphAndTheWordBeingSpoken() {
-        val paragraphs = listOf(ui(0, 0, 300, 600), ui(2_000, 2_000, 2_500), ui(4_000, 4_000, null))
+        val paragraphs = listOf(
+            ui(0, 0, 300, 600),
+            ui(2_000, 2_000, 2_500),
+            ui(4_000, 4_000, null, 4_600),
+            ui(6_000, null, null),
+        )
         assertNull(PlayingWord.locate(paragraphs, -1))
         assertEquals(WordLocation(0, 1), PlayingWord.locate(paragraphs, 450))
         assertEquals(WordLocation(0, 2), PlayingWord.locate(paragraphs, 1_500))
         assertEquals(WordLocation(1, 0), PlayingWord.locate(paragraphs, 2_000))
-        // Without exact times there is no word: the paragraph is focused, no lens.
-        assertEquals(WordLocation(2, null), PlayingWord.locate(paragraphs, 4_200))
+        // Edited paragraphs keep highlighting timed words and bridge single-word replacements.
+        assertEquals(WordLocation(2, 0), PlayingWord.locate(paragraphs, 4_050))
+        assertEquals(WordLocation(2, 1), PlayingWord.locate(paragraphs, 4_250))
+        assertEquals(WordLocation(2, 2), PlayingWord.locate(paragraphs, 4_650))
+        // Legacy paragraphs with no word times focus the paragraph only, no lens.
+        assertEquals(WordLocation(3, null), PlayingWord.locate(paragraphs, 6_200))
         assertNull(PlayingWord.locate(emptyList(), 10))
+    }
+
+    @Test fun speedLabelsFormatQuarterStepsCleanly() {
+        val expected = listOf("0.5×", "0.75×", "1×", "1.25×", "1.5×", "1.75×", "2×")
+        assertEquals(expected, PlaybackViewModel.SPEEDS.map { app.focal.ui.note.speedLabel(it) })
+    }
+
+    @Test fun copyPillWidthCentersBothCopyAndCopiedSymmetrically() {
+        assertEquals(
+            20 + 8 + 60 + 2 * 16,
+            app.focal.ui.components.copyPillWidth(copyLabel = 38, copiedLabel = 60, glyph = 20, gap = 8, padding = 16),
+        )
     }
 }
 
