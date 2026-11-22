@@ -17,10 +17,10 @@
     </style>
     <style name="Theme.Focal.Base" parent="android:Theme.Material.Light.NoActionBar" />
 
-    <!-- The splash (spec 5.13): paper, the static mark in ink, no icon background; Theme.Focal after it. -->
+    <!-- Instant quiet cold start: pure paper with no logo flash until the first library frame is ready; Theme.Focal after. -->
     <style name="Theme.Focal.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/paper</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_mark</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_blank</item>
         <item name="postSplashScreenTheme">@style/Theme.Focal</item>
     </style>
 </resources>

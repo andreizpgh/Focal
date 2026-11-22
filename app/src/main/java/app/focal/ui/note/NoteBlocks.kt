@@ -323,8 +323,9 @@ internal fun GapRow(gap: GapUi, playable: Boolean, onPlay: () -> Unit, modifier:
  * hold their text alone (their line positions are read from the row's top).
  */
 @Composable
-internal fun ParagraphTime(ms: Long, onPlay: (() -> Unit)?, modifier: Modifier = Modifier) {
+internal fun ParagraphTime(ms: Long, onPlay: (() -> Unit)?, modifier: Modifier = Modifier, entrance: Long? = null) {
     val colors = FocalTheme.colors
+    val reveal = LocalPageReveal.current
     val time = NoteTimes.clock(ms)
     val spoken = stringResource(R.string.a11y_play_from, time)
     val source = remember { MutableInteractionSource() }
@@ -341,6 +342,11 @@ internal fun ParagraphTime(ms: Long, onPlay: (() -> Unit)?, modifier: Modifier =
         Text(
             time, style = FocalType.caption, color = colors.recede,
             modifier = Modifier
+                .then(
+                    if (entrance == null) Modifier else Modifier.graphicsLayer {
+                        alpha = FocalClock.fadeSlow(reveal.develop() - entrance)
+                    },
+                )
                 .then(
                     if (onPlay == null) Modifier.clearAndSetSemantics { }
                     else Modifier

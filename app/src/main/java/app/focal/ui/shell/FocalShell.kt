@@ -148,10 +148,10 @@ class ShellState internal constructor(
     internal fun takeDroppedPull(): Boolean = droppedPull.also { droppedPull = false }
 
     /** Back from the top page: it folds into where it came from if that is on screen, else it fades through. */
-    fun back() {
+    fun back(motionOverride: PageMotion? = null) {
         if (backStack.size <= 1) return
         dockClock.start()
-        pages.pop(backStack.last(), other = backStack[backStack.lastIndex - 1])
+        pages.pop(backStack.last(), other = backStack[backStack.lastIndex - 1], motionOverride = motionOverride)
         backStack.removeAt(backStack.lastIndex)
     }
 

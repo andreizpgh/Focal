@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -22,12 +23,49 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
 import app.focal.ui.design.Scene
 import app.focal.ui.design.Stage
 import java.nio.ByteBuffer
+
+/**
+ * Draws the dark instrument material directly into a moving [Rect] inside a [DrawScope] without re-measuring
+ * a layout node or reallocating [BitmapShader] / [Matrix] per frame (used by [app.focal.ui.shell.PageMotion.LiveStage]).
+ */
+internal class SceneMaterialPainter {
+    private val grain = Grain.brush()
+    private val grainMatrix = Matrix()
+
+    fun draw(scope: DrawScope, rect: Rect, grainOrigin: Offset, alpha: Float) {
+        if (alpha <= 0f || rect.width <= 0f || rect.height <= 0f) return
+        val w = rect.width
+        val h = rect.height
+        val gradient = Brush.verticalGradient(
+            0f to Scene.top, Scene.MID_STOP to Scene.mid, 1f to Scene.bottom, startY = 0f, endY = h,
+        )
+        val radiusX = (w * Scene.HIGHLIGHT_RADIUS_X).coerceAtLeast(1f)
+        val radiusY = (h * Scene.HIGHLIGHT_RADIUS_Y).coerceAtLeast(1f)
+        val squash = radiusY / radiusX
+        val highlight = Brush.radialGradient(
+            0f to Color.White.copy(alpha = Scene.HIGHLIGHT_ALPHA), Scene.HIGHLIGHT_END to Color.Transparent,
+            center = Offset(w / 2f, 0f), radius = radiusX,
+        )
+        grainMatrix.setTranslate(-grainOrigin.x, -grainOrigin.y)
+        grain.shader.setLocalMatrix(grainMatrix)
+        with(scope) {
+            translate(rect.left, rect.top) {
+                drawRect(gradient, size = Size(w, h), alpha = alpha)
+                scale(1f, squash, pivot = Offset(w / 2f, 0f)) {
+                    drawRect(highlight, size = Size(w, h / squash), alpha = alpha)
+                }
+                drawRect(grain, size = Size(w, h), alpha = Scene.GRAIN_ALPHA * alpha, colorFilter = Grain.white)
+            }
+        }
+    }
+}
 
 /**
  * The logo's material (spec 2.2, 3.4): the near-black vertical gradient, the top highlight and the grain. Gradient

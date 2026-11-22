@@ -77,7 +77,7 @@ import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigationevent.NavigationEvent
 import app.focal.ui.components.BottomColumnState
 import app.focal.ui.components.DockState
-import app.focal.ui.components.sceneMaterial
+import app.focal.ui.components.SceneMaterialPainter
 import app.focal.ui.design.FocalClock
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
@@ -130,6 +130,8 @@ class PageReveal internal constructor(
      * (T7b), infinity otherwise: its title, meta and paragraphs arrive at fixed times after it (spec 2.8.2).
      */
     val develop: () -> Float,
+    /** True only while this page is opening through a container transform (never on Back, so headings never shift mid-flight). */
+    val opening: () -> Boolean = { false },
 )
 
 /** What the current page shows of itself; outside a transform everything is at full alpha. */
@@ -241,9 +243,6 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     private var elapsed by mutableFloatStateOf(Float.POSITIVE_INFINITY)
     private var clock: Job? = null
 
-    /** The page's meta and text after a predictive back was released (`fadeFast` out); other changes use [body]. */
-    private var predictiveBody = Animatable(1f)
-
     /** v when a predictive back was released: the fold runs from the previewed page over what remains of v. */
     internal var commitAt = 1f
 
@@ -302,9 +301,9 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         readied -= destination
     }
 
-    /** Whether [c] holds still until its page is [ready]: an opening out of the stage or a row, with motion on. */
+    /** Whether [c] holds still until its page is [ready]: any container opening (stage, live stage or row), with motion on. */
     private fun waits(c: PageChange): Boolean =
-        c.push && !reduced && (c.motion == PageMotion.Stage || c.motion == PageMotion.Row) && c.document !in readied
+        c.push && !reduced && c.motion in CONTAINERS && c.document !in readied
 
     /**
      * The library's page where it is laid out (a detached one is gone). One pane composes it again when a note's
@@ -401,8 +400,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      */
     private var top: Destination? = null
 
-    /** [top] goes back to [other], the page under it. */
-    internal fun pop(top: Destination, other: Destination?) {
+    /** [top] goes back to [other], the page under it. [motionOverride] forces a specific exit (e.g. FadeThrough on Delete). */
+    internal fun pop(top: Destination, other: Destination?, motionOverride: PageMotion? = null) {
         this.top = other
         arriving = null
         // A page that was to open once the fold before it landed goes back before it ever showed: the fold lands.
@@ -418,20 +417,21 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         // A released predictive back, while its seek is under way. A gesture that was cancelled leaves its change
         // behind with the page whole again (nothing reports the cancel): a Back after it is an ordinary one.
         val seeking = (document?.value ?: 1f) < 1f
-        if (current != null && current.predictive && !current.committed && current.document == top && seeking) {
+        if (motionOverride == null && current != null && current.predictive && !current.committed && current.document == top && seeking) {
             commitAt = document?.value ?: 1f
-            predictiveBody = Animatable(1f)
             val committed = current.copy(committed = true, serial = ++serial)
             change = committed
             // No clock runs for a released predictive back: its fold decides at once, from the previewed layout.
+            // Row Back always recedes cleanly onto the visible library (never flying titles across neighbour rows).
             if (committed.motion in CONTAINERS) {
-                resolved = originCard(committed) != null
+                resolved = committed.motion != PageMotion.Row && originCard(committed) != null
                 resolvedFor = committed
             }
         } else {
-            val interrupted = inFlight(top, push = false)
+            val interrupted = if (motionOverride == null) inFlight(top, push = false) else null
             val c = PageChange(
-                reverse(opened[top]), top, push = false, serial = ++serial, start = interrupted?.let(::startOf) ?: ChangeStart.Pop, other = other,
+                motionOverride ?: reverse(opened[top]), top, push = false, serial = ++serial,
+                start = interrupted?.let(::startOf) ?: ChangeStart.Pop, other = other,
             )
             carryDecision(interrupted, c)
             change = c
@@ -549,7 +549,6 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         if (queued != null) return
         if (current != null && current.push && !current.predictive && current.motion in CONTAINERS && (pulling(current) || active(current))) return
         clock?.cancel()
-        predictiveBody = Animatable(1f)
         change = PageChange(reverse(opened[top]), top, push = false, predictive = true, edge = edge, serial = ++serial, other = other)
     }
 
@@ -657,8 +656,9 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         if (c.motion !in CONTAINERS || change !== c) return false
         var waited = false
         if (resolvedFor !== c) {
-            val ready = originCard(c) != null
-            if (!ready && elapsed <= DECIDE_MS) return false
+            val rowBack = !c.push && c.motion == PageMotion.Row
+            val ready = !rowBack && originCard(c) != null
+            if (!ready && !rowBack && elapsed <= DECIDE_MS) return false
             resolved = ready
             resolvedFor = c
             waited = elapsed > FocalTiming.TRIGGER_LEAD_MS
@@ -715,18 +715,18 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     }
 
     /** How long a change's clock runs: until its slowest part has settled (spec 2.8). */
-    private fun clockEnd(c: PageChange): Float = when (c.motion) {
-        PageMotion.Cut -> 0f
-        PageMotion.FadeThrough -> FocalSettle.FADE_MS.toFloat()
-        PageMotion.Stage, PageMotion.Row, PageMotion.LiveStage -> FocalSettle.STAGE_MS.toFloat()
+    private fun clockEnd(c: PageChange): Float = when {
+        c.motion == PageMotion.Cut -> 0f
+        c.motion == PageMotion.FadeThrough || (!c.push && c.motion == PageMotion.Row) -> FocalSettle.FADE_MS.toFloat()
+        else -> FocalSettle.STAGE_MS.toFloat()
     }
 
     /** The upper page's progress v on the clock: 0 → 1 as it opens, 1 → 0 as it folds (from where it started). */
     private fun clockProgress(c: PageChange): Float {
-        val t = when (c.motion) {
-            PageMotion.Cut -> 1f
-            PageMotion.FadeThrough -> fade(elapsed)
-            PageMotion.Stage, PageMotion.Row, PageMotion.LiveStage -> move(elapsed)
+        val t = when {
+            c.motion == PageMotion.Cut -> 1f
+            c.motion == PageMotion.FadeThrough || (!c.push && c.motion == PageMotion.Row) -> fade(elapsed)
+            else -> move(elapsed)
         }
         val from = c.start.v
         return if (c.push) from + (1 - from) * t else from * (1 - t)
@@ -818,9 +818,16 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         val page = destination.coordinates?.takeIf { it.isAttached } ?: return false
         val sourceLayout = slot.layout ?: return false
         val pageLayout = destination.layout ?: return false
-        // Both pre-measured layouts fly together via dual-layout crossfade (zero per-frame remeasurement).
+        // Only fly the title when both ends wrap identically: flying two different line breaks produces ghosting double text.
         if (sourceLayout.lineCount == 0 || pageLayout.lineCount == 0) return false
         if (origin.size.width <= 0 || page.size.width <= 0) return false
+        val sameWrap = sourceLayout.layoutInput.text.text == pageLayout.layoutInput.text.text &&
+            sourceLayout.lineCount == pageLayout.lineCount &&
+            (0 until sourceLayout.lineCount).all { line ->
+                sourceLayout.getLineStart(line) == pageLayout.getLineStart(line) &&
+                    !sourceLayout.isLineEllipsized(line) && !pageLayout.isLineEllipsized(line)
+            }
+        if (!sameWrap) return false
         // Some of it on screen: inside its frame, as far as the page's list shows it.
         val shown = inPage(c, page, clip = true) ?: return page.boundsInWindowOrEmpty().height > 0f
         val height = frames[c.document]?.size?.height?.toFloat() ?: return false
@@ -850,6 +857,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     /** The origin surface's alpha: dark instrument for a live stage, tonal card for a resting stage, none for a bare row. */
     internal fun material(c: PageChange): Float = when {
         c.motion == PageMotion.Row -> 0f
+        c.motion == PageMotion.LiveStage -> smoothstep(0.32f, 0.92f, progress(c))
         c.dragged -> smoothstep(PULLED_MATERIAL_FROM, PULLED_MATERIAL_TO, progress(c))
         else -> smoothstep(MATERIAL_FROM, 1f, progress(c))
     }
@@ -887,6 +895,10 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
             }
         },
         develop = { if (developing == destination && !reduced) developClock.elapsed else Float.POSITIVE_INFINITY },
+        opening = {
+            val c = change
+            c != null && c.document == destination && c.push && transforms(c)
+        },
     )
 
     /**
@@ -917,10 +929,10 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     private fun body(c: PageChange): Float {
         val from = c.start.body
         return when {
-            c.predictive -> predictiveBody.value
+            c.predictive -> if (c.committed) 1f - smoothstep(0f, 0.42f, progress(c)) else 1f
             // Pulled: with the travel, over the last part of the page's own way, under the title that rises with it.
             c.dragged -> 1 - smoothstep(PULLED_BODY_FROM, PULLED_BODY_TO, pageTravel(c))
-            !c.push && c.motion == PageMotion.Row -> from * (1 - smoothstep(0f, HALF, fadeFast(elapsed)))
+            !c.push && c.motion == PageMotion.Row -> from * (1f - smoothstep(0f, 0.46f, progress(c)))
             !c.push -> from * (1 - fadeFast(elapsed))
             c.motion == PageMotion.Stage || c.motion == PageMotion.Row -> {
                 val at = when {
@@ -939,15 +951,15 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     }
 
     /**
-     * T16: the other rows around a row that opens leave on `fadeFast` (spec 6.1); on Back they return as the page's
-     * text leaves, a fade-through on the same `fadeFast`.
+     * T16: the other rows around a row that opens leave on `fadeFast` (spec 6.1); on Back they fade back in
+     * overlapping the dissolving note paper so the screen never flashes blank white.
      */
     private fun rows(c: PageChange): Float {
         val from = c.start.rows
         if (c.push) return from * (1 - fadeFast(elapsed))
-        // They wait for as much of the page's text as was there: none when Back turned an opening around before its
-        // text arrived, so the library never blanks between a page that showed nothing and the rows.
-        return from + (1 - from) * smoothstep(HALF * c.start.body, 1f, fadeFast(elapsed))
+        val p = progress(c)
+        val start = 0.06f * c.start.body
+        return from + (1 - from) * smoothstep(start, start + 0.46f, p)
     }
 
     /** The origin's own content as the page opens out of it (T16′, T7b): the time, text and footer leave on `fadeFast`. */
@@ -1007,7 +1019,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
             if (!c.committed) return PageLook(preview = preview(c), edge = c.edge)
             if (transforms(c)) return if (active(c)) PageLook.Recorded else PageLook.Gone
             val fraction = if (commitAt <= 0f) 0f else v / commitAt
-            return PageLook(alpha = smoothstep(0f, 1f, fraction), preview = preview(c), edge = c.edge)
+            return PageLook(alpha = smoothstep(0f, 1f, fraction), preview = preview(c), edge = c.edge, recede = 1f - fraction)
         }
         // T7: the scene covers the change; the page below leaves at once (pages are transparent sheets on one paper).
         if (c.motion == PageMotion.Cut) return if (upper) PageLook.Shown else PageLook.Gone
@@ -1031,7 +1043,14 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
                 else -> PageLook.Gone
             }
         }
-        // A fade-through: the outgoing page is gone before the incoming one appears.
+        // Non-transforming Back (Row, deleted note, off-screen origin): outgoing sheet recedes and clears before the
+        // library fades in (Q7: two typesettings never overlap, brisk FADE_MS cadence).
+        if (!c.push) {
+            if (!upper) return PageLook(alpha = smoothstep(HALF, 1f, 1f - v))
+            val recede = ((1f - v) / HALF).coerceIn(0f, 1f)
+            return PageLook(alpha = smoothstep(HALF, 1f, v), recede = recede)
+        }
+        // Opening fade-through: the outgoing page is gone before the incoming one appears.
         return PageLook(alpha = if (upper) smoothstep(HALF, 1f, v) else smoothstep(HALF, 1f, 1 - v))
     }
 
@@ -1073,7 +1092,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     internal fun aside(destination: Destination, look: PageLook): Boolean {
         val c = change ?: return look.alpha <= 0f
         return when {
-            look.recorded -> leaving(destination)
+            // Keep a recorded page in-bounds so HardwareRenderer never culls layer.record during a fold.
+            look.recorded -> false
             look.alpha <= 0f -> leaving(destination) || settled()
             else -> false
         }
@@ -1088,11 +1108,6 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      */
     private fun inPage(c: PageChange, title: LayoutCoordinates, clip: Boolean): Rect? =
         frames[c.document]?.takeIf { it.isAttached }?.localBoundingBoxOf(title, clipBounds = clip)
-
-    /** A predictive back released past its threshold: the page's meta and text leave on `fadeFast` as it folds. */
-    internal suspend fun play(c: PageChange) {
-        if (c.motion in CONTAINERS && c.predictive && c.committed) predictiveBody.animateTo(0f, FocalMotion.fadeFast())
-    }
 
     /** The stage holds its recording while the live stage opens into the page (T7b): it is leaving, not changing. */
     internal fun freezesStage(): Boolean {
@@ -1195,13 +1210,14 @@ private fun move(ms: Float): Float = FocalClock.stage(ms)
 private fun fade(ms: Float): Float = FocalClock.fade(ms)
 private fun fadeFast(ms: Float): Float = FocalClock.fadeFast(ms)
 
-/** How a page draws itself: [alpha], the predictive preview at eased progress [preview] toward [edge], or recorded. */
+/** How a page draws itself: [alpha], the predictive preview at eased progress [preview] toward [edge], [recede] exit, or recorded. */
 @Immutable
 internal data class PageLook(
     val alpha: Float = 1f,
     val preview: Float = 0f,
     val edge: Int = NavigationEvent.EDGE_LEFT,
     val recorded: Boolean = false,
+    val recede: Float = 0f,
 ) {
     companion object {
         val Shown = PageLook()
@@ -1272,15 +1288,17 @@ internal fun PageFrame(
             .graphicsLayer {
                 val look = pages.look(destination)
                 alpha = if (look.recorded) 1f else look.alpha
-                // A page that is not drawn, or one leaving that has all but landed, stands aside: one kept composed a
-                // moment longer never swallows a tap meant for the page under it (PageTransitions.aside).
+                // A page that is not drawn stands aside: one kept composed a moment longer never swallows a tap
+                // meant for the page under it (PageTransitions.aside).
                 val aside = pages.aside(destination, look)
                 val e = if (look.recorded) 0f else look.preview
-                scaleX = previewScale(e)
+                val r = if (look.recorded) 0f else look.recede
+                scaleX = previewScale(e) * (1f - RECEDE_SCALE * r)
                 scaleY = scaleX
                 translationX = if (aside) ASIDE * size.width else previewShift(e, size.width, look.edge)
-                shape = if (e > 0f) RoundedCornerShape(FocalShapes.sheetRadius * e) else androidx.compose.ui.graphics.RectangleShape
-                clip = e > 0f
+                val corner = max(FocalShapes.sheetRadius.value * e, RecedeRadius.value * r).dp
+                shape = if (corner > 0.dp) RoundedCornerShape(corner) else androidx.compose.ui.graphics.RectangleShape
+                clip = corner > 0.dp
             }
             // Inside the layer: the frame's own space, where the transforms find the page's title even while it is aside.
             .onPlaced {
@@ -1301,8 +1319,8 @@ internal fun PageFrame(
                 val look = pages.look(destination)
                 if (look.recorded) layer.record { this@drawWithContent.drawContent() }
                 else if (look.alpha > 0f) {
-                    // A previewed page is a sheet of paper over the page it returns to.
-                    if (look.preview > 0f) drawRect(paper)
+                    // A previewed or receding page is a solid sheet of paper over the page it returns to.
+                    if (look.preview > 0f || look.recede > 0f) drawRect(paper)
                     drawContent()
                 }
             }
@@ -1350,6 +1368,8 @@ internal fun LibraryFrame(
 
 /** A page that is not drawn is placed this many widths aside (see [PageFrame]). */
 private const val ASIDE = 2f
+private const val RECEDE_SCALE = 0.05f
+private val RecedeRadius = 16.dp
 
 /** Where one page's frame was laid out, so it can unregister only itself. */
 private class PlacedFrame { var coordinates: LayoutCoordinates? = null }
@@ -1399,7 +1419,6 @@ internal fun PageTransformOverlay(pages: PageTransitions, live: LiveSurfaceState
 
 @Composable
 private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bottom: BottomColumnState, change: PageChange, placement: OverlayPlacement) {
-    LaunchedEffect(change) { pages.play(change) }
     val colors = FocalTheme.colors
     val density = LocalDensity.current
     val frame: () -> TransformFrame? = {
@@ -1449,20 +1468,13 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
             },
         )
         if (change.motion == PageMotion.LiveStage) {
-            Spacer(
-                Modifier
-                    .layout { measurable, constraints ->
-                        val r = frame()?.clip ?: Rect.Zero
-                        val placeable = measurable.measure(Constraints.fixed(max(0, r.width.roundToInt()), max(0, r.height.roundToInt())))
-                        layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(r.left.roundToInt(), r.top.roundToInt()) }
-                    }
-                    .graphicsLayer { alpha = frame()?.material ?: 0f }
-                    .sceneMaterial(grainOrigin = { frame()?.let { it.clip.topLeft - it.origin.topLeft } ?: Offset.Zero }),
-            )
+            val painter = remember { SceneMaterialPainter() }
             Spacer(
                 Modifier.fillMaxSize().drawBehind {
                     val f = frame() ?: return@drawBehind
-                    if (f.material <= 0f || colors.stageRing.alpha <= 0f) return@drawBehind
+                    if (f.material <= 0f) return@drawBehind
+                    painter.draw(this, f.clip, grainOrigin = f.clip.topLeft - f.origin.topLeft, alpha = f.material)
+                    if (colors.stageRing.alpha <= 0f) return@drawBehind
                     val width = RingWidth.toPx()
                     drawRoundRect(
                         colors.stageRing, topLeft = f.clip.topLeft + Offset(width / 2, width / 2),
@@ -1498,8 +1510,10 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                 val title = titleInFlight(f)
                 val feather = pages.flightFeather(change)
                 val wake = if (change.push) title?.let { titleWake(it, feather) } else null
-                drawIntoCanvas { canvas ->
-                    canvas.saveLayer(Rect(Offset.Zero, size), Paint())
+                val needsSoftBottom = f.clip.bottom < size.height
+                val needsSoftTop = !stageLike && f.clip.top > 0f
+                val needsMask = wake != null || needsSoftBottom || needsSoftTop
+                fun drawPageLayer() {
                     if (f.preview <= 0f) drawLayer(layer) else {
                         val scale = previewScale(f.preview)
                         val shift = previewShift(f.preview, size.width, f.edge)
@@ -1508,9 +1522,17 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                             scale(scale, scale, pivot = Offset(size.width / 2, size.height / 2))
                         }) { drawLayer(layer) }
                     }
-                    clearEdges(f, soft = if (stageLike) ClipEdges.Bottom else ClipEdges.Both)
-                    wake?.let { drawRect(it.brush(Color.Black), it.topLeft(), it.size(size.width), blendMode = BlendMode.DstOut) }
-                    canvas.restore()
+                }
+                if (!needsMask) {
+                    drawPageLayer()
+                } else {
+                    drawIntoCanvas { canvas ->
+                        canvas.saveLayer(Rect(Offset.Zero, size), Paint())
+                        drawPageLayer()
+                        clearEdges(f, soft = if (stageLike) ClipEdges.Bottom else ClipEdges.Both)
+                        wake?.let { drawRect(it.brush(Color.Black), it.topLeft(), it.size(size.width), blendMode = BlendMode.DstOut) }
+                        canvas.restore()
+                    }
                 }
             },
         )
@@ -1791,12 +1813,12 @@ private fun PageTransitions.flight(c: PageChange, f: TransformFrame, overlay: La
     val originAlpha = when {
         identicalSingleLine -> 0f
         sameWrap -> 1f - smoothstep(0.28f, 0.68f, v)
-        else -> 1f - smoothstep(0.16f, 0.42f, v)
+        else -> 1f - smoothstep(0.22f, 0.64f, v)
     }
     val pageAlpha = when {
         identicalSingleLine -> 1f
         sameWrap -> smoothstep(0.18f, 0.58f, v)
-        else -> smoothstep(0.44f, 0.70f, v)
+        else -> smoothstep(0.24f, 0.66f, v)
     }
     val ink = if (page.muted) colors.recede else colors.ink
     val originInk = if (slot.titleMuted) colors.recede else colors.ink

@@ -22,7 +22,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.focal.recording.RecordingService
 import app.focal.recording.RecordingState
 import app.focal.ui.design.FocalMotion
-import app.focal.ui.design.FocalSettle
 import app.focal.ui.shell.FocalApp
 import app.focal.ui.shell.FocalWindow
 import app.focal.ui.shell.NightMode
@@ -65,7 +64,7 @@ class MainActivity : ComponentActivity() {
         splash.setKeepOnScreenCondition {
             !library.state.value.loaded && SystemClock.uptimeMillis() - createdAt < SPLASH_MAX_HOLD_MS
         }
-        // Subtle, quiet exit once the first real library frame is ready: icon recedes slightly as paper dissolves.
+        // Quiet paper-only reveal once the first real library frame is ready: no logo flash, no artificial hold.
         splash.setOnExitAnimationListener { exit ->
             val animScale = runCatching {
                 Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
@@ -74,15 +73,8 @@ class MainActivity : ComponentActivity() {
                 exit.remove()
                 return@setOnExitAnimationListener
             }
-            val duration = (FocalSettle.FADE_FAST_MS * 1.15f).toLong()
+            val duration = SPLASH_EXIT_MS
             val interpolator = FocalMotion.springInterpolator(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS, duration)
-            runCatching { exit.iconView }.getOrNull()?.animate()
-                ?.alpha(0f)
-                ?.scaleX(SPLASH_ICON_EXIT_SCALE)
-                ?.scaleY(SPLASH_ICON_EXIT_SCALE)
-                ?.setDuration((duration * 0.85f).toLong())
-                ?.setInterpolator(interpolator)
-                ?.start()
             exit.view.animate()
                 .alpha(0f)
                 .setDuration(duration)
@@ -211,7 +203,7 @@ class MainActivity : ComponentActivity() {
         /** The recording notification: show the recording screen. */
         const val ACTION_SHOW_RECORDING = "app.focal.action.SHOW_RECORDING"
         /** Hard ceiling for holding the system splash while SQLite emits the first library frame. */
-        private const val SPLASH_MAX_HOLD_MS = 280L
-        private const val SPLASH_ICON_EXIT_SCALE = 0.90f
+        private const val SPLASH_MAX_HOLD_MS = 250L
+        private const val SPLASH_EXIT_MS = 120L
     }
 }

@@ -193,7 +193,10 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
                 val id = noteId
                 recording.finish()
                 haptics.finish()
-                if (id != null) shell.open(Destination.Note(id), PageMotion.LiveStage)
+                if (id != null) {
+                    activity?.let { NoteViewModel.prepare(it, id) }
+                    shell.open(Destination.Note(id), PageMotion.LiveStage)
+                }
             },
             openSettings = openSettings,
         )

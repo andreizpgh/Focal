@@ -10,8 +10,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
@@ -34,8 +36,10 @@ import app.focal.ui.library.rememberTransferWords
 import app.focal.ui.library.shareNoteText
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.LocalShell
+import app.focal.ui.shell.PageMotion
 import app.focal.ui.state.LibraryViewModel
 import app.focal.ui.state.NoteEvent
+import app.focal.ui.state.NoteUiState
 import app.focal.ui.state.NoteViewModel
 import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.PlaybackSession
@@ -65,16 +69,21 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
     val finishRequested by recording.finishRequested.collectAsStateWithLifecycle()
     val playback = remember(player, id) { RoutePlayback(player, id, session) }
     val feedback = shell.bottom.feedback
-    val current by rememberUpdatedState(state)
+    // Keep the last rendered note snapshot while deleting/leaving so SQLite trashing never flashes a blank white screen.
+    var frozenState by remember(id) { mutableStateOf<NoteUiState?>(null) }
+    val lastValid = remember(id) { object { var value: NoteUiState? = null } }
+    if (state.loaded && !state.missing) lastValid.value = state
+    val shownState = frozenState ?: if (state.missing) lastValid.value ?: state else state
+    val current by rememberUpdatedState(shownState)
 
     val words = RouteWords(
         undo = stringResource(R.string.action_undo), deleted = stringResource(R.string.feedback_deleted),
         audioRemoved = stringResource(R.string.feedback_audio_removed), textCopied = stringResource(R.string.feedback_text_copied),
     )
     // Playback belongs to its page (spec 5.6): leaving it stops the note's audio, whichever way it leaves.
-    val leave = {
+    val leave: (PageMotion?) -> Unit = { motionOverride ->
         player.stopNote(id)
-        if (shell.current == destination) shell.back()
+        if (shell.current == destination) shell.back(motionOverride)
     }
     DisposableEffect(player, id) {
         onDispose { if (!activity.isChangingConfigurations) player.stopNote(id) }
@@ -85,7 +94,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
                 // The Undo or commit runs through the library's view model: its outcomes ("Too late to undo", a
                 // removal that failed) come after the page has gone, and only app-level effects still listen then.
                 NoteEvent.Deleted -> {
-                    leave()
+                    leave(PageMotion.FadeThrough)
                     appScope.launch {
                         feedback.showDeferred(
                             words.deleted, FeedbackAction(words.undo, FocalIcon.Undo),
@@ -101,7 +110,10 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
                 }
                 // The page shows "Replaced N · Undo" itself: inside Edit its Undo belongs to the session's log.
                 is NoteEvent.Replaced -> Unit
-                is NoteEvent.Error -> appScope.launch { feedback.show(event.message) }
+                is NoteEvent.Error -> {
+                    frozenState = null
+                    appScope.launch { feedback.show(event.message) }
+                }
             }
         }
     }
@@ -109,8 +121,11 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
     // A note deleted elsewhere leaves the screen; a read failure says so and offers to read it again. "Missing" is
     // confirmed with the store first: it may be what the page was left with (deleted here, restored with Undo since).
     LaunchedEffect(state.missing) {
-        if (!state.missing) return@LaunchedEffect
-        if (note.exists()) note.reload() else leave()
+        if (!state.missing || frozenState != null) return@LaunchedEffect
+        if (note.exists()) note.reload() else {
+            frozenState = lastValid.value
+            leave(PageMotion.FadeThrough)
+        }
     }
     val tryAgain = stringResource(R.string.action_try_again)
     LaunchedEffect(state.error) {
@@ -151,7 +166,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
                 recording.finish()
                 haptics.finish()
             },
-            back = leave,
+            back = { leave(null) },
             rename = note::rename,
             copy = {
                 val result = copyNoteText(context, id, current.title, note.copyText())
@@ -169,6 +184,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
                 note.removeAudio()
             },
             delete = {
+                frozenState = current
                 player.stopNote(id)
                 note.delete()
             },
@@ -191,7 +207,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
     // A hit the page has already shown no longer overrides where the reader was.
     val listState = rememberNoteListState(id, hit = destination.hit != null && !page.hitShown)
     NotePage(
-        note = state,
+        note = shownState,
         playback = playback,
         actions = actions,
         edits = edits,
