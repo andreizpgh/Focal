@@ -256,13 +256,12 @@ would change any word's letters or digits is dropped.
 - **Seams.** At a window seam with a pause under 0.8 s, a period before a lowercase
   continuation is removed, unless it ends an abbreviation, initial or number. Case
   is never changed.
-- **Sentences and paragraphs.** A lowercase word followed by a capitalized word
-  after a 3-second pause can receive a period. Paragraphs close at a sentence
-  end after 3 seconds, after 1.5 seconds once they hold two sentences, or once
-  they hold 40 words. Unpunctuated passages can close after 12 words at a
-  3-second pause. At 80 words the formatter chooses the longest recent pause.
-  The last paragraph stays open during transcription. Incremental assembly and
-  batch formatting use the same rules.
+- **Sentences and paragraphs.** Paragraphs close at a sentence end after 3 seconds,
+  after 1.5 seconds once they hold two sentences, or once they hold 40 words.
+  Unpunctuated passages can close after 12 words at a 3-second pause. At 80 words
+  the formatter chooses the longest recent pause. The formatter does not insert
+  guessed commas or periods. The last paragraph stays open during transcription.
+  Incremental assembly and batch formatting use the same rules.
 - **Title**: the first sentence (extended if shorter than 12 characters), at most
   36 characters. A longer sentence is shortened to whole words: to the last
   clause that fills at least half of the room, and never left on a function word
@@ -270,7 +269,10 @@ would change any word's letters or digits is dropped.
   follows it wherever a title is shown beside its text. A renamed title is never
   replaced.
 - **Doubtful words**: a word whose least confident letter-bearing token is below
-  probability 0.5 gets a dotted underline. Spelling edits clear it. Trailing sentence marks preserve it. These
+  probability 0.5 gets a dotted underline. Spelling edits clear it, and tapping
+  **Keep** (or **Mark all as reviewed**) stores a per-word `reviewed` flag in the
+  paragraph's `words` JSON without modifying `text`, `source_text`, or raw window
+  tokens. Trailing sentence marks preserve an unreviewed doubt flag. These
   thresholds are provisional ([evidence](speech-quality.md#doubtful-words)).
 - **Copy** joins the visible paragraphs with a blank line: no title, no marks.
   Copy and Share refuse a note longer than 200,000 characters, which could
@@ -284,9 +286,10 @@ so the range widens to its timed neighbours. Times are never invented.
 
 ## Playback
 
-`SpeechPlayer` streams the note's PCM file through `AudioTrack` and reports the
-actual playback head. Losing audio focus or unplugging headphones pauses it. The
-player refuses to start while a recording is live, and leaving a note stops it.
+`SpeechPlayer` streams the note's PCM file through `AudioTrack` at 1×, 1.5×, or
+2× speed (`PlaybackParams`) and reports the actual playback head. Losing audio
+focus or unplugging headphones pauses it. The player refuses to start while a
+recording is live, and leaving a note stops it.
 
 ## Interface
 

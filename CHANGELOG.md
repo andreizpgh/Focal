@@ -5,6 +5,49 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
+## [0.5.0] - 2026-11-21
+
+### Added
+
+- **Instant-keyboard in-place review.** Tapping any word (or tapping **Review · N**
+  in the top bar) opens inline editing immediately with the keyboard ready and
+  the target word or phrase selected. A single-row companion strip rides above
+  the keyboard with **Listen**, one-tap suggestions from nearby spellings or
+  earlier manual edits in the same note, and **Keep** / **Next** / **Apply**.
+- **Explicit review confirmation and dismissal.** Tapping **Keep** marks an
+  unclear word as reviewed without altering text or original recognizer tokens,
+  clears its dotted underline, decrements **Review · N**, and jumps straight to
+  the next unclear span in a **‹ 1 of N ›** queue. **Mark all as reviewed** in
+  the overflow menu clears all remaining underlines at once, with Undo.
+- **Playback speed.** Added a **1× / 1.5× / 2×** speed toggle to the note
+  player strip while keeping the spoken-word highlight synchronized to playback.
+
+### Changed
+
+- **Balanced library home screen.** At rest, the top Stage card now uses tonal
+  paper (`stageIdleSurface` with a 1 dp hairline border) and a high-contrast
+  **Copy** pill, reserving the dark instrument material strictly for active
+  recording. The library dock pairs Search with a centered, sculpted **Record**
+  pill carrying a muted vermilion microphone dot.
+- **Unified page transitions and interactive pull-down.** Every note — single-line,
+  wrapped, or truncated, from the Stage card or any library row — opens with the
+  same dual-layout crossfade flight using measured typography and overlapping
+  alpha curves so mid-flight frames never wash out or snap. Pulling the Stage
+  card down dissolves tonal paper smoothly into the note page with monotonic
+  title motion at every drag position.
+- **Broader wording reuse.** Manual edits to any word in a note (not only
+  originally flagged words) can now be offered as one-tap suggestions on later
+  occurrences in the same note.
+
+### Removed
+
+- Removed the modal word-review dialog and floating punctuation chips in favor
+  of instant-keyboard inline editing.
+- Removed heuristic comma/period insertion (`BoundaryPunctuation`) and
+  window-overlap alternative readings (`overlapReadings`), whose multilingual
+  benchmarks showed no net benefit. Parakeet Ultra's own punctuation is preserved
+  intact.
+
 ## [0.4.0] - 2026-11-21
 
 ### Added
@@ -367,6 +410,7 @@ recovery of interrupted recordings.
 First public alpha: background recording and local transcription with the
 bundled Whisper Base model.
 
+[0.5.0]: https://github.com/andreizpgh/Focal/releases/tag/v0.5.0
 [0.4.0]: https://github.com/andreizpgh/Focal/releases/tag/v0.4.0
 [0.3.2]: https://github.com/andreizpgh/Focal/releases/tag/v0.3.2
 [0.3.1]: https://github.com/andreizpgh/Focal/releases/tag/v0.3.1

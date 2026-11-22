@@ -169,23 +169,25 @@ confident.
 
 **Review in the app.** A dotted underline marks the spelling. Adjacent flags can
 be checked as a phrase. Changing a trailing sentence mark keeps the lexical
-flag. Changing the spelling clears it. Only an actual `<unk>` piece can mark
-the preceding word as incomplete. Other recognizer control pieces are ignored.
+flag. Changing the spelling or confirming the word with **Keep** (or **Mark all
+as reviewed**) clears it without modifying the original recognizer tokens. Only
+an actual `<unk>` piece can mark the preceding word as incomplete. Other
+recognizer control pieces are ignored.
 
-Tap the words, or tap **Review** at the top of the note. The review
-can play the original audio with a little context. At window boundaries, the app
-can also show a second reading already present in the stored context tokens. It
-requires scored words above the doubt threshold and at least 60% time overlap
-(intersection over union). A separate list offers nearby spellings from this
-note within one insertion, deletion or substitution. Review can also reuse
-short wording from saved edits to the same doubtful spelling in this note.
-It requires an unchanged neighbouring word to identify a substitution, omits
-conflicting replacements, and recomputes the suggestion from the current text
-after a restore or undo. Applying any suggestion is an explicit, undoable edit.
+Tap any word, or tap **Review · N** at the top of the note, to edit in place with
+the keyboard open immediately. A single-row companion strip rides above the
+keyboard with **Listen** (original audio around the selection), one-tap
+suggestions from nearby spellings in the same note (within one edit) or earlier
+short manual edits in the same note, and **Keep** / **Next** / **Apply**. Reused
+edits require an unchanged neighbouring word to identify a substitution, omit
+conflicting replacements, and recompute from the current text after a restore or
+undo. Window-overlap alternative readings were removed after the multilingual
+benchmark showed they fired on only 4 of 227 holdout spans and harmed more
+often than they helped (2 harmful vs 1 helpful). Applying any edit or
+confirmation is explicit and undoable.
 The [multilingual review measurement](benchmarks/2026-11-19-multilingual/README.md)
-counts matching and mismatching underlines, tests the nearby spelling menu
-and replays the alternative readings from overlapping audio. The time readers
-save and the accuracy of their final edits still need a study.
+counts matching and mismatching underlines and evaluates nearby-spelling hints.
+The time readers save and the accuracy of their final edits still need a study.
 
 A [wider-audio replay](benchmarks/2026-11-20-context-review/README.md) re-decoded
 a selected phrase with the same recognizer. On 343 held-out selections across
@@ -240,26 +242,20 @@ research candidate for review suggestions.
   word after a seam was rejected: 14 fixed against 23 damaged.
 - **Duplicate guard.** On 86 forced hard cuts, words repeated near the cut fell
   from 16 to 2, and the guard removed no correct word.
-- **Clause punctuation (provisional).** A few Russian constructions in ordinary
-  dictation can supply a missing comma, such as “я думаю, что” and “важно, чтобы”.
-  The rule requires the exact conjunction and a matching preceding word.
-- **Missing periods (provisional).** New dictation receives a period between
-  a word ending in a lowercase letter and a word beginning with a capital
-  after a measured pause of at least 3 seconds. A trailing function word
-  suppresses the period, as in “в Москву”. Explicit marks and letter
-  case are preserved. A capital can also begin a name. A pause alone does
-  not resolve commas or distinguish questions from statements.
+- **No synthetic punctuation heuristics.** Language-specific comma heuristics and
+  pause-based period insertion were removed after evaluation showed no net
+  multilingual benefit and risk of non-reversible false marks inside `source_text`.
+  Parakeet Ultra's own punctuation is preserved intact.
 - **Paragraphs (provisional).** Timed gaps run about 0.3–0.5 seconds longer
   than acoustic silence. In normal streams, 22 of 70 short acoustic gaps
   measured at least 1.5 seconds. Earlier thresholds left ordinary phone
-  dictation in one block. The formatter now breaks at a sentence end after
+  dictation in one block. The formatter breaks at a sentence end after
   3 seconds, after 1.5 seconds once two sentences have accumulated, or after
   40 words. An unpunctuated passage can break after 12 words at a 3-second
-  pause. At 80 words it breaks at the longest recent pause. These new rules apply during
-  decoding. Readers can use **Start paragraph here** to split existing notes.
-  Selecting a paragraph's first word offers **Join previous paragraph** when
-  both passages can retain their source information. The multilingual benchmark
-  compares these automatic breaks to authored paragraphs in publisher readings.
+  pause. At 80 words it breaks at the longest recent pause. Readers can press
+  Enter to split or Backspace at paragraph start to join while editing in place.
+  The multilingual benchmark compares these automatic breaks to authored
+  paragraphs in publisher readings.
 - **Title.** The first sentence, extended by the next if it is shorter than 12
   characters, at most 36 characters. A longer first sentence is shortened to
   whole words at a clause, never to a dangling function word, and carries no

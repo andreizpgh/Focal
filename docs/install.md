@@ -1,9 +1,9 @@
 # Install Focal
 
-**[Download Focal-0.4.0.apk](https://github.com/andreizpgh/Focal/releases/download/v0.4.0/Focal-0.4.0.apk)**
+**[Download Focal-0.5.0.apk](https://github.com/andreizpgh/Focal/releases/download/v0.5.0/Focal-0.5.0.apk)**
 
 Focal is distributed as an APK on its
-[release page](https://github.com/andreizpgh/Focal/releases/tag/v0.4.0), under
+[release page](https://github.com/andreizpgh/Focal/releases/tag/v0.5.0), under
 **Assets**. You don’t need a GitHub account, Android Studio or a ZIP archive.
 Earlier versions stay on their own release pages.
 
@@ -21,7 +21,7 @@ Earlier versions stay on their own release pages.
 ## Install
 
 1. Open the download link on your phone.
-2. Open **Focal-0.4.0.apk** from your browser’s downloads or the Files app.
+2. Open **Focal-0.5.0.apk** from your browser’s downloads or the Files app.
 3. If Android asks, allow **Install unknown apps** for that browser or file
    manager, go back and tap **Install**. You can turn the permission off
    afterwards.
@@ -41,11 +41,10 @@ Android updates an app in place only when the new APK is signed with the same
 key. Alpha 2 to Alpha 9 and every release since share one development key, and
 each release is checked to carry the same certificate before it is published.
 
-- **Over 0.3.2:** install 0.4.0 in place. It uses the same application ID,
-  signing certificate and note database format. Existing notes keep their text,
-  paragraph breaks, manual edits and recordings. On an Android 16 emulator,
-  the signed update preserved a test note's custom title, both paragraphs and
-  an earlier edit. The new review screen offered that spelling on its next occurrence.
+- **Over 0.4.0 or 0.3.2:** install 0.5.0 in place. It uses the same application ID,
+  signing certificate, and SQLite schema version (the new per-word `reviewed` bit
+  is backward-compatible in the existing `words` JSON). Existing notes keep their
+  text, paragraph breaks, manual edits, and recordings.
 - **Over 0.3.1:** the notes stay as they are; nothing in them is converted.
   Tested on an Android emulator: the published 0.3.1 APK was installed, then
   0.3.2 over it.

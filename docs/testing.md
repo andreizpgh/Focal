@@ -123,6 +123,31 @@ to end, so before publishing a release is checked on emulators in three parts:
 
 ## What has been verified
 
+### 0.5.0
+
+Checked on host JVM and an API 36 (Android 16) x86_64 emulator (`fintrail36`) with
+the verified speech model bundled. No physical ARM phone run yet.
+
+- **JVM, lint, and scripts:** 63 core unit tests, 214 app unit tests, `:app:lintDebug`
+  (0 errors), and 58 Python script tests all passed.
+- **Instrumented suite (`-Pfocal.requireModel=true`):** 158 of 158 phone-sized tests
+  passed at 824 × 1830 (320 dpi), including inline review, `Keep` confirmation and
+  `Review · N` dismissal, `Mark all as reviewed`, undoable confirmation, `NoteStoreTest`
+  persistence, and real Parakeet Ultra INT8 decoding of the public JFK fixture. Ten
+  additional wide-display tests (all nine two-pane `InterfaceTest` interactions and
+  `GalleryTest#tablet`) passed at 1600 × 2560 (320 dpi). Landscape and wide gallery
+  stages were not run separately.
+- **Visual and frame review:** Inspected rendered 412 × 915 dp gallery shots for
+  library light/dark, live recording, transcribing, dark playback (with 1× speed pill),
+  in-place review light/dark, and mid-flight open/back transition frames for Stage and
+  Row notes. The four screenshots in `docs/screenshots/` come from this 0.5.0 build.
+- **Release build:** Signed ARM64 APK verified with `scripts/release.py` (v2/v3
+  signing certificate `3e407a18…a3bc`, 16 KB zipalign, aapt2 badging, `arm64-v8a`
+  only, all five locked model files byte for byte). Physical ARM phone validation
+  remains open below.
+
+### 0.4.0
+
 **Wrapped title and inline review, 2026-11-19.** On a 320 × 640 Android 35
 emulator a truncated two-line card opened into a three-line heading. Consecutive
 screen-recorded frames showed the card text fading and the full heading appearing
@@ -132,8 +157,6 @@ rendered 130 frames. Android marked three as janky and reported 21 ms median
 and 30 ms p95 frame duration. Physical phone frame pacing is still unmeasured.
 The instrumentation tests also exercised correction, phrase splitting, a
 Greek question, joining paragraphs, undo and the store's stale-write guards.
-
-### 0.4.0
 
 The signed ARM64 APK was built from `c51fcd1`. The 63 core and 212 app JVM
 tests passed, as did lint and all 93 Python script tests with the research
@@ -154,8 +177,7 @@ The published 0.3.2 APK opened a synthetic two-paragraph note that contained
 a custom title and a manual correction. Installing the signed 0.4.0 APK over
 it preserved all three. Review offered the earlier spelling at its next
 occurrence. Applying and undoing the suggestion restored the second paragraph
-and kept the first correction. The [review screenshot](screenshots/word-review-light.png)
-comes from this signed build. Physical ARM phone measurements remain open.
+and kept the first correction. Physical ARM phone measurements remain open.
 
 ### 0.3.2
 

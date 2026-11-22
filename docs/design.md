@@ -37,7 +37,7 @@ difference is listed under [Known deviations](#known-deviations).
 
 ## Color
 
-Two inks and the grays between them; no accent color and no dynamic color.
+Two inks and the grays between them, with one quiet hardware accent reserved for the microphone dot. No dynamic color.
 
 | Role | Light | Dark | Used for |
 | --- | --- | --- | --- |
@@ -46,13 +46,13 @@ Two inks and the grays between them; no accent color and no dynamic color.
 | `muted` | `#6B6B6B` | `#8F8F8F` | Receded text, metadata |
 | `faint` | `#949494` | `#6E6E6E` | Placeholders, disabled glyphs, doubt dots |
 | `line` | `#EBEBEB` | `#222222` | Hairlines |
-| `s1` / `s2` | `#F3F3F3` / `#E8E8E8` | `#1C1C1C` / `#282828` | Secondary controls, edit sheet, find matches |
+| `s1` / `s2` | `#F3F3F3` / `#E8E8E8` | `#1C1C1C` / `#282828` | Secondary controls, review pills, find matches |
+| `stageIdleSurface` | `#F3F3F1` | `#191919` | Resting stage card (tonal paper, 1 dp hairline border) |
 | `lens` | `#E0E0E0` | `#333333` | The playing word |
-| `inv` / `onInv` | `#111111` / `#FFFFFF` | `#EDEDED` / `#0F0F0F` | Primary pills (Record, Copy), the current find match |
+| `inv` / `onInv` | `#111111` / `#FFFFFF` | `#EDEDED` / `#0F0F0F` | Primary pills (Record, Copy, Keep/Next), current find match |
+| `recordDot` | `#D93829` | `#E04638` | Microphone dot on Record, Continue recording, and Resume |
 
-The recording scene uses a vertical gradient (`#262626` → `#171717` → `#0A0A0A`),
-a 7% grain, ink `#EDEDED` and muted `#8C8C8C`. The stage card uses the same
-material with muted `#999999`.
+The recording scene and live stage card use the dark instrument material: a vertical gradient (`#262626` → `#171717` → `#0A0A0A`), 7% grain, ink `#EDEDED` and muted `#8C8C8C` (`#999999` on the folded card). At rest, the stage card uses tonal paper so an open microphone is unmistakable across the room.
 
 Text contrast is at least 4.5:1 in every state and meaningful non-text at least
 3:1. With Android's contrast setting at medium or high, every receded gray moves
@@ -169,15 +169,17 @@ deleting, Undo and errors are silent. Focal plays no sounds.
 
 ### The stage
 
-A card at the top of the library in the instrument's material. It always holds
-what is current: while recording, the live wave, the running length and the
-latest line; otherwise the note being transcribed, or the latest note with a
-one-tap Copy. Dragging the card down opens what it holds, the same way in both
+A card at the top of the library that holds what is current: while recording, it
+takes the dark instrument material with the live wave, running length and latest
+line; at rest, it sits on tonal paper (`stageIdleSurface` with a 1 dp hairline
+border) showing the note being transcribed or the latest note with a high-contrast
+one-tap Copy pill. Dragging the card down opens what it holds, the same way in both
 cases: while recording the scene, and at rest the note. The card's edge follows
-the finger all the way, and a note's card turns into its page under the finger;
-let go past 40 % of the way, or flung down, it opens, and sooner it goes back
-into the card. In an empty library there is no card; the nine bars rest in ink
-on the paper above one line of invitation.
+the finger all the way, and a note's card dissolves smoothly into paper under the
+finger while the title interpolates directly into the page heading; let go past
+40% of the way, or flung down, it opens, and sooner it goes back into the card. In
+an empty library there is no card; the nine bars rest in ink on the paper above one
+line of invitation.
 
 ### The recording scene
 
@@ -262,29 +264,31 @@ region, and stays until dismissed while TalkBack is on.
 ### The document
 
 The note page: title, dateline and paragraphs on paper. The text is edited where
-it is read.
+it is read, with no modal dialogs.
 
-- **Tap a word** to review it in context. Listen to the audio, choose a local
-  suggestion, adjust punctuation, type a replacement or split the paragraph.
-  On the first word, **Join previous paragraph** combines adjacent passages.
-  Undo restores their wording, original recordings' time ranges and search entries.
-  Apply saves the wording and offers Undo. Cancel returns to reading.
-  If an earlier edit in this note replaced the same doubtful wording, review
-  offers that spelling or short phrase under **From your edits in this note**.
-  Conflicting replacements suppress the suggestion. Restoring the source
-  paragraph also removes suggestions derived from that edit.
+- **Tap a word** to edit it immediately in place: the word (or contiguous unclear
+  phrase) is selected and the keyboard opens right away, so the next key replaces
+  it. A tap on bare paper places the caret.
+- **Long-press** to sweep a phrase: the word under the finger, growing word by
+  word as the finger moves. Lifting it opens Edit with that phrase selected.
+- **Reviewing unclear words.** Doubtful words carry a faint dotted underline, and
+  a quiet **Review · N** pill sits in the top bar. Tapping **Review · N** enters
+  Edit immediately on the first unclear span with a compact **‹ 1 of N ›** stepper
+  in the edit bar. A single-row companion strip rides above the keyboard with
+  **Listen**, one-tap suggestions from earlier edits or nearby spellings in the
+  same note, and **Keep** (which confirms the word, clears its underline, offers
+  Undo, and steps straight to the next unclear word without closing the keyboard).
+  Once you type a replacement, **Keep** flips to **Next** (or **Apply** on the
+  final span). **Mark all as reviewed** in the overflow menu clears all remaining
+  underlines at once, with Undo.
 - **Paragraph times.** A note that still has its audio shows, over each paragraph
   after the first, the time it starts at; a tap plays from there. A setting turns
   them off.
-- **Long-press** to sweep a phrase: the word under the finger, growing word by
-  word as the finger moves. Lifting it opens review for that span.
 - **▶ in the dock** plays the note. The playing paragraph stays in ink, a soft
-  lens follows the word, a player strip appears above the dock and the text
-  follows playback within the middle third of the screen.
+  lens follows the word, a player strip with a **1× / 1.5× / 2×** speed toggle
+  appears above the dock, and the text follows playback within the middle third
+  of the screen.
 - **Tap the title** to rename it.
-- Doubtful words have a row of faint dots under their spelling. Adjacent
-  marked words open together. **Review** in the top bar opens a flagged span and shows how many
-  there are. **Next unclear** moves on to the next flagged span.
 - **Delete** is hidden while a note is being transcribed or waits for the speech
   model; if it is reached another way, the pill asks to finish first.
 - **Copy and Share** refuse a note longer than 200,000 characters; the pill asks
