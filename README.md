@@ -3,11 +3,11 @@
   <h1>Focal</h1>
   <p>Offline voice notes for Android.</p>
   <p>
-    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/v0.5.2/Focal-0.5.2.apk">Download Focal 0.5.2</a></strong>
+    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/v0.5.3/Focal-0.5.3.apk">Download Focal 0.5.3</a></strong>
     &nbsp;·&nbsp;
     <a href="docs/install.md">Install guide</a>
     &nbsp;·&nbsp;
-    <a href="https://github.com/andreizpgh/Focal/releases/tag/v0.5.2">Release notes</a>
+    <a href="https://github.com/andreizpgh/Focal/releases/tag/v0.5.3">Release notes</a>
   </p>
   <sub>Android 8.0+ · ARM64 · ~0.7 GB · No internet permission · Testing pre-release</sub>
 </div>
@@ -36,7 +36,7 @@ Tap **Record** and start talking. Text appears in paragraphs after each pause wh
 
 ### Status
 
-Focal 0.5.2 is a testing pre-release and installs directly over 0.5.1, 0.5.0, 0.4.0, and 0.3.2. Unit tests, lint, and Android 16 emulator suites pass with the bundled speech model, while physical ARM phone speed, heat, battery use, and spontaneous dictation accuracy remain open in the [phone checklist](docs/testing.md#phone-validation). Check important transcripts against the original audio.
+Focal 0.5.3 is a testing pre-release and installs directly over 0.5.2, 0.5.1, 0.5.0, 0.4.0, and 0.3.2. Unit tests, lint, and Android 16 emulator suites pass with the bundled speech model, while physical ARM phone speed, heat, battery use, and spontaneous dictation accuracy remain open in the [phone checklist](docs/testing.md#phone-validation). Check important transcripts against the original audio.
 
 ---
 

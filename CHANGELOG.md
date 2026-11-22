@@ -5,6 +5,42 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
+## [0.5.3] - 2026-11-23
+
+### Added
+
+- **Title rename `Done` button and seamless Title ↔ Body edit switching.**
+  Renaming a note title now shows a **Done** pill directly above the keyboard
+  (matching Edit and Review). Tapping the title while editing a paragraph saves
+  the paragraph and moves focus straight into the title without dismissing the
+  keyboard; tapping a paragraph while renaming commits the title and opens that
+  word for editing.
+
+### Changed
+
+- **Unified page transitions.** Stage tap, Stage pull-down, library row tap,
+  Back, Predictive Back, and folded-stage **Finish** now share one spatial
+  container transform: a single critically damped spring, subtle library depth
+  recession, rounded elevated paper sheet with hairline border, and universal
+  title flight across both Stage cards and library rows regardless of line
+  wrapping.
+- **Smooth Search ↔ Record dock transition.** Closing Search now unveils the
+  **Record** button continuously as the search bar contracts instead of popping
+  it in after the close animation finishes.
+- **Stage delete-and-promote motion.** Deleting the latest note in the library
+  now animates the departing card out and glides the next note up into the Stage
+  card, while deleting an open note settles the library quietly behind the exit.
+- **Compact Settings footer.** Removed the decorative waveform logo below
+  **Version** and tightened vertical rhythm so the Settings screen fits cleanly
+  in one portrait viewport at default font scale.
+
+### Fixed
+
+- **Folded live-recording Finish reveal.** Synchronized title and paragraph
+  development to the exact first transform frame and prevented solid-paper top
+  and bottom fades from drawing a bright band over the dark-to-paper material
+  crossfade.
+
 ## [0.5.2] - 2026-11-22
 
 ### Added
