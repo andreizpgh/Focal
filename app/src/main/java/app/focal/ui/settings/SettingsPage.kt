@@ -58,6 +58,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.focal.R
+import app.focal.ui.components.FeedbackHostState
+import app.focal.ui.components.FeedbackPill
 import app.focal.ui.components.FocalBottomSheet
 import app.focal.ui.components.FocalIcon
 import app.focal.ui.components.FocalIconButton
@@ -90,8 +92,16 @@ import app.focal.ui.state.ThemeMode
 class SettingsActions(
     val setTheme: (ThemeMode) -> Unit = {},
     val setParagraphTimes: (Boolean) -> Unit = {},
+    /** Export all settled notes as Markdown ZIP through Android SAF. */
+    val exportNotes: () -> Unit = {},
+    /** Back up all settled notes (with optional audio) through Android SAF. */
+    val backupNotes: (includeAudio: Boolean) -> Unit = {},
+    /** Restore notes from an offline backup ZIP through Android SAF. */
+    val restoreBackup: () -> Unit = {},
     /** "Remove all audio", once confirmed in its sheet. */
     val removeAllAudio: () -> Unit = {},
+    /** "Delete all notes", once confirmed in its sheet. */
+    val deleteAllNotes: () -> Unit = {},
     /** ← and Esc: the strip closes with the swipe's motion; in `SettingsActivity` the activity finishes. */
     val back: () -> Unit = {},
     val sourceCode: () -> Unit = {},
@@ -130,10 +140,7 @@ private val RowPlate = PressPlate(FocalShapes.block, insetX = SettingsMetrics.pl
 
 /**
  * The settings page (spec 5.10): the bar with ← "Back" and the page's name beside it, then four groups under small
- * labels. Every row does something or leads somewhere: a switch, an action with what it would free, a link; nothing
- * on the page is there only to be read, except the version. Each row is one line. "Remove all audio" asks once, in a
- * sheet, because it cannot be undone from here. The statement that Focal works offline is not a setting, so it closes
- * the page under the mark instead of sitting in a list. Paper, a top fade, no dock.
+ * labels (Theme, Notes, Data, About). Every row does something or leads somewhere. Paper, a top fade, no dock.
  * [headingFocus] receives focus when the page was opened by the accessibility action or a key.
  */
 @Composable
@@ -143,13 +150,23 @@ fun SettingsPage(
     modifier: Modifier = Modifier,
     headingFocus: FocusRequester = remember { FocusRequester() },
     scroll: ScrollState = rememberScrollState(),
+    feedback: FeedbackHostState = remember { FeedbackHostState() },
 ) {
     val context = LocalContext.current
     val pane = stringResource(R.string.settings_pane)
-    var confirming by rememberSaveable { mutableStateOf(false) }
-    // Nothing left to remove (the last audio went elsewhere): the question is withdrawn, not kept for later.
-    if (confirming && state.usageKnown && state.notesWithAudio == 0) SideEffect { confirming = false }
+    var confirmingRemoveAudio by rememberSaveable { mutableStateOf(false) }
+    var confirmingDeleteAll by rememberSaveable { mutableStateOf(false) }
+    var choosingBackup by rememberSaveable { mutableStateOf(false) }
+    // Withdraw sheets automatically if the underlying counts dropped to zero elsewhere.
+    if (confirmingRemoveAudio && state.usageKnown && state.notesWithAudio == 0) SideEffect { confirmingRemoveAudio = false }
+    if (confirmingDeleteAll && state.usageKnown && state.noteCount == 0) SideEffect { confirmingDeleteAll = false }
+    if (choosingBackup && state.usageKnown && state.noteCount == 0) SideEffect { choosingBackup = false }
     val audio = Formatter.formatShortFileSize(context, state.audioBytes)
+    val hasNotes = !state.usageKnown || state.noteCount > 0
+    val hasAudio = !state.usageKnown || state.notesWithAudio > 0
+    val canActOnNotes = state.usageKnown && state.noteCount > 0 && !state.busy
+    val canActOnAudio = state.usageKnown && state.notesWithAudio > 0 && !state.busy
+
     Box(modifier.fillMaxSize().semantics { paneTitle = pane }) {
         Column(
             Modifier
@@ -171,9 +188,23 @@ fun SettingsPage(
                 )
                 GroupLabel(stringResource(R.string.settings_notes))
                 SwitchRow(stringResource(R.string.paragraph_times), state.paragraphTimes, actions.setParagraphTimes)
-                GroupLabel(stringResource(R.string.settings_storage))
-                // The action itself, with what it would free beside it; with no audio kept there is nothing to do. Until
-                // the space is read (a moment, off screen) it says nothing rather than something it would take back.
+                GroupLabel(stringResource(R.string.settings_data))
+                SettingsRow(
+                    stringResource(R.string.data_export_notes),
+                    value = stringResource(R.string.data_export_format),
+                    onClick = { if (canActOnNotes) actions.exportNotes() },
+                    enabled = hasNotes && !state.busy,
+                )
+                SettingsRow(
+                    stringResource(R.string.data_backup),
+                    onClick = { if (canActOnNotes) choosingBackup = true },
+                    enabled = hasNotes && !state.busy,
+                )
+                SettingsRow(
+                    stringResource(R.string.data_restore),
+                    onClick = { if (!state.busy) actions.restoreBackup() },
+                    enabled = !state.busy,
+                )
                 SettingsRow(
                     stringResource(R.string.storage_remove_all),
                     value = when {
@@ -181,9 +212,18 @@ fun SettingsPage(
                         state.notesWithAudio > 0 -> audio
                         else -> stringResource(R.string.storage_none)
                     },
-                    // A tap before the space is read asks nothing: the sheet would otherwise wait and open by itself.
-                    onClick = { if (state.usageKnown && state.notesWithAudio > 0) confirming = true },
-                    enabled = !state.usageKnown || state.notesWithAudio > 0,
+                    onClick = { if (canActOnAudio) confirmingRemoveAudio = true },
+                    enabled = hasAudio && !state.busy,
+                )
+                SettingsRow(
+                    stringResource(R.string.data_delete_all),
+                    value = when {
+                        !state.usageKnown -> ""
+                        state.noteCount > 0 -> pluralStringResource(R.plurals.data_note_count, state.noteCount, state.noteCount)
+                        else -> stringResource(R.string.data_none)
+                    },
+                    onClick = { if (canActOnNotes) confirmingDeleteAll = true },
+                    enabled = hasNotes && !state.busy,
                 )
                 GroupLabel(stringResource(R.string.settings_about))
                 SettingsRow(
@@ -197,14 +237,84 @@ fun SettingsPage(
         }
         PaperTopFade(LocalWindowLayout.current.topBar, Modifier.fillMaxSize())
         TopBar(stringResource(R.string.settings_title), actions.back, headingFocus)
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .widthIn(max = FocalLayout.contentMaxWidth + FocalLayout.gutter * 2)
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(horizontal = FocalLayout.gutter, vertical = FocalGrid.x16),
+        ) {
+            FeedbackPill(feedback)
+        }
+        BackupSheet(
+            visible = choosingBackup && state.noteCount > 0,
+            hasAudio = state.notesWithAudio > 0,
+            audioSize = audio,
+            onConfirm = { includeAudio ->
+                choosingBackup = false
+                actions.backupNotes(includeAudio)
+            },
+            onDismiss = { choosingBackup = false },
+        )
         RemoveAudioSheet(
-            visible = confirming && state.notesWithAudio > 0, notes = state.notesWithAudio, size = audio,
+            visible = confirmingRemoveAudio && state.notesWithAudio > 0, notes = state.notesWithAudio, size = audio,
             onConfirm = {
-                confirming = false
+                confirmingRemoveAudio = false
                 actions.removeAllAudio()
             },
-            onDismiss = { confirming = false },
+            onDismiss = { confirmingRemoveAudio = false },
         )
+        DeleteAllNotesSheet(
+            visible = confirmingDeleteAll && state.noteCount > 0,
+            notes = state.noteCount,
+            onConfirm = {
+                confirmingDeleteAll = false
+                actions.deleteAllNotes()
+            },
+            onDismiss = { confirmingDeleteAll = false },
+        )
+    }
+}
+
+/** Backup options sheet: text + metadata by default, with an optional audio toggle when kept audio exists. */
+@Composable
+private fun BackupSheet(
+    visible: Boolean,
+    hasAudio: Boolean,
+    audioSize: String,
+    onConfirm: (includeAudio: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = FocalTheme.colors
+    var includeAudio by rememberSaveable { mutableStateOf(false) }
+    val shown = remember { mutableStateOf(hasAudio to audioSize) }
+    if (visible) shown.value = hasAudio to audioSize
+    val (canIncludeAudio, size) = shown.value
+    FocalBottomSheet(visible = visible, onDismiss = onDismiss) {
+        Text(
+            stringResource(R.string.data_backup_title), style = FocalType.headline, color = colors.ink,
+            textAlign = TextAlign.Center, modifier = Modifier.padding(top = FocalGrid.x24).semantics { heading() },
+        )
+        Text(
+            stringResource(R.string.data_backup_body), style = FocalType.secondary, color = colors.recede,
+            textAlign = TextAlign.Center, modifier = Modifier.padding(top = FocalGrid.x8),
+        )
+        if (canIncludeAudio) {
+            Spacer(Modifier.height(FocalGrid.x12))
+            SwitchRow(
+                title = stringResource(R.string.data_backup_include_audio, size),
+                checked = includeAudio,
+                onChange = { includeAudio = it },
+                horizontalPadding = 0.dp,
+            )
+        }
+        FocalPrimaryPill(
+            stringResource(R.string.data_backup_confirm),
+            onClick = { onConfirm(canIncludeAudio && includeAudio) },
+            modifier = Modifier.fillMaxWidth().padding(top = FocalGrid.x20),
+        )
+        FocalTextButton(stringResource(R.string.action_cancel), onClick = onDismiss, modifier = Modifier.padding(top = FocalGrid.x8))
     }
 }
 
@@ -229,6 +339,27 @@ private fun RemoveAudioSheet(visible: Boolean, notes: Int, size: String, onConfi
             textAlign = TextAlign.Center, modifier = Modifier.padding(top = FocalGrid.x8),
         )
         FocalPrimaryPill(stringResource(R.string.storage_remove_confirm), onClick = onConfirm, modifier = Modifier.fillMaxWidth().padding(top = FocalGrid.x24))
+        FocalTextButton(stringResource(R.string.action_cancel), onClick = onDismiss, modifier = Modifier.padding(top = FocalGrid.x8))
+    }
+}
+
+/** "Delete all notes" asks clearly before permanently deleting every settled note and its saved audio. */
+@Composable
+private fun DeleteAllNotesSheet(visible: Boolean, notes: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val colors = FocalTheme.colors
+    val shown = remember { mutableStateOf(notes) }
+    if (visible) shown.value = notes
+    val count = shown.value
+    FocalBottomSheet(visible = visible, onDismiss = onDismiss) {
+        Text(
+            pluralStringResource(R.plurals.data_delete_all_title, count, count), style = FocalType.headline, color = colors.ink,
+            textAlign = TextAlign.Center, modifier = Modifier.padding(top = FocalGrid.x24).semantics { heading() },
+        )
+        Text(
+            stringResource(R.string.data_delete_all_body), style = FocalType.secondary, color = colors.recede,
+            textAlign = TextAlign.Center, modifier = Modifier.padding(top = FocalGrid.x8),
+        )
+        FocalPrimaryPill(stringResource(R.string.data_delete_all_confirm), onClick = onConfirm, modifier = Modifier.fillMaxWidth().padding(top = FocalGrid.x24))
         FocalTextButton(stringResource(R.string.action_cancel), onClick = onDismiss, modifier = Modifier.padding(top = FocalGrid.x8))
     }
 }
@@ -306,7 +437,7 @@ private fun SettingsRow(
         if (value != null) {
             Spacer(Modifier.width(SettingsMetrics.trailingGap))
             Text(
-                value, style = FocalType.field.tabular(), color = colors.recede,
+                value, style = FocalType.field.tabular(), color = if (enabled) colors.recede else colors.faint,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = SettingsMetrics.valueMaxWidth),
             )
         }
@@ -322,7 +453,12 @@ private fun SettingsRow(
  * shapes at a smaller size: a pill track (`s2` off, `inv` on) and a round thumb that crosses it on `move`.
  */
 @Composable
-private fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun SwitchRow(
+    title: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    horizontalPadding: androidx.compose.ui.unit.Dp = FocalLayout.gutter,
+) {
     val colors = FocalTheme.colors
     val source = remember { MutableInteractionSource() }
     val on = remember { Animatable(if (checked) 1f else 0f) }
@@ -333,7 +469,7 @@ private fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Un
             .heightIn(min = SettingsMetrics.rowMinHeight)
             .focusRing(FocalShapes.block)
             .toggleable(checked, source, indication = RowPlate, role = Role.Switch, onValueChange = onChange)
-            .padding(horizontal = FocalLayout.gutter, vertical = SettingsMetrics.rowPadding),
+            .padding(horizontal = horizontalPadding, vertical = SettingsMetrics.rowPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, style = FocalType.field, color = colors.ink, textAlign = chromeAlign(), modifier = Modifier.weight(1f))

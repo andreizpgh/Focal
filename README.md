@@ -3,11 +3,11 @@
   <h1>Focal</h1>
   <p>Offline voice notes for Android.</p>
   <p>
-    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/v0.5.1/Focal-0.5.1.apk">Download Focal 0.5.1</a></strong>
+    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/v0.5.2/Focal-0.5.2.apk">Download Focal 0.5.2</a></strong>
     &nbsp;·&nbsp;
     <a href="docs/install.md">Install guide</a>
     &nbsp;·&nbsp;
-    <a href="https://github.com/andreizpgh/Focal/releases/tag/v0.5.1">Release notes</a>
+    <a href="https://github.com/andreizpgh/Focal/releases/tag/v0.5.2">Release notes</a>
   </p>
   <sub>Android 8.0+ · ARM64 · ~0.7 GB · No internet permission · Testing pre-release</sub>
 </div>
@@ -32,11 +32,11 @@ Tap **Record** and start talking. Text appears in paragraphs after each pause wh
 - **Background capture and recovery.** Keeps recording with the screen off, syncs PCM audio to disk every second, recovers from calls or process death without losing saved audio, and lets you continue recording into an existing note.
 - **Automatic language detection.** Supports 25 European languages without a language picker. Accuracy varies noticeably across languages and speakers ([multilingual benchmark](docs/benchmarks/2026-11-19-multilingual/README.md)).
 - **In-place editing and review.** Tap any word to edit it directly with **Listen** and **Done** right above the keyboard, or tap **Review · N** to step through low-confidence words, replay the surrounding audio, and apply suggestions or confirm with **Keep**.
-- **Audio playback and cleanup.** Play back from 0.5× to 2× (0.25× steps) with word-level highlighting, copy or share multiple selected notes at once, or delete audio files while keeping the text.
+- **Audio playback and data ownership.** Play back from 0.5× to 2× (0.25× steps) with word-level highlighting, copy or share multiple selected notes at once, export all notes as Markdown, back up and restore archives offline, or delete audio files while keeping the text.
 
 ### Status
 
-Focal 0.5.1 is a testing pre-release and installs directly over 0.5.0, 0.4.0, and 0.3.2. Unit tests, lint, and Android 16 emulator suites pass with the bundled speech model, while physical ARM phone speed, heat, battery use, and spontaneous dictation accuracy remain open in the [phone checklist](docs/testing.md#phone-validation). Check important transcripts against the original audio.
+Focal 0.5.2 is a testing pre-release and installs directly over 0.5.1, 0.5.0, 0.4.0, and 0.3.2. Unit tests, lint, and Android 16 emulator suites pass with the bundled speech model, while physical ARM phone speed, heat, battery use, and spontaneous dictation accuracy remain open in the [phone checklist](docs/testing.md#phone-validation). Check important transcripts against the original audio.
 
 ---
 

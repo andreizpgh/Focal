@@ -1134,6 +1134,79 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         null,
     ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
 
+    /** True when any row (active, ready, or trashed) already carries [id]. */
+    fun noteExists(id: String): Boolean = readableDatabase.rawQuery(
+        "SELECT 1 FROM notes WHERE id=?", arrayOf(id),
+    ).use { it.moveToFirst() }
+
+    /** Paragraph data restored from an offline backup archive. */
+    data class RestoredParagraph(
+        val ord: Int,
+        val startMs: Long,
+        val endMs: Long,
+        val text: String,
+        val sourceText: String?,
+        val wordsJson: String?,
+        val edited: Boolean,
+    )
+
+    /**
+     * Imports one restored note non-destructively (returns false without modifying anything if [id] already exists).
+     * Restores paragraphs and FTS search indexes in one transaction.
+     */
+    fun importRestoredNote(
+        id: String,
+        title: String,
+        titleIsCustom: Boolean,
+        created: Long,
+        language: String,
+        durationMs: Long,
+        speechEngine: String,
+        audioPresent: Boolean,
+        paragraphs: List<RestoredParagraph>,
+    ): Boolean {
+        val inserted = writableDatabase.transaction {
+            if (rawQuery("SELECT 1 FROM notes WHERE id=?", arrayOf(id)).use { it.moveToFirst() }) return@transaction false
+            execSQL(
+                """INSERT INTO notes(id,title,created,language,state,duration,error,speech_engine,title_is_custom,legacy,audio_present,seq)
+                VALUES(?,?,?,?,?,?,'',?,?,0,?,(SELECT COALESCE(MAX(seq),0)+1 FROM notes))""",
+                arrayOf<Any>(
+                    id,
+                    title.take(MAX_TITLE_CHARS),
+                    created,
+                    language.ifBlank { AUTOMATIC_LANGUAGE },
+                    NoteState.READY,
+                    durationMs.coerceAtLeast(0L),
+                    speechEngine.ifBlank { ULTRA_ENGINE },
+                    if (titleIsCustom) 1 else 0,
+                    if (audioPresent) 1 else 0,
+                ),
+            )
+            val seq = noteSeq(this, id)!!
+            indexTitle(seq)
+            paragraphs.forEachIndexed { idx, p ->
+                val added = insertOrThrow("paragraphs", null, ContentValues().apply {
+                    put("note_id", id)
+                    put("ord", p.ord.coerceAtLeast(idx))
+                    put("start_ms", p.startMs.coerceAtLeast(0L))
+                    put("end_ms", p.endMs.coerceAtLeast(p.startMs.coerceAtLeast(0L)))
+                    put("text", p.text)
+                    put("source_text", p.sourceText)
+                    put("words", p.wordsJson)
+                    put("edited", if (p.edited) 1 else 0)
+                    put("hidden", 0)
+                    put("open", 0)
+                    put("revision", 0)
+                })
+                indexParagraph(added)
+            }
+            if (!titleIsCustom && title.isBlank()) refreshTitle(this, id)
+            true
+        }
+        if (inserted) changed()
+        return inserted
+    }
+
     /**
      * A note with the given paragraphs, for UI and service tests. Paragraphs get no word times unless
      * [timedWords] is set, in which case each word gets an even share of its paragraph. [hidden] lists the

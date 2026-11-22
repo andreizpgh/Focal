@@ -53,7 +53,7 @@ directory, so a phone with real notes is the wrong place.
 
 | Area | Tests |
 | --- | --- |
-| Storage | `NoteStoreTest` (schema 6 and its upgrade from 5, edits, search index, trash, crash-loop guard, reopening a ready note for more recording, previews), `LegacyDatabaseUpgradeTest` (migration from schemas 1–4) |
+| Storage | `NoteStoreTest` (schema 6 and its upgrade from 5, edits, search index, trash, crash-loop guard, reopening a ready note for more recording, previews), `LegacyDatabaseUpgradeTest` (migration from schemas 1–4), `NoteArchiveTest` (Markdown export and backup/restore round-trip) |
 | Recording and transcription | `RecordingServiceTest` (capture durability, pauses, the hold while another app has the microphone and its automatic return, continuing a ready note), `WindowFeedTest`, `SpeechWorkflowTest`, `UltraServiceTest`, `NotificationsTest` |
 | Speech | `OfflineRecognizerTest` and `UltraTranscriberTest` (decode the public JFK fixture), `SileroVadTest`, `UltraModelTest` (install, storage checks, damaged and interrupted copies) |
 | Playback | `SpeechPlayerTest` |

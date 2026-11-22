@@ -5,6 +5,54 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
+## [0.5.2] - 2026-11-22
+
+### Added
+
+- **Offline data export, backup, and cleanup in Settings.** Under a new **Data**
+  section, you can export all notes as Markdown (`.zip`), create a full backup
+  (`.zip` with optional audio files), restore a backup without overwriting
+  existing notes, remove saved audio, or delete all notes after confirmation.
+  Uses Android's document picker with no network permission.
+- **Faster live transcript preview while recording.** While the recording screen
+  is visible, Focal decodes an ephemeral in-memory preview of the current spoken
+  phrase after ~1.6 s instead of waiting for a full 6–20 s pause window. Final
+  committed text still uses the full-context windows unchanged, and live
+  previews pause automatically under battery saver or elevated thermal load.
+
+### Changed
+
+- **Quiet cold start.** Removed the brief splash logo flash on launch; the
+  window opens directly on solid paper and dissolves into the library once the
+  first query finishes.
+- **Hybrid playback speed pill.** Fixed the speed pill width so switching
+  between `1×`, `1.25×`, and `1.75×` never shifts the player controls or popover.
+  A short tap now cycles `1× → 1.5× → 2× → 1×`; pressing and holding (or
+  dragging upward) opens the full `0.5×`–`2×` (`0.25×` step) menu.
+- **Review `Keep` integrated with top-bar Undo.** Confirming an unclear word
+  with **Keep** now pushes directly onto the note's Undo/Redo stack and no
+  longer shows a bottom confirmation pill on every word.
+- **Shorter feedback banners.** Plain confirmations now dismiss after 2.8 s;
+  banners with **Undo** stay for 5.0 s (or the system accessibility timeout when
+  longer).
+
+### Fixed
+
+- **Back-navigation flicker and scrolled-down exits.** Note pages opened from a
+  library row or scrolled past their heading now exit with a clean
+  recede-and-dissolve transition (no overlapping text or double-drawn titles),
+  and deleting an open note keeps its last frame visible during exit instead of
+  flashing blank white.
+- **Folded live-recording Finish smoothness.** Eliminated per-frame material
+  re-measurement during the folded-stage Finish transition, prefetched the
+  finished note before opening, and fixed vertical clipping on developing
+  paragraph timestamps.
+- **Offline spell-checker suggestions.** Fixed locale matching (explicit `ru-RU`
+  / `en-US` with fallback to Android's system spell-checker language), relaxed
+  strict typo gating, and enabled suggestions for any tapped word in Edit mode.
+- **Redundant "Note ready" notifications.** Suppressed completion and timeout
+  notifications while Focal is open on screen.
+
 ## [0.5.1] - 2026-11-22
 
 ### Added

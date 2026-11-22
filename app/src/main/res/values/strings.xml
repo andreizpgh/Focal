@@ -225,9 +225,46 @@
     <string name="theme_dark">Dark</string>
     <string name="settings_notes">Notes</string>
     <string name="paragraph_times">Paragraph times</string>
-    <string name="settings_storage">Storage</string>
+    <string name="settings_data">Data</string>
+    <string name="data_export_notes">Export notes</string>
+    <string name="data_export_format">Markdown</string>
+    <string name="data_backup">Back up</string>
+    <string name="data_restore">Restore backup</string>
+    <string name="data_backup_title">Back up notes</string>
+    <string name="data_backup_body">Saves an offline archive you can restore on this or another phone.</string>
+    <string name="data_backup_include_audio">Include audio (%s)</string>
+    <string name="data_backup_confirm">Save backup</string>
     <string name="storage_remove_all">Remove all audio</string>
     <string name="storage_none">None kept</string>
+    <string name="data_delete_all">Delete all notes</string>
+    <string name="data_none">None</string>
+    <plurals name="data_note_count">
+        <item quantity="one">%d note</item>
+        <item quantity="other">%d notes</item>
+    </plurals>
+    <plurals name="data_delete_all_title">
+        <item quantity="one">Delete %d note?</item>
+        <item quantity="other">Delete all %d notes?</item>
+    </plurals>
+    <string name="data_delete_all_body">This permanently removes every note and its saved audio. This cannot be undone.</string>
+    <string name="data_delete_all_confirm">Delete all</string>
+    <plurals name="feedback_exported">
+        <item quantity="one">Exported %d note</item>
+        <item quantity="other">Exported %d notes</item>
+    </plurals>
+    <plurals name="feedback_backed_up">
+        <item quantity="one">Backed up %d note</item>
+        <item quantity="other">Backed up %d notes</item>
+    </plurals>
+    <plurals name="feedback_restored_notes">
+        <item quantity="one">Restored %d note</item>
+        <item quantity="other">Restored %d notes</item>
+    </plurals>
+    <string name="feedback_restore_none">All notes are already in your library.</string>
+    <string name="feedback_restore_empty">This backup contains no notes.</string>
+    <string name="feedback_export_failed">Couldn’t export your notes.</string>
+    <string name="feedback_backup_failed">Couldn’t save the backup.</string>
+    <string name="feedback_restore_failed">Couldn’t read this backup file.</string>
     <plurals name="storage_remove_title">
         <item quantity="one">Remove the audio of %d note?</item>
         <item quantity="other">Remove the audio of %d notes?</item>

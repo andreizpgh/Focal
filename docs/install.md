@@ -1,8 +1,8 @@
 # Install Focal
 
-**[Download Focal-0.5.1.apk](https://github.com/andreizpgh/Focal/releases/download/v0.5.1/Focal-0.5.1.apk)**
+**[Download Focal-0.5.2.apk](https://github.com/andreizpgh/Focal/releases/download/v0.5.2/Focal-0.5.2.apk)**
 
-Focal is distributed as a single APK on the [release page](https://github.com/andreizpgh/Focal/releases/tag/v0.5.1) under **Assets**. You don't need a GitHub account, Android Studio, or a ZIP archive. Older releases remain on their own release pages.
+Focal is distributed as a single APK on the [release page](https://github.com/andreizpgh/Focal/releases/tag/v0.5.2) under **Assets**. You don't need a GitHub account, Android Studio, or a ZIP archive. Older releases remain on their own release pages.
 
 ## Requirements
 
@@ -14,7 +14,7 @@ Focal is distributed as a single APK on the [release page](https://github.com/an
 ## Install
 
 1. Open the download link on your phone.
-2. Open **Focal-0.5.1.apk** from your browser downloads or the Files app.
+2. Open **Focal-0.5.2.apk** from your browser downloads or the Files app.
 3. If Android asks, allow **Install unknown apps** for that browser or file manager, go back, and tap **Install**. You can turn that permission off afterwards.
 
 Open Focal and tap **Record**. Grant microphone access (and, on Android 13+, notifications so Pause and Finish stay available in the notification shade). Talk normally; paragraphs appear after pauses. Tap **Finish**, fix any errors if needed, and **Copy**.
@@ -23,7 +23,7 @@ On first launch, the recording screen may say **Preparing speech model** while t
 
 ## Updating
 
-- **From 0.5.0, 0.4.0, or 0.3.2:** install **Focal-0.5.1.apk** directly over the existing app. It uses the same application ID, signing certificate, and SQLite schema, so all notes, titles, edits, review confirmations, and recordings stay intact.
+- **From 0.5.1, 0.5.0, 0.4.0, or 0.3.2:** install **Focal-0.5.2.apk** directly over the existing app. It uses the same application ID, signing certificate, and SQLite schema, so all notes, titles, edits, review confirmations, and recordings stay intact.
 
 <details>
 <summary>Upgrading from older builds (0.3.1 down to Alpha 1)</summary>
