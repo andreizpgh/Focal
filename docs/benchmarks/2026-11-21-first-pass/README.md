@@ -45,4 +45,4 @@ The comparison covers eight original windows of 3.73–20.74 seconds, with two t
 
 The host difference was within the variation between short timing runs. The Android trace had 13 low-confidence decisions in 470 emitted pieces. Both collection rounds produced identical alternate IDs and scores. All eight Android windows also matched the packaged library's original token, timing and confidence receipts. The timings cover collection during speech recognition. They exclude menu generation, database writes and time spent reviewing. The physical phone's energy and thermal behavior remain unmeasured.
 
-[Method, source and reproduction](method.md) · [Language-level results and paired timings](results.json) · [Per-recording counts](cases.jsonl)
+Raw per-recording logs, JSON measurements and prototype scripts are archived in Git at tag `v0.4.0` (`cd859d6`).

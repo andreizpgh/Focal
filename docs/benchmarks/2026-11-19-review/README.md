@@ -16,14 +16,14 @@ The small model left every selected spelling intact. The larger model produced 1
 
 The speech inputs are the six Russian and six English FLEURS DEV clips already used in the engine comparison. Each 16 kHz PCM16 WAV matched its digest in the [corpus manifest](../fleurs-corpus.json). These public recordings are read speech. This is an exploratory comparison on a previously used set.
 
-For each clip, Parakeet Ultra INT8 and sherpa-onnx 2.0.1 decoded one window with greedy search and two CPU threads. Focal's Kotlin formatter and doubtful-word rule produced the [word receipts](fleurs-dev-words.json). The receipts contain ASR spellings, minimum content-token confidence and the flag shown by Focal. They are derived from [FLEURS](https://huggingface.co/datasets/google/fleurs), Conneau et al. (2022), Google, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Model prompts use only the ASR input. Scoring uses the repository's hashed references.
+For each clip, Parakeet Ultra INT8 and sherpa-onnx 2.0.1 decoded one window with greedy search and two CPU threads. Focal's Kotlin formatter and doubtful-word rule produced word receipts (archived in Git at tag `v0.4.0`, commit `cd859d6`). The receipts contain ASR spellings, minimum content-token confidence and the flag shown by Focal. They are derived from [FLEURS](https://huggingface.co/datasets/google/fleurs), Conneau et al. (2022), Google, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Model prompts use only the ASR input. Scoring uses the repository's hashed references.
 
 - **Word review.** Ask for a replacement or KEEP for each app-flagged span, then for the least and most confident distinct unflagged alphabetic words in each clip. Supply up to 12 surrounding words on either side. Score the effect of accepting each valid suggestion in isolation using whole-clip word edit distance. A rejected response preserves the original. The 12 transcripts had 18 word errors per 193 reference words. Eight of 27 selections contained a substituted or inserted word on a minimum-edit alignment, including two of the three flagged spans. All three flags were in Russian.
 - **Punctuation.** Compare the formatted ASR text to a second condition that removes supported trailing marks while retaining capitalization. Each model sees each condition independently. Discard a response if removing the allowed trailing punctuation fails to reproduce the source exactly, including its words, case and internal marks. Score the mark or absence of a mark between consecutive exactly aligned words and at aligned utterance ends. Unsupported boundary marks are excluded. There were 161 scored positions with 18 reference marks. This subset starts with just one scored punctuation error in the formatted ASR condition. Errors at misrecognized words fall outside this metric.
 
 ## Synthetic decisions
 
-The [Russian fixtures](fixtures.json) have two separate tasks. In the word-choice task the model receives two supplied alternatives, one correct. Each of eight contexts is tested twice, swapping which spelling is presented as the original. Keeping every original gets eight of 16 right. This measures selection given candidate availability. It gives no estimate of how often Focal's overlapping audio or nearby words yield the intended candidate.
+The Russian fixtures (archived at tag `v0.4.0`) have two separate tasks. In the word-choice task the model receives two supplied alternatives, one correct. Each of eight contexts is tested twice, swapping which spelling is presented as the original. Keeping every original gets eight of 16 right. This measures selection given candidate availability. It gives no estimate of how often Focal's overlapping audio or nearby words yield the intended candidate.
 
 In the paragraph task the model receives numbered, already segmented sentences. It may return only a sorted list of internal sentence boundaries. The eight notes have five manually specified topic breaks across four notes. Keeping every note intact gets four notes exactly right and misses all five breaks. Sentence detection, ambiguous paragraph preferences and spontaneous long dictation require separate evaluation.
 
@@ -40,7 +40,7 @@ The constrained format made all responses parseable. Both models then chose the 
 
 ## Reproduction
 
-Start a local CPU Ollama server with cloud access disabled, one loaded model and one parallel request. The exact GGUF hashes and measured results are in [results.json](results.json). The model templates used the Qwen chat delimiters and an empty completed thinking block before the response. Against a local alias for each model, run the suites serially.
+Start a local CPU Ollama server with cloud access disabled, one loaded model and one parallel request. The exact GGUF hashes and measured results are archived in Git at tag `v0.4.0` (`cd859d6`). The model templates used the Qwen chat delimiters and an empty completed thinking block before the response. Against a local alias for each model, run the suites serially.
 
 ```sh
 python3 scripts/bench-review-model.py --model "$MODEL" --suite speech

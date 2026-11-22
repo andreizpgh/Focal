@@ -74,4 +74,4 @@ The Russian controls use the same audio, word alignment and printed dictation ke
 
 On this emulator the seven-coefficient classifier processed 473 already prepared gaps of a 608-word Russian note in 0.012 ms median (0.017 ms p95). The first pass took 0.095 ms. ART process RSS was 117.9 MiB at start and peaked at 126.7 MiB including the input fixture, runtime and warm-up. Feature construction is outside the timer. Each warm sample averages 100 complete passes.
 
-[Method, sources and reader protocol](method.md) · [Measurements and model hashes](results.json) · [Source IDs and per-recording scores](cases.jsonl)
+[Method, sources and reader protocol](method.md) · Raw JSON results and per-recording dumps are archived in Git at tag `v0.4.0` (`cd859d6`).

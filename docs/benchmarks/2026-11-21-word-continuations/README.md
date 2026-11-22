@@ -41,7 +41,7 @@ The score is predicted probability of helping minus predicted probability of har
 
 ## Reproducing the candidate comparison
 
-Use the pinned model, source archive, CPU settings, public audio receipts and selection plan from the [single-piece experiment](../2026-11-21-first-pass/method.md). The [benchmark sources](../../../scripts/word-review) are separate from the application build.
+Use the pinned model, source archive, CPU settings, public audio receipts and selection plan archived in Git at tag `v0.4.0` (`cd859d6`). The prototype harness is separate from the application build.
 
 1. Compile the diagnostic host executable from the original decode harness, the first-pass stock observer built with `-DFOCAL_CAPTURE_ENCODINGS`, and `encodings.cpp`. Run the 415 original requests with the released host shared library and `FOCAL_WORD_ENCODINGS` pointing to a private output file. This records the emitted tokens and the encoder's valid frames. Keep the binary intermediates local.
 2. Apply `decoder.patch` to the original pinned sherpa tree and copy `replay.h` and `word-paths.inc` to its `sherpa-onnx/csrc` directory. Build the C API for the desired platform. Run `vocab.py` on the locked token list. Set `FOCAL_WORD_TYPES` to its output and `FOCAL_WORD_PATHS` to a writable trace file. For the quality run only, set `FOCAL_WORD_REPLAY` to the released encoder frames, using the identical single-stream request order.
@@ -51,4 +51,4 @@ Use the pinned model, source archive, CPU settings, public audio receipts and se
 6. With Python 3, NumPy and SciPy installed, run `continuations.py WORK FIRST_PASS_WORK models/parakeet-ultra/tokens.txt PREVIOUS_CONTEXT_RESULTS_JSON OUTPUT_JSON`. The script checks reference hashes and discards any window with changed tokens, timing or confidence. All 415 windows (71.05 minutes) matched exactly, including all previously archived decisions. There were 709 eligible seeds, 1,553 branch starts, 5,480 extra joiner calls, 3,534 extra predictor calls and 1,330 completed paths. The private file of cached frames was used only to reproduce the released host output. The Android measurements ran directly on audio.
 7. For Android, run the released library once, then the experimental build with observation off, on, on and off, in fresh processes. Leave `FOCAL_WORD_REPLAY` unset. Two further enabled runs with `FOCAL_WORD_COST=1` measure observation and branch-following sections with a monotonic clock. Use `--android` when scoring to verify all six receipts against the released library and read the measured costs.
 
-[Per-language counts, Russian controls and Android timings](results.json)
+Raw per-language JSON results and reproduction scripts are archived in Git at tag `v0.4.0` (`cd859d6`).

@@ -45,4 +45,4 @@ Both used two CPU threads and the app's lower-memory setting. The sampled Androi
 
 All six Android crops produced the same tokens on each of their three runs. All six differed from their host token sequence. The full crop transcripts differed by 17 normalized word edits in total. On the seven associated selections both builds offered one neutral strict suggestion, while the timing-only policy offered one fewer option on Android. The multilingual quality tables use the host runs.
 
-[Selection, scoring and reproduction](method.md) · [Results by language, Russian checks and Android timings](results.json) · [Per-recording counts](cases.jsonl)
+Raw per-recording logs, JSON measurements and prototype scripts are archived in Git at tag `v0.4.0` (`cd859d6`).
