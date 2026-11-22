@@ -414,21 +414,21 @@ class InterfaceTest {
         assertEquals(REVISED, stored())
     }
 
-    @Test fun aWordCanBeCorrectedAndUndoneWhileReading() {
+    @Test fun aWordTapOpensInlineEditWithNearbySuggestionAndUndo() {
         val title = "Review fixture $tag"
         val words = listOf("Harbur lights.", "The Harbour is quiet.")
         val id = note(title, words)
         launch()
         openFromLibrary(title, words[0])
         compose.onNodeWithText(words[0]).performTouchInput { click(Offset(8f, 15f)) }
-        await("word review", hasText("Review wording"))
+        await("inline editor", hasSetTextAction() and hasText(words[0]))
+        await("nearby spelling suggestion", hasText("Harbour") and hasClickAction())
         compose.onNode(hasText("Harbour") and hasClickAction()).performClick()
-        compose.onNode(hasText("Apply") and hasClickAction()).performClick()
-        await("the saved text", hasText("Harbour lights."))
-        assertEquals("Harbour lights.\n\nThe Harbour is quiet.", app.store.transcript(id))
-        compose.onNode(hasText("Undo") and hasClickAction()).performClick()
+        compose.waitUntil(TIMEOUT_MS) { app.store.transcript(id) == "Harbour lights.\n\nThe Harbour is quiet." }
+        compose.onNode(hasContentDescription("Undo")).performClick()
+        compose.waitUntil(TIMEOUT_MS) { app.store.paragraphs(id).map { it.text } == words }
+        compose.onNode(hasContentDescription("Done")).performClick()
         await("the restored wording", hasText(words[0]))
-        assertEquals(words, app.store.paragraphs(id).map { it.text })
     }
 
     @Test fun repeatCorrectionUsesThisNotesSavedEditAndCanBeUndone() {
@@ -443,40 +443,26 @@ class InterfaceTest {
         store.rename(id, title)
         launch()
         openFromLibrary(title, text)
-        compose.onNodeWithText("Review (2)").performClick()
-        compose.onNode(hasSetTextAction()).performTextReplacement("Семёна")
-        compose.onNodeWithText("Apply").performClick()
+        compose.onNodeWithText("Review · 2").performClick()
+        await("inline review editor", hasSetTextAction() and hasText(text))
+        await("review stepper", hasText("1 of 2"))
+        compose.onNode(hasSetTextAction()).performTextReplacement(text.replaceFirst("семен", "Семёна"))
         val firstEdit = text.replaceFirst("семен", "Семёна")
-        await("the first correction", hasText(firstEdit))
-        compose.onNodeWithText("Review (1)").performClick()
-        await("the correction source", hasText("From your edits in this note"))
+        await("next action in strip", hasText("Next") and hasClickAction())
+        compose.onNode(hasText("Next") and hasClickAction()).performClick()
+        compose.waitUntil(TIMEOUT_MS) { store.transcript(id) == firstEdit }
+        await("reused wording suggestion", hasText("Семёна") and hasClickAction())
         compose.onNode(hasText("Семёна") and hasClickAction()).performClick()
-        assertEquals(firstEdit, store.transcript(id))
-        compose.onNodeWithText("Apply").performClick()
-        await("both saved corrections", hasText(firstEdit.replace("семен", "Семёна")))
+        val both = firstEdit.replace("семен", "Семёна")
+        await("both saved corrections", hasText(both))
+        assertEquals(both, store.transcript(id))
         compose.onNode(hasText("Undo") and hasClickAction()).performClick()
         await("only the earlier correction", hasText(firstEdit))
         assertEquals(tokens, store.windowTokens(store.windows(id).single().id))
     }
 
-    @Test fun joinAndUndoFromTheFirstWordOfAGreekParagraph() {
-        val title = "Greek review $tag"
-        val paragraphs = listOf("Είμαστε εδώ.", "Πάμε;")
-        val id = note(title, paragraphs)
-        launch()
-        openFromLibrary(title, paragraphs[0])
-        compose.onNodeWithText(paragraphs[1]).performTouchInput { click(Offset(8f, 15f)) }
-        await("Greek question mark", hasText(";") and hasClickAction())
-        compose.onNodeWithText("Join previous paragraph").performClick()
-        await("joined reading text", hasText("Είμαστε εδώ. Πάμε;"))
-        assertEquals("Είμαστε εδώ. Πάμε;", app.store.transcript(id))
-        compose.onNode(hasText("Undo") and hasClickAction()).performClick()
-        await("restored reading text", hasText(paragraphs[1]))
-        assertEquals(paragraphs, app.store.paragraphs(id).map { it.text })
-    }
-
-    @Test fun reviewGroupsUnclearWordsAndCanSplitTheNextPhraseWhileReading() {
-        val title = "Marked phrase fixture $tag"
+    @Test fun reviewKeepClearsUnclearWordsAndDismissesReviewPill() {
+        val title = "Confirm review $tag"
         val text = "Первая мысль. Проект готов сегодня."
         val store = app.store
         val id = store.create().also { created += it }
@@ -489,25 +475,42 @@ class InterfaceTest {
         store.rename(id, title)
         launch()
         openFromLibrary(title, text)
-        compose.onNodeWithText("Review (2)").performClick()
-        await("the marked phrase", hasSetTextAction() and hasText("Первая мысль."))
-        compose.onNodeWithText("Next unclear").performClick()
-        await("the next marked word", hasSetTextAction() and hasText("готов"))
-        compose.onNodeWithText("Start paragraph here").performClick()
-        await("the split", hasText("готов сегодня."))
-        assertEquals("Первая мысль. Проект\n\nготов сегодня.", store.transcript(id))
-        compose.onNode(hasText("Undo") and hasClickAction()).performClick()
-        await("the original paragraph", hasText(text))
-        val body = compose.onNodeWithText(text)
-        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
-        body.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
-        val middleWord = layouts.single().getBoundingBox(text.indexOf("Проект") + 2).center
-        body.performTouchInput { click(middleWord) }
-        await("the manually selected word", hasSetTextAction() and hasText("Проект"))
-        compose.onNodeWithText("Next unclear").performClick()
-        await("the flagged word after the selection", hasSetTextAction() and hasText("готов"))
-        compose.onNodeWithText("Done").performClick()
+        compose.onNodeWithText("Review · 2").performClick()
+        await("first unclear span in stepper", hasText("1 of 2"))
+        compose.onNode(hasText("Keep") and hasClickAction()).performClick()
+        await("second unclear span in stepper", hasText("1 of 1"))
+        compose.onNode(hasText("Keep") and hasClickAction()).performClick()
+        awaitGone("editor closes after last confirmed word", hasSetTextAction())
+        awaitGone("Review pill dismissed", hasText("Review · 1"))
+        awaitGone("Review pill dismissed completely", hasText("Review · 2"))
+        assertEquals(text, store.transcript(id))
         assertEquals(tokens, store.windowTokens(store.windows(id).single().id))
+        // Undo brings back the last confirmed unclear word.
+        compose.onNode(hasText("Undo") and hasClickAction()).performClick()
+        await("Review pill returns after undo", hasText("Review · 1"))
+    }
+
+    @Test fun markAllReviewedClearsRemainingUnderlinesAndCanBeUndone() {
+        val title = "Mark all reviewed $tag"
+        val text = "Первая мысль. Проект готов сегодня."
+        val store = app.store
+        val id = store.create().also { created += it }
+        Synthetic.savedAudio(store, id, 6_000)
+        val tokens = Synthetic.speech(text).mapIndexed { i, token ->
+            if (i == 0 || i == 3) token.copy(logProb = -1.2) else token
+        }
+        Synthetic.commit(store, id, Synthetic.plan(0, 0, 6_000, EndKind.FINAL), tokens)
+        assertTrue(store.markReady(id))
+        store.rename(id, title)
+        launch()
+        openFromLibrary(title, text)
+        await("Review pill", hasText("Review · 2"))
+        compose.onNode(hasContentDescription("More options")).performClick()
+        await("Mark all menu item", hasText("Mark all as reviewed"))
+        compose.onNodeWithText("Mark all as reviewed").performClick()
+        awaitGone("Review pill dismissed", hasText("Review · 2"))
+        compose.onNode(hasText("Undo") and hasClickAction()).performClick()
+        await("Review pill restored", hasText("Review · 2"))
     }
 
     @Test fun searchOpensANoteAtItsParagraph() {

@@ -11,7 +11,6 @@ data class FormatConfig(
     val minWordEndMs: Long = SpeechTuning.MIN_WORD_END_MS,
     val capWords: Int = SpeechTuning.PARAGRAPH_CAP_WORDS,
     val capLookbackWords: Int = SpeechTuning.PARAGRAPH_CAP_LOOKBACK_WORDS,
-    val sentenceRestartMs: Long = SpeechTuning.SENTENCE_RESTART_MS,
     val unpunctuatedMinWords: Int = SpeechTuning.UNPUNCTUATED_MIN_WORDS,
 ) {
     init {
@@ -51,27 +50,6 @@ object SeamRepair {
             out[i] = out[i].copy(text = fixed)
         }
         return out to ops
-    }
-}
-
-/** Display punctuation from a narrow lexical cue or a long, capitalized restart. Existing marks take precedence. */
-private object BoundaryPunctuation {
-    private val beforeChto = setOf("думаю", "считаю", "кажется", "оказалось", "выяснилось")
-    private val beforeChtoby = setOf("хочу", "хотим", "прошу", "просим", "важно", "нужно")
-
-    fun apply(previous: Word, next: Word, config: FormatConfig): Word {
-        val last = previous.text.lastOrNull() ?: return previous
-        if (!last.isLowerCase()) return previous
-        val cues = when (next.text) {
-            "что" -> beforeChto
-            "чтобы" -> beforeChtoby
-            else -> null
-        }
-        if (cues != null && previous.text.lowercase() in cues) return previous.copy(text = previous.text + ",")
-        if (next.startMs - previous.endMs < config.sentenceRestartMs || next.text.firstOrNull()?.isUpperCase() != true) return previous
-        val pair = listOf(previous.text, next.text)
-        if (TextRules.danglingWord(previous.text, TextRules.functionWords(pair))) return previous
-        return previous.copy(text = previous.text + ".")
     }
 }
 
@@ -236,7 +214,7 @@ object Doubt {
         enabled: Boolean = SpeechTuning.DOUBT_ENABLED,
         threshold: Double = SpeechTuning.DOUBT_THRESHOLD,
     ): Boolean {
-        if (!enabled || word.punctOnly) return false
+        if (!enabled || word.punctOnly || word.reviewed) return false
         val confidence = word.confidence
         return word.unknownPiece || (confidence != null && confidence < threshold)
     }
@@ -267,8 +245,7 @@ data class FormattedTranscript(
 object Formatter {
     fun format(windows: List<DecodedWindow>, config: FormatConfig = FormatConfig()): FormattedTranscript {
         val raw = WindowMerge.merge(windows, config.dedupeMs, config.minWordEndMs)
-        val (repaired, ops) = SeamRepair.repairAll(raw, config.seamPauseMs)
-        val words = repaired.mapIndexed { i, word -> repaired.getOrNull(i + 1)?.let { BoundaryPunctuation.apply(word, it, config) } ?: word }
+        val (words, ops) = SeamRepair.repairAll(raw, config.seamPauseMs)
         return FormattedTranscript(raw, words, ops, Paragraphs.split(words, config), Title.of(words.map { it.text }))
     }
 }
@@ -315,8 +292,7 @@ class TranscriptAssembler(
         }
         for (word in fresh) {
             if (open.isNotEmpty()) {
-                val previous = BoundaryPunctuation.apply(open.last(), word, config)
-                open[open.lastIndex] = previous
+                val previous = open.last()
                 if (TextWords.endsSentence(previous.text)) sentences++
                 if (Paragraphs.breaks(previous, word, sentences, open.size, config)) {
                     result += open.toList()

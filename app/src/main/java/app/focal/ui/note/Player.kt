@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -68,6 +69,7 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
 import app.focal.ui.design.LocalReducedMotion
+import app.focal.ui.design.tabular
 import app.focal.ui.library.spokenDuration
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -116,12 +118,19 @@ class PlayerPosition(private val audio: () -> Long) {
 }
 
 /**
- * The player strip (spec 4.10): elapsed time, the track with the centre-bar playhead, the total. The whole 48 dp row is
- * the drag target: the playhead grows to 32 dp while it is dragged and the text follows it; the audio seeks on
- * release. For TalkBack it is one adjustable "Audio position", moved 5 s per swipe.
+ * The player strip (spec 4.10): elapsed time, the track with the centre-bar playhead, the total, and a compact
+ * playback speed pill (1× / 1.5× / 2×). The scrubber row is the drag target: the playhead grows to 32 dp while it is
+ * dragged and the text follows it; the audio seeks on release. For TalkBack the scrubber is one adjustable "Audio
+ * position", moved 5 s per swipe, beside a separate speed button.
  */
 @Composable
-internal fun PlayerStrip(position: PlayerPosition, onSeek: (Long) -> Unit, modifier: Modifier = Modifier) {
+internal fun PlayerStrip(
+    position: PlayerPosition,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+    speed: Float = 1f,
+    onCycleSpeed: (() -> Unit)? = null,
+) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -141,87 +150,142 @@ internal fun PlayerStrip(position: PlayerPosition, onSeek: (Long) -> Unit, modif
     Row(
         modifier
             .fillMaxWidth()
-            .height(PlayerMetrics.height)
-            .clearAndSetSemantics {
-                contentDescription = label
-                stateDescription = state
-                // The whole seconds the labels show, not the per-frame position: the node changes once a second.
-                progressBarRangeInfo = ProgressBarRangeInfo(
-                    (position.seconds * MS).toFloat(), 0f..PlayerSteps.rangeEnd(duration), PlayerSteps.steps(duration),
-                )
-                setProgress { target ->
-                    seek(target.roundToInt().toLong().coerceIn(0, duration))
-                    true
-                }
-            }
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    down.consume()
-                    val left = track.left
-                    val width = track.width.coerceAtLeast(1f)
-                    fun at(x: Float): Long {
-                        val fraction = ((x - left) / width).coerceIn(0f, 1f)
-                        return ((if (rtl) 1 - fraction else fraction) * position.durationMs).roundToInt().toLong()
-                    }
-                    position.scrubMs = at(down.position.x)
-                    try {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-                            position.scrubMs = at(change.position.x)
-                            change.consume()
-                        }
-                        position.scrubMs?.let(seek)
-                    } finally {
-                        // Also when the strip leaves under the finger (the audio ended, a recording began), which
-                        // cancels the gesture: a scrub position left behind would hold the next playback's playhead.
-                        position.scrubMs = null
-                    }
-                }
-            },
+            .height(PlayerMetrics.height),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            NoteTimes.clock(position.seconds * MS), style = FocalType.caption, color = colors.ink, maxLines = 1,
-            modifier = Modifier.widthIn(min = PlayerMetrics.timeMin),
-        )
-        Spacer(Modifier.width(PlayerMetrics.trackGap))
-        Spacer(
+        Row(
             Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .onPlaced {
-                    track.left = it.positionInParent().x
-                    track.width = it.size.width.toFloat()
-                }
-                .drawBehind {
-                    val total = position.durationMs.coerceAtLeast(1)
-                    val fraction = position.ms().toFloat() / total
-                    val x = (if (rtl) 1 - fraction else fraction) * size.width
-                    val track = PlayerMetrics.track.toPx()
-                    val gap = PlayerMetrics.trackBreak.toPx() + PlayerMetrics.playheadWidth.toPx() / 2
-                    val top = (size.height - track) / 2
-                    val round = CornerRadius(track / 2)
-                    val (playedFrom, playedTo) = if (rtl) (x + gap) to size.width else 0f to (x - gap)
-                    val (restFrom, restTo) = if (rtl) 0f to (x - gap) else (x + gap) to size.width
-                    if (restTo > restFrom) drawRoundRect(colors.lens, Offset(restFrom, top), Size(restTo - restFrom, track), round)
-                    if (playedTo > playedFrom) drawRoundRect(colors.ink, Offset(playedFrom, top), Size(playedTo - playedFrom, track), round)
-                    val headWidth = PlayerMetrics.playheadWidth.toPx()
-                    val headHeight = head.value.dp.toPx()
-                    drawRoundRect(
-                        colors.ink, Offset(x - headWidth / 2, (size.height - headHeight) / 2), Size(headWidth, headHeight),
-                        CornerRadius(headWidth / 2),
+                .clearAndSetSemantics {
+                    contentDescription = label
+                    stateDescription = state
+                    // The whole seconds the labels show, not the per-frame position: the node changes once a second.
+                    progressBarRangeInfo = ProgressBarRangeInfo(
+                        (position.seconds * MS).toFloat(), 0f..PlayerSteps.rangeEnd(duration), PlayerSteps.steps(duration),
                     )
+                    setProgress { target ->
+                        seek(target.roundToInt().toLong().coerceIn(0, duration))
+                        true
+                    }
+                }
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        down.consume()
+                        val left = track.left
+                        val width = track.width.coerceAtLeast(1f)
+                        fun at(x: Float): Long {
+                            val fraction = ((x - left) / width).coerceIn(0f, 1f)
+                            return ((if (rtl) 1 - fraction else fraction) * position.durationMs).roundToInt().toLong()
+                        }
+                        position.scrubMs = at(down.position.x)
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+                                position.scrubMs = at(change.position.x)
+                                change.consume()
+                            }
+                            position.scrubMs?.let(seek)
+                        } finally {
+                            // Also when the strip leaves under the finger (the audio ended, a recording began), which
+                            // cancels the gesture: a scrub position left behind would hold the next playback's playhead.
+                            position.scrubMs = null
+                        }
+                    }
                 },
-        )
-        Spacer(Modifier.width(PlayerMetrics.trackGap))
-        Text(
-            NoteTimes.clock(duration), style = FocalType.caption, color = colors.recede, maxLines = 1, textAlign = TextAlign.End,
-            modifier = Modifier.widthIn(min = PlayerMetrics.timeMin),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                NoteTimes.clock(position.seconds * MS), style = FocalType.caption, color = colors.ink, maxLines = 1,
+                modifier = Modifier.widthIn(min = PlayerMetrics.timeMin),
+            )
+            Spacer(Modifier.width(PlayerMetrics.trackGap))
+            Spacer(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .onPlaced {
+                        track.left = it.positionInParent().x
+                        track.width = it.size.width.toFloat()
+                    }
+                    .drawBehind {
+                        val total = position.durationMs.coerceAtLeast(1)
+                        val fraction = position.ms().toFloat() / total
+                        val x = (if (rtl) 1 - fraction else fraction) * size.width
+                        val track = PlayerMetrics.track.toPx()
+                        val gap = PlayerMetrics.trackBreak.toPx() + PlayerMetrics.playheadWidth.toPx() / 2
+                        val top = (size.height - track) / 2
+                        val round = CornerRadius(track / 2)
+                        val (playedFrom, playedTo) = if (rtl) (x + gap) to size.width else 0f to (x - gap)
+                        val (restFrom, restTo) = if (rtl) 0f to (x - gap) else (x + gap) to size.width
+                        if (restTo > restFrom) drawRoundRect(colors.lens, Offset(restFrom, top), Size(restTo - restFrom, track), round)
+                        if (playedTo > playedFrom) drawRoundRect(colors.ink, Offset(playedFrom, top), Size(playedTo - playedFrom, track), round)
+                        val headWidth = PlayerMetrics.playheadWidth.toPx()
+                        val headHeight = head.value.dp.toPx()
+                        drawRoundRect(
+                            colors.ink, Offset(x - headWidth / 2, (size.height - headHeight) / 2), Size(headWidth, headHeight),
+                            CornerRadius(headWidth / 2),
+                        )
+                    },
+            )
+            Spacer(Modifier.width(PlayerMetrics.trackGap))
+            Text(
+                NoteTimes.clock(duration), style = FocalType.caption, color = colors.recede, maxLines = 1, textAlign = TextAlign.End,
+                modifier = Modifier.widthIn(min = PlayerMetrics.timeMin),
+            )
+        }
+        if (onCycleSpeed != null) {
+            Spacer(Modifier.width(FocalGrid.x8))
+            SpeedPill(speed = speed, onClick = onCycleSpeed)
+        }
     }
+}
+
+@Composable
+private fun SpeedPill(speed: Float, onClick: () -> Unit) {
+    val colors = FocalTheme.colors
+    val source = remember { MutableInteractionSource() }
+    val text = speedLabel(speed)
+    val description = stringResource(R.string.cd_playback_speed, text)
+    Box(
+        Modifier
+            .heightIn(min = FocalLayout.target)
+            .clearAndSetSemantics {
+                contentDescription = description
+                role = Role.Button
+                this.onClick { onClick(); true }
+            }
+            .pressScale(source)
+            .focusRing(FocalShapes.pill)
+            .clickable(source, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .widthIn(min = 42.dp)
+                .heightIn(min = 32.dp)
+                .background(if (speed == 1f) colors.s1 else colors.s2, FocalShapes.pill)
+                .padding(horizontal = FocalGrid.x8),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text,
+                style = FocalType.caption.copy(fontWeight = FocalWeight.Medium).tabular(),
+                color = if (speed == 1f) colors.recede else colors.ink,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
+internal fun speedLabel(speed: Float): String = when {
+    speed >= 1.75f -> "2×"
+    speed >= 1.25f -> "1.5×"
+    else -> "1×"
 }
 
 private const val MS = 1000L

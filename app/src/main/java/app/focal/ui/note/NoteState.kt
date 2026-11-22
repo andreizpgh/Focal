@@ -13,6 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.TextRange
+import app.focal.data.ConfirmUndo
 import app.focal.data.MergeUndo
 import app.focal.data.TextMatch
 import app.focal.ui.state.EditOutcome
@@ -33,6 +34,7 @@ interface NotePlayback {
     fun toggle()
     fun pause()
     fun stop()
+    fun cycleSpeed() {}
 }
 
 /** What the note page does beyond playback and editing; the route provides it from the view models. */
@@ -71,7 +73,9 @@ class NoteActions(
      * which ends with it (the gallery, tests).
      */
     val session: EditSession? = null,
-    val overlapReadings: suspend (Long, Long) -> List<String> = { _, _ -> emptyList() },
+    val confirmDoubt: suspend (paragraphId: Long, revision: Long, start: Int, end: Int) -> EditOutcome = { _, _, _, _ -> EditOutcome.NotEditable },
+    val confirmAllDoubt: suspend () -> EditOutcome = { EditOutcome.NotEditable },
+    val undoConfirmDoubt: suspend (ConfirmUndo) -> EditOutcome = { EditOutcome.Stale },
 )
 
 /** The paragraph holding the caret in Edit: its field's text and focus. */
@@ -95,6 +99,9 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
     val arrivals = Arrivals()
 
     var editing by mutableStateOf(editing)
+        internal set
+    /** True when Edit was entered from top-right "Review · N" to step through unclear words. */
+    var reviewing by mutableStateOf(false)
         internal set
     var field by mutableStateOf(field)
         internal set
@@ -168,7 +175,7 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
                 listOf(
                     page.editing, field?.id?.let(page.storedId), field?.text?.text?.toString(), field?.text?.selection?.start, field?.text?.selection?.end,
                     page.find.open, page.find.fromEdit, page.find.query.text.toString(), page.find.replacement.text.toString(),
-                    page.renaming, page.hitShown, page.editLog()?.encode(), shown,
+                    page.renaming, page.hitShown, page.editLog()?.encode(), shown, page.reviewing,
                 )
             },
             restore = { saved ->
@@ -182,6 +189,7 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
                     hitShown = saved[HIT_SHOWN] as Boolean
                     restoredLog = EditLog.decode(saved.getOrNull(EDIT_LOG) as List<*>?)
                     restoredShown = saved.getOrNull(FIELD_SHOWN) as String?
+                    reviewing = (saved.getOrNull(REVIEWING) as? Boolean) == true
                     fieldBound = field == null
                 }
             },
@@ -200,6 +208,7 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
         private const val HIT_SHOWN = 10
         private const val EDIT_LOG = 11
         private const val FIELD_SHOWN = 12
+        private const val REVIEWING = 13
     }
 }
 

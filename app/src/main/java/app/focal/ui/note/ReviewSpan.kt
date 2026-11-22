@@ -8,19 +8,6 @@ import java.text.Normalizer
 /** Offsets are valid only for this stored revision. Small enough to retain across recreation. */
 internal data class ReviewSpan(val paragraphId: Long, val revision: Long, val start: Int, val end: Int) : Serializable {
     fun text(paragraph: ParagraphUi) = paragraph.text.substring(start, end)
-
-    fun punctuationStart(text: String): Int {
-        var offset = start
-        while (offset > 0 && text[offset - 1] in "¿¡") offset--
-        return offset
-    }
-
-    /** Include the editable punctuation immediately following the chosen words, leaving closing quotes in place. */
-    fun punctuationEnd(text: String): Int {
-        var offset = end
-        while (offset < text.length && text[offset] in REVIEW_MARKS) offset++
-        return offset
-    }
 }
 
 internal fun ParagraphUi.reviewSpan(range: IntRange): ReviewSpan =
@@ -86,5 +73,3 @@ private fun oneEditApart(a: String, b: String): Boolean {
     val suffix = a.commonSuffixWith(b).length
     return prefix + suffix >= maxOf(a.length, b.length) - 1
 }
-
-internal const val REVIEW_MARKS = ".,?!…;:;·"

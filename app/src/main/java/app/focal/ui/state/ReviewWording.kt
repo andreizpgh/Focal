@@ -1,7 +1,6 @@
 package app.focal.ui.state
 
 import app.focal.core.AlignedWord
-import app.focal.core.Doubt
 import app.focal.core.TextWords
 import app.focal.core.Word
 
@@ -17,8 +16,7 @@ internal fun reviewWording(source: List<Word>, aligned: List<AlignedWord>): List
         val editCount = at - fromEdit
         // Require an unchanged neighbour and a short substitution on both sides. Pure insertions,
         // deletions and paragraphs with no matching words have no attributable replacement.
-        if ((fromEdit > 0 || at < aligned.size) && sourceCount in 1..3 && editCount in 1..3 &&
-            (fromSource until nextSource).any { Doubt.isDoubtful(source[it]) }) {
+        if ((fromEdit > 0 || at < aligned.size) && sourceCount in 1..3 && editCount in 1..3) {
             val original = reviewPhrase(source.subList(fromSource, nextSource).map { it.text })
             val replacement = reviewPhrase(aligned.subList(fromEdit, at).map { it.text })
             if (original != null && replacement != null && original != replacement) add(ReviewWording(original, replacement))

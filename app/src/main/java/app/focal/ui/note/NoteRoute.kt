@@ -180,7 +180,9 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
             undoReplace = note::undoReplace,
             writes = note.writes,
             session = note.editSession,
-            overlapReadings = note::overlapReadings,
+            confirmDoubt = note::confirmDoubt,
+            confirmAllDoubt = note::confirmAllDoubt,
+            undoConfirmDoubt = note::undoConfirmDoubt,
         )
     }
     val settings by (context.applicationContext as FocalApplication).preferences.settings.collectAsStateWithLifecycle()
@@ -220,6 +222,7 @@ private class RoutePlayback(private val player: PlaybackViewModel, private val n
     override fun toggle() = player.toggle(noteId)
     override fun pause() = player.pause()
     override fun stop() = player.stopNote(noteId)
+    override fun cycleSpeed() = player.cycleSpeed()
 }
 
 /**

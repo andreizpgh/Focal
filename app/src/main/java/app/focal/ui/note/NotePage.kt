@@ -32,10 +32,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.key
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -443,7 +440,7 @@ fun NotePage(
     }
     // Edit starts in turn too: a Replace all still writing outside Edit lands first, and the field starts from its
     // result, never from the words it replaced.
-    fun enterEdit(at: CaretAt?) {
+    fun enterEdit(at: CaretAt?, review: Boolean = false) {
         if (!note.editable || page.editing) return
         val playingAt = focus.playingId?.takeIf { playingHere }?.let { id ->
             val paragraph = paragraphs.firstOrNull { it.id == id }
@@ -458,6 +455,7 @@ fun NotePage(
             if (!latestNote.editable || page.editing) return@write
             session.begin(session.paragraphs(latestNote.paragraphs).filter { it.text.isNotBlank() })
             page.editing = true
+            page.reviewing = review
             (at ?: playingAt)?.let { focusField(it) }
         }
     }
@@ -469,6 +467,7 @@ fun NotePage(
             playback.stop()
         }
         page.editing = false
+        page.reviewing = false
         page.field = null
         page.editMenu = false
         focus.editingId = null
@@ -641,30 +640,7 @@ fun NotePage(
             withFrameMillis { }
         }
         runCatching { field.requester.requestFocus() }
-    }
-    // Edit moves the page for the caret alone (spec 5.7): when the caret's line is not between the bar and the
-    // keyboard, the list scrolls by the least that brings it there, on `move`, and at no other time. It follows the
-    // keyboard's target, so the page settles with the keyboard as it rises, in one motion.
-    val window = LocalWindowInfo.current
-    val indexNow = rememberUpdatedState(indexOf)
-    val caretMargin = with(density) { (if (LocalWindowLayout.current.rail) ShortCaretMargin else CaretMargin).toPx() }
-    LaunchedEffect(field, find.open) {
-        val current = field ?: return@LaunchedEffect
-        if (find.open) return@LaunchedEffect
-        snapshotFlow { Triple(current.text.selection, current.text.text.length, imeTarget.getBottom(density)) }.collectLatest { (selection, _, keyboard) ->
-            // The field lays out what changed in the frame that follows.
-            withFrameMillis { }
-            val index = indexNow.value[current.id] ?: return@collectLatest
-            if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
-                listState.scrollToItem(index)
-                withFrameMillis { }
-            }
-            val line = lineBox(page.layouts[current.id], selection.end)
-            val y = windowY(listState, index, line.first) ?: return@collectLatest
-            val bandEnd = if (keyboard > 0) window.containerSize.height - keyboard else listState.layoutInfo.viewportSize.height
-            val scroll = caretScroll(y, y + (line.second - line.first), bandTop() + caretMargin, bandEnd - caretMargin)
-            if (scroll != 0f) listState.animateScrollBy(scroll, FocalMotion.move())
-        }
+        keyboard?.show()
     }
     // A paragraph put just before the first one on screen in Edit (the text before a split, by Enter or a redo) takes
     // its place there, so the lines stay put and the rest moves down, as text does where Enter is pressed: the list
@@ -844,43 +820,248 @@ fun NotePage(
 
     val canPlay = note.canPlay && note.audioPresent
     val canEdit = note.editable
-    var review by rememberSaveable(note.noteId) { mutableStateOf<ReviewSpan?>(null) }
-    var reviewIndex by rememberSaveable(note.noteId) { mutableIntStateOf(0) }
-    var savingReview by remember { mutableStateOf(false) }
-    var reviewError by remember(review) { mutableStateOf<String?>(null) }
-    val unclear = remember(paragraphs, canEdit, page.editing) {
-        if (canEdit && !page.editing) paragraphs.flatMap { it.unclearSpans() } else emptyList()
+    val unclear = remember(paragraphs, canEdit) {
+        if (canEdit) paragraphs.flatMap { it.unclearSpans() } else emptyList()
     }
-    fun openReview(span: ReviewSpan) {
-        val index = unclear.indexOf(span)
-        if (index >= 0) reviewIndex = index
-        playback.stop()
-        page.playerDismissed = true
-        page.rangeEndMs = null
-        page.listening = false
-        page.menu = false
-        review = span
+    val focusedParagraph = page.field?.id?.let { id -> paragraphs.firstOrNull { it.id == id } }
+    val fieldText = page.field?.text?.text?.toString()
+    val fieldSelection = page.field?.text?.selection
+    val fieldDirty = focusedParagraph != null && fieldText != null && fieldText.trim() != focusedParagraph.text
+    val activeUnclear = if (page.editing && !find.open && !fieldDirty && focusedParagraph != null && fieldSelection != null) {
+        unclear.firstOrNull { span ->
+            span.paragraphId == focusedParagraph.id && if (fieldSelection.collapsed) {
+                fieldSelection.start in span.start..span.end
+            } else {
+                fieldSelection.min < span.end && fieldSelection.max > span.start
+            }
+        }
+    } else null
+    val activeSpan = activeUnclear ?: if (page.editing && !find.open && !fieldDirty && focusedParagraph != null && fieldSelection != null) {
+        if (!fieldSelection.collapsed && fieldSelection.max <= focusedParagraph.text.length) {
+            ReviewSpan(focusedParagraph.id, focusedParagraph.revision, fieldSelection.min, fieldSelection.max)
+        } else {
+            wordIn(focusedParagraph.text, fieldSelection.start)?.let { focusedParagraph.reviewSpan(it) }
+        }
+    } else null
+    val reviewSuggestions = remember(activeSpan, paragraphs) {
+        val span = activeSpan ?: return@remember emptyList()
+        val paragraph = paragraphs.firstOrNull { it.id == span.paragraphId } ?: return@remember emptyList()
+        val selected = span.text(paragraph)
+        val seen = hashSetOf(spellingKey(selected))
+        buildList {
+            previousWording(paragraphs, selected)?.takeIf { seen.add(spellingKey(it)) }?.let(::add)
+            nearbySpellings(paragraphs, span).filter { seen.add(spellingKey(it)) }.forEach(::add)
+        }
     }
-    fun closeReview() {
-        if (page.listening) playback.stop()
-        page.rangeEndMs = null
-        page.listening = false
-        review = null
+    val reviewPrimary = when {
+        !page.editing || find.open -> null
+        activeUnclear != null -> ReviewPrimary.Keep
+        page.reviewing -> {
+            val others = if (!fieldDirty) unclear.isNotEmpty() else unclear.any { span ->
+                span.paragraphId != focusedParagraph.id ||
+                    (fieldSelection != null && (span.end <= fieldSelection.min || span.start >= fieldSelection.max))
+            }
+            if (others) ReviewPrimary.Next else ReviewPrimary.Apply
+        }
+        else -> null
     }
+    val reviewStripShown = page.editing && !find.open && page.field != null &&
+        (page.reviewing || activeUnclear != null || reviewSuggestions.isNotEmpty())
+    val reviewPosition = if (activeUnclear != null) unclear.indexOf(activeUnclear) + 1 else 0
+    val reviewTotal = if (page.reviewing) unclear.size else 0
+
+    // Edit moves the page for the caret alone (spec 5.7): when the caret's line is not between the bar and the
+    // keyboard (or ReviewStrip above it), the list scrolls by the least that brings it there, on `move`.
+    val window = LocalWindowInfo.current
+    val indexNow = rememberUpdatedState(indexOf)
+    val caretMargin = with(density) { (if (LocalWindowLayout.current.rail) ShortCaretMargin else CaretMargin).toPx() }
+    val stripReservePx = with(density) { (ReviewStripMetrics.height + FocalLayout.bottomGap * 2).toPx() }
+    LaunchedEffect(field, find.open, reviewStripShown) {
+        val current = field ?: return@LaunchedEffect
+        if (find.open) return@LaunchedEffect
+        snapshotFlow { Triple(current.text.selection, current.text.text.length, imeTarget.getBottom(density)) }.collectLatest { (selection, _, keyboard) ->
+            // The field lays out what changed in the frame that follows.
+            withFrameMillis { }
+            val index = indexNow.value[current.id] ?: return@collectLatest
+            if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
+                listState.scrollToItem(index)
+                withFrameMillis { }
+            }
+            val line = lineBox(page.layouts[current.id], selection.end)
+            val y = windowY(listState, index, line.first) ?: return@collectLatest
+            val stripReserve = if (reviewStripShown) stripReservePx else 0f
+            val bandEnd = (if (keyboard > 0) window.containerSize.height - keyboard else listState.layoutInfo.viewportSize.height) - stripReserve
+            val scroll = caretScroll(y, y + (line.second - line.first), bandTop() + caretMargin, bandEnd - caretMargin)
+            if (scroll != 0f) listState.animateScrollBy(scroll, FocalMotion.move())
+        }
+    }
+
+    val wordConfirmedLabel = stringResource(R.string.review_confirmed)
+    val allReviewedLabel = stringResource(R.string.review_all_done)
+    fun freshParagraphs(): List<ParagraphUi> =
+        session.paragraphs(latestNote.paragraphs).filter { it.text.isNotBlank() }
+    fun nextSpanIn(list: List<ParagraphUi>, paragraphId: Long?, offset: Int): ReviewSpan? {
+        val spans = list.flatMap { it.unclearSpans() }
+        if (spans.isEmpty()) return null
+        val order = list.withIndex().associate { (i, p) -> p.id to i }
+        val currentP = order[paragraphId] ?: -1
+        return spans.firstOrNull { span ->
+            val p = order[span.paragraphId] ?: -1
+            if (p == currentP) span.start >= offset else p > currentP
+        } ?: spans.first()
+    }
+    fun prevSpanIn(list: List<ParagraphUi>, paragraphId: Long?, offset: Int): ReviewSpan? {
+        val spans = list.flatMap { it.unclearSpans() }
+        if (spans.isEmpty()) return null
+        val order = list.withIndex().associate { (i, p) -> p.id to i }
+        val currentP = order[paragraphId] ?: Int.MAX_VALUE
+        return spans.lastOrNull { span ->
+            val p = order[span.paragraphId] ?: Int.MAX_VALUE
+            if (p == currentP) span.end <= offset else p < currentP
+        } ?: spans.last()
+    }
+    fun focusSpan(span: ReviewSpan) {
+        focusField(CaretAt(span.paragraphId, span.start, span.end), refresh = true, commit = false)
+    }
+    fun offerConfirmUndo(saved: EditOutcome.Saved, label: String) {
+        val receipt = saved.confirmUndo ?: return
+        scope.launch {
+            if (bottom.feedback.show(label, FeedbackAction(undoLabel, FocalIcon.Undo)) != FeedbackResult.ActionPerformed) return@launch
+            write {
+                if (page.editing && !session.save()) {
+                    scope.launch { bottom.feedback.show(notSaved) }
+                    return@write
+                }
+                val undone = actions.undoConfirmDoubt(receipt)
+                if (undone is EditOutcome.Saved) session.applySaved(undone.paragraphs)
+                else report(undone, words.tooLate)
+            }
+        }
+    }
+    fun keepCurrent(span: ReviewSpan) {
+        write {
+            if (!session.save()) {
+                if (session.failures >= 2) scope.launch { bottom.feedback.show(saveFailed) }
+                return@write
+            }
+            val id = session.resolve(span.paragraphId)
+            val stored = session.paragraph(id) ?: return@write
+            val outcome = actions.confirmDoubt(stored.id, stored.revision, span.start, span.end)
+            if (outcome !is EditOutcome.Saved) {
+                report(outcome, notSaved)
+                return@write
+            }
+            session.applySaved(outcome.paragraphs)
+            val fresh = freshParagraphs()
+            val remaining = fresh.flatMap { it.unclearSpans() }
+            if (page.reviewing && remaining.isNotEmpty()) {
+                nextSpanIn(fresh, stored.id, span.end)?.let(::focusSpan)
+                offerConfirmUndo(outcome, wordConfirmedLabel)
+            } else {
+                val allDone = page.reviewing && remaining.isEmpty()
+                exitEdit()
+                offerConfirmUndo(outcome, if (allDone) allReviewedLabel else wordConfirmedLabel)
+            }
+        }
+    }
+    fun advanceReview(delta: Int) {
+        write {
+            val currentId = page.field?.id?.let(session::resolve)
+            val currentStart = page.field?.text?.selection?.min ?: 0
+            val currentEnd = page.field?.text?.selection?.max ?: 0
+            if (!session.save()) {
+                if (session.failures >= 2) scope.launch { bottom.feedback.show(saveFailed) }
+                return@write
+            }
+            val fresh = freshParagraphs()
+            val target = if (delta >= 0) nextSpanIn(fresh, currentId, currentEnd) else prevSpanIn(fresh, currentId, currentStart)
+            if (target == null) {
+                exitEdit()
+                scope.launch { bottom.feedback.show(allReviewedLabel) }
+            } else {
+                focusSpan(target)
+            }
+        }
+    }
+    fun markAllReviewed() {
+        write {
+            if (page.editing && !session.save()) {
+                if (session.failures >= 2) scope.launch { bottom.feedback.show(saveFailed) }
+                return@write
+            }
+            val outcome = actions.confirmAllDoubt()
+            if (outcome !is EditOutcome.Saved) {
+                report(outcome, notSaved)
+                return@write
+            }
+            session.applySaved(outcome.paragraphs)
+            if (page.editing && page.reviewing) exitEdit()
+            offerConfirmUndo(outcome, allReviewedLabel)
+        }
+    }
+    fun pickSuggestion(wording: String) {
+        val current = page.field ?: return
+        val span = activeSpan ?: return
+        val sel = current.text.selection
+        val replaceStart = (if (sel.collapsed) span.start else sel.min).coerceIn(0, current.text.text.length)
+        val replaceEnd = (if (sel.collapsed) span.end else sel.max).coerceIn(replaceStart, current.text.text.length)
+        current.text.edit {
+            replace(replaceStart, replaceEnd, wording)
+            selection = TextRange(replaceStart + wording.length)
+        }
+        write {
+            val before = session.paragraph(current.id)
+            if (!session.save()) return@write
+            val after = session.paragraph(current.id)
+            if (page.reviewing) {
+                val fresh = freshParagraphs()
+                val next = nextSpanIn(fresh, session.resolve(current.id), replaceStart + wording.length)
+                if (next == null) {
+                    exitEdit()
+                    if (before != null && after != null && before.text != after.text) {
+                        scope.launch {
+                            if (bottom.feedback.show(allReviewedLabel, FeedbackAction(undoLabel, FocalIcon.Undo)) != FeedbackResult.ActionPerformed) return@launch
+                            write {
+                                if (page.editing && !session.save()) {
+                                    scope.launch { bottom.feedback.show(notSaved) }
+                                    return@write
+                                }
+                                val since = mark()
+                                val outcome = edits.edit(after.id, after.revision, before.text)
+                                if (outcome is EditOutcome.Saved) {
+                                    session.applySaved(outcome.paragraphs)
+                                    if (page.editing && untouched(since)) reseedField()
+                                } else report(outcome, words.tooLate)
+                            }
+                        }
+                    } else {
+                        scope.launch { bottom.feedback.show(allReviewedLabel) }
+                    }
+                } else {
+                    focusSpan(next)
+                }
+            }
+        }
+    }
+
     val onTap: (ParagraphUi, Int, IntRange?) -> Unit = { paragraph, offset, word ->
         when {
             find.open || page.renaming -> Unit
             page.editing -> focusField(wordOrCaret(paragraph.id, offset, word), refresh = false, commit = true)
-            canEdit && word != null -> openReview(
-                unclear.firstOrNull { it.paragraphId == paragraph.id && word.first in it.start until it.end }
-                    ?: paragraph.reviewSpan(word),
-            )
+            canEdit -> {
+                val unclearHit = word?.let { w ->
+                    unclear.firstOrNull { it.paragraphId == paragraph.id && w.first in it.start until it.end }
+                }
+                val target = unclearHit?.let { CaretAt(it.paragraphId, it.start, it.end) }
+                    ?: wordOrCaret(paragraph.id, offset, word)
+                enterEdit(target, review = false)
+            }
             !canEdit && canPlay -> playFromWord(paragraph, offset)
         }
     }
     val onSweep: ((ParagraphUi, IntRange) -> Unit)? = if (!canEdit || find.open || page.renaming) null else { paragraph, range ->
         if (page.editing) focusField(CaretAt(paragraph.id, range.first, range.last + 1), refresh = false, commit = true)
-        else openReview(paragraph.reviewSpan(range))
+        else enterEdit(CaretAt(paragraph.id, range.first, range.last + 1), review = false)
     }
     // Edit's ▶ (spec 5.7): plays just the audio of the selected words, or of the words around the caret, and stops. It
     // is how a doubtful word is checked against what was said without leaving the place being corrected. The strip and
@@ -969,15 +1150,43 @@ fun NotePage(
                         page.stripShown = false
                         scope.launch { page.stripBack.snapTo(0f) }
                     }) {
-                        PlayerStrip(position, onSeek = { ms ->
-                            page.rangeEndMs = null
-                            playback.playFrom(ms)
-                        })
+                        PlayerStrip(
+                            position,
+                            onSeek = { ms ->
+                                page.rangeEndMs = null
+                                playback.playFrom(ms)
+                            },
+                            speed = audio.speed,
+                            onCycleSpeed = playback::cycleSpeed,
+                        )
                     }
                 }
             }
         } else null,
-        rows = if (find.open) { { FindRows(find, findActions) } } else null,
+        rows = when {
+            find.open -> { { FindRows(find, findActions) } }
+            reviewStripShown -> {
+                {
+                    ReviewStrip(
+                        canListen = canPlay,
+                        listening = listening,
+                        onListen = listen,
+                        suggestions = reviewSuggestions,
+                        onPickSuggestion = ::pickSuggestion,
+                        primary = reviewPrimary,
+                        onPrimary = {
+                            when (reviewPrimary) {
+                                ReviewPrimary.Keep -> activeUnclear?.let(::keepCurrent)
+                                ReviewPrimary.Next -> advanceReview(+1)
+                                ReviewPrimary.Apply -> done()
+                                null -> Unit
+                            }
+                        },
+                    )
+                }
+            }
+            else -> null
+        },
         dockHidden = page.editing || page.renaming || find.open,
     )
 
@@ -1033,6 +1242,7 @@ fun NotePage(
     val editable = note.editable && paragraphs.isNotEmpty()
     val menuItems = NoteMenuItems(
         edit = note.editable,
+        markAllReviewed = note.editable && unclear.isNotEmpty(),
         find = editable || (note.phase == NotePhase.READY && !note.audioPresent && paragraphs.isNotEmpty()),
         share = note.phase == NotePhase.READY || note.phase == NotePhase.PARTIAL_FAILURE,
         removeAudio = note.canRemoveAudio,
@@ -1047,6 +1257,7 @@ fun NotePage(
                 val top = visibleParagraphs(listState, currentItems).firstOrNull()
                 enterEdit(if (playingHere) null else top?.let { CaretAt(it, 0) })
             },
+            markAllReviewed = { markAllReviewed() },
             find = { openFind() }, rename = { page.renaming = true }, share = actions.share, append = actions.recordMore,
             removeAudio = {
                 playback.stop()
@@ -1060,14 +1271,16 @@ fun NotePage(
         )
     }
     val editBarActions = run {
-        EditBarActions(undo = undo, redo = redo, done = { done() }, restore = restore, find = { openFind() }, listen = listen)
+        EditBarActions(
+            undo = undo, redo = redo, done = { done() }, restore = restore, find = { openFind() }, listen = listen,
+            reviewPrevious = { advanceReview(-1) }, reviewNext = { advanceReview(+1) }, markAllReviewed = { markAllReviewed() },
+        )
     }
-    val focusedParagraph = page.field?.id?.let { id -> paragraphs.firstOrNull { it.id == id } }
 
     // The page's shortcuts (spec 8.5): each where it applies; false leaves the key to whoever else wants it.
     val reading = (mode == NoteMode.Reading || mode == NoteMode.Playing) && !page.renaming
     val onKey: (PageKey) -> Boolean = { key ->
-        if (review != null) false else when (key) {
+        when (key) {
             PageKey.Undo -> page.editing.also { if (it) undo() }
             PageKey.Redo -> page.editing.also { if (it) redo() }
             PageKey.Find -> (!find.open).also { if (it) openFind() }
@@ -1088,97 +1301,6 @@ fun NotePage(
     PageKeysEffect { key ->
         val covered = shell.live.visible || shell.twoPane && shell.settings.isOpen
         shell.current == destination && !covered && onKey(key)
-    }
-
-    val changedMessage = stringResource(R.string.review_stale)
-    val appliedLabel = stringResource(R.string.review_saved)
-    val splitLabel = stringResource(R.string.review_split_saved)
-    val joinedLabel = stringResource(R.string.review_join_saved)
-    fun saveReview(change: suspend () -> EditOutcome, accepted: (EditOutcome.Saved) -> Unit) {
-        if (savingReview) return
-        savingReview = true
-        write {
-            try {
-                when (val result = change()) {
-                    is EditOutcome.Saved -> { closeReview(); accepted(result) }
-                    is EditOutcome.Failed -> reviewError = result.message
-                    EditOutcome.TooLarge -> reviewError = words.tooLarge
-                    else -> { closeReview(); report(result, changedMessage) }
-                }
-            } finally { savingReview = false }
-        }
-    }
-    fun joinInReview(previous: ParagraphUi, paragraph: ParagraphUi) {
-        saveReview({ edits.merge(previous.id, previous.revision, paragraph.id, paragraph.revision) }) { saved ->
-            val receipt = saved.mergeUndo ?: return@saveReview
-            scope.launch {
-                if (bottom.feedback.show(joinedLabel, FeedbackAction(undoLabel, FocalIcon.Undo)) == FeedbackResult.ActionPerformed) {
-                    write { report(if (page.editing) EditOutcome.Stale else actions.undoMerge(receipt), words.tooLate) }
-                }
-            }
-        }
-    }
-    fun splitInReview(paragraph: ParagraphUi, at: Int) {
-        saveReview({ edits.split(paragraph.id, paragraph.revision, at) }) { saved ->
-            val origin = saved.origin ?: return@saveReview
-            val kept = saved.paragraphs.first { it.id == paragraph.id }
-            val added = saved.paragraphs.first { it.id != paragraph.id }
-            scope.launch {
-                if (bottom.feedback.show(splitLabel, FeedbackAction(undoLabel, FocalIcon.Undo)) != FeedbackResult.ActionPerformed) return@launch
-                write {
-                    // An open editor owns the paragraph order and drafts until Done.
-                    val result = if (page.editing) EditOutcome.Stale
-                        else edits.unsplit(kept.id, kept.revision, added.id, added.revision, at, origin)
-                    report(result, words.tooLate)
-                }
-            }
-        }
-    }
-    review?.let { span ->
-        val paragraph = paragraphs.firstOrNull { it.id == span.paragraphId && it.revision == span.revision }
-        if (note.loaded && (!canEdit || paragraph == null) && !savingReview) {
-            LaunchedEffect(span) {
-                closeReview()
-                bottom.feedback.show(changedMessage)
-            }
-        } else if (paragraph != null) key(span) {
-            val next = unclear.firstOrNull { candidate ->
-                if (candidate.paragraphId == span.paragraphId) candidate.start >= span.end
-                else indexOf.getValue(candidate.paragraphId) > indexOf.getValue(span.paragraphId)
-            }
-            val boundary = paragraph.words.firstOrNull { span.start in it.start until it.end }?.start
-            LaunchedEffect(span) {
-                val index = indexOf[span.paragraphId] ?: return@LaunchedEffect
-                if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
-            }
-            val previous = if (boundary == paragraph.words.firstOrNull()?.start && boundary != null) {
-                paragraphs.getOrNull(paragraphs.indexOfFirst { it.id == paragraph.id } - 1)?.takeIf { before ->
-                    note.gaps.none { it.afterParagraphId == before.id } &&
-                        (before.originKnown || !paragraph.hasOriginal) &&
-                        (paragraph.originKnown || !before.hasOriginal)
-                }
-            } else null
-            val nearby = remember(span, paragraphs) { nearbySpellings(paragraphs, span) }
-            val earlierWording = remember(span, paragraphs) { previousWording(paragraphs, span.text(paragraph)) }
-            WordReview(paragraph, span, earlierWording, nearby, actions.overlapReadings, listening,
-                listen = if (!canPlay) null else { {
-                    if (listening) playback.pause() else {
-                        val clip = paragraph.listenRange(span.start, span.end, FocalTiming.LISTEN_SELECTION_MS)
-                        val end = minOf(clip.last + 1, note.durationMs)
-                        if (end > clip.first) {
-                            page.listening = true
-                            page.rangeEndMs = end
-                            playback.playRange(clip.first, end)
-                        }
-                    }
-                } },
-                next = next?.let { { openReview(it) } },
-                split = boundary?.takeIf { it > 0 }?.let { at -> { splitInReview(paragraph, at) } },
-                join = previous?.let { { joinInReview(it, paragraph) } },
-                saving = savingReview, error = reviewError, dismiss = ::closeReview,
-                save = { text -> saveReview({ edits.edit(paragraph.id, span.revision, text) }) { offerUndo(paragraph, it, appliedLabel) } },
-            )
-        }
     }
 
     Box(
@@ -1214,7 +1336,11 @@ fun NotePage(
             NoteTopBar(
                 title = head.title, titleMuted = head.titleFallback, collapsed = collapsed && mode != NoteMode.Editing,
                 reviewCount = if (find.open || page.renaming) 0 else unclear.size,
-                onReview = { (unclear.getOrNull(reviewIndex) ?: unclear.firstOrNull())?.let(::openReview) },
+                onReview = {
+                    unclear.firstOrNull()?.let { span ->
+                        enterEdit(CaretAt(span.paragraphId, span.start, span.end), review = true)
+                    }
+                },
                 menuItems = menuItems, menuOpen = page.menu, onMenu = { page.menu = it }, menu = menuActions,
                 onBack = actions.back,
                 chrome = { chrome() * (1 - editT.value) },
@@ -1226,18 +1352,30 @@ fun NotePage(
                 canUndo = session.canUndo, canRedo = session.canRedo,
                 canRestore = focusedParagraph?.let { it.edited && it.canRestore } == true,
                 failed = session.failed, menuOpen = page.editMenu, onMenu = { page.editMenu = it }, actions = editBarActions,
-                canListen = canPlay && page.field != null, listening = listening,
+                canListen = canPlay && page.field != null && !reviewStripShown, listening = listening,
+                reviewPosition = reviewPosition,
+                reviewTotal = reviewTotal,
+                canMarkAllReviewed = unclear.isNotEmpty(),
                 modifier = Modifier.zIndex(BARS_Z).graphicsLayer { alpha = editT.value * chrome() }.inertBar(!page.editing || find.open),
             )
         }
         val topPadding = with(density) { status.getTop(this).toDp() } + topBar + FocalGrid.x8
         val short = rememberUpdatedState(LocalWindowLayout.current.rail)
+        val settleLiftPx = with(density) { FocalGrid.x12.toPx() }
         // Nothing of a note is drawn before the note is there: an empty state would show a date in 1970 and a
         // writing head for a frame or two. The page's opening waits for this ([PageTransitions.ready]).
         if (note.loaded) SideEffect { shell.pages.ready(destination) }
         CompositionLocalProvider(LocalBringIntoViewSpec provides StillPage) {
             if (note.loaded) {
-                BoxWithConstraints(Modifier.fillMaxSize().graphicsLayer { alpha = listFade.value * reveal.body() }) {
+                BoxWithConstraints(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val bodyReveal = reveal.body()
+                            alpha = listFade.value * bodyReveal
+                            translationY = (1f - bodyReveal) * settleLiftPx
+                        },
+                ) {
                     // The text column is at most 600 dp and centred (spec 2.5); the list itself spans the page, so it
                     // scrolls from its margins too.
                     val side = FocalLayout.columnInset(maxWidth) - FocalLayout.gutter
@@ -1319,8 +1457,12 @@ fun NotePage(
         val findFade = if (short.value) FocalLayout.topFade else FindFade
         PaperTopFade(0.dp, Modifier.fillMaxSize().zIndex(FADES_Z), fade = findFade, alpha = { findT.value * reveal.chrome() })
         BottomFade(
-            bottom, Modifier.fillMaxSize().zIndex(FADES_Z).graphicsLayer { alpha = (1 - editT.value) * reveal.chrome() },
-            keyboard = find.open, keyboardFade = if (short.value) FocalLayout.topFade else FocalLayout.keyboardFade,
+            bottom,
+            Modifier.fillMaxSize().zIndex(FADES_Z).graphicsLayer {
+                alpha = (if (reviewStripShown) 1f else 1 - editT.value) * reveal.chrome()
+            },
+            keyboard = find.open || reviewStripShown,
+            keyboardFade = if (short.value) FocalLayout.topFade else FocalLayout.keyboardFade,
         )
         JumpPill(
             visible = page.playingOutside != null && stripWanted,

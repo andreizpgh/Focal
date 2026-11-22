@@ -252,12 +252,22 @@ data class SplitOrigin(
 /** Exact paragraph rows removed or overwritten by a merge. Undo is valid only at the resulting revision. */
 class MergeUndo internal constructor(internal val first: Paragraph, internal val second: Paragraph, internal val mergedRevision: Long)
 
+/** Previous word-review flags before confirming doubtful words. Undo is valid only at the resulting revisions. */
+class ConfirmUndo internal constructor(internal val rows: List<Row>) {
+    internal data class Row(val id: Long, val previousWordsJson: String, val resultingRevision: Long)
+}
+
 sealed interface EditResult {
     /**
      * The change is saved; [paragraphs] are the affected paragraphs as now stored. A split also gives the
      * paragraph's [origin], what it was before.
      */
-    data class Saved(val paragraphs: List<Paragraph>, val origin: SplitOrigin? = null, val mergeUndo: MergeUndo? = null) : EditResult
+    data class Saved(
+        val paragraphs: List<Paragraph>,
+        val origin: SplitOrigin? = null,
+        val mergeUndo: MergeUndo? = null,
+        val confirmUndo: ConfirmUndo? = null,
+    ) : EditResult
     /** The paragraph changed since the caller read it ([Paragraph.revision]). */
     data object Conflict : EditResult
     data object Missing : EditResult

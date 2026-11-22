@@ -36,7 +36,8 @@ data class PlaybackState(
     val passageId: Long? = null,
     val positionMs: Long = 0,
     val durationMs: Long = 0,
-    val isPlaying: Boolean = false
+    val isPlaying: Boolean = false,
+    val speed: Float = 1f,
 )
 
 class SpeechPlayer(private val context: Context, private val store: NoteStore, private val scope: CoroutineScope) {
@@ -53,6 +54,7 @@ class SpeechPlayer(private val context: Context, private val store: NoteStore, p
     private var playbackLease: SessionOperations.PlaybackLease? = null
     private var source: Source? = null
     private var requestedPlaying = false
+    private var playbackSpeed = 1f
 
     private data class Source(val noteId: String, val passageId: Long?, val startMs: Long = 0, val endMs: Long? = null)
     private class Session(
@@ -87,7 +89,19 @@ class SpeechPlayer(private val context: Context, private val store: NoteStore, p
         job?.cancel()
         job = null
         playing.value = null
-        playback.value = PlaybackState()
+        playback.value = PlaybackState(speed = playbackSpeed)
+    }
+
+    /** Sets playback rate (e.g., 1f, 1.5f, 2f) and applies it immediately if a track is active. */
+    fun setSpeed(speed: Float) = synchronized(lock) {
+        val clamped = speed.coerceIn(0.5f, 2f)
+        playbackSpeed = clamped
+        active?.takeIf { it.generation == generation }?.track?.let { applySpeed(it, clamped) }
+        playback.value = playback.value.copy(speed = clamped)
+    }
+
+    private fun applySpeed(track: AudioTrack, rate: Float) {
+        runCatching { track.playbackParams = track.playbackParams.setSpeed(rate) }
     }
 
     /** Clears a note's player state without stopping a newer selection. */
@@ -201,7 +215,7 @@ class SpeechPlayer(private val context: Context, private val store: NoteStore, p
         requestedPlaying = false
         playing.value = null
         val knownDuration = playback.value.takeIf { it.noteId == next.noteId }?.durationMs ?: 0
-        playback.value = PlaybackState(next.noteId, next.passageId, positionMs.coerceIn(0, knownDuration), knownDuration)
+        playback.value = PlaybackState(next.noteId, next.passageId, positionMs.coerceIn(0, knownDuration), knownDuration, speed = playbackSpeed)
         val lease = SessionOperations.tryAcquirePlayback(next.noteId) { stopIfCurrent(token) }
         if (lease == null) {
             onError("Audio is unavailable while recording or removing this session.")
@@ -232,7 +246,7 @@ class SpeechPlayer(private val context: Context, private val store: NoteStore, p
     private fun publishLocked(session: Session) {
         checkCurrentLocked(session.generation)
         playback.value = PlaybackState(session.source.noteId, session.source.passageId,
-            session.positionMs(), session.durationMs, true)
+            session.positionMs(), session.durationMs, true, playbackSpeed)
     }
 
     private suspend fun playSource(token: Long, next: Source, requestedMs: Long, onError: (String) -> Unit) {
@@ -268,7 +282,7 @@ class SpeechPlayer(private val context: Context, private val store: NoteStore, p
             val startFrame = requestedFrame.coerceIn(rangeStart, maxOf(rangeStart, rangeEnd))
             synchronized(lock) {
                 checkCurrentLocked(token)
-                playback.value = PlaybackState(next.noteId, next.passageId, startFrame * 1000 / SAMPLE_RATE, durationMs)
+                playback.value = PlaybackState(next.noteId, next.passageId, startFrame * 1000 / SAMPLE_RATE, durationMs, speed = playbackSpeed)
                 if (startFrame >= rangeEnd) requestedPlaying = false
             }
             if (startFrame >= rangeEnd) return
@@ -297,8 +311,9 @@ class SpeechPlayer(private val context: Context, private val store: NoteStore, p
             synchronized(lock) {
                 checkCurrentLocked(token)
                 active = current
+                if (playbackSpeed != 1f) applySpeed(output, playbackSpeed)
                 output.play()
-                playback.value = PlaybackState(next.noteId, next.passageId, startFrame * 1000 / SAMPLE_RATE, durationMs, true)
+                playback.value = PlaybackState(next.noteId, next.passageId, startFrame * 1000 / SAMPLE_RATE, durationMs, true, playbackSpeed)
                 playing.value = next.passageId ?: -1L
             }
             RandomAccessFile(file, "r").use { input ->

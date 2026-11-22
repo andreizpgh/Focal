@@ -26,7 +26,7 @@ data class DecodedWindow(
  * A word with absolute times in the recording. [confidence] is the lowest probability of its letter or
  * digit tokens (null for punctuation-only words or unknown scores). [window] is the index of the window
  * that produced it. [unknownPiece] means the recognizer emitted `<unk>` inside the word, so its text is
- * missing a character.
+ * missing a character. [reviewed] means the user confirmed the word as correct without changing its text.
  */
 data class Word(
     val text: String,
@@ -36,6 +36,7 @@ data class Word(
     val punctOnly: Boolean,
     val window: Int,
     val unknownPiece: Boolean = false,
+    val reviewed: Boolean = false,
 )
 
 /**

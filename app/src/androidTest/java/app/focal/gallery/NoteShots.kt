@@ -61,6 +61,7 @@ object NoteShots {
         addAll(themed("playing") { Note(design(), playing = true) })
         add(Shot("playing-legacy-light", dark = false) { Note(design(timed = false), playing = true) })
         addAll(themed("edit") { Note(design(edited = true), edit = true, scroll = 2 to 0) })
+        addAll(themed("review") { Note(designReview(), review = true) })
         addAll(themed("find") { Note(design(), find = "screen" to "page", nextMatch = true) })
         addAll(themed("find-replaced") { Note(design(replaced = true), find = "screen" to "page", replaced = true) })
         addAll(themed("transcribing") { Note(saturdayNote(NotePhase.TRANSCRIBING)) })
@@ -142,6 +143,20 @@ internal fun design(timed: Boolean = true, edited: Boolean = false, replaced: Bo
 
 private const val THIRD = 3L
 
+internal fun designReview(): NoteUiState {
+    val texts = DesignText.toMutableList().also {
+        it[0] = "Notes for Thursday’s design review. Start with the recording screen, because that’s the moment people decide whether to trust the app at all."
+        it[1] = "The second screen asks for too much at once: microphone, notifications and a theme choice. I would move the permision prompt to the moment someone first taps Record."
+        it[2] = "Keeping permission requests contextual makes the welcome screen quieter, and the headline already says what the app does."
+    }
+    val paragraphs = timedParagraphs(texts, DESIGN_MS, timed = true, doubtful = setOf("permision", "Ines"))
+    return NoteUiState(
+        noteId = "design-review", loaded = true, title = "Notes for Thursday’s design review", titleIsCustom = false,
+        created = at("16:05"), durationMs = DESIGN_MS, phase = NotePhase.READY, audioPresent = true, canPlay = true,
+        editable = true, paragraphs = paragraphs, canRemoveAudio = true, canAppend = true,
+    )
+}
+
 internal fun saturdayNote(phase: NotePhase) = NoteUiState(
     noteId = "saturday", loaded = true, title = "So the plan for Saturday is simple", created = at("14:32"),
     durationMs = 4 * 60_000L, phase = phase, progress = 0.64f, audioPresent = true, canPlay = true,
@@ -208,6 +223,7 @@ internal fun Note(
     note: NoteUiState,
     playing: Boolean = false,
     edit: Boolean = false,
+    review: Boolean = false,
     find: Pair<String, String>? = null,
     nextMatch: Boolean = false,
     replaced: Boolean = false,
@@ -222,7 +238,7 @@ internal fun Note(
     LaunchedEffect(shell) { shell.open(destination) }
     FocalShell(shell, destination = { current ->
         if (current is Destination.Note) {
-            NoteDestination(note, destination, playing, edit, find, nextMatch, replaced, captureElsewhere, scroll, landing, states)
+            NoteDestination(note, destination, playing, edit, find, nextMatch, replaced, captureElsewhere, scroll, landing, states, review = review)
             if (menu) NoteMenuInline()
         } else Box(Modifier.fillMaxSize())
     })
@@ -256,15 +272,25 @@ internal fun NoteDestination(
     scroll: Pair<Int, Int>?,
     landing: Boolean,
     states: PageStates = PageStates(),
+    review: Boolean = false,
 ) {
     val shell = app.focal.ui.shell.LocalShell.current
     val list: LazyListState = rememberLazyListState()
     scroll?.let { (index, offset) -> LaunchedEffect(list) { list.scrollToItem(index, offset) } }
     val third = note.paragraphs.getOrNull(2)
-    val field = if (edit && states.editField && third != null) {
-        remember { FieldFocus(third.id, third.text, "The welcome screen can lose the subtitle entirely.".length) }
-    } else null
-    val page: NotePageState = rememberNotePageState(editing = edit, field = field, takesFocus = states.focus)
+    val reviewParagraph = if (review) note.paragraphs.firstOrNull { p -> p.words.any { it.doubtful } } else null
+    val reviewWord = reviewParagraph?.words?.firstOrNull { it.doubtful }
+    val field = when {
+        review && reviewParagraph != null && reviewWord != null -> remember {
+            FieldFocus(reviewParagraph.id, reviewParagraph.text, androidx.compose.ui.text.TextRange(reviewWord.start, reviewWord.end))
+        }
+        edit && states.editField && third != null -> remember {
+            FieldFocus(third.id, third.text, "The welcome screen can lose the subtitle entirely.".length)
+        }
+        else -> null
+    }
+    val page: NotePageState = rememberNotePageState(editing = edit || review, field = field, takesFocus = states.focus)
+    if (review) LaunchedEffect(page) { page.reviewing = true }
     if (states.rename) LaunchedEffect(page) { page.renaming = true }
     if (states.followOff) LaunchedEffect(page) {
         waitFrames(FIND_SETTLE_MS)

@@ -24,8 +24,8 @@ class TranscriptVectorsTest {
         dedupeMs = constants["DEDUPE_MS"].long(),
         minWordEndMs = constants["MIN_WORD_END_MS"].long(),
         capWords = constants["CAP_WORDS"].long().toInt(),
-        // These vectors predate pause-only breaks and punctuation on capitalized restarts.
-        sentenceRestartMs = Long.MAX_VALUE, unpunctuatedMinWords = Int.MAX_VALUE,
+        // These vectors predate pause-only breaks on unpunctuated passages.
+        unpunctuatedMinWords = Int.MAX_VALUE,
         capLookbackWords = constants["CAP_LOOKBACK_WORDS"].long().toInt(),
     )
 
@@ -37,7 +37,7 @@ class TranscriptVectorsTest {
         val shipped = FormatConfig().copy(
             paragraphPauseMs = format.paragraphPauseMs, longPauseMs = format.longPauseMs,
             maxWords = format.maxWords, capWords = format.capWords,
-            sentenceRestartMs = format.sentenceRestartMs, unpunctuatedMinWords = format.unpunctuatedMinWords,
+            unpunctuatedMinWords = format.unpunctuatedMinWords,
         )
         assertEquals(shipped, format)
         assertEquals(2 * SpeechTuning.PARAGRAPH_MAX_WORDS, SpeechTuning.PARAGRAPH_CAP_WORDS)

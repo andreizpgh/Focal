@@ -9,8 +9,9 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.focal.FocalApplication
 import app.focal.R
-import app.focal.data.MergeUndo
+import app.focal.data.ConfirmUndo
 import app.focal.data.EditResult
+import app.focal.data.MergeUndo
 import app.focal.data.NoteState
 import app.focal.data.ReplaceUndo
 import app.focal.data.SplitOrigin
@@ -55,7 +56,12 @@ sealed interface EditOutcome {
      * for undoing it; after a merge the joined paragraph. Session undo takes ids and revisions from here
      * instead of waiting for the state to reload.
      */
-    data class Saved(val paragraphs: List<ParagraphUi>, val origin: SplitOrigin? = null, val mergeUndo: MergeUndo? = null) : EditOutcome
+    data class Saved(
+        val paragraphs: List<ParagraphUi>,
+        val origin: SplitOrigin? = null,
+        val mergeUndo: MergeUndo? = null,
+        val confirmUndo: ConfirmUndo? = null,
+    ) : EditOutcome
     /** The paragraph changed since it was read (or is gone): reload; the draft is not saved. */
     data object Stale : EditOutcome
     /** The note is recording or transcribing. */
@@ -261,9 +267,14 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
         return edit { store.undoReplace(undo) }.also { if (it is EditOutcome.Saved) lastReplace = null }
     }
 
-    suspend fun overlapReadings(start: Long, end: Long): List<String> = withContext(Dispatchers.IO) {
-        store.overlapReadings(noteId, start, end)
-    }
+    /** Marks doubtful words overlapping [start]..<[end] in [paragraphId] as confirmed without changing text. */
+    suspend fun confirmDoubt(paragraphId: Long, revision: Long, start: Int, end: Int): EditOutcome =
+        edit { store.confirmDoubt(paragraphId, revision, start, end) }
+
+    /** Marks all doubtful words in this note as confirmed without changing text. */
+    suspend fun confirmAllDoubt(): EditOutcome = edit { store.confirmAllDoubt(noteId) }
+
+    suspend fun undoConfirmDoubt(undo: ConfirmUndo): EditOutcome = edit { store.undoConfirmDoubt(undo) }
 
     /** The body as Copy puts it: visible paragraphs joined by a blank line (no title, no doubt marks). */
     suspend fun copyText(): String = withContext(Dispatchers.IO) { store.transcript(noteId) }
@@ -304,7 +315,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
     }
 
     private fun outcome(result: EditResult): EditOutcome = when (result) {
-        is EditResult.Saved -> EditOutcome.Saved(result.paragraphs.map(ParagraphUi::of), result.origin, result.mergeUndo)
+        is EditResult.Saved -> EditOutcome.Saved(result.paragraphs.map(ParagraphUi::of), result.origin, result.mergeUndo, result.confirmUndo)
         EditResult.Conflict, EditResult.Missing -> EditOutcome.Stale
         EditResult.NotEditable -> EditOutcome.NotEditable
         EditResult.TooLarge -> EditOutcome.TooLarge

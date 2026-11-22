@@ -7,15 +7,13 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import androidx.annotation.VisibleForTesting
 import androidx.core.database.sqlite.transaction
+import app.focal.core.Alignment
+import app.focal.core.AsrToken
 import app.focal.core.DecodedWindow
 import app.focal.core.Doubt
-import app.focal.core.WordBuilder
-import app.focal.core.SpeechTuning
-import app.focal.core.AsrToken
 import app.focal.core.EndKind
 import app.focal.core.FormatConfig
 import app.focal.core.Paragraphs
-import app.focal.core.TextWords
 import app.focal.core.Title
 import app.focal.core.Transcript
 import app.focal.core.TranscriptAssembler
@@ -507,33 +505,6 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         "SELECT tokens FROM windows WHERE id=?", arrayOf(windowId.toString()),
     ).use { if (it.moveToFirst() && !it.isNull(0)) TranscriptJson.decodeTokens(it.getString(0)) else null }
 
-    /** A second reading of the same audio, already decoded as context across a window boundary. */
-    fun overlapReadings(noteId: String, start: Long, end: Long): List<String> {
-        if (end <= start) return emptyList()
-        val middle = start + (end - start) / 2
-        return readableDatabase.rawQuery(
-            """SELECT audio_start,idx,tokens FROM windows WHERE note_id=? AND state='DONE' AND hidden=0
-                AND tokens IS NOT NULL AND audio_start<=? AND audio_end>=? AND (keep_hi<=? OR keep_lo>?)
-                ORDER BY idx LIMIT 2""",
-            arrayOf(noteId, start.toString(), end.toString(), middle.toString(), middle.toString()),
-        ).use { cursor ->
-            buildList {
-                while (cursor.moveToNext()) {
-                    val tokens = TranscriptJson.decodeTokens(cursor.getString(2))
-                    val decoded = DecodedWindow(cursor.getLong(0), null, null, tokens)
-                    val words = WordBuilder.build(decoded, cursor.getInt(1)).filter { (it.startMs + it.endMs) / 2 in start until end }
-                    if (words.isEmpty() || words.any { it.confidence == null || Doubt.isDoubtful(it) }) continue
-                    val overlap = minOf(end, words.last().endMs) - maxOf(start, words.first().startMs)
-                    val union = maxOf(end, words.last().endMs) - minOf(start, words.first().startMs)
-                    if (overlap >= SpeechTuning.REVIEW_MIN_TIME_OVERLAP * union) {
-                        val reading = words.joinToString(" ") { it.text }
-                        TextWords.lexicalRange(reading, 0, reading.length)?.let { add(reading.substring(it)) }
-                    }
-                }
-            }
-        }
-    }
-
     private fun storedWindow(c: Cursor) = StoredWindow(
         id = c.long("id"), noteId = c.string("note_id"), index = c.int("idx"),
         ownStartMs = c.long("own_start"), ownEndMs = c.long("own_end"),
@@ -852,6 +823,86 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         indexParagraph(second.id)
         refreshTitle(this, second.noteId)
         EditResult.Saved(paragraphsIn(this, "id IN (?,?)", listOf(first.id.toString(), second.id.toString())))
+    }
+
+    /**
+     * Marks doubtful source words overlapping [charStart]..<[charEnd] in [id] as reviewed without modifying the
+     * paragraph's text, original recognizer text or edited flag. Returns an opaque [ConfirmUndo] receipt for Undo.
+     */
+    fun confirmDoubt(id: Long, revision: Long, charStart: Int, charEnd: Int): EditResult = edit {
+        val paragraph = paragraphsIn(this, "id=?", listOf(id.toString())).firstOrNull()
+        editable(this, paragraph, revision)?.let { return@edit it }
+        paragraph!!
+        val source = paragraph.sourceWords() ?: return@edit EditResult.Saved(listOf(paragraph))
+        val previousJson = paragraph.wordsJson ?: return@edit EditResult.Saved(listOf(paragraph))
+        val indices = doubtfulSourceIndicesIn(paragraph, source, charStart, charEnd)
+        if (indices.isEmpty()) return@edit EditResult.Saved(listOf(paragraph))
+        val updated = source.mapIndexed { index, word -> if (index in indices) word.copy(reviewed = true) else word }
+        execSQL("UPDATE paragraphs SET words=?,revision=revision+1 WHERE id=?",
+            arrayOf<Any>(TranscriptJson.encodeWords(updated), paragraph.id))
+        val stored = paragraphsIn(this, "id=?", listOf(id.toString()))
+        val receipt = ConfirmUndo(listOf(ConfirmUndo.Row(paragraph.id, previousJson, stored.single().revision)))
+        EditResult.Saved(stored, confirmUndo = receipt)
+    }
+
+    /** Marks every doubtful word in all visible paragraphs of [noteId] as reviewed in one undoable transaction. */
+    fun confirmAllDoubt(noteId: String): EditResult = edit {
+        val state = noteState(this, noteId) ?: return@edit EditResult.Missing
+        if (state != NoteState.READY) return@edit EditResult.NotEditable
+        val rows = paragraphsIn(this, "note_id=? AND hidden=0", listOf(noteId))
+        val undoRows = ArrayList<ConfirmUndo.Row>()
+        val changedIds = ArrayList<String>()
+        for (paragraph in rows) {
+            val source = paragraph.sourceWords() ?: continue
+            val previousJson = paragraph.wordsJson ?: continue
+            if (source.none { Doubt.isDoubtful(it) }) continue
+            val updated = source.map { if (Doubt.isDoubtful(it)) it.copy(reviewed = true) else it }
+            execSQL("UPDATE paragraphs SET words=?,revision=revision+1 WHERE id=?",
+                arrayOf<Any>(TranscriptJson.encodeWords(updated), paragraph.id))
+            undoRows += ConfirmUndo.Row(paragraph.id, previousJson, paragraph.revision + 1)
+            changedIds += paragraph.id.toString()
+        }
+        if (changedIds.isEmpty()) return@edit EditResult.Saved(emptyList())
+        val placeholders = changedIds.joinToString(",") { "?" }
+        val stored = paragraphsIn(this, "id IN ($placeholders)", changedIds)
+        EditResult.Saved(stored, confirmUndo = ConfirmUndo(undoRows))
+    }
+
+    /** Restores word-review flags cleared by [confirmDoubt] or [confirmAllDoubt] while revisions still match. */
+    fun undoConfirmDoubt(undo: ConfirmUndo): EditResult = edit {
+        if (undo.rows.isEmpty()) return@edit EditResult.Saved(emptyList())
+        for (row in undo.rows) {
+            val current = paragraphsIn(this, "id=?", listOf(row.id.toString())).singleOrNull()
+            editable(this, current, row.resultingRevision)?.let { return@edit it }
+        }
+        val ids = ArrayList<String>(undo.rows.size)
+        for (row in undo.rows) {
+            execSQL("UPDATE paragraphs SET words=?,revision=revision+1 WHERE id=?",
+                arrayOf<Any>(row.previousWordsJson, row.id))
+            ids += row.id.toString()
+        }
+        val placeholders = ids.joinToString(",") { "?" }
+        EditResult.Saved(paragraphsIn(this, "id IN ($placeholders)", ids))
+    }
+
+    private fun doubtfulSourceIndicesIn(paragraph: Paragraph, source: List<Word>, charStart: Int, charEnd: Int): Set<Int> {
+        if (charEnd <= charStart) return emptySet()
+        val out = HashSet<Int>()
+        if (!paragraph.edited && source.joinToString(" ") { it.text } == paragraph.text) {
+            var pos = 0
+            source.forEachIndexed { index, word ->
+                val start = pos
+                val end = pos + word.text.length
+                pos = end + 1
+                if (end > charStart && start < charEnd && Doubt.isDoubtful(word)) out += index
+            }
+        } else {
+            for (aligned in Alignment.align(source, paragraph.text)) {
+                val sourceIndex = aligned.sourceIndex ?: continue
+                if (aligned.end > charStart && aligned.start < charEnd && aligned.doubtful) out += sourceIndex
+            }
+        }
+        return out
     }
 
     private fun Paragraph.content() = ParagraphContent(text, sourceText, sourceWords(), startMs, endMs, edited)

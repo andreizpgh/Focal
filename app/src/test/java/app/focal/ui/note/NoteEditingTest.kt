@@ -57,6 +57,14 @@ class ReadingChoicesTest {
         })
         assertEquals(listOf("cale\u0301"), nearbySpellings(listOf(ui), ui.unclearSpans().single()))
     }
+
+    @Test fun manualEditsOnConfidentWordsAreAlsoReusedAsSuggestions() {
+        val source = listOf("Вчера", "ждали", "семен", "дома.").mapIndexed { i, text ->
+            Word(text, i * 100L, i * 100L + 90, 0.96, false, 0)
+        }
+        val saved = reviewWording(source, Alignment.align(source, "Вчера ждали Семёна дома."))
+        assertEquals(listOf(ReviewWording("семен", "Семёна")), saved)
+    }
 }
 
 class FindStateTest {
@@ -93,6 +101,12 @@ class NoteFormatTest {
         assertEquals("3:08", NoteTimes.clock(188_400))
         assertEquals("12:04", NoteTimes.clock(724_000))
         assertEquals("1:02:03", NoteTimes.clock(3_723_000))
+    }
+
+    @Test fun playbackSpeedLabelsFormatStandardSteps() {
+        assertEquals("1×", speedLabel(1f))
+        assertEquals("1.5×", speedLabel(1.5f))
+        assertEquals("2×", speedLabel(2f))
     }
 
     @Test fun theAdjustablePlayerMovesFiveSecondsPerStep() {

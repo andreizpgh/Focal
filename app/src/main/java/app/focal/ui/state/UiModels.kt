@@ -422,6 +422,7 @@ data class PlaybackSession(
     val noteId: String? = null,
     val playing: Boolean = false,
     val durationMs: Long = 0,
+    val speed: Float = 1f,
 )
 
 enum class ThemeMode(val key: String) {

@@ -31,7 +31,7 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
     private val failed: (String) -> Unit = { report(R.string.error_playback) }
 
     val session: StateFlow<PlaybackSession> = player.playback
-        .map { PlaybackSession(it.noteId, it.isPlaying, it.durationMs) }
+        .map { PlaybackSession(it.noteId, it.isPlaying, it.durationMs, it.speed) }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackSession())
 
@@ -63,6 +63,13 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
 
     fun pause() = player.pause()
 
+    /** Cycles playback speed through 1× → 1.5× → 2× → 1×. */
+    fun cycleSpeed() {
+        val current = player.playback.value.speed
+        val index = SPEEDS.indexOfFirst { kotlin.math.abs(it - current) < 0.05f }
+        player.setSpeed(SPEEDS[(index + 1) % SPEEDS.size])
+    }
+
     /** Stops playback of [noteId] only (its audio is being removed, or it was deleted). */
     fun stopNote(noteId: String) = player.stopNote(noteId)
 
@@ -79,6 +86,7 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
     companion object {
         /** Playback starts this long before the tapped word. */
         const val PREROLL_MS = 500L
+        val SPEEDS = floatArrayOf(1f, 1.5f, 2f)
     }
 }
 

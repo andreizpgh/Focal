@@ -136,17 +136,44 @@ class NoteStoreTest {
         assertEquals("Write about local speech recognition.", app.focal.core.Title.remainder(note.preview))
     }
 
-    @Test fun reviewOffersOnlyASecondReadingCoveringTheSelectedAudio() {
+    @Test fun confirmDoubtAndConfirmAllClearUnderlinesWithoutChangingTextAndCanBeUndone() {
         val id = store.create()
-        savedAudio(store, id, 10_000)
-        commit(store, id, plan(0, 0, 6_000, EndKind.PAUSE), tokens(
-            Triple("First", 1.0, 0.3), Triple("harbour.", 6.1, 0.3),
-        ))
-        commit(store, id, plan(1, 6_000, 10_000, EndKind.FINAL, EndKind.PAUSE), tokens(Triple("Harber", 0.35, 0.3)))
-        assertEquals(listOf("harbour"), store.overlapReadings(id, 6_100, 6_400))
-        assertTrue(store.overlapReadings(id, 1_000, 1_300).isEmpty())
-        assertTrue(store.overlapReadings(id, 6_300, 6_650).isEmpty())
-        assertEquals("First harbour.", store.windows(id).first().rawText)
+        savedAudio(store, id, 12_000)
+        val firstTokens = speech("Check harbor lights.").map { if (it.text.trim() == "harbor") it.copy(logProb = -1.2) else it }
+        val secondTokens = speech("Meet Sam later.").map { if (it.text.trim() == "Sam") it.copy(logProb = -1.2) else it }
+        commit(store, id, plan(0, 0, 6_000, EndKind.PAUSE), firstTokens)
+        commit(store, id, plan(1, 6_000, 12_000, EndKind.FINAL, EndKind.PAUSE), secondTokens)
+        assertTrue(store.markReady(id))
+
+        val before = store.paragraphs(id)
+        val p1 = before[0]
+        val harborStart = p1.text.indexOf("harbor")
+        val confirmed = store.confirmDoubt(p1.id, p1.revision, harborStart, harborStart + "harbor".length) as EditResult.Saved
+        val updated = confirmed.paragraphs.single()
+        assertEquals(p1.text, updated.text)
+        assertEquals(p1.sourceText, updated.sourceText)
+        assertFalse(updated.edited)
+        assertTrue(updated.sourceWords()!!.first { it.text == "harbor" }.reviewed)
+        assertEquals(EditResult.Conflict, store.confirmDoubt(p1.id, p1.revision, harborStart, harborStart + "harbor".length))
+
+        // Undo restores the doubtful flag cleanly.
+        val undone = store.undoConfirmDoubt(confirmed.confirmUndo!!) as EditResult.Saved
+        assertFalse(undone.paragraphs.single().sourceWords()!!.first { it.text == "harbor" }.reviewed)
+        assertEquals(EditResult.Conflict, store.undoConfirmDoubt(confirmed.confirmUndo!!))
+
+        // Confirm all marks both paragraphs reviewed and can be undone atomically.
+        val allConfirmed = store.confirmAllDoubt(id) as EditResult.Saved
+        assertEquals(2, allConfirmed.paragraphs.size)
+        assertTrue(store.paragraphs(id).flatMap { it.sourceWords()!! }.filter { (it.confidence ?: 1.0) < 0.5 }.all { it.reviewed })
+        val allUndone = store.undoConfirmDoubt(allConfirmed.confirmUndo!!) as EditResult.Saved
+        assertEquals(2, allUndone.paragraphs.size)
+        assertTrue(store.paragraphs(id).flatMap { it.sourceWords()!! }.filter { (it.confidence ?: 1.0) < 0.5 }.none { it.reviewed })
+
+        // An intervening text edit makes an older confirm undo stale.
+        val again = store.confirmAllDoubt(id) as EditResult.Saved
+        val currentFirst = store.paragraphs(id).first()
+        store.editParagraph(currentFirst.id, currentFirst.revision, "Check harbour lights.")
+        assertEquals(EditResult.Conflict, store.undoConfirmDoubt(again.confirmUndo!!))
     }
 
     @Test fun windowsCommitRawResultsAndParagraphsTogether() {

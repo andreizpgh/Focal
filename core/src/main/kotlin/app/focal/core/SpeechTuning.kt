@@ -63,8 +63,6 @@ object SpeechTuning {
     const val LONG_PAUSE_MS = 3_000L
     /** A long pause can separate unpunctuated thoughts once the current one has this many words. */
     const val UNPUNCTUATED_MIN_WORDS = 12
-    /** A capitalized restart after a gap this long can supply a missing period. */
-    const val SENTENCE_RESTART_MS = 3_000L
     /** Provisional. */
     const val PARAGRAPH_MIN_SENTENCES = 2
     /** Provisional: a paragraph closes at the first sentence end once it holds this many words (some six lines on a phone). */
@@ -85,8 +83,6 @@ object SpeechTuning {
     const val TITLE_MIN_CHARS = 12
 
     // Doubtful words (provisional GO): min content-token probability below the threshold.
-    /** Provisional intersection over union for two timed readings offered for manual review. */
-    const val REVIEW_MIN_TIME_OVERLAP = 0.6
     const val DOUBT_ENABLED = true
     const val DOUBT_THRESHOLD = 0.5
 }

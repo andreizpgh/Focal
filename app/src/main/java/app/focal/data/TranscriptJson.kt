@@ -8,7 +8,7 @@ import app.focal.core.Word
  *
  * Tokens: `[[text, startSec, durationSec, logProb|null], ...]` exactly as the recognizer returned them.
  * Words: `[[text, startMs, endMs, confidence|null, flags, window], ...]`, flags bit 0 = punctuation only,
- * bit 1 = `<unk>` inside the word. Non-finite numbers are stored as null.
+ * bit 1 = `<unk>` inside the word, bit 2 = confirmed as reviewed by the user. Non-finite numbers are stored as null.
  */
 internal object TranscriptJson {
     fun encodeTokens(tokens: List<AsrToken>): String = buildString {
@@ -37,7 +37,7 @@ internal object TranscriptJson {
             append(','); append(word.startMs)
             append(','); append(word.endMs)
             append(','); number(word.confidence)
-            append(','); append((if (word.punctOnly) 1 else 0) or (if (word.unknownPiece) 2 else 0))
+            append(','); append((if (word.punctOnly) 1 else 0) or (if (word.unknownPiece) 2 else 0) or (if (word.reviewed) 4 else 0))
             append(','); append(word.window)
             append(']')
         }
@@ -48,7 +48,7 @@ internal object TranscriptJson {
         require(row.size == 6) { "Malformed word" }
         val flags = (row[4] as Double).toInt()
         Word(row[0] as String, (row[1] as Double).toLong(), (row[2] as Double).toLong(), row[3] as Double?,
-            flags and 1 != 0, (row[5] as Double).toInt(), flags and 2 != 0)
+            flags and 1 != 0, (row[5] as Double).toInt(), flags and 2 != 0, flags and 4 != 0)
     }
 
     private fun StringBuilder.number(value: Double?) {

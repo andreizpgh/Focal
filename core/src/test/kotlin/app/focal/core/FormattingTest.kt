@@ -26,35 +26,22 @@ class FormattingTest {
     }
 
     @Test
-    fun aLongCapitalizedRestartSuppliesAPeriodAcrossWindowsAndSurvivesRecovery() {
-        val first = DecodedWindow(0, null, null, listOf(AsrToken(" Вернусь", 0.0, 0.3), AsrToken(" завтра", 0.4, 0.3)))
-        val second = DecodedWindow(4_000, null, null, listOf(AsrToken(" Нужно", 0.0, 0.3), AsrToken(" успеть", 0.4, 0.3)))
+    fun formatterDoesNotInsertGuessedPunctuationAcrossPausesOrClauses() {
+        val first = DecodedWindow(0, null, null, listOf(AsrToken(" Я", 0.0, 0.2), AsrToken(" думаю", 0.3, 0.2)))
+        val second = DecodedWindow(4_000, null, null, listOf(AsrToken(" что", 0.0, 0.2), AsrToken(" Москву", 0.3, 0.3)))
         val batch = Formatter.format(listOf(first, second))
-        assertEquals("Вернусь завтра.\n\nНужно успеть", batch.copyText)
-        assertEquals("завтра", batch.rawWords[1].text)
-        val stored = TranscriptAssembler().append(first, 0).paragraphs.last()
-        val recovered = TranscriptAssembler(openParagraph = stored).append(second, 1)
-        assertEquals(batch.words, recovered.paragraphs.flatten())
-        assertEquals(batch.paragraphs.size, recovered.paragraphs.size)
-        val short = Formatter.format(listOf(first, second.copy(audioStartMs = 1_000)))
-        assertEquals("завтра", short.words[1].text)
+        assertEquals("Я думаю что Москву", batch.copyText)
+        assertEquals(batch.rawWords, batch.words)
     }
 
     @Test
-    fun russianClauseCuesAddOnlyTheMissingCommaAndKeepTheRawAudioWords() {
-        fun window(at: Long, text: String) = DecodedWindow(at, null, null, text.split(' ').mapIndexed { i, word ->
-            AsrToken(" $word", 0.3 * i, 0.2)
-        })
-        val first = window(0, "Я думаю")
-        val second = window(600, "что важно чтобы ответ пришёл вовремя.")
-        val result = Formatter.format(listOf(first, second))
-        assertEquals("Я думаю, что важно, чтобы ответ пришёл вовремя.", result.copyText)
-        assertEquals("думаю", result.rawWords[1].text)
-        val open = TranscriptAssembler().append(first, 0).paragraphs.last()
-        assertEquals(result.words, TranscriptAssembler(openParagraph = open).append(second, 1).paragraphs.flatten())
-        val other = "Я думаю, что-то изменилось."
-        assertEquals(other, Formatter.format(listOf(window(0, other))).copyText)
-        assertEquals("Еду в Москву", Formatter.format(listOf(window(0, "Еду в"), window(5_000, "Москву"))).copyText)
+    fun reviewedWordClearsDoubtWithoutChangingText() {
+        val doubtful = Word("затиркой", 0, 400, 0.3, punctOnly = false, window = 0)
+        assertTrue(Doubt.isDoubtful(doubtful))
+        val confirmed = doubtful.copy(reviewed = true)
+        assertTrue(!Doubt.isDoubtful(confirmed))
+        assertTrue(!Alignment.align(listOf(confirmed), "затиркой").single().doubtful)
+        assertTrue(!Alignment.align(listOf(confirmed), "затиркой,").single().doubtful)
     }
 
     @Test
