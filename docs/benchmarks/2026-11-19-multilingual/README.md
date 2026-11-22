@@ -1,26 +1,23 @@
-# 25-Language Recognition & Review Benchmark
+# Recognition and review across 25 languages
 
-> **TL;DR:** Parakeet Ultra INT8 was evaluated across all 25 supported European languages (182 short recordings, 50 long continuous recordings totaling 177.1 minutes, and 7 controls).
->
-> - **Word accuracy varies widely by language:** strong on major Western/Slavic languages (1.7–8.1% WER on short clips for Portuguese, Russian, Italian, Spanish, English, French), weaker on smaller languages (up to ~43% on Greek and Latvian).
-> - **Doubtful-word underlines are high-precision, low-recall:** **89.5%** of underlined words were genuine errors (256 / 286), catching **18.6%** of all visible word mismatches.
-> - **Extra punctuation models did not earn their weight:** a 268 MB multilingual punctuation model (*Horizon*) tied Focal's raw ASR punctuation on the holdout (301 vs 301 mark errors across 7,044 gaps; helped in 4 languages, hurt in 3, tied in 18), and a tiny timing-only classifier abstained. **Product decision:** ship Parakeet Ultra's own punctuation intact and rely on fast manual review.
+Parakeet Ultra INT8 was tested across all 25 supported European languages using 182 short recordings, 50 long continuous recordings (177.1 minutes total), and 7 controls.
 
----
+Key findings:
+- **Accuracy varies widely by language.** Short-clip WER ranged from 1.7–8.1% on Portuguese, Russian, Italian, Spanish, English, and French up to ~43% on Greek and Latvian.
+- **Doubtful-word underlines are precise but sparse.** 89.5% of underlined words were real errors (256 of 286), catching 18.6% of all visible word mismatches.
+- **Extra punctuation models did not beat Parakeet Ultra.** A 268 MB multilingual punctuation model (*Horizon*) tied Focal's raw ASR punctuation on the holdout (301 vs 301 mark errors across 7,044 gaps: helped in 4 languages, hurt in 3, tied in 18), and a small pause-timing classifier abstained. Focal keeps Parakeet Ultra's own punctuation and relies on manual review.
 
-## What was compared
+## Models compared
 
-| System | Description | Shipped in APK? |
+| System | Description | Shipped in APK |
 | --- | --- | --- |
-| **Focal** | Parakeet Ultra INT8 + deterministic word-preserving formatter (no synthetic punctuation) | **Yes** |
+| **Focal** | Parakeet Ultra INT8 with deterministic word-preserving formatting (no synthetic punctuation) | Yes |
 | **Timing** | 56-byte (7-weight) pause-duration classifier tested for missing sentence marks | No (abstained on holdout) |
-| **Horizon** | 268 MB INT8 multilingual punctuation model (+ 34 MB tokenizer) tested at `0.90` confidence fill | No (net tie, heavy RAM/APK cost) |
-
----
+| **Horizon** | 268 MB INT8 multilingual punctuation model (+ 34 MB tokenizer) tested at `0.90` confidence fill | No (net tie, high RAM/size cost) |
 
 ## Held-out summary
 
-Across 84 short holdout clips, Focal made **284 word edits in 1,824 reference words (15.6% WER)**. Across the combined short and eligible long holdouts (**7,044** scoreable word boundaries), Focal and *Horizon* tied at **301 mark errors each** — filling high-confidence gaps fixed 5 exact marks, introduced 5 new errors at previously correct gaps, and changed 4 gaps that remained wrong.
+Across 84 short holdout clips, Focal made 284 word edits in 1,824 reference words (15.6% WER). Across the combined short and eligible long holdouts (7,044 scoreable gaps), Focal and *Horizon* tied at 301 mark errors each: filling high-confidence gaps fixed 5 exact marks, introduced 5 errors at previously correct gaps, and changed 4 gaps that remained wrong.
 
 | Split | Recordings | Scored gaps | Focal mark errors | Timing (0.90) | Timing (dev cutoff) | Horizon (0.90) | Horizon fixed / introduced |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -32,13 +29,11 @@ Across 84 short holdout clips, Focal made **284 word edits in 1,824 reference wo
 | Maltese floor speech | 2 | 151 | 9 | 9 | 9 | 9 | 0 / 0 |
 | Supplemental recordings | 19 | 7,657 | 371 | 371 | 371 | 364 | 9 / 2 |
 
-At its development-selected cutoff (`1.00`, abstain), *Timing* left all 301 holdout errors unchanged. On sentence boundaries specifically, Focal missed 41 reference sentence ends and added 59; *Horizon* missed 41 and added 66.
-
----
+At its development-selected cutoff (`1.00`, abstain), *Timing* left all 301 holdout errors unchanged. On sentence boundaries, Focal missed 41 reference ends and added 59; *Horizon* missed 41 and added 66.
 
 ## Per-language breakdown
 
-Each row reports the independent short holdout test, whether that language's primary long recording met the reference-agreement bar (`≥ 70%` lexical agreement with uploader captions or publisher text), punctuation errors across that language's holdout, and doubtful-word underline precision.
+Each row shows the independent short holdout test, whether that language's primary long recording met the reference-agreement bar (`≥ 70%` lexical agreement with uploader captions or publisher text), punctuation mark errors across that language's holdout, and underline precision.
 
 | Language | Short clips | Short WER (errors / words) | Long holdout | Focal → Horizon mark errors | Fixed / introduced | True errors / underlined |
 | --- | ---: | ---: | --- | ---: | ---: | ---: |
@@ -68,32 +63,24 @@ Each row reports the independent short holdout test, whether that language's pri
 | Swedish | 4 | 28.4% (25/88) | eligible | 7 → 7 | 0 / 0 | 14 / 20 |
 | Ukrainian | 2 | 4.2% (1/24) | eligible | 15 → 14 | 1 / 0 | 11 / 12 |
 
-**Coverage notes:**
-- Primary long recordings for 8 languages fell below the 70% caption-agreement filter; 19 supplemental recordings (16 of them ≥ 3 min passing the check) bring total long-recording coverage to **23 of 25 languages** (Latvian and Maltese remained below 70%; on publisher-aligned Maltese text, the recognizer made 315 word edits in 670 words).
-- Highest short-clip WERs were Latvian (43.3%) and Greek (42.6%), unchanged even when stripping decomposable diacritics. Because clip counts per language are small (2–4 clips), speaker identity and recording quality strongly influence individual rows.
+Primary long recordings for 8 languages fell below the 70% caption-agreement filter. Adding 19 supplemental recordings (16 of them ≥ 3 minutes passing the check) brought long-recording coverage to 23 of 25 languages; Latvian and Maltese stayed below 70% (on publisher-aligned Maltese text, the recognizer made 315 word edits in 670 words). Short-clip WERs for Latvian (43.3%) and Greek (42.6%) did not change when stripping decomposable diacritics. Because clip counts per language are small (2–4 clips), speaker and audio quality strongly affect individual rows.
 
----
+## Review behavior
 
-## What the reviewer actually sees
+- **Underlines:** 89.5% precision (256 of 286 underlines differed from the reference), covering 18.6% of visible word mismatches (256 of 1,378). Tightening the threshold below `0.35` gave 64 mismatches in 69 flags. Omitted words have no displayed token to underline.
+- **Spelling hints:** Nearby-spelling suggestions appeared on 8 of 227 flagged spans (2 helpful, 6 tied, 0 harmful). Window-overlap alternate readings fired on 4 spans (1 helpful, 1 tied, 2 harmful) and were removed in 0.5.0.
+- **Paragraph breaks:** 16 of 101 automatic splits fell inside a reference sentence. Against publisher paragraphing (21 readings), 22 breaks matched, 122 were extra, and 65 were missed. Readers can split or join paragraphs in place.
+- **Scripts and typography:** The bundled Inter subset covered all 210 distinct NFC letters and combining marks seen in the evaluation. Regional rules handle Greek semicolon question marks, Spanish inverted marks, and combining accents without altering recognized words.
 
-- **Doubtful-word underlines:** **89.5% precision** (256 / 286 underlines differed from the reference), catching **18.6%** of all visible word mismatches (256 / 1,378). Tightening the threshold below `0.35` raised precision to 92.8% (64 / 69). Deleted words have no displayed token to underline.
-- **In-note spelling hints:** Nearby-spelling suggestions appeared on 8 of 227 flagged spans (**2 helpful, 6 tied, 0 harmful**). By contrast, window-overlap alternate readings fired on only 4 spans (**1 helpful, 1 tied, 2 harmful**) and were removed in `0.5.0`.
-- **Paragraphing:** 16 of 101 automatic paragraph splits fell inside a reference sentence. Against publisher paragraphing (21 readings), 22 breaks matched, 122 were extra, and 65 were missed — readers can press Enter or Backspace in place to adjust breaks.
-- **Regional typography & scripts:** The bundled Inter font subset covered all 210 distinct NFC letters and combining marks seen across the 25 languages, and regional rules handle Greek semicolon question marks, Spanish inverted marks, and combining accents without altering recognized words.
+## Emulator resource probe
 
----
-
-## Android emulator resource probe (Horizon vs. Russian-only)
-
-Measured on a two-core x86-64 Android emulator using ONNX Runtime 1.28.2 (pre-tokenized windows, excluding ASR and UI; physical ARM phone latency, memory, heat, and battery remain unmeasured).
+Measured on a two-core x86-64 Android emulator using ONNX Runtime 1.28.2 on pre-tokenized windows (excluding ASR and UI; physical ARM phone latency, memory, heat, and battery remain unmeasured).
 
 | Russian control recording | Words | Scored gaps | Focal → Horizon errors | Model load | Warm median / p95 | Peak process RSS |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Listening monologue | 1,006 | 943 | 104 → 89 | 2.49 s | 2.37 / 3.94 s | 387.6 MiB |
 | Complete classroom dictation | 638 | 307 | 20 → 19 | 1.13 s | 1.95 / 2.23 s | 386.5 MiB |
 
-For comparison, the 29.5 MiB [Russian-only punctuation model](../2026-11-19-punctuation/README.md) scored 101 and 20 on the same two recordings. The 7-weight timing classifier ran in 0.012 ms median (126.7 MiB ART RSS).
+On the same two recordings, the 29.5 MiB [Russian-only punctuation model](../2026-11-19-punctuation/README.md) scored 101 and 20. The 7-weight timing classifier ran in 0.012 ms median (126.7 MiB ART RSS).
 
----
-
-[Methodology, sources & reader protocol](method.md) · Raw JSON results and per-recording dumps are archived in Git at tag `v0.4.0` (`cd859d6`).
+[Method, sources, and reader protocol](method.md) · Raw JSON results and per-recording dumps are archived in Git at tag `v0.4.0` (`cd859d6`).
