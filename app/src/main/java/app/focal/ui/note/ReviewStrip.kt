@@ -106,6 +106,20 @@ internal fun ReviewStrip(
     }
 }
 
+/** Right-aligned Done pill riding above the keyboard while renaming a note title, matching Edit/Review's [ReviewStrip]. */
+@Composable
+internal fun RenameStrip(onDone: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = ReviewStripMetrics.height),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spacer(Modifier.weight(1f))
+        PrimaryReviewPill(primary = ReviewPrimary.Done, onClick = onDone)
+    }
+}
+
 @Composable
 private fun ListenPill(listening: Boolean, onClick: () -> Unit) {
     val colors = FocalTheme.colors

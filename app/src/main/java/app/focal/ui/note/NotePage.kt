@@ -81,6 +81,7 @@ import app.focal.ui.design.LocalWindowLayout
 import app.focal.ui.design.columnInset
 import app.focal.ui.library.LibraryDates
 import app.focal.ui.library.LibraryModels
+import app.focal.ui.library.RenameController
 import app.focal.ui.library.noteDock
 import app.focal.ui.shell.BackEase
 import app.focal.ui.shell.Destination
@@ -229,6 +230,7 @@ fun NotePage(
     val latestNote by rememberUpdatedState(note)
     val focus = page.focus
     val find = page.find
+    val renameController = remember { RenameController() }
     val listFade = remember { Animatable(1f) }
     val scroller = remember(listState) { NoteScroller(listState, listFade) }
     // A far jump cut short leaves the text faded: it comes back on `fade` (NoteScroller.restoresFade).
@@ -461,7 +463,7 @@ fun NotePage(
             (at ?: playingAt)?.let { focusField(it) }
         }
     }
-    fun exitEdit() {
+    fun exitEdit(hideKeyboard: Boolean = true) {
         // A clip Edit was playing ends with it (the player strip stays away: it was never the page's playback).
         if (page.listening) {
             page.listening = false
@@ -474,8 +476,10 @@ fun NotePage(
         page.editMenu = false
         focus.editingId = null
         session.end()
-        keyboard?.hide()
-        focusManager.clearFocus()
+        if (hideKeyboard) {
+            keyboard?.hide()
+            focusManager.clearFocus()
+        }
     }
     val saveFailed = stringResource(R.string.feedback_save_failed)
     // Done, Esc and Back store everything shown, as the writes before them left it: an undo or redo still writing (a
@@ -1057,7 +1061,22 @@ fun NotePage(
 
     val onTap: (ParagraphUi, Int, IntRange?) -> Unit = { paragraph, offset, word ->
         when {
-            find.open || page.renaming -> Unit
+            find.open -> Unit
+            page.renaming -> {
+                // Symmetric with tapping the title from Edit: commit the title and jump directly into body editing.
+                renameController.commit()
+                if (canEdit) {
+                    val unclearHit = word?.let { w ->
+                        unclear.firstOrNull { it.paragraphId == paragraph.id && w.first in it.start until it.end }
+                    }
+                    val target = unclearHit?.let { CaretAt(it.paragraphId, it.start, it.end) }
+                        ?: wordOrCaret(paragraph.id, offset, word)
+                    enterEdit(target, review = false)
+                } else {
+                    keyboard?.hide()
+                    focusManager.clearFocus()
+                }
+            }
             page.editing -> focusField(wordOrCaret(paragraph.id, offset, word), refresh = false, commit = true)
             canEdit -> {
                 val unclearHit = word?.let { w ->
@@ -1176,6 +1195,17 @@ fun NotePage(
         } else null,
         rows = when {
             find.open -> { { FindRows(find, findActions) } }
+            page.renaming -> {
+                {
+                    RenameStrip(
+                        onDone = {
+                            renameController.commit()
+                            keyboard?.hide()
+                            focusManager.clearFocus()
+                        },
+                    )
+                }
+            }
             reviewStripShown -> {
                 {
                     ReviewStrip(
@@ -1326,14 +1356,16 @@ fun NotePage(
             // Space acts once; its repeats go with it, so no focused control sees half of the press.
             .shortcutKeys(shortcuts)
             .then(
-                // While the title is renamed, a tap anywhere else commits it and does nothing else (spec 5.5).
+                // While renaming the title, tapping blank paper/meta below the title commits and hides the keyboard;
+                // tapping a paragraph is handled directly by ParagraphText -> onTap to commit and switch straight to Edit.
                 if (!page.renaming) Modifier else Modifier.pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val down = event.changes.firstOrNull { it.pressed && !it.previousPressed } ?: continue
-                            if (down.position.y > page.titleBottom) {
-                                event.changes.forEach { it.consume() }
+                            val event = awaitPointerEvent(PointerEventPass.Final)
+                            val up = event.changes.firstOrNull { !it.pressed && it.previousPressed } ?: continue
+                            if (!up.isConsumed && up.position.y > page.titleBottom) {
+                                renameController.commit()
+                                keyboard?.hide()
                                 focusManager.clearFocus()
                             }
                         }
@@ -1407,8 +1439,26 @@ fun NotePage(
                                     head = head,
                                     titleInks = focus.titleInks,
                                     renaming = page.renaming,
-                                    canRename = mode == NoteMode.Reading || mode == NoteMode.Playing,
-                                    onRename = { page.renaming = true },
+                                    canRename = mode == NoteMode.Reading || mode == NoteMode.Playing || mode == NoteMode.Editing,
+                                    onRename = {
+                                        if (page.editing) {
+                                            write {
+                                                while (true) {
+                                                    val before = session.field()
+                                                    if (!session.save()) {
+                                                        if (session.failures >= 2) scope.launch { bottom.feedback.show(saveFailed) }
+                                                        return@write
+                                                    }
+                                                    if (life.gone) return@write
+                                                    if (session.field() == before) break
+                                                }
+                                                exitEdit(hideKeyboard = false)
+                                                page.renaming = true
+                                            }
+                                        } else {
+                                            page.renaming = true
+                                        }
+                                    },
                                     onCommitRename = { text ->
                                         page.renaming = false
                                         if (text != note.title || note.titleIsCustom) actions.rename(text)
@@ -1420,6 +1470,7 @@ fun NotePage(
                                     entrance = landing,
                                     modifier = Modifier.animateItem(fadeInSpec = null, placementSpec = placement, fadeOutSpec = null),
                                     onHeadLines = { page.headLines = it },
+                                    renameController = renameController,
                                 )
                                 is NoteItem.Text -> ParagraphItem(
                                     item, page, placement,
@@ -1464,17 +1515,17 @@ fun NotePage(
             }
         }
         // The top fade under the bar; Find's is shorter (spec 2.6).
-        PaperTopFade(topBar, Modifier.fillMaxSize().zIndex(FADES_Z), alpha = { (1 - findT.value) * reveal.chrome() })
+        PaperTopFade(topBar, Modifier.fillMaxSize().zIndex(FADES_Z), alpha = { (1 - findT.value) * reveal.chrome() * reveal.paperFade() })
         // In a short window Find's fades are the 16 dp soft edges: 48 dp ones would cover the little text a landscape
         // keyboard leaves between the status bar and the rows (spec 5.8, 5.14).
         val findFade = if (short.value) FocalLayout.topFade else FindFade
-        PaperTopFade(0.dp, Modifier.fillMaxSize().zIndex(FADES_Z), fade = findFade, alpha = { findT.value * reveal.chrome() })
+        PaperTopFade(0.dp, Modifier.fillMaxSize().zIndex(FADES_Z), fade = findFade, alpha = { findT.value * reveal.chrome() * reveal.paperFade() })
         BottomFade(
             bottom,
             Modifier.fillMaxSize().zIndex(FADES_Z).graphicsLayer {
-                alpha = (if (reviewStripShown) 1f else 1 - editT.value) * reveal.chrome()
+                alpha = (if (reviewStripShown || page.renaming) 1f else 1 - editT.value) * reveal.chrome() * reveal.paperFade()
             },
-            keyboard = find.open || reviewStripShown,
+            keyboard = find.open || reviewStripShown || page.renaming,
             keyboardFade = if (short.value) FocalLayout.topFade else FocalLayout.keyboardFade,
         )
         JumpPill(

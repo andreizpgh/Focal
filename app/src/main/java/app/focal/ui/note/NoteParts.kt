@@ -274,13 +274,13 @@ internal fun caretScroll(top: Float, bottom: Float, bandTop: Float, bandBottom: 
 /** A bar that is out of play (the top bar under Find, the bar Edit replaced): never read, focused or touched. */
 internal fun Modifier.inertBar(on: Boolean): Modifier = inert(on).untouchable(on)
 
-/** T7, T7b: paragraphs on the first screen fade in top-to-bottom from +110 ms, 24 ms apart, right behind the expanding card. */
+/** T7, T7b: paragraphs on the first screen fade in top-to-bottom from +120 ms, 24 ms apart, right behind the title. */
 internal fun entranceDelay(landing: Boolean, index: Int, count: Int): Long? {
     if (!landing || index >= FocalTiming.STAGGER_MAX) return null
     return LIVE_ENTRANCE_BASE_MS + index * FocalTiming.RACK_STAGGER_MS
 }
 
-private const val LIVE_ENTRANCE_BASE_MS = 110L
+private const val LIVE_ENTRANCE_BASE_MS = 120L
 
 /** The paragraph actions' labels (spec 8.2). */
 internal data class ParagraphLabels(val play: String, val edit: String, val copy: String, val restore: String, val playUnclear: String)

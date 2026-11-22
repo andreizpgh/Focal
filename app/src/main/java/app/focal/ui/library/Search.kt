@@ -129,15 +129,17 @@ class LibrarySearchState internal constructor(open: Boolean, results: Boolean = 
         content.animateTo(if (show && open) 1f else 0f, FocalMotion.fadeSlow())
     }
 
-    /** Closes back into the circle; [clear] then empties the query. */
+    /** Synchronized 0..1 dock-hide progress read in the draw phase while [fieldShown] is true. */
+    fun dockHideProgress(): Float = smoothstep(0.04f, 0.68f, grow.value)
+
+    /** Closes back into the circle while unveiling Record smoothly beside it; [clear] then empties the query. */
     suspend fun close(clear: () -> Unit) = coroutineScope {
         if (!open) return@coroutineScope
         open = false
+        // Record smoothly emerges behind the retracting pill as `grow` shrinks 1 -> 0 (zero abrupt pop-in).
+        dockHidden = false
         launch { content.animateTo(0f, FocalMotion.fade()) }
         grow.animateTo(0f, FocalMotion.moveUnit())
-        dockHidden = false
-        // The dock fades in on `fade` over the circle-sized field; the field leaves once it is covered.
-        Animatable(0f).animateTo(1f, FocalMotion.fade())
         // Opened again meanwhile: the field and the query are the new search's.
         if (open) return@coroutineScope
         fieldShown = false

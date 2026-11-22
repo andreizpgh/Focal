@@ -255,15 +255,54 @@ fun StageCard(
     val spoken = remember { SpokenText() }
     if (stage is StageUi.Live) Speaks(spoken) { stageDescription(stage.copy(elapsedSeconds = seconds()), dates, today) }
     val description = if (stage is StageUi.Live) null else stageDescription(stage, dates, today)
+    val shell = LocalShell.current
+    val pages = shell.pages
     val note = (stage as? StageUi.Note)?.row
     val prepare by rememberUpdatedState(actions.prepare)
-    // Another note on the card (the one before was deleted, or Undo brought it back): its title, time and text come
-    // in on `fade` instead of replacing the last ones in a single frame. The first note shown is simply there.
-    val firstNote = remember { NoteOnStage(note?.id) }
-    val arrival = remember(note?.id) { Animatable(if (note?.id == firstNote.id || reduced) 1f else 0f) }
-    LaunchedEffect(arrival) {
-        firstNote.id = null
-        if (arrival.value < 1f) arrival.animateTo(1f, FocalMotion.fade())
+    // Honest Stage-note handoff: when the Stage note is deleted on the visible library (or restored by Undo), the
+    // outgoing note clearly departs the Stage card first and the newly promoted note rises into the Stage card from
+    // below. When the library is covered (e.g. deleted from inside the Note page), snap directly with zero stutter.
+    var shownNote by remember { mutableStateOf(stage as? StageUi.Note) }
+    val swapAlpha = remember { Animatable(1f) }
+    val swapShiftDp = remember { Animatable(0f) }
+    val swapScale = remember { Animatable(1f) }
+    val incomingStageNote = stage as? StageUi.Note
+    LaunchedEffect(incomingStageNote?.row?.id) {
+        val next = incomingStageNote
+        val prev = shownNote
+        if (next == null) {
+            shownNote = null
+            swapAlpha.snapTo(1f)
+            swapShiftDp.snapTo(0f)
+            swapScale.snapTo(1f)
+            return@LaunchedEffect
+        }
+        if (prev == null || prev.row.id == next.row.id || reduced || !shown() || shell.libraryCovered) {
+            shownNote = next
+            swapAlpha.snapTo(1f)
+            swapShiftDp.snapTo(0f)
+            swapScale.snapTo(1f)
+            return@LaunchedEffect
+        }
+        // Phase 1: departing Stage note shrinks slightly and clears out of the card.
+        kotlinx.coroutines.coroutineScope {
+            launch { swapAlpha.animateTo(0f, FocalMotion.fadeFast()) }
+            launch { swapScale.animateTo(0.96f, FocalMotion.fadeFast()) }
+            launch { swapShiftDp.animateTo(-8f, FocalMotion.fadeFast()) }
+        }
+        // Phase 2: newly promoted note glides up into the Stage card.
+        shownNote = next
+        swapShiftDp.snapTo(18f)
+        swapScale.snapTo(0.98f)
+        kotlinx.coroutines.coroutineScope {
+            launch { swapAlpha.animateTo(1f, FocalMotion.fade()) }
+            launch { swapShiftDp.animateTo(0f, FocalMotion.move()) }
+            launch { swapScale.animateTo(1f, FocalMotion.move()) }
+        }
+    }
+    // Keep same-note live updates (progress, edits, fresh flag) synchronous without triggering the swap animation.
+    if (incomingStageNote != null && shownNote?.row?.id == incomingStageNote.row.id) {
+        shownNote = incomingStageNote
     }
     val clickLabel = stringResource(if (note != null) R.string.a11y_open_note else R.string.a11y_expand_recording)
     // The keys the focused card answers itself (spec 8.5), which the two-pane library leaves to it: Space on the live
@@ -335,40 +374,58 @@ fun StageCard(
                 },
                 onClick = { if (note != null) actions.open(note) else actions.expand() },
             )
-            .clip(FocalShapes.sheet)
-            .then(
-                if (stage is StageUi.Live) Modifier.sceneMaterial(FocalShapes.sheetRadius, ring = colors.stageRing)
-                else Modifier.background(colors.stageIdleSurface, FocalShapes.sheet).border(1.dp, colors.stageIdleBorder, FocalShapes.sheet),
-            )
-            // Selected: the whole card shifts a step, as a selected row's plate does on paper (`fadeFast`). No
-            // outline: a ring inside the card's edge read as a second, thinner card.
-            .drawWithContent {
-                drawContent()
-                val a = check.value
-                val veil = if (stage is StageUi.Live) colors.stageInk else colors.ink
-                if (a > 0f) drawRect(veil, alpha = StageMetrics.SELECTED_VEIL * a)
-            },
+            .clip(FocalShapes.sheet),
     ) {
-        if (shimmering) Spacer(Modifier.matchParentSize().shimmer { shimmer.value })
+        // Card surface & border hide while the morphing overlay owns the Stage card (zero phantom duplicate behind scrim).
+        Spacer(
+            Modifier
+                .matchParentSize()
+                .graphicsLayer { alpha = if (pages.hidesStage()) 0f else 1f }
+                .then(
+                    if (stage is StageUi.Live) Modifier.sceneMaterial(FocalShapes.sheetRadius, ring = colors.stageRing)
+                    else Modifier.background(colors.stageIdleSurface, FocalShapes.sheet).border(1.dp, colors.stageIdleBorder, FocalShapes.sheet),
+                ),
+        )
+        if (shimmering) Spacer(Modifier.matchParentSize().graphicsLayer { alpha = if (pages.hidesStage()) 0f else 1f }.shimmer { shimmer.value })
         when (stage) {
             is StageUi.Live -> RecordedStage { LiveStage(stage, meter, seconds) }
-            is StageUi.Note -> RecordedStage(alpha = { arrival.value }) { NoteStage(
-                stage, dates, today, actions, title, origin, shown, copyRequests = { copyRequests.intValue },
-                checked = { check.value },
-                onReadyMoment = {
-                    if (!reduced) scope.launch {
-                        delay(FocalTiming.READY_SHIMMER_DELAY_MS)
-                        shimmer.snapTo(0f)
-                        shimmering = true
-                        try {
-                            shimmer.animateTo(1f, tween(FocalMotion.readyShimmer.durationMillis, easing = LinearEasing))
-                        } finally {
-                            shimmering = false
-                        }
-                    }
-                },
-            ) }
+            is StageUi.Note -> {
+                val activeStage = shownNote ?: stage
+                RecordedStage(
+                    alpha = { swapAlpha.value },
+                    shiftDp = { swapShiftDp.value },
+                    scale = { swapScale.value },
+                ) {
+                    NoteStage(
+                        activeStage, dates, today, actions, title, origin, shown, copyRequests = { copyRequests.intValue },
+                        checked = { check.value },
+                        onReadyMoment = {
+                            if (!reduced) scope.launch {
+                                delay(FocalTiming.READY_SHIMMER_DELAY_MS)
+                                shimmer.snapTo(0f)
+                                shimmering = true
+                                try {
+                                    shimmer.animateTo(1f, tween(FocalMotion.readyShimmer.durationMillis, easing = LinearEasing))
+                                } finally {
+                                    shimmering = false
+                                }
+                            }
+                        },
+                    )
+                }
+            }
         }
+        // Selected veil: shifts the card a step as a selected row's plate does on paper (`fadeFast`).
+        Spacer(
+            Modifier
+                .matchParentSize()
+                .drawWithContent {
+                    val a = check.value
+                    if (a <= 0f || pages.hidesStage()) return@drawWithContent
+                    val veil = if (stage is StageUi.Live) colors.stageInk else colors.ink
+                    drawRect(veil, alpha = StageMetrics.SELECTED_VEIL * a)
+                },
+        )
     }
 }
 
@@ -379,7 +436,13 @@ fun StageCard(
  * the recording it had when Finish was tapped: the content is leaving, it must not turn into the note on its way out.
  */
 @Composable
-private fun RecordedStage(modifier: Modifier = Modifier, alpha: () -> Float = { 1f }, content: @Composable () -> Unit) {
+private fun RecordedStage(
+    modifier: Modifier = Modifier,
+    alpha: () -> Float = { 1f },
+    shiftDp: () -> Float = { 0f },
+    scale: () -> Float = { 1f },
+    content: @Composable () -> Unit,
+) {
     val shell = LocalShell.current
     val live = shell.live
     val layer = rememberGraphicsLayer()
@@ -388,13 +451,20 @@ private fun RecordedStage(modifier: Modifier = Modifier, alpha: () -> Float = { 
         onDispose { if (live.stageNote === layer) live.stageNote = null }
     }
     Box(
-        modifier.drawWithContent {
-            if (!shell.pages.freezesStage()) layer.record { this@drawWithContent.drawContent() }
-            // On the recording itself, so what draws it elsewhere (a page opening out of it, the scene) draws it as
-            // faded in as the card is, never whole over a card that is still arriving.
-            layer.alpha = alpha()
-            drawLayer(layer)
-        },
+        modifier
+            .graphicsLayer {
+                translationY = shiftDp().dp.toPx()
+                val s = scale()
+                scaleX = s
+                scaleY = s
+            }
+            .drawWithContent {
+                if (!shell.pages.freezesStage()) layer.record { this@drawWithContent.drawContent() }
+                // On the recording itself, so what draws it elsewhere (a page opening out of it, the scene) draws it as
+                // faded in as the card is, never whole over a card that is still arriving.
+                layer.alpha = alpha()
+                if (!shell.pages.hidesStage()) drawLayer(layer)
+            },
     ) { content() }
 }
 
@@ -908,6 +978,3 @@ private fun rememberFigureMetrics(): FigureMetrics {
         FigureMetrics(paint, FocalType.stageLength.letterSpacing.value * size)
     }
 }
-
-/** The note the card showed when it was first composed (see StageCard's arrival). */
-private class NoteOnStage(var id: String?)

@@ -61,6 +61,7 @@ import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.alignWith
+import app.focal.ui.library.RenameController
 import app.focal.ui.library.RenameField
 import app.focal.ui.shell.LocalPageReveal
 import app.focal.ui.shell.pageTitle
@@ -126,6 +127,7 @@ internal fun NoteHead(
     entrance: Boolean,
     modifier: Modifier = Modifier,
     onHeadLines: (List<Span>) -> Unit = {},
+    renameController: RenameController? = null,
 ) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
@@ -159,6 +161,7 @@ internal fun NoteHead(
                 color = colors.ink,
                 caret = colors.ink,
                 onCommit = onCommitRename,
+                controller = renameController,
                 modifier = titleModifier,
                 placeholder = { Text(head.derivedTitle, style = TitleStyle, color = colors.faint, maxLines = NoteBlockMetrics.TITLE_LINES) },
             )

@@ -37,13 +37,15 @@ class FocalMotionTest {
         assertEquals(FocalSettle.FADE_FAST_MS.toFloat(), settleMs(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS), 3f)
         assertEquals(FocalSettle.FADE_MS.toFloat(), settleMs(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_STIFFNESS), 3f)
         assertEquals(FocalSettle.MOVE_MS.toFloat(), settleMs(FocalMotion.SPATIAL_DAMPING, FocalMotion.MOVE_STIFFNESS), 3f)
+        assertEquals(FocalSettle.PAGE_MS.toFloat(), settleMs(FocalMotion.PAGE_DAMPING, FocalMotion.PAGE_STIFFNESS), 3f)
         assertEquals(FocalSettle.FADE_SLOW_MS.toFloat(), settleMs(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_SLOW_STIFFNESS), 3f)
     }
 
     /** The clock-drawn springs start at 0, follow the spring's solution and end exactly at 1 at their settle time. */
     @Test fun clockSpringsSettleOnTheirTime() {
         val springs = listOf(
-            FocalClock::move to FocalSettle.MOVE_MS, FocalClock::fadeFast to FocalSettle.FADE_FAST_MS,
+            FocalClock::move to FocalSettle.MOVE_MS, FocalClock::page to FocalSettle.PAGE_MS,
+            FocalClock::fadeFast to FocalSettle.FADE_FAST_MS,
             FocalClock::fade to FocalSettle.FADE_MS, FocalClock::fadeSlow to FocalSettle.FADE_SLOW_MS,
         )
         for ((spring, settle) in springs) {

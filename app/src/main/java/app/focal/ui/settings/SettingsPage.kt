@@ -66,14 +66,10 @@ import app.focal.ui.components.FocalIconButton
 import app.focal.ui.components.FocalPrimaryPill
 import app.focal.ui.components.FocalTextButton
 import app.focal.ui.components.Glyph
-import app.focal.ui.components.NineBars
 import app.focal.ui.components.PageArea
 import app.focal.ui.components.PaperTopFade
 import app.focal.ui.components.PressPlate
-import app.focal.ui.components.WaveDress
-import app.focal.ui.components.WaveMode
 import app.focal.ui.components.focusRing
-import app.focal.ui.components.markBox
 import app.focal.ui.components.pageInsets
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
@@ -112,12 +108,12 @@ class SettingsActions(
 object SettingsMetrics {
     /** The first group label sits this far under the top bar. */
     val contentTop = FocalGrid.x8
-    /** Group labels: 24 dp above (none above the first), 4 dp below. */
-    val groupAbove = FocalGrid.x24
+    /** Group labels: 20 dp above (none above the first), 4 dp below. */
+    val groupAbove = FocalGrid.x20
     val groupBelow = FocalGrid.x4
     /** The theme control sits this far under its label: it has no row padding of its own. */
     val controlTop = FocalGrid.x8
-    val rowMinHeight = FocalGrid.x56
+    val rowMinHeight = 52.dp
     val rowPadding = FocalGrid.x12
     val trailingGap = FocalGrid.x16
     /** A row's trailing value never takes more than this, so its title keeps room at large font scales. */
@@ -126,11 +122,9 @@ object SettingsMetrics {
     val switchWidth = 52.dp
     val switchHeight = FocalGrid.x32
     val switchInset = FocalGrid.x4
-    /** The footer: the static mark 48 dp under the last row, the statement 12 dp under it, at most this wide. */
-    val footerGap = FocalGrid.x48
-    val footerMark = FocalGrid.x32
-    val statementGap = FocalGrid.x12
-    val statementWidth = 264.dp
+    /** Quiet offline colophon beneath About, without a decorative logo peeking below the viewport fold. */
+    val footerGap = FocalGrid.x20
+    val statementWidth = 280.dp
     val plateInset = FocalGrid.x8
     /** The bar's title starts after the ← (x 72). */
     val titleStart = 72.dp
@@ -489,22 +483,18 @@ private fun SwitchRow(
     }
 }
 
-/**
- * The footer (spec 5.10): the static mark, 32 dp, and under it what Focal is rather than what it can be set to: it
- * works offline, in `caption` `muted`, centred.
- */
+/** Quiet offline footnote beneath About, keeping the full Settings page comfortably within a single screen. */
 @Composable
 private fun Footer(modifier: Modifier = Modifier) {
     val colors = FocalTheme.colors
-    Column(
-        modifier.padding(top = SettingsMetrics.footerGap).padding(horizontal = FocalLayout.gutter).semantics(mergeDescendants = true) { },
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        NineBars(WaveMode.Static, WaveDress.paper(colors), Modifier.markBox(SettingsMetrics.footerMark))
-        Spacer(Modifier.height(SettingsMetrics.statementGap))
-        Text(
-            stringResource(R.string.works_offline), style = FocalType.caption, color = colors.recede, textAlign = TextAlign.Center,
-            modifier = Modifier.widthIn(max = SettingsMetrics.statementWidth),
-        )
-    }
+    Text(
+        stringResource(R.string.works_offline),
+        style = FocalType.caption,
+        color = colors.recede,
+        textAlign = TextAlign.Center,
+        modifier = modifier
+            .padding(top = SettingsMetrics.footerGap, bottom = FocalGrid.x8)
+            .padding(horizontal = FocalLayout.gutter)
+            .widthIn(max = SettingsMetrics.statementWidth),
+    )
 }

@@ -226,6 +226,7 @@ internal class BottomContent(
     val strip: (@Composable () -> Unit)?,
     val rows: (@Composable ColumnScope.() -> Unit)?,
     val dockHidden: Boolean,
+    val dockHideProgress: (() -> Float)? = null,
 )
 
 /**
@@ -242,9 +243,10 @@ fun DestinationBottom(
     strip: (@Composable () -> Unit)? = null,
     rows: (@Composable ColumnScope.() -> Unit)? = null,
     dockHidden: Boolean = rows != null,
+    dockHideProgress: (() -> Float)? = null,
 ) {
     val shell = LocalShell.current
-    val content = BottomContent(dock, actions, strip, rows, dockHidden)
+    val content = BottomContent(dock, actions, strip, rows, dockHidden, dockHideProgress)
     SideEffect { shell.bottomContent[destination] = content }
     // Kept while the page is composed, not only while it is on the back stack: a page NavDisplay still holds after
     // Back, opened again, has its dock at once (nothing in it composes again to register it anew).
@@ -586,6 +588,7 @@ private fun ShellBottom(shell: ShellState, layout: WindowLayout) {
         strip = content.strip,
         rows = content.rows,
         dockHidden = content.dockHidden,
+        dockHideProgress = content.dockHideProgress,
         area = LocalDockAreas.current.dock,
         rail = layout.rail,
     )

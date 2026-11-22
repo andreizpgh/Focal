@@ -43,9 +43,11 @@ import kotlin.math.sqrt
  */
 object FocalMotion {
     const val SPATIAL_DAMPING = 0.9f
+    const val PAGE_DAMPING = 0.95f
     const val EFFECTS_DAMPING = 1f
     const val PRESS_STIFFNESS = 1400f
     const val MOVE_STIFFNESS = 700f
+    const val PAGE_STIFFNESS = 450f
     const val STAGE_STIFFNESS = 300f
     const val FADE_FAST_STIFFNESS = 3800f
     const val FADE_STIFFNESS = 1600f
@@ -161,6 +163,7 @@ object FocalSettle {
     const val FADE_MS = 231L
     const val FADE_SLOW_MS = 326L
     const val MOVE_MS = 317L
+    const val PAGE_MS = 359L
     const val STAGE_MS = 484L
 }
 
@@ -170,6 +173,7 @@ object FocalSettle {
  */
 object FocalClock {
     fun move(ms: Float): Float = at(FocalMotion.SPATIAL_DAMPING, FocalMotion.MOVE_STIFFNESS, FocalSettle.MOVE_MS, ms)
+    fun page(ms: Float): Float = at(FocalMotion.PAGE_DAMPING, FocalMotion.PAGE_STIFFNESS, FocalSettle.PAGE_MS, ms)
     fun stage(ms: Float): Float = at(FocalMotion.SPATIAL_DAMPING, FocalMotion.STAGE_STIFFNESS, FocalSettle.STAGE_MS, ms)
     fun fadeFast(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS, FocalSettle.FADE_FAST_MS, ms)
     fun fade(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_STIFFNESS, FocalSettle.FADE_MS, ms)
@@ -258,9 +262,9 @@ object FocalTiming {
     /** At most this many paragraphs stagger (rack focus, the settle's develop); the others need none. */
     const val STAGGER_MAX = 12
     /** T7, T7b: the page under the settling scene develops its title, meta and paragraphs this long after Finish. */
-    const val SETTLE_TITLE_DELAY_MS = 120L
-    const val SETTLE_META_DELAY_MS = 200L
-    const val SETTLE_PARAGRAPH_DELAY_MS = 180L
+    const val SETTLE_TITLE_DELAY_MS = 80L
+    const val SETTLE_META_DELAY_MS = 130L
+    const val SETTLE_PARAGRAPH_DELAY_MS = 140L
     /** The settings hint shows once the library has been at rest this long, and at most this many times. */
     const val SETTINGS_HINT_IDLE_MS = 1500L
     const val SETTINGS_HINT_MAX = 2

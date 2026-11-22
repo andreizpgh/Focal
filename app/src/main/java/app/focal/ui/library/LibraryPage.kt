@@ -92,6 +92,7 @@ import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.Stage
 import app.focal.ui.design.columnInset
 import app.focal.ui.design.smoothstep
+import app.focal.ui.note.RenameStrip
 import app.focal.ui.scene.ExpandDrag
 import app.focal.ui.shell.Destination
 import app.focal.ui.shell.DestinationBottom
@@ -177,6 +178,11 @@ fun LibraryPage(
     val focusManager = LocalFocusManager.current
     var renaming by rename::noteId
     val renameBounds = remember { RenameBounds() }
+    val renameController = remember { RenameController() }
+    var stagePromoting by remember { mutableStateOf(false) }
+    val stageNoteId = (model.stage as? StageUi.Note)?.row?.id
+    val currentStageNoteId by rememberUpdatedState(stageNoteId)
+    LaunchedEffect(stageNoteId) { stagePromoting = false }
     val imeVisible = WindowInsets.isImeVisible
     val density = LocalDensity.current
 
@@ -222,7 +228,10 @@ fun LibraryPage(
                 deleteSelected = {
                     val rows = selection.ids.mapNotNull { currentSelectable[it] }
                     selection.clear()
-                    if (rows.isNotEmpty()) actions.deleteAll(rows)
+                    if (rows.isNotEmpty()) {
+                        if (rows.any { it.id == currentStageNoteId }) stagePromoting = true
+                        actions.deleteAll(rows)
+                    }
                 },
                 copySelected = {
                     val rows = selection.ids.mapNotNull { currentSelectable[it] }
@@ -249,8 +258,13 @@ fun LibraryPage(
             Destination.Library,
             if (selecting && model.live == null) DockState.Selecting(selection.count, selectedAudio, selectedHasText) else model.dock,
             dockActions,
-            rows = if (searchState.fieldShown) { { SearchField(searchState, query, onClose = closeSearch) } } else null,
+            rows = when {
+                searchState.fieldShown -> { { SearchField(searchState, query, onClose = closeSearch) } }
+                renaming != null -> { { RenameStrip(onDone = { renameController.commit(); focusManager.clearFocus() }) } }
+                else -> null
+            },
             dockHidden = searchState.dockHidden || renaming != null,
+            dockHideProgress = if (searchState.fieldShown) searchState::dockHideProgress else null,
         )
     }
 
@@ -264,7 +278,11 @@ fun LibraryPage(
     val menuActions = remember(actions) {
         NoteMenuActions(
             copyText = actions.copyText, share = actions.share, rename = { renaming = it.id },
-            removeAudio = actions.removeAudio, delete = actions.delete,
+            removeAudio = actions.removeAudio,
+            delete = { row ->
+                if (row.id == currentStageNoteId) stagePromoting = true
+                actions.delete(row)
+            },
         )
     }
     // A long press selects; a tap opens, or toggles while notes are selected. A note that cannot be deleted now (it is
@@ -293,12 +311,13 @@ fun LibraryPage(
         )
     }
     // The same lambda across recompositions, so the list it is handed to can skip.
-    val renameField: @Composable (NoteRow, onStage: Boolean) -> Unit = remember(actions, rename, renameBounds) { { row, onStage ->
+    val renameField: @Composable (NoteRow, onStage: Boolean) -> Unit = remember(actions, rename, renameBounds, renameController) { { row, onStage ->
         val colors = FocalTheme.colors
         RenameField(
             initial = row.title,
             // Kept with the rename's state, above the list (a row's own saved state stays with its place).
             draft = rename.draft,
+            controller = renameController,
             style = if (onStage) FocalType.headline else FocalType.rowTitle,
             color = colors.ink,
             caret = colors.ink,
@@ -351,6 +370,7 @@ fun LibraryPage(
                 model, dates, today, meter, listState, stageActions, rowActions, selection,
                 renaming = renaming, renameField = renameField, imePadded = renaming != null,
                 openSettings = actions.openSettings, stageFocus = stageFocus, liveSeconds = liveSeconds,
+                stagePromoting = stagePromoting,
                 // The library itself is on screen: no page, settings, search or scene over it.
                 onScreen = {
                     !shell.libraryCovered && !searchState.open && shell.settings.progress.value <= 0f && shell.live.expansion.value <= 0f
@@ -399,18 +419,32 @@ private fun LibraryContent(
     openSettings: () -> Unit,
     stageFocus: FocusRequester?,
     liveSeconds: (() -> Long)?,
+    stagePromoting: Boolean,
     onScreen: () -> Boolean,
 ) {
+    val shell = LocalShell.current
+    val reduced = LocalReducedMotion.current
     val empty = model.empty
-    // Deleting the last note: the stage leaves on `fadeFast`, the composition arrives on `fade` (4.22.5).
+    // Deleting the last note: on the visible library the Stage card recedes gently (scale + fadeFast) before the empty
+    // state arrives; when deleted from inside an open note page, snap immediately under the exiting note.
     val emptyAlpha = remember { Animatable(if (empty) 1f else 0f) }
     val listAlpha = remember { Animatable(if (empty) 0f else 1f) }
+    val listScale = remember { Animatable(1f) }
     LaunchedEffect(empty) {
-        if (empty) {
-            listAlpha.animateTo(0f, FocalMotion.fadeFast())
+        if (reduced || shell.libraryCovered) {
+            emptyAlpha.snapTo(if (empty) 1f else 0f)
+            listAlpha.snapTo(if (empty) 0f else 1f)
+            listScale.snapTo(1f)
+        } else if (empty) {
+            kotlinx.coroutines.coroutineScope {
+                launch { listAlpha.animateTo(0f, FocalMotion.fadeFast()) }
+                launch { listScale.animateTo(0.96f, FocalMotion.fadeFast()) }
+            }
             emptyAlpha.animateTo(1f, FocalMotion.fade())
+            listScale.snapTo(1f)
         } else {
             emptyAlpha.animateTo(0f, FocalMotion.fadeFast())
+            listScale.snapTo(1f)
             listAlpha.animateTo(1f, FocalMotion.fade())
         }
     }
@@ -421,10 +455,16 @@ private fun LibraryContent(
         EmptyLibrary(openSettings, Modifier.fillMaxSize().graphicsLayer { alpha = emptyAlpha.value })
     }
     if (!empty || listShown) {
-        Box(Modifier.fillMaxSize().graphicsLayer { alpha = listAlpha.value }) {
+        Box(
+            Modifier.fillMaxSize().graphicsLayer {
+                alpha = listAlpha.value
+                scaleX = listScale.value
+                scaleY = listScale.value
+            },
+        ) {
             LibraryList(
                 model, dates, today, meter, listState, stageActions, rowActions, selection, renaming, renameField, imePadded, stageFocus,
-                liveSeconds, onScreen,
+                liveSeconds, stagePromoting, onScreen,
             )
         }
     }
@@ -450,6 +490,7 @@ private fun LibraryList(
     imePadded: Boolean,
     stageFocus: FocusRequester?,
     liveSeconds: (() -> Long)?,
+    stagePromoting: Boolean,
     onScreen: () -> Boolean,
 ) {
     val shell = LocalShell.current
@@ -596,6 +637,10 @@ private fun LibraryList(
                     )
                 }
             }
+            val allowItemMotion = !shell.libraryCovered
+            val itemPlacement = if (allowItemMotion) placement else null
+            val itemFadeIn = if (allowItemMotion) FocalMotion.fade<Float>() else null
+            val itemFadeOut = if (allowItemMotion) FocalMotion.fadeFast<Float>() else null
             model.days.forEachIndexed { index, day ->
                 val key = dayKey(day.epochDay)
                 item(key = key, contentType = DAY_TYPE) {
@@ -606,13 +651,22 @@ private fun LibraryList(
                             .padding(horizontal = FocalLayout.gutter)
                             .padding(top = if (index == 0) firstLabelGap(model.stage != null) else SECTION_GAP, bottom = LABEL_TO_TITLE)
                             .stickyLabelSource(labels, key)
-                            .animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
+                            .animateItem(
+                                fadeInSpec = itemFadeIn,
+                                placementSpec = itemPlacement,
+                                fadeOutSpec = if (stagePromoting && index == 0 && day.rows.size == 1) null else itemFadeOut,
+                            ),
                     )
                 }
                 itemsIndexed(day.rows, key = { _, row -> row.id }, contentType = { _, _ -> ROW_TYPE }) { at, row ->
                     NoteRowItem(
                         row, dates, rowActions,
-                        modifier = Modifier.animateItem(fadeInSpec = FocalMotion.fade(), placementSpec = placement, fadeOutSpec = FocalMotion.fadeFast()),
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = itemFadeIn,
+                            placementSpec = itemPlacement,
+                            // A row promoted from top of list into the Stage card hands off cleanly instead of fading like a deletion.
+                            fadeOutSpec = if (stagePromoting && index == 0 && at == 0) null else itemFadeOut,
+                        ),
                         title = if (renaming == row.id) { { renameField(row, false) } } else null,
                         capturing = model.live != null,
                         selected = selection.contains(row.id),

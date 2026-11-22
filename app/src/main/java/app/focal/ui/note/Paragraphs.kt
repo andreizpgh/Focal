@@ -359,7 +359,10 @@ internal fun ParagraphText(
                     val result = layoutState.value ?: return@awaitEachGesture
                     if (!held) {
                         // Lifted in time: a tap, unless the list took the gesture for a scroll.
-                        if (up != null) tap?.invoke(result.getOffsetForPosition(up.position), result.wordUnder(up.position, wordAt, slop))
+                        if (up != null) {
+                            up.consume()
+                            tap?.invoke(result.getOffsetForPosition(up.position), result.wordUnder(up.position, wordAt, slop))
+                        }
                         return@awaitEachGesture
                     }
                     val handler = sweep ?: return@awaitEachGesture

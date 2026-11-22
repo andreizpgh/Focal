@@ -81,7 +81,7 @@ class NoteEditTest {
     }
 
     @Composable
-    private fun EditingNote(store: EditBackend) {
+    private fun EditingNote(store: EditBackend, onRename: (String) -> Unit = {}) {
         val shell = rememberShellState()
         val destination = remember { Destination.Note(note.noteId) }
         LaunchedEffect(shell) { shell.open(destination) }
@@ -89,7 +89,7 @@ class NoteEditTest {
             if (current is Destination.Note) {
                 val first = note.paragraphs.first()
                 NotePage(
-                    note = note, playback = Silent, actions = remember { NoteActions() }, edits = store, destination = destination,
+                    note = note, playback = Silent, actions = remember { NoteActions(rename = onRename) }, edits = store, destination = destination,
                     dates = dates, today = today, captureElsewhere = false,
                     page = rememberNotePageState(field = remember { FieldFocus(first.id, first.text, first.text.length) }),
                 )
@@ -125,6 +125,26 @@ class NoteEditTest {
         // Nothing is discarded: still in Edit, with the draft.
         rule.onNode(hasSetTextAction()).assertTextContains(REVISED)
         rule.onNode(hasContentDescription("Retry")).assertIsDisplayed()
+    }
+
+    @Test fun renameShowsDoneAndSwitchesBidirectionallyWithBodyEdit() {
+        val store = FlakyStore(failures = 0)
+        val renamed = CopyOnWriteArrayList<String>()
+        rule.setContent { FocalTheme(dark = false) { EditingNote(store, onRename = { renamed += it }) } }
+        // Started in body Edit: tapping the title saves the body and switches cleanly into title rename with a Done pill.
+        rule.onNodeWithText("Synthetic edit fixture").performClick()
+        rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasSetTextAction() and hasText("Synthetic edit fixture")).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNode(hasContentDescription("Done")).assertIsDisplayed()
+        // Edit the title and tap Done: commits the new title and exits rename.
+        rule.onNode(hasSetTextAction() and hasText("Synthetic edit fixture")).performTextReplacement("Renamed fixture")
+        rule.onNode(hasContentDescription("Done")).performClick()
+        rule.waitUntil(TIMEOUT_MS) { renamed.isNotEmpty() }
+        assertEquals(listOf("Renamed fixture"), renamed)
+        // Re-enter title rename, then tap a body paragraph: commits rename and enters body Edit seamlessly.
+        rule.onNodeWithText("Synthetic edit fixture").performClick()
+        rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasSetTextAction() and hasText("Synthetic edit fixture")).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText(FIRST).performClick()
+        rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasSetTextAction() and hasText(FIRST)).fetchSemanticsNodes().isNotEmpty() }
     }
 
     private companion object {

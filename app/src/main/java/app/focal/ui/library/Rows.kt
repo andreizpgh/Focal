@@ -19,8 +19,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -42,6 +45,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -167,12 +171,17 @@ fun NoteRowItem(
     val origin = rememberRowOrigin(row.id, titleMuted = row.title.isBlank(), dock = pageDock(row, capturing))
     val prepare by rememberUpdatedState(actions.prepare)
     val platePath = remember { Path() }
+    val rowLayer = rememberGraphicsLayer()
+    DisposableEffect(origin, rowLayer) {
+        origin.layer = rowLayer
+        onDispose { if (origin.layer === rowLayer) origin.layer = null }
+    }
     Box(
         modifier
             .fillMaxWidth()
             .drawBehind {
                 val a = plate.value
-                if (a <= 0f) return@drawBehind
+                if (a <= 0f || pages.hidesRow(row.id)) return@drawBehind
                 val inset = RowMetrics.plateInset.toPx()
                 val round = CornerRadius(FocalShapes.blockRadius.toPx())
                 // Rows that are selected next to each other are one block: a stack of rounded plates, each with its
@@ -206,32 +215,42 @@ fun NoteRowItem(
                 },
                 onClick = { actions.open(row) },
             )
-            .padding(horizontal = FocalLayout.gutter, vertical = RowMetrics.hitPad)
-            // The row's content box is what a page grows out of (T16).
-            .pageOrigin(origin),
+            .padding(horizontal = RowMetrics.plateInset),
     ) {
-        Column {
-            TitleLine(
-                title = title ?: {
-                    // Balanced, so a title never ends on a lone word; hidden while a copy of it flies to the page.
-                    Text(
-                        titleText, style = RowTitleStyle, onTextLayout = { origin.layout = it }, color = if (row.title.isBlank()) colors.recede else colors.ink,
-                        maxLines = RowMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .pageOrigin(origin, title = true)
-                            .graphicsLayer { alpha = if (pages.flying(row.id)) 0f else 1f },
-                    )
-                },
-                trailing = trailing,
-                trailingInk = working,
-                titleText = titleText,
-                checked = { plate.value },
-            )
-            Preview(previewAfterTitle(row))
-            if (row.phase == NotePhase.TRANSCRIBING) {
-                Spacer(Modifier.height(RowMetrics.trackGap))
-                RowTrack(row.progress ?: 0f)
+        // The row's plate box (matching RowPlate) is what the elevated card grows out of and folds back into (T16).
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .pageOrigin(origin)
+                .drawWithContent {
+                    if (pages.recordsOrigin(row.id)) rowLayer.record { this@drawWithContent.drawContent() }
+                    if (!pages.hidesRow(row.id)) drawContent()
+                }
+                .padding(horizontal = FocalLayout.gutter - RowMetrics.plateInset, vertical = RowMetrics.hitPad),
+        ) {
+            Column {
+                TitleLine(
+                    title = title ?: {
+                        // Balanced, so a title never ends on a lone word; hidden while a copy of it flies to the page.
+                        Text(
+                            titleText, style = RowTitleStyle, onTextLayout = { origin.layout = it }, color = if (row.title.isBlank()) colors.recede else colors.ink,
+                            maxLines = RowMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .pageOrigin(origin, title = true)
+                                .graphicsLayer { alpha = if (pages.flying(row.id)) 0f else 1f },
+                        )
+                    },
+                    trailing = trailing,
+                    trailingInk = working,
+                    titleText = titleText,
+                    checked = { plate.value },
+                )
+                Preview(previewAfterTitle(row))
+                if (row.phase == NotePhase.TRANSCRIBING) {
+                    Spacer(Modifier.height(RowMetrics.trackGap))
+                    RowTrack(row.progress ?: 0f)
+                }
             }
         }
     }
@@ -366,10 +385,20 @@ fun SearchResultItem(result: SearchRow, dates: LibraryDates, today: LocalDate, o
     }
 }
 
+/** Handle allowing an external Done button or body tap to commit an active [RenameField] synchronously. */
+@Stable
+class RenameController {
+    internal var onCommit: (() -> Unit)? = null
+
+    fun commit() {
+        onCommit?.invoke()
+    }
+}
+
 /**
  * A title renamed in place (spec 5.1.6): a [BasicTextField] in the title's own style with all text selected, the
- * caret in [caret]. IME Done, Enter or leaving the field commits; [onCancel] (Back) is the caller's. An empty value
- * restores the derived title (the store's rule for a blank title), which [placeholder] can show while it is empty.
+ * caret in [caret]. IME Done, Enter, external [controller], or leaving the field commits; Back cancels. An empty
+ * value restores the derived title (the store's rule for a blank title), which [placeholder] can show while empty.
  */
 @Composable
 fun RenameField(
@@ -385,6 +414,7 @@ fun RenameField(
      * selected); the field's own saved state is then left alone.
      */
     draft: MutableState<TextFieldValue?>? = null,
+    controller: RenameController? = null,
 ) {
     val saved = rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(initial, selection = TextRange(0, initial.length)))
@@ -400,6 +430,11 @@ fun RenameField(
         if (committed) return
         committed = true
         onCommit(value().text.trim())
+    }
+    val commitAction: () -> Unit = { commit() }
+    SideEffect { controller?.onCommit = commitAction }
+    DisposableEffect(controller) {
+        onDispose { if (controller?.onCommit === commitAction) controller.onCommit = null }
     }
     LaunchedEffect(Unit) { focus.requestFocus() }
     BasicTextField(

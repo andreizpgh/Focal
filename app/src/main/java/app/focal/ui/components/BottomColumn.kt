@@ -41,12 +41,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.util.lerp as floatLerp
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
@@ -202,10 +204,13 @@ fun BottomColumn(
     strip: (@Composable () -> Unit)? = null,
     rows: (@Composable ColumnScope.() -> Unit)? = null,
     dockHidden: Boolean = rows != null,
+    /** Optional 0..1 hide progress read in the draw phase (e.g. synchronized to Search's expand/shrink). */
+    dockHideProgress: (() -> Float)? = null,
     area: BottomArea = BottomArea.Window,
     rail: Boolean = false,
 ) {
     val density = LocalDensity.current
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val ime = WindowInsets.ime
     val imeTarget = WindowInsets.imeAnimationTarget
     val navigation = WindowInsets.navigationBars
@@ -234,14 +239,27 @@ fun BottomColumn(
                 }
             },
             {
-                val graphics = Modifier.graphicsLayer {
-                    // Hiding, the dock fades as far as the keyboard has risen or its own fade has run, whichever
-                    // leads: it follows a keyboard that moves, and still hides when a requested keyboard never shows
-                    // (a hardware keyboard, a refused IME). It never comes back while it is meant to be hidden.
-                    val target = imeTarget.getBottom(density)
-                    val keyboard = if (dockHidden && target > 0) (ime.getBottom(density).toFloat() / target).coerceIn(0f, 1f) else 0f
-                    alpha = 1 - maxOf(keyboard, fade.value)
-                }
+                val graphics = Modifier
+                    .inert(dockHidden)
+                    .graphicsLayer {
+                        val hide = if (dockHideProgress != null) {
+                            dockHideProgress().coerceIn(0f, 1f)
+                        } else {
+                            // Hiding, the dock fades as far as the keyboard has risen or its own fade has run, whichever
+                            // leads: it follows a keyboard that moves, and still hides when a requested keyboard never shows
+                            // (a hardware keyboard, a refused IME). It never comes back while it is meant to be hidden.
+                            val target = imeTarget.getBottom(density)
+                            val keyboard = if (dockHidden && target > 0) (ime.getBottom(density).toFloat() / target).coerceIn(0f, 1f) else 0f
+                            maxOf(keyboard, fade.value)
+                        }
+                        alpha = 1f - hide
+                        if (dockHideProgress != null && !rail) {
+                            val s = floatLerp(1f, 0.94f, hide)
+                            scaleX = s
+                            scaleY = s
+                            translationX = (if (rtl) 1f else -1f) * FocalGrid.x12.toPx() * hide
+                        }
+                    }
                 Box(graphics) { dock() }
             },
         ),
@@ -293,7 +311,7 @@ fun BottomColumn(
             stripPlaceables.forEach { it.place(left, stripBottom - it.height) }
             // A dock that has faded out is not placed: rows, the feedback pill and the page's last lines stand where
             // it stood, and an invisible Record or Copy must not take their taps, nor TalkBack's focus.
-            if (!dockHidden || fade.value < 1f) {
+            if (!dockHidden || fade.value < 1f || dockHideProgress != null) {
                 dockPlaceables.forEach { it.place(railBox?.let { box -> railX(box, it.width, layoutDirection == LayoutDirection.Rtl) } ?: left, dockBottom - it.height) }
             }
             // Rows over the dock: they arrive where it stands (Find's rows before the keyboard has lifted them) while it
