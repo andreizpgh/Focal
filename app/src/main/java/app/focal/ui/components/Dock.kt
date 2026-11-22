@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.PlainTooltip
@@ -212,6 +213,9 @@ object DockMetrics {
     val gap = FocalGrid.x12
     /** The labelled Resume pill that the circle widens into while paused (x 24-172). */
     val resume = 148.dp
+    /** Sculpted centered width of the idle library Record pill, keeping the bottom balanced with the tonal stage. */
+    val recordPillWidth = 176.dp
+    val recordPillPadding = FocalGrid.x32
     /** The landscape rail (spec 5.14): the circle above the primary circle, centred in this box. */
     val railHeight = circle * 2 + gap
     /** Glyph-only controls in the rail: the record dot and the finish square in a circle (spec 2.7). */
@@ -340,8 +344,14 @@ fun Dock(
         }
         return
     }
+    val centered = pill == PillFace.Record
+    val recordWidth = if (centered) recordPillWidth() else 0.dp
     LookaheadScope {
-        Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        Row(
+            modifier.fillMaxWidth(),
+            horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start,
+            verticalAlignment = Alignment.Bottom,
+        ) {
             CircleSlot(
                 face = circle,
                 leaving = leaving?.circle,
@@ -377,7 +387,8 @@ fun Dock(
                 requests = requests,
                 selected = selected,
                 modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
-                    .weight(1f).heightIn(min = DockMetrics.height),
+                    .then(if (centered) Modifier.weight(1f, fill = false).widthIn(min = recordWidth, max = recordWidth) else Modifier.weight(1f))
+                    .heightIn(min = DockMetrics.height),
             )
             // Anchored to the dock's row: it opens above it, its end on the dock's end.
             FocalMenu(expanded = selectionMenu, onDismiss = { selectionMenu = false }, above = true) {
@@ -511,6 +522,18 @@ private fun RailTooltip(label: String?, state: TooltipState, content: @Composabl
     )
 }
 
+/** The idle library Record pill: [DockMetrics.recordPillWidth], or wider when large text needs it. */
+@Composable
+private fun recordPillWidth(): Dp {
+    val label = stringResource(R.string.action_record)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(label, density) {
+        val text = with(density) { measurer.measure(label, FocalType.label, maxLines = 1).size.width.toDp() }
+        maxOf(DockMetrics.recordPillWidth, text + GlyphSize.recordDot + DockMetrics.glyphGap + DockMetrics.recordPillPadding * 2)
+    }
+}
+
 /** The rail's labelled Resume: [DockMetrics.railResume], or wider when "Resume" needs it (a large font). */
 @Composable
 private fun railResumeWidth(): Dp {
@@ -530,7 +553,7 @@ private fun CircleContent(face: CircleFace, dress: Dress, rail: Boolean) {
     if (rail && face == CircleFace.Resume) {
         // A rail item's stack: the pill's ● above its word, centred (R1 kept in the rail's width).
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            RecordDot(ink)
+            RecordDot(colors.recordDot)
             Spacer(Modifier.height(DockMetrics.railResumeGap))
             Text(stringResource(R.string.action_resume), style = FocalType.label, color = ink, maxLines = 1, softWrap = false)
         }
@@ -545,8 +568,8 @@ private fun CircleContent(face: CircleFace, dress: Dress, rail: Boolean) {
         CircleFace.Close -> Glyph(FocalIcon.Close, ink)
         CircleFace.More -> Glyph(FocalIcon.More, ink)
         // The dot Record and Resume carry: on a note it records more of the same note.
-        CircleFace.Append -> RecordDot(ink, size = DockMetrics.appendDot)
-        CircleFace.Resume -> LabelRow(stringResource(R.string.action_resume), ink) { RecordDot(ink) }
+        CircleFace.Append -> RecordDot(colors.recordDot, size = DockMetrics.appendDot)
+        CircleFace.Resume -> LabelRow(stringResource(R.string.action_resume), ink) { RecordDot(colors.recordDot) }
         CircleFace.None -> Unit
     }
 }
@@ -642,10 +665,11 @@ private fun PillSlot(
             SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
                 when (shown) {
                     PillFace.Record -> {
+                        val dot = FocalTheme.colors.recordDot
                         PrimaryContainer(dress, containerAlpha)
                         PillContent(dress, contentAlpha) { ink ->
-                            if (rail) RecordDot(ink, size = DockMetrics.railDot)
-                            else LabelRow(stringResource(R.string.action_record), ink) { RecordDot(ink) }
+                            if (rail) RecordDot(dot, size = DockMetrics.railDot)
+                            else LabelRow(stringResource(R.string.action_record), ink) { RecordDot(dot) }
                         }
                     }
                     PillFace.Finish -> {

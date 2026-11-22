@@ -25,8 +25,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
-import androidx.compose.foundation.text.selection.LocalTextSelectionColors
-import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.CompositionLocalProvider
@@ -281,24 +279,19 @@ fun LibraryPage(
     // The same lambda across recompositions, so the list it is handed to can skip.
     val renameField: @Composable (NoteRow, onStage: Boolean) -> Unit = remember(actions, rename, renameBounds) { { row, onStage ->
         val colors = FocalTheme.colors
-        // On the material the paper's `select` and ink handles would vanish: stageInk handles on a light veil.
-        val stageSelection = remember(colors.stageInk) { TextSelectionColors(handleColor = colors.stageInk, backgroundColor = Stage.selection) }
-        val selection = if (onStage) stageSelection else LocalTextSelectionColors.current
-        CompositionLocalProvider(LocalTextSelectionColors provides selection) {
-            RenameField(
-                initial = row.title,
-                // Kept with the rename's state, above the list (a row's own saved state stays with its place).
-                draft = rename.draft,
-                style = if (onStage) FocalType.headline else FocalType.rowTitle,
-                color = if (onStage) colors.stageInk else colors.ink,
-                caret = if (onStage) colors.stageInk else colors.ink,
-                onCommit = { text ->
-                    rename.noteId = null
-                    if (text != row.title) actions.rename(row, text)
-                },
-                modifier = Modifier.onGloballyPositioned { renameBounds.rect = it.boundsInWindow() },
-            )
-        }
+        RenameField(
+            initial = row.title,
+            // Kept with the rename's state, above the list (a row's own saved state stays with its place).
+            draft = rename.draft,
+            style = if (onStage) FocalType.headline else FocalType.rowTitle,
+            color = colors.ink,
+            caret = colors.ink,
+            onCommit = { text ->
+                rename.noteId = null
+                if (text != row.title) actions.rename(row, text)
+            },
+            modifier = Modifier.onGloballyPositioned { renameBounds.rect = it.boundsInWindow() },
+        )
     } }
 
     Box(

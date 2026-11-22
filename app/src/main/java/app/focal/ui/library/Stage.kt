@@ -7,6 +7,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -334,13 +336,17 @@ fun StageCard(
                 onClick = { if (note != null) actions.open(note) else actions.expand() },
             )
             .clip(FocalShapes.sheet)
-            .sceneMaterial(FocalShapes.sheetRadius, ring = colors.stageRing)
-            // Selected: the whole card lightens a step, as a selected row's plate does on paper (`fadeFast`). No
+            .then(
+                if (stage is StageUi.Live) Modifier.sceneMaterial(FocalShapes.sheetRadius, ring = colors.stageRing)
+                else Modifier.background(colors.stageIdleSurface, FocalShapes.sheet).border(1.dp, colors.stageIdleBorder, FocalShapes.sheet),
+            )
+            // Selected: the whole card shifts a step, as a selected row's plate does on paper (`fadeFast`). No
             // outline: a ring inside the card's edge read as a second, thinner card.
             .drawWithContent {
                 drawContent()
                 val a = check.value
-                if (a > 0f) drawRect(colors.stageInk, alpha = StageMetrics.SELECTED_VEIL * a)
+                val veil = if (stage is StageUi.Live) colors.stageInk else colors.ink
+                if (a > 0f) drawRect(veil, alpha = StageMetrics.SELECTED_VEIL * a)
             },
     ) {
         if (shimmering) Spacer(Modifier.matchParentSize().shimmer { shimmer.value })
@@ -693,7 +699,7 @@ private fun NoteStage(
             {
                 if (renameField != null) renameField() else Text(
                     titleText, style = titleStyle, onTextLayout = { origin.layout = it },
-                    color = if (fallback) colors.stageRecede else colors.stageInk,
+                    color = if (fallback) colors.recede else colors.ink,
                     maxLines = titleLines, overflow = TextOverflow.Ellipsis,
                     // While the stage opens into its page (or folds back), a copy of the title flies between them.
                     modifier = Modifier
@@ -706,10 +712,10 @@ private fun NoteStage(
                 // Selected, a check takes the time's place (the row's length gives way to one the same way).
                 Box(Modifier.clearAndSetSemantics { }, contentAlignment = Alignment.CenterEnd) {
                     Text(
-                        dates.stageWhen(row.created, today), style = FocalType.dateline, color = colors.stageRecede, maxLines = 1,
+                        dates.stageWhen(row.created, today), style = FocalType.dateline, color = colors.recede, maxLines = 1,
                         modifier = Modifier.graphicsLayer { alpha = 1 - checked() },
                     )
-                    Glyph(FocalIcon.Check, colors.stageInk, Modifier.graphicsLayer { alpha = checked() }, size = FocalGrid.x20)
+                    Glyph(FocalIcon.Check, colors.ink, Modifier.graphicsLayer { alpha = checked() }, size = FocalGrid.x20)
                 }
             },
             { Box(Modifier.clearAndSetSemantics { }.stageText(origin)) { StageText(row, noSpeech) } },
@@ -792,12 +798,12 @@ private fun NoteStage(
 private fun StageText(row: NoteRow, noSpeech: Boolean) {
     val colors = FocalTheme.colors
     if (noSpeech) {
-        Text(stringResource(R.string.no_speech), style = FocalType.stageText, color = colors.stageRecede, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(stringResource(R.string.no_speech), style = FocalType.stageText, color = colors.recede, maxLines = 1, overflow = TextOverflow.Ellipsis)
         return
     }
     val preview = remember(row.preview, row.title, row.titleIsCustom) { AnnotatedString(previewAfterTitle(row)) }
     Column {
-        CutText(preview, FocalType.stageWords, colors.stageRecede, StageMetrics.TEXT_LINES_MAX, Modifier.weight(1f, fill = false))
+        CutText(preview, FocalType.stageWords, colors.recede, StageMetrics.TEXT_LINES_MAX, Modifier.weight(1f, fill = false))
         // A partial failure or a waiting note's reason takes the text's last line (spec 4.22.4).
         val reason = row.waitingReason?.takeIf { row.phase == NotePhase.WAITING }
         val lastLine = when {
@@ -807,7 +813,7 @@ private fun StageText(row: NoteRow, noSpeech: Boolean) {
         }
         if (lastLine != null) {
             Text(
-                lastLine, style = StageReasonStyle, color = colors.stageRecede,
+                lastLine, style = StageReasonStyle, color = colors.recede,
                 maxLines = StageMetrics.TEXT_LINES_MIN, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -838,8 +844,8 @@ private fun StageLength(durationMs: Long) {
     Layout(
         content = {
             parts.forEachIndexed { index, part ->
-                Text(numerals[index], style = FocalType.stageLength, color = colors.stageInk)
-                Text(units.getValue(part.unit), style = FocalType.meta.copy(fontWeight = FocalWeight.Medium), color = colors.stageRecede)
+                Text(numerals[index], style = FocalType.stageLength, color = colors.ink)
+                Text(units.getValue(part.unit), style = FocalType.meta.copy(fontWeight = FocalWeight.Medium), color = colors.recede)
             }
         },
         modifier = Modifier.clearAndSetSemantics { },

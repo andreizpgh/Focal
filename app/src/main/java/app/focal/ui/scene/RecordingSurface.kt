@@ -310,7 +310,13 @@ fun RecordingSurface(
                     alpha = (if (spatial) 1f else live.expansion.value) * live.landingAlpha.value
                 },
         ) {
-            Material(live, frame, slots, spatial, landing, colors.stageRing, wake = if (entry == SceneEntry.RecordEmpty && spatial) live.wake else null)
+            if (entry == SceneEntry.Record && spatial && !landing) {
+                Spacer(Modifier.fillMaxSize().drawBehind { drawRect(colors.stageIdleSurface) })
+            }
+            Material(
+                live, frame, slots, spatial, landing, colors.stageRing,
+                wake = if ((entry == SceneEntry.RecordEmpty || entry == SceneEntry.Record) && spatial) live.wake else null,
+            )
             if (entry == SceneEntry.Record && spatial) LeavingNote(live, frame, choreography)
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = choreography.chrome.value * live.landingContent.value }) {
                 // The stage's typesetting travels only out of (and into) a live stage: Record grows the scene out of a

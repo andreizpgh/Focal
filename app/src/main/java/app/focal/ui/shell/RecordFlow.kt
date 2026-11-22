@@ -154,7 +154,7 @@ fun RecordFlowSheet(flow: RecordFlow) {
                 if (shown == RationaleMode.Allow) flow.allow() else flow.openDetails()
             },
             modifier = Modifier.fillMaxWidth().padding(top = FocalGrid.x32),
-            leading = if (shown == RationaleMode.Allow) { tint -> RecordDot(tint) } else null,
+            leading = if (shown == RationaleMode.Allow) { _ -> RecordDot(FocalTheme.colors.recordDot) } else null,
         )
         FocalTextButton(stringResource(R.string.perm_not_now), onClick = flow::dismiss, modifier = Modifier.padding(top = FocalGrid.x8))
     }

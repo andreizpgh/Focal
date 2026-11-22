@@ -27,14 +27,9 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -60,19 +55,16 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.focal.R
 import app.focal.ui.components.CopyLabel
 import app.focal.ui.components.ProgressPhase
-import app.focal.ui.components.actionShadowPaint
 import app.focal.ui.components.copyPillWidth
 import app.focal.ui.components.focusRing
-import app.focal.ui.components.glassHighlight
 import app.focal.ui.components.pressScale
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
+import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.LocalReducedMotion
-import app.focal.ui.design.Scene
-import app.focal.ui.design.Stage
 import app.focal.ui.design.rememberFocalHaptics
 import app.focal.ui.design.smoothstep
 import kotlinx.coroutines.delay
@@ -134,6 +126,7 @@ fun StagePill(
     shown: () -> Boolean = { true },
     copyRequests: () -> Int = { 0 },
 ) {
+    val colors = FocalTheme.colors
     val density = LocalDensity.current
     val reduced = LocalReducedMotion.current
     val haptics = rememberFocalHaptics()
@@ -172,7 +165,7 @@ fun StagePill(
         else maxOf(StagePillMetrics.copyWidth.toPx(), labelWidth + 2 * StagePillMetrics.padding.toPx())
     }
     val width = remember { Animatable(targetWidth) }
-    val white = remember { Animatable(if (copy?.fresh == true) 1f else 0f) }
+    val filled = remember { Animatable(if (copy != null && copy.enabled) 1f else 0f) }
     val q = remember { Animatable(if (copy != null) 1f else 0f) }
     val fill = remember { Animatable(progress?.fraction ?: 1f) }
     var lastLabel by remember { mutableStateOf(label) }
@@ -187,28 +180,29 @@ fun StagePill(
     LaunchedEffect(copy != null) {
         if (copy == null) {
             q.snapTo(0f)
+            filled.snapTo(0f)
             return@LaunchedEffect
         }
         if (q.value >= 1f) return@LaunchedEffect
         // Only where it can be seen: behind settings, search or the scene, or scrolled away, the stage simply shows
-        // the white Copy and the moment stays unclaimed for the next time it is on screen.
+        // Copy and the moment stays unclaimed for the next time it is on screen.
         val moment = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && shown() && FreshNotes.claimMoment(noteId)
         if (moment) {
             haptics.ready()
             announced = true
             if (reduced) {
-                fill.snapTo(1f); width.snapTo(targetWidth); white.snapTo(1f); q.snapTo(1f)
+                fill.snapTo(1f); width.snapTo(targetWidth); filled.snapTo(if (copy.enabled) 1f else 0f); q.snapTo(1f)
                 return@LaunchedEffect
             }
             onReadyMoment()
             fill.snapTo(1f)
             morphing = true
             launch { width.animateTo(targetWidth, FocalMotion.move()) }
-            launch { white.animateTo(1f, FocalMotion.fade()) }
+            launch { filled.animateTo(if (copy.enabled) 1f else 0f, FocalMotion.fade()) }
             q.animateTo(1f, FocalMotion.fade())
             morphing = false
         } else {
-            fill.snapTo(1f); width.snapTo(targetWidth); q.snapTo(1f)
+            fill.snapTo(1f); width.snapTo(targetWidth); filled.snapTo(if (copy.enabled) 1f else 0f); q.snapTo(1f)
         }
     }
     LaunchedEffect(targetWidth) { if (!width.isRunning || q.value >= 1f) width.animateTo(targetWidth, FocalMotion.move()) }
@@ -217,8 +211,8 @@ fun StagePill(
         // The fill moves with each committed window, never backwards.
         if (target > fill.value) fill.animateTo(target.coerceIn(0f, 1f), FocalMotion.move())
     }
-    val whiteTarget = copy != null && (copy.fresh || copied)
-    LaunchedEffect(whiteTarget) { if (q.value >= 1f) white.animateTo(if (whiteTarget) 1f else 0f, FocalMotion.fade()) }
+    val filledTarget = copy != null && (copy.enabled || copied)
+    LaunchedEffect(filledTarget) { if (q.value >= 1f) filled.animateTo(if (filledTarget) 1f else 0f, FocalMotion.fade()) }
 
     val source = remember { MutableInteractionSource() }
     val enabled = copy?.enabled == true
@@ -270,33 +264,14 @@ fun StagePill(
                 }
             }
             .pressScale(source)
-            .focusRing(FocalShapes.pill, color = Scene.ink)
+            .focusRing(FocalShapes.pill, color = colors.ink)
             .clickable(source, indication = null, enabled = enabled && !copied, onClick = ::copyNow)
             .drawWithCache {
                 val outline = FocalShapes.pill.createOutline(size, layoutDirection, this)
-                val path = Path().apply { addOutline(outline) }
-                val highlight = glassHighlight(outline, StagePillMetrics.ring.toPx())
-                val gradient = Brush.verticalGradient(listOf(Scene.actionTop, Scene.actionBottom))
-                val shadow = actionShadowPaint(StagePillMetrics.shadowY.toPx(), StagePillMetrics.shadowSigma.toPx(), Stage.actionShadow)
-                val ring = StagePillMetrics.ring.toPx()
-                val radius = size.height / 2
                 onDrawBehind {
-                    val w = white.value
-                    if (w < 1f) {
-                        drawOutline(outline, Scene.glass)
-                        drawPath(highlight, Scene.glassHighlight)
-                    }
-                    if (w > 0f) {
-                        if (shadow != null) {
-                            shadow.alpha = (Stage.actionShadow.alpha * w * MAX_ALPHA).roundToInt()
-                            drawIntoCanvas { it.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, radius, radius, shadow) }
-                        }
-                        drawRoundRect(
-                            Scene.actionRing, topLeft = Offset(-ring, -ring), size = Size(size.width + 2 * ring, size.height + 2 * ring),
-                            cornerRadius = CornerRadius(radius + ring), alpha = w,
-                        )
-                        drawPath(path, gradient, alpha = w)
-                    }
+                    val w = filled.value
+                    val bg = lerp(colors.s2, colors.inv, w)
+                    drawOutline(outline, bg)
                 }
             },
         contentAlignment = Alignment.Center,
@@ -309,7 +284,7 @@ fun StagePill(
             val withTrack = (progress?.phase ?: ProgressPhase.Transcribing) == ProgressPhase.Transcribing
             Box(Modifier.matchParentSize().graphicsLayer { alpha = 1 - smoothstep(0f, HALF, q.value) }) {
                 Text(
-                    shownLabel.orEmpty(), style = FocalType.action, color = Scene.ink, maxLines = 1,
+                    shownLabel.orEmpty(), style = FocalType.action, color = colors.ink, maxLines = 1,
                     modifier = Modifier.align(if (withTrack) Alignment.TopCenter else Alignment.Center)
                         .padding(top = if (withTrack) StagePillMetrics.labelTop else 0.dp),
                 )
@@ -320,11 +295,11 @@ fun StagePill(
                             .drawWithCache {
                                 val corner = CornerRadius(size.height / 2)
                                 onDrawBehind {
-                                    drawRoundRect(Stage.track, cornerRadius = corner)
-                                    val filled = size.width * fill.value
+                                    drawRoundRect(colors.select, cornerRadius = corner)
+                                    val filledWidth = size.width * fill.value
                                     drawRoundRect(
-                                        Scene.ink, topLeft = Offset(if (rtl) size.width - filled else 0f, 0f),
-                                        size = Size(filled, size.height), cornerRadius = corner,
+                                        colors.ink, topLeft = Offset(if (rtl) size.width - filledWidth else 0f, 0f),
+                                        size = Size(filledWidth, size.height), cornerRadius = corner,
                                     )
                                 }
                             },
@@ -334,7 +309,7 @@ fun StagePill(
         }
         if (copy != null) {
             Box(Modifier.graphicsLayer { alpha = smoothstep(HALF, 1f, q.value) * if (enabled) 1f else StagePillMetrics.DISABLED_ALPHA }) {
-                CopyFace(copied, white)
+                CopyFace(copied, filled)
             }
         }
         // A spoken-only "Note ready" for TalkBack at the moment (nothing is drawn).
@@ -348,15 +323,15 @@ fun StagePill(
 }
 
 private const val HALF = 0.5f
-private const val MAX_ALPHA = 255f
 
 /**
  * The copy glyph and "Copy", or the check and "Copied": glyph 18 + 6 + `action` (spec 4.22.4), centred on "Copy".
- * The ink follows the fill: `stageInk` on glass, `#111111` on white (it recomposes only while the fill changes).
+ * The ink follows the fill: `ink` on `s2`, `onInv` on `inv` (it recomposes only while the fill changes).
  */
 @Composable
-private fun CopyFace(copied: Boolean, white: Animatable<Float, *>) {
-    val color = lerp(Scene.ink, Scene.actionLabel, white.value)
+private fun CopyFace(copied: Boolean, filled: Animatable<Float, *>) {
+    val colors = FocalTheme.colors
+    val color = lerp(colors.ink, colors.onInv, filled.value)
     CopyLabel(copied, color, FocalType.action, StagePillMetrics.glyph, StagePillMetrics.glyphGap)
 }
 

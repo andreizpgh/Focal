@@ -48,6 +48,12 @@ data class FocalColors(
     val stageMuted: Color = Stage.muted,
     /** Dark theme only: separates the card's bottom stop from dark paper. */
     val stageRing: Color = Color.Transparent,
+    /** Resting stage card surface: calm tonal paper at rest; dark instrument is reserved for live recording. */
+    val stageIdleSurface: Color,
+    /** Hairline edge around the resting stage card. */
+    val stageIdleBorder: Color,
+    /** Muted vermilion strictly for the Record dot and active recording indicator (Braun hardware cue). */
+    val recordDot: Color = Color(0xFFD93829),
 ) {
     /** Receded text: [muted], or [ink] when high-contrast text switches receding off. */
     val recede: Color get() = if (receding) muted else ink
@@ -80,6 +86,7 @@ data class FocalColors(
             select = Color(0xFFD6D6D6), inv = Color(0xFF111111), onInv = Color(0xFFFFFFFF), raised = Color(0xFFFFFFFF),
             raisedRing = Color.Transparent, raisedLine = Color(0xFFEBEBEB), scrim = Color.Black.copy(alpha = 0.32f), press = Color(0xFF111111).copy(alpha = 0.08f),
             centreBarTop = Color(0xFF111111), centreBarBottom = Color(0xFF3D3D3D),
+            stageIdleSurface = Color(0xFFF3F3F1), stageIdleBorder = Color(0x14111111),
         )
         val Dark = FocalColors(
             dark = true,
@@ -89,6 +96,7 @@ data class FocalColors(
             raisedRing = Color(0xFF2C2C2C), raisedLine = Color(0xFF303030), scrim = Color.Black.copy(alpha = 0.60f), press = Color(0xFFEDEDED).copy(alpha = 0.10f),
             centreBarTop = Color(0xFFFFFFFF), centreBarBottom = Color(0xFFCFCFCF),
             stageRing = Color.White.copy(alpha = 0.07f),
+            stageIdleSurface = Color(0xFF191919), stageIdleBorder = Color(0x12FFFFFF),
         )
 
         /**
@@ -116,6 +124,9 @@ data class FocalColors(
             scrim = lerp(from.scrim, to.scrim, t),
             press = lerp(from.press, to.press, t), centreBarTop = lerp(from.centreBarTop, to.centreBarTop, t),
             centreBarBottom = lerp(from.centreBarBottom, to.centreBarBottom, t), stageRing = lerp(from.stageRing, to.stageRing, t),
+            stageIdleSurface = lerp(from.stageIdleSurface, to.stageIdleSurface, t),
+            stageIdleBorder = lerp(from.stageIdleBorder, to.stageIdleBorder, t),
+            recordDot = lerp(from.recordDot, to.recordDot, t),
         )
 
         /** `UiModeManager.getContrast()` at or above this is the "medium" or "high" contrast setting. */

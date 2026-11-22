@@ -48,7 +48,7 @@ class SceneChoreography internal constructor(val kind: SceneEntry, private val r
      * and the note leaving, and each "+n" lands n ms after the tap.
      */
     internal suspend fun play(wake: Animatable<Float, *>) = coroutineScope {
-        if (kind == SceneEntry.RecordEmpty && !reduced) {
+        if ((kind == SceneEntry.RecordEmpty || kind == SceneEntry.Record) && !reduced) {
             wake.snapTo(0f)
             launch(start = CoroutineStart.UNDISPATCHED) { wake.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.fadeFast())) }
         } else wake.snapTo(1f)
