@@ -5,6 +5,25 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
+## [0.5.5] - 2026-11-23
+
+### Changed
+
+- **Vertical Paper Unfold for secondary notes.** Replaced the generic right-side
+  slide (which also conflicted with the right-edge Settings strip) with an
+  in-place full-width vertical paper unfold directly from the tapped row and
+  back into it. Borderless rows unfold at full screen width (`0 dp` corners,
+  horizontal `1 dp` top/bottom hairlines only, no disappearing card borders or
+  side margins), with true proportional title flight (`16 sp ↔ 28 sp`), body
+  paragraphs rising underneath the flying title, and a pinned top bar that never
+  drifts mid-flight.
+- **Zero-gray dark-to-light `Finish` transitions (`T7` and `T7b`).** Both
+  fullscreen recording **Finish** and folded-pill **Finish** now keep the
+  contracting obsidian recording surface 100 % opaque all the way into the exact
+  placed bounds of the bottom primary dock pill (`Transcribing` / `Copy`),
+  uncovering pure crisp paper underneath instead of alpha-blending black into
+  muddy gray over white paper in Light theme.
+
 ## [0.5.4] - 2026-11-23
 
 ### Changed
