@@ -5,7 +5,7 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
-## [Unreleased]
+## [0.5.6] - 2026-11-23
 
 ### Changed
 
