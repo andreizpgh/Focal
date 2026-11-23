@@ -57,6 +57,7 @@ object TransitionShots {
             val theme = if (dark) "dark" else "light"
             for (t in times) add(Shot("film-rowback-$theme-${"%03d".format(t)}", dark = dark, settleMs = after(AT_MS + OPEN_MS, t)) { RowToNote(back = true) })
             for (t in times) add(Shot("film-rowopen-$theme-${"%03d".format(t)}", dark = dark, settleMs = after(AT_MS, t)) { RowToNote(back = false) })
+            for (t in times) add(Shot("film-shortback-$theme-${"%03d".format(t)}", dark = dark, settleMs = after(AT_MS + OPEN_MS, t)) { RowToNote(back = true, index = 3) })
             for (t in times) add(Shot("film-t7-$theme-${"%03d".format(t)}", dark = dark, settleMs = after(AT_MS, t)) { FullscreenFinishToNote() })
             for (t in times) add(Shot("film-t7b-$theme-${"%03d".format(t)}", dark = dark, settleMs = after(AT_MS, t)) { LiveToNote() })
         }
@@ -70,16 +71,17 @@ private const val OPEN_MS = 608L
 /** The note the stage holds (the design renders' note) and the page it opens. */
 private val stageNote: NoteUiState get() = design().copy(noteId = "note-0")
 
-/** A row's note: "Pick up the prescription before six". */
-private val rowNote: NoteUiState
-    get() {
-        val row = rows()[2]
+/** A row's note: "Pick up the prescription before six" (index 2), or "Мысли после пробежки", one line on both. */
+private val rowNote: NoteUiState get() = rowNoteAt(2)
+
+private fun rowNoteAt(index: Int): NoteUiState {
+        val row = rows()[index]
         return NoteUiState(
             noteId = row.id, loaded = true, title = row.title, titleIsCustom = true, created = row.created, durationMs = row.durationMs,
             phase = NotePhase.READY, audioPresent = true, canPlay = true, editable = true,
             paragraphs = timedParagraphs(listOf(row.preview), row.durationMs), canRemoveAudio = true,
         )
-    }
+}
 
 @Composable
 private fun NotePageOf(note: NoteUiState, destination: Destination.Note, landing: Boolean = false) = NoteDestination(
@@ -106,9 +108,9 @@ private fun StageToNote(back: Boolean) {
 
 /** T16: a row opens its note's page; with [back], Back folds the page into the row. */
 @Composable
-private fun RowToNote(back: Boolean) {
+private fun RowToNote(back: Boolean, index: Int = 2) {
     val shell = rememberShellState()
-    val note = remember { rowNote }
+    val note = remember { rowNoteAt(index) }
     LaunchedEffect(shell) {
         waitFrames(AT_MS)
         shell.open(Destination.Note(note.noteId), PageMotion.Row)

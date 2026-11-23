@@ -62,10 +62,14 @@ fun SceneRoute(shell: ShellState, recording: RecordingViewModel, library: Librar
     val notificationsOff = rememberNotificationsOff()
     val firstRecordings = remember(notes.days) { notes.days.sumOf { it.rows.size } < FocalTiming.HINT_RECORDINGS }
     val paused = state.phase == RecordingPhase.PAUSED
-    val scene = SceneUi(
+    val built = SceneUi(
         elapsedSeconds = state.elapsedSeconds, paused = paused, pauseReason = state.pauseReason, speech = state.speech,
         paragraphs = state.paragraphs, hint = firstRecordings, notificationsOff = notificationsOff,
     )
+    // After Finish (T7) the scene is leaving as it was: the capture's last updates (its final text, the stopped
+    // timer) are not set again in the frames the note's paper grows in.
+    val held = remember { object { var scene: SceneUi? = null } }
+    val scene = if (live.landingNote != null) held.scene ?: built else built.also { held.scene = it }
     val noteId by rememberUpdatedState(state.noteId)
     val isPaused by rememberUpdatedState(paused)
     val dockActions = remember(recording, live) {
@@ -78,7 +82,8 @@ fun SceneRoute(shell: ShellState, recording: RecordingViewModel, library: Librar
                     live.prepareLanding(id)
                     recording.finish()
                     haptics.finish()
-                    scope.launch { live.land(reduced) { shell.open(Destination.Note(id), PageMotion.Cut) } }
+                    val page = Destination.Note(id)
+                    scope.launch { live.land(reduced, pageReady = { shell.pages.isReady(page) }) { shell.open(page, PageMotion.Cut) } }
                 }
             },
         )

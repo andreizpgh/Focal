@@ -53,6 +53,8 @@ object FocalMotion {
     const val FADE_STIFFNESS = 1600f
     const val FADE_SLOW_STIFFNESS = 800f
     const val DEVELOP_STIFFNESS = 300f
+    /** Finish's paper growing out of the dock's pill (T7, T7b): critically damped, softer than a page's. */
+    const val BLOOM_STIFFNESS = 130f
 
     /** Press scale 1 to 0.97, lens glide within a line, playhead height, menu scale-in, the Copied check. */
     fun <T> press(): SpringSpec<T> = spring(SPATIAL_DAMPING, PRESS_STIFFNESS)
@@ -73,6 +75,11 @@ object FocalMotion {
     fun moveUnit(): SpringSpec<Float> = spring(SPATIAL_DAMPING, MOVE_STIFFNESS, visibilityThreshold = UNIT_THRESHOLD)
     fun pageUnit(): SpringSpec<Float> = spring(PAGE_DAMPING, PAGE_STIFFNESS, visibilityThreshold = UNIT_THRESHOLD)
     fun stageUnit(): SpringSpec<Float> = spring(SPATIAL_DAMPING, STAGE_STIFFNESS, visibilityThreshold = UNIT_THRESHOLD)
+    /**
+     * Finish's paper (T7, T7b): it grows over a whole window from rest, so it starts gently and is still easing out
+     * when its last edge leaves the window, about a third of a second on, instead of crossing it in a few frames.
+     */
+    fun bloomUnit(): SpringSpec<Float> = spring(EFFECTS_DAMPING, BLOOM_STIFFNESS, visibilityThreshold = UNIT_THRESHOLD)
     const val UNIT_THRESHOLD = 0.001f
     /** Icon and label swaps, menu exit, feedback exit, press plates. */
     fun <T> fadeFast(): SpringSpec<T> = spring(EFFECTS_DAMPING, FADE_FAST_STIFFNESS)
@@ -166,6 +173,7 @@ object FocalSettle {
     const val MOVE_MS = 317L
     const val PAGE_MS = 359L
     const val STAGE_MS = 484L
+    const val BLOOM_MS = 810L
 }
 
 /**
@@ -176,6 +184,7 @@ object FocalClock {
     fun move(ms: Float): Float = at(FocalMotion.SPATIAL_DAMPING, FocalMotion.MOVE_STIFFNESS, FocalSettle.MOVE_MS, ms)
     fun page(ms: Float): Float = at(FocalMotion.PAGE_DAMPING, FocalMotion.PAGE_STIFFNESS, FocalSettle.PAGE_MS, ms)
     fun stage(ms: Float): Float = at(FocalMotion.SPATIAL_DAMPING, FocalMotion.STAGE_STIFFNESS, FocalSettle.STAGE_MS, ms)
+    fun bloom(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.BLOOM_STIFFNESS, FocalSettle.BLOOM_MS, ms)
     fun fadeFast(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_FAST_STIFFNESS, FocalSettle.FADE_FAST_MS, ms)
     fun fade(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_STIFFNESS, FocalSettle.FADE_MS, ms)
     fun fadeSlow(ms: Float): Float = at(FocalMotion.EFFECTS_DAMPING, FocalMotion.FADE_SLOW_STIFFNESS, FocalSettle.FADE_SLOW_MS, ms)

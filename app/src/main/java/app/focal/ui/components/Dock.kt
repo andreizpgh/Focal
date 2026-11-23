@@ -302,6 +302,11 @@ fun Dock(
     requests: DockRequests? = null,
     rail: Boolean = false,
     leavingOnMaterial: Boolean = false,
+    /**
+     * Keep the faces a swap has left composed, unseen, instead of removing them as it settles: while Finish's paper
+     * grows over the window, so the dock is not recomposed in the frames the paper moves in.
+     */
+    holdLeaving: Boolean = false,
 ) {
     val circle = circleFace(state)
     val pill = pillFace(state)
@@ -312,7 +317,7 @@ fun Dock(
     var selectionMenu by remember { mutableStateOf(false) }
     if (second != CircleFace.More && selectionMenu) SideEffect { selectionMenu = false }
     val swap = rememberDockSwap(DockFaces(circle, pill, second), clock)
-    val leaving = swap.leaving()
+    val leaving = if (holdLeaving) swap.left() else swap.leaving()
     val circleWidth = when (circle) {
         CircleFace.None -> 0.dp
         CircleFace.Resume -> DockMetrics.resume
@@ -944,6 +949,9 @@ private class DockSwap(val shown: DockFaces, private val from: DockFaces?, priva
     /** The faces still leaving, read in composition (a derived state: it changes once, when the swap ends). */
     val settled = derivedStateOf { q() >= 1f }
     fun leaving(): DockFaces? = if (settled.value) null else from
+
+    /** The faces this swap leaves, settled or not (drawn at nothing once it has settled). */
+    fun left(): DockFaces? = from
 
     /** What leaves if the dock changes again now: a swap caught before its midpoint keeps what was leaving. */
     fun outgoing(): DockFaces = if (from != null && q() < HALF) from else shown

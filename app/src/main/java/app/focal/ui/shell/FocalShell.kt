@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -185,6 +186,17 @@ class ShellState internal constructor(
     /** What each destination asked the bottom column to show; only the current destination's is drawn. */
     internal val bottomContent = mutableStateMapOf<Destination, BottomContent>()
 
+    /**
+     * The note's page Finish is growing its paper for (T7 over the scene, T7b over the library), or null. For that
+     * fraction of a second what the paper covers and reveals keeps its state (the library, the page once it has its
+     * note, the dock once the page has registered its own): the stopped capture's last updates and the first steps
+     * of its transcription are set once it has landed, not in the frames it moves in. A derived state: the T7b clock
+     * ticks every frame and its readers recompose only when this changes.
+     */
+    internal val finishing: Destination? by derivedStateOf {
+        live.landingNote?.let { Destination.Note(it) } ?: pages.change?.takeIf { pages.freezesStage() }?.document
+    }
+
     /** The scene's dock (Pause | Finish in the scene's dress), shown over any page while the scene is up. */
     internal var sceneBottom by mutableStateOf<BottomContent?>(null)
 }
@@ -319,12 +331,14 @@ private fun Shell(
 ) {
     val colors = FocalTheme.colors
     val live = shell.live
-    val behindScene by remember(live) { derivedStateOf { live.open } }
+    // One decorator list for the display: a new one in each composition would recompose every page with the shell.
+    val decorator = rememberSaveableStateHolderNavEntryDecorator<Destination>(pageStates)
+    val decorators = remember(decorator) { listOf(decorator) }
     Box(Modifier.fillMaxSize()) {
-        Box(
+        InertBehindScene(
+            live,
             Modifier
                 .fillMaxSize()
-                .inert(behindScene)
                 // The dim covers the whole window, the paper the scaled pages leave at its edges included.
                 .drawWithContent {
                     drawContent()
@@ -350,7 +364,7 @@ private fun Shell(
                 backStack = shell.backStack,
                 modifier = Modifier.zIndex(PAGES_Z),
                 onBack = { shell.back() },
-                entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(pageStates)),
+                entryDecorators = decorators,
                 transitionSpec = { pageSwap() },
                 popTransitionSpec = { pageSwap() },
                 predictivePopTransitionSpec = { edge ->
@@ -373,12 +387,30 @@ private fun Shell(
             if (!twoPane) PageTransformOverlay(shell.pages, shell.live, shell.bottom, Modifier.zIndex(OVERLAY_Z))
         }
         LiveSurfaceHost(shell.live, scene)
-        // While Finish's paper grows over the library (T7b, under 200 ms), Back waits, as it does over the scene (T7):
-        // the page would otherwise fold into the stage the paper is still covering.
-        val finishing by remember(shell) { derivedStateOf { shell.pages.freezesStage() } }
-        BackHandler(enabled = finishing) { }
+        FinishingBack(shell)
         ShellBottom(shell, layout)
     }
+}
+
+/**
+ * The pages, inert behind the open scene. Its own scope: the scene opening or Finish starting recomposes this, not the
+ * shell and every page in it.
+ */
+@Composable
+private fun InertBehindScene(live: LiveSurfaceState, modifier: Modifier, content: @Composable BoxScope.() -> Unit) {
+    val behindScene by remember(live) { derivedStateOf { live.open } }
+    Box(modifier.inert(behindScene), content = content)
+}
+
+/**
+ * While Finish's paper grows over the library (T7b, about a third of a second), Back waits, as it does over the scene
+ * (T7): the page would otherwise fold into the stage the paper is still covering. Its own scope, like
+ * [InertBehindScene].
+ */
+@Composable
+private fun FinishingBack(shell: ShellState) {
+    val finishing by remember(shell) { derivedStateOf { shell.pages.freezesStage() } }
+    BackHandler(enabled = finishing) { }
 }
 
 /**
@@ -534,8 +566,15 @@ private fun rememberDockAreas(shell: ShellState, layout: WindowLayout): DockArea
     }
 }
 
-/** The last bottom content shown: a page that is arriving registers its own a frame later. */
-private class ShownBottom { var content: BottomContent? = null }
+/**
+ * The last bottom content shown: a page that is arriving registers its own a frame later. [held]: the last one a page
+ * registered ([heldFor]), kept while Finish's paper grows over it.
+ */
+private class ShownBottom {
+    var content: BottomContent? = null
+    var held: BottomContent? = null
+    var heldFor: Destination? = null
+}
 
 @Composable
 private fun ShellBottom(shell: ShellState, layout: WindowLayout) {
@@ -559,8 +598,18 @@ private fun ShellBottom(shell: ShellState, layout: WindowLayout) {
     // It is the last one shown too: Finish over the scene (T7) keeps the scene's Pause | Finish, in the scene's dress,
     // until the note's page has registered its dock, never an older dock the scene was opened over.
     val scene = if (live.visible && live.landingNote == null) (shell.sceneBottom ?: sceneDock(shell)).also { shown.content = it } else null
-    val content = scene
-        ?: shell.bottomContent[current]?.also { shown.content = it }
+    val registered = shell.bottomContent[current]
+    // While Finish's paper grows (ShellState.finishing), the dock the note's page registered stays as it was then.
+    val finishingHere = shell.finishing == current
+    if (!finishingHere) shown.held = null
+    val held = shown.held?.takeIf { finishingHere && shown.heldFor == current }
+    val content = held
+        ?: scene
+        ?: registered?.also {
+            shown.content = it
+            shown.held = it
+            shown.heldFor = current
+        }
         ?: shell.pages.arrivingDock(current)?.let { BottomContent(it, NoActions, strip = null, rows = null, dockHidden = false) }
         ?: shown.content?.takeIf { current.hasDock }
         ?: return
@@ -592,6 +641,7 @@ private fun ShellBottom(shell: ShellState, layout: WindowLayout) {
                 requests = shell.bottom.dock, rail = layout.rail,
                 // T7: the note's paper grows out of the pill under the finger, which was the scene's white Finish.
                 leavingOnMaterial = live.landingNote != null,
+                holdLeaving = finishingHere,
             )
         },
         strip = content.strip,

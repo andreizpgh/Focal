@@ -73,7 +73,11 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
     var frozenState by remember(id) { mutableStateOf<NoteUiState?>(null) }
     val lastValid = remember(id) { object { var value: NoteUiState? = null } }
     if (state.loaded && !state.missing) lastValid.value = state
-    val shownState = frozenState ?: if (state.missing) lastValid.value ?: state else state
+    val latest = frozenState ?: if (state.missing) lastValid.value ?: state else state
+    // While Finish's paper grows over this page (T7, T7b), the page keeps the note it had loaded: the transcription's
+    // first steps are set once the paper has landed, not in the frames it moves in.
+    val held = remember(id) { object { var state: NoteUiState? = null } }
+    val shownState = held.state?.takeIf { it.loaded && shell.finishing == destination } ?: latest.also { held.state = it }
     val current by rememberUpdatedState(shownState)
 
     val words = RouteWords(

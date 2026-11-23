@@ -306,6 +306,7 @@ fun RecordingSurface(
         // The material and everything on it, clipped to the morph's rounded rect. Finish (T7) leaves the scene where
         // it is and cuts the note's paper out of it, growing from the dock's pill: the page and its dock show there.
         val bloom = landing && spatial
+        val contentGone by remember(live) { derivedStateOf { live.landingNote != null && live.landingContent.value <= 0f } }
         Box(
             Modifier
                 .fillMaxSize()
@@ -341,7 +342,9 @@ fun RecordingSurface(
                 wake = if ((entry == SceneEntry.RecordEmpty || entry == SceneEntry.Record) && spatial) live.wake else null,
             )
             if (entry == SceneEntry.Record && spatial) LeavingNote(live, frame, choreography)
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = choreography.chrome.value * live.landingContent.value }) {
+            // Once Finish's content has left (T7), nothing of it is composed or drawn: the live wave and the text would
+            // otherwise redraw every frame inside the layer the paper is cut out of.
+            if (!contentGone) Box(Modifier.fillMaxSize().graphicsLayer { alpha = choreography.chrome.value * live.landingContent.value }) {
                 // The stage's typesetting travels only out of (and into) a live stage: Record grows the scene out of a
                 // note or the resting instrument, whose text leaves on its own (T1′, T1′e).
                 TextRegion(
@@ -355,7 +358,7 @@ fun RecordingSurface(
                 Chevron(frame, slots, actions.collapse)
                 LatestPill(open, listState, slots, latest)
             }
-            if (landing) LandingDock(scene.paused, live)
+            if (landing && !contentGone) LandingDock(scene.paused, live)
         }
         // T1′e: the resting instrument's paper dress, over the material until it is opaque (Light only).
         if (entry == SceneEntry.RecordEmpty && spatial && !colors.dark && live.restBounds != null) {

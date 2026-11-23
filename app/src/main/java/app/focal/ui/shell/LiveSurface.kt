@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
@@ -269,14 +270,15 @@ class LiveSurfaceState internal constructor(open: Boolean) {
     }
 
     /**
-     * T7, after [prepareLanding]: [openNote] puts the note's page under the scene, and the page's paper grows out of
-     * the dock's pill, the Finish under the finger, on the page spring until it has covered the window
-     * ([Morph.bloom]), while the scene's content leaves on `fadeFast`. The scene never moves or turns grey: what it
-     * still shows is the material at full strength, and the paper takes its place edge by edge (a dark surface faded
-     * over white paper is a grey wash). Under reduced motion the scene crossfades away in 150 ms. Then the surface is
-     * gone; the spring's tail, all of it off screen, is not waited for.
+     * T7, after [prepareLanding]: [openNote] puts the note's page under the scene and the scene's content leaves on
+     * `fadeFast`. Once the page has its note and has composed it ([pageReady], and not before [LANDING_HOLD_MS]), its
+     * paper grows out of the dock's pill, the Finish under the finger, on `bloom` until it has covered the window
+     * ([Morph.bloom]): the frames that build the page are spent while the content leaves, never in the paper's motion.
+     * The scene never moves or turns grey: what it still shows is the material at full strength, and the paper takes
+     * its place edge by edge (a dark surface faded over white paper is a grey wash). Under reduced motion the scene
+     * crossfades away in 150 ms. Then the surface is gone; the spring's tail, all of it off screen, is not waited for.
      */
-    suspend fun land(reducedMotion: Boolean, openNote: () -> Unit) {
+    suspend fun land(reducedMotion: Boolean, pageReady: () -> Boolean = { true }, openNote: () -> Unit) {
         try {
             // A fold or an expand still running ends here: the scene settles from its full size.
             expansion.snapTo(1f)
@@ -291,9 +293,20 @@ class LiveSurfaceState internal constructor(open: Boolean) {
                 launch(start = CoroutineStart.UNDISPATCHED) {
                     landingContent.animateTo(0f, FocalMotion.fromTrigger(FocalMotion.fadeFast()))
                 }
-                val bloom = launch(start = CoroutineStart.UNDISPATCHED) {
-                    landing.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.pageUnit()))
-                }
+                var start = Long.MIN_VALUE
+                var last = Long.MIN_VALUE
+                var calm = 0
+                do {
+                    val now = withFrameNanos { it }
+                    if (start == Long.MIN_VALUE) start = now
+                    // Frames that come on time: what Finish set off (the page, the stopped capture) has been built.
+                    calm = if (last != Long.MIN_VALUE && now - last <= CALM_FRAME_MS * NANOS_PER_MS) calm + 1 else 0
+                    last = now
+                    // The content gone is the content removed (RecordingSurface): that is done before the paper moves too.
+                    val waiting = now - start < LANDING_HOLD_MS * NANOS_PER_MS || !pageReady() || landingContent.value > 0f ||
+                        calm < CALM_FRAMES
+                } while (waiting && now - start < HOLD_LIMIT_MS * NANOS_PER_MS)
+                val bloom = launch(start = CoroutineStart.UNDISPATCHED) { landing.animateTo(1f, FocalMotion.bloomUnit()) }
                 snapshotFlow { landing.value >= Morph.BLOOM_COVERED }.first { it }
                 bloom.cancel()
             }
@@ -309,6 +322,17 @@ class LiveSurfaceState internal constructor(open: Boolean) {
     }
 
     companion object {
+        /**
+         * T7: the paper waits at least this long and until the scene's content has left, then for the page and for
+         * [CALM_FRAMES] frames in a row no longer than [CALM_FRAME_MS] (a frame that ran long means work Finish set
+         * off is still being done, and a motion started then would stutter), and never longer than [HOLD_LIMIT_MS]
+         * after Finish (T7b holds the same way).
+         */
+        private const val LANDING_HOLD_MS = 64L
+        const val CALM_FRAMES = 2
+        const val CALM_FRAME_MS = 20L
+        const val HOLD_LIMIT_MS = 260L
+        private const val NANOS_PER_MS = 1_000_000L
         /** The pages behind the morph (spec 2.8.2 `libraryScale`). */
         const val PAGES_SCALE = 0.06f
 

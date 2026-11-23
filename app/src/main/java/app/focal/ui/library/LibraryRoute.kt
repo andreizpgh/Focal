@@ -18,6 +18,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -105,13 +106,21 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
     // finishes so StageCard never flashes from dark LiveStage to light NoteStage for 1-2 frames after Finish.
     val lastLive = remember { object { var value: RecordingUiState? = null } }
     if (recordingState.live) lastLive.value = recordingState
-    val frozenLive = if (shell.pages.freezesStage()) lastLive.value else null
+    // Read through a derived state: the transform's clock ticks every frame, and a plain read here would recompose the
+    // whole library with it while Finish's paper grows over it.
+    val freezes by remember(shell) { derivedStateOf { shell.pages.freezesStage() } }
+    val frozenLive = if (freezes) lastLive.value else null
     val shown = when {
         frozenLive != null -> frozenLive
         shell.live.covered -> recordingState
         else -> RecordingUiState()
     }
-    val model = remember(libraryState, shown, fresh) { LibraryModels.of(libraryState, shown, fresh) }
+    val built = remember(libraryState, shown, fresh) { LibraryModels.of(libraryState, shown, fresh) }
+    // While Finish's paper grows over the library (T7b) or over the scene above it (T7), the library is being covered
+    // as it was at Finish: the new note, the stage's change and the rows the recording's end brings are built once the
+    // paper has landed, not in the frames it moves in.
+    val held = remember { object { var model: LibraryModel? = null } }
+    val model = if (shell.finishing != null) held.model ?: built else built.also { held.model = it }
     val dates = rememberLibraryDates()
     val today = rememberToday()
     // Read when an action runs: the remembered actions below outlive a change of the setting.

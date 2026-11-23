@@ -429,7 +429,14 @@ ones stand in for amendments to the specification.
   row's fold (reverse T16) squares the rest of its way; its band has no shadow
   or hairlines, its paper reaches 24 dp past its edges and fades out there, and
   it dissolves with the scrim as the flying title comes within 16 dp of its
-  line.
+  line. A row's opening (T16) is borderless the same way, and neither direction
+  dims or scales the library (6.1's `libraryScale` and scrim now belong to the
+  stage only). Finish's paper runs on its own critically damped spring
+  (stiffness 130, the window covered at about 340 ms) and starts once the
+  note's page is laid out and two frames have come on time; until it has
+  landed, the library, the page and the dock keep their state. Titles with the
+  same line breaks crossfade at one width instead of scaling one typesetting
+  into the other's place.
 
 **Not resolved**
 
