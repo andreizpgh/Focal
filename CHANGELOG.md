@@ -5,6 +5,31 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
+## [0.5.7] - 2026-11-23
+
+### Changed
+
+- **Smoother Finish.** The note's paper now grows out of the Finish pill on a
+  gentler spring and starts only once the note's page is built and the frames
+  Finish sets off are done, so it is no longer interrupted by that work. While
+  it grows, the library, the page and the dock keep the state they had, and the
+  library no longer shrinks back under it.
+- **Borderless row opening.** Opening a note from a row now matches folding it
+  back: no shadow, hairlines or dimming, the library stays still, and the
+  paper's soft edge grows from the row.
+- **Steady titles.** A title crossfades between the row's and the page's
+  typesetting at one shared width, so short titles no longer jump in width as
+  they land in their row.
+
+### Fixed
+
+- During Finish from the folded card, the whole library no longer recomposes
+  on every frame of the transition.
+- Opening the recording screen or starting Finish no longer recomposes every
+  page of the app: those changes now reach only the parts that read them.
+- The dock removes the controls a swap has replaced after Finish's paper has
+  landed, not in the middle of its motion.
+
 ## [0.5.6] - 2026-11-23
 
 ### Changed
