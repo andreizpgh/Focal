@@ -33,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -45,7 +44,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -167,21 +165,15 @@ fun NoteRowItem(
     val working = row.phase == NotePhase.TRANSCRIBING || row.phase == NotePhase.WAITING || row.phase == NotePhase.PREPARING_MODEL
     val titleText = noteTitle(row, dates)
     val menuActions = actions.menuActions(row)
-    val pages = LocalShell.current.pages
     val origin = rememberRowOrigin(row.id, titleMuted = row.title.isBlank(), dock = pageDock(row, capturing))
     val prepare by rememberUpdatedState(actions.prepare)
     val platePath = remember { Path() }
-    val rowLayer = rememberGraphicsLayer()
-    DisposableEffect(origin, rowLayer) {
-        origin.layer = rowLayer
-        onDispose { if (origin.layer === rowLayer) origin.layer = null }
-    }
     Box(
         modifier
             .fillMaxWidth()
             .drawBehind {
                 val a = plate.value
-                if (a <= 0f || pages.hidesRow(row.id)) return@drawBehind
+                if (a <= 0f) return@drawBehind
                 val inset = RowMetrics.plateInset.toPx()
                 val round = CornerRadius(FocalShapes.blockRadius.toPx())
                 // Rows that are selected next to each other are one block: a stack of rounded plates, each with its
@@ -217,28 +209,21 @@ fun NoteRowItem(
             )
             .padding(horizontal = RowMetrics.plateInset),
     ) {
-        // The row's plate box (matching RowPlate) is what the elevated card grows out of and folds back into (T16).
         Box(
             Modifier
                 .fillMaxWidth()
                 .pageOrigin(origin)
-                .drawWithContent {
-                    if (pages.recordsOrigin(row.id)) rowLayer.record { this@drawWithContent.drawContent() }
-                    if (!pages.hidesRow(row.id)) drawContent()
-                }
                 .padding(horizontal = FocalLayout.gutter - RowMetrics.plateInset, vertical = RowMetrics.hitPad),
         ) {
             Column {
                 TitleLine(
                     title = title ?: {
-                        // Balanced, so a title never ends on a lone word; hidden while a copy of it flies to the page.
                         Text(
                             titleText, style = RowTitleStyle, onTextLayout = { origin.layout = it }, color = if (row.title.isBlank()) colors.recede else colors.ink,
                             maxLines = RowMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .pageOrigin(origin, title = true)
-                                .graphicsLayer { alpha = if (pages.flying(row.id)) 0f else 1f },
+                                .pageOrigin(origin, title = true),
                         )
                     },
                     trailing = trailing,

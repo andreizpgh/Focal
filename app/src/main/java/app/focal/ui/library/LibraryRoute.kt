@@ -101,7 +101,16 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
     val search by library.search.collectAsStateWithLifecycle()
     val fresh = FreshNotes.current
     // After Record the library keeps its layout until the scene covers it (spec 2.8.2 `liveLayoutSwitch`).
-    val shown = if (shell.live.covered) recordingState else RecordingUiState()
+    // And during folded LiveStage -> Finish (T7b), keep the last live RecordingUiState frozen until the transform
+    // finishes so StageCard never flashes from dark LiveStage to light NoteStage for 1-2 frames after Finish.
+    val lastLive = remember { object { var value: RecordingUiState? = null } }
+    if (recordingState.live) lastLive.value = recordingState
+    val frozenLive = if (shell.pages.freezesStage()) lastLive.value else null
+    val shown = when {
+        frozenLive != null -> frozenLive
+        shell.live.covered -> recordingState
+        else -> RecordingUiState()
+    }
     val model = remember(libraryState, shown, fresh) { LibraryModels.of(libraryState, shown, fresh) }
     val dates = rememberLibraryDates()
     val today = rememberToday()
@@ -141,7 +150,7 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
             prepare = { id -> activity?.let { NoteViewModel.prepare(it, id) } },
             openResult = { result ->
                 val hit = result.paragraphId?.let { NoteHit(it, result.hitStart, result.hitEnd) }
-                shell.open(Destination.Note(result.row.id, hit))
+                shell.open(Destination.Note(result.row.id, hit), PageMotion.Row)
             },
             expand = { scope.launch { shell.live.expand(reduced) } },
             copy = { row ->

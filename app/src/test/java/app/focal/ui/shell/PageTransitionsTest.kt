@@ -40,13 +40,14 @@ class PageTransitionsTest {
         assertEquals(null, pages.provisional())
     }
 
-    @Test fun rowTransformDrawsCleanPaperCardWithoutGraySurface() {
+    @Test fun secondaryRowUsesLateralSlideNotContainerTransform() {
+        assertFalse(PageMotion.Row in PageTransitions.CONTAINERS)
+        assertTrue(PageMotion.Stage in PageTransitions.CONTAINERS)
+        assertTrue(PageMotion.LiveStage in PageTransitions.CONTAINERS)
         val open = PageChange(PageMotion.Row, a, push = true, other = Destination.Library)
         val back = PageChange(PageMotion.Row, a, push = false, other = Destination.Library)
         assertEquals(0f, pages.material(open), 0.0001f)
         assertEquals(0f, pages.material(back), 0.0001f)
-        assertEquals(1f, pages.paperAlpha(open), 0.0001f)
-        assertEquals(1f, pages.paperAlpha(back), 0.0001f)
         assertEquals(1f, pages.libraryScale(), 0.0001f)
     }
 }

@@ -2,7 +2,10 @@ package app.focal.gallery
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import app.focal.ui.library.LibraryActions
 import app.focal.ui.library.LibraryHost
 import app.focal.ui.library.LibraryPage
@@ -35,7 +38,7 @@ object TransitionShots {
         for (t in listOf(60L, 140L)) add(Shot("t16-row-open-$t-light", dark = false, settleMs = after(AT_MS, t)) { RowToNote(back = false) })
         for (t in listOf(60L, 120L, 200L)) add(Shot("t16-row-back-$t-light", dark = false, settleMs = after(AT_MS + OPEN_MS, t)) { RowToNote(back = true) })
         add(Shot("t16-row-back-120-dark", dark = true, settleMs = after(AT_MS + OPEN_MS, 120)) { RowToNote(back = true) })
-        for (t in listOf(60L, 140L, 260L)) add(Shot("t7b-$t-light", dark = false, settleMs = after(AT_MS, t)) { LiveToNote() })
+        for (t in listOf(20L, 80L, 140L, 240L)) add(Shot("t7b-$t-light", dark = false, settleMs = after(AT_MS, t)) { LiveToNote() })
         add(Shot("t7b-140-dark", dark = true, settleMs = after(AT_MS, 140)) { LiveToNote() })
         for (t in listOf(80L, 160L)) add(Shot("note-sheet-back-$t-light", dark = false, settleMs = after(AT_MS + OPEN_MS, t)) { SheetBackNote() })
         add(Shot("note-sheet-back-120-dark", dark = true, settleMs = after(AT_MS + OPEN_MS, 120)) { SheetBackNote() })
@@ -104,17 +107,20 @@ private fun RowToNote(back: Boolean) {
     })
 }
 
-/** T7b: Finish in the library dock opens the live stage into the new note's page, which develops as in T7. */
+/** T7b: Finish in the library dock opens the live stage into the new note's page, simulating recording ending right at Finish. */
 @Composable
 private fun LiveToNote() {
     val shell = rememberShellState()
     val note = remember { saturdayNote(NotePhase.TRANSCRIBING) }
+    var live by remember { mutableStateOf(true) }
     LaunchedEffect(shell) {
         waitFrames(AT_MS)
         shell.open(Destination.Note(note.noteId), PageMotion.LiveStage)
+        live = false
     }
+    val model = if (live || shell.pages.freezesStage()) liveModel(paused = false) else idleModel()
     FocalShell(shell, destination = { d ->
-        if (d is Destination.Note) NotePageOf(note, d, landing = true) else LibraryDestination(liveModel(paused = false))
+        if (d is Destination.Note) NotePageOf(note, d, landing = true) else LibraryDestination(model)
     })
 }
 

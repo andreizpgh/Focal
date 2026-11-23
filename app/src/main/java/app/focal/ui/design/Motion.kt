@@ -263,9 +263,9 @@ object FocalTiming {
     /** At most this many paragraphs stagger (rack focus, the settle's develop); the others need none. */
     const val STAGGER_MAX = 12
     /** T7, T7b: the page under the settling scene develops its title, meta and paragraphs this long after Finish. */
-    const val SETTLE_TITLE_DELAY_MS = 80L
-    const val SETTLE_META_DELAY_MS = 130L
-    const val SETTLE_PARAGRAPH_DELAY_MS = 140L
+    const val SETTLE_TITLE_DELAY_MS = 100L
+    const val SETTLE_META_DELAY_MS = 150L
+    const val SETTLE_PARAGRAPH_DELAY_MS = 160L
     /** The settings hint shows once the library has been at rest this long, and at most this many times. */
     const val SETTINGS_HINT_IDLE_MS = 1500L
     const val SETTINGS_HINT_MAX = 2
