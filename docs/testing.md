@@ -79,9 +79,12 @@ adb shell wm size reset && adb shell wm density reset
 ```
 
 Each test method renders one group (`foundation`, `library`, `scene`, `note`,
-`finish`, `coverage`, `transitions`). Pass
+`finish`, `coverage`, `transitions`, `film`). Pass
 `-Pandroid.testInstrumentationRunnerArguments.shots=<prefixes>` to re-render a few
-shots. Some groups repeat shots at 1.3× and 2.0× font scale.
+shots. Some groups repeat shots at 1.3× and 2.0× font scale. `film` renders the
+row's opening and fold and both Finish transitions every 16 ms in both themes,
+for frame-by-frame review of motion; its frames come from the test's clock, not
+a device's timing.
 
 ### Release checks
 

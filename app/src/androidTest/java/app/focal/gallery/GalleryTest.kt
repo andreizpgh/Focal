@@ -99,6 +99,9 @@ class GalleryTest {
     @Test
     fun transitions() = render("transitions", TransitionShots.all)
 
+    @Test
+    fun film() = render("film", TransitionShots.film)
+
     /** A phone in landscape (spec 5.14): run alone, with the display turned to 1830 x 824 px at 320 dpi. */
     @Test
     fun landscape() = render("landscape", AdaptiveShots.landscape)

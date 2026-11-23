@@ -1,5 +1,6 @@
 package app.focal.ui.shell
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -372,6 +373,10 @@ private fun Shell(
             if (!twoPane) PageTransformOverlay(shell.pages, shell.live, shell.bottom, Modifier.zIndex(OVERLAY_Z))
         }
         LiveSurfaceHost(shell.live, scene)
+        // While Finish's paper grows over the library (T7b, under 200 ms), Back waits, as it does over the scene (T7):
+        // the page would otherwise fold into the stage the paper is still covering.
+        val finishing by remember(shell) { derivedStateOf { shell.pages.freezesStage() } }
+        BackHandler(enabled = finishing) { }
         ShellBottom(shell, layout)
     }
 }
@@ -551,7 +556,9 @@ private fun ShellBottom(shell: ShellState, layout: WindowLayout) {
     // them (it is composed in the frame p leaves 0), the dock already holds Pause | Finish, so its swap starts with
     // the tap. A page that opens out of the stage or a row shows the dock it will register (its origin knows the
     // note), for the same reason; actions arrive with the page, a frame or two later.
-    val scene = if (live.visible && live.landingNote == null) shell.sceneBottom ?: sceneDock(shell) else null
+    // It is the last one shown too: Finish over the scene (T7) keeps the scene's Pause | Finish, in the scene's dress,
+    // until the note's page has registered its dock, never an older dock the scene was opened over.
+    val scene = if (live.visible && live.landingNote == null) (shell.sceneBottom ?: sceneDock(shell)).also { shown.content = it } else null
     val content = scene
         ?: shell.bottomContent[current]?.also { shown.content = it }
         ?: shell.pages.arrivingDock(current)?.let { BottomContent(it, NoActions, strip = null, rows = null, dockHidden = false) }
@@ -583,6 +590,8 @@ private fun ShellBottom(shell: ShellState, layout: WindowLayout) {
             Dock(
                 content.dock, content.actions, material = shell.live.material, clock = shell.dockClock, hidden = content.dockHidden,
                 requests = shell.bottom.dock, rail = layout.rail,
+                // T7: the note's paper grows out of the pill under the finger, which was the scene's white Finish.
+                leavingOnMaterial = live.landingNote != null,
             )
         },
         strip = content.strip,

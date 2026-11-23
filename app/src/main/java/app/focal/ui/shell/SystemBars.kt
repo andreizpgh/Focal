@@ -48,13 +48,17 @@ class SystemBarsState {
     fun followMaterial(clip: Rect?, navigationTop: Float, density: Density) = followMaterial(clip, NavigationBar.bottom(navigationTop), density)
 
     /**
-     * T7: as the scene settles into the dock's pill, each bar returns to the theme's appearance in the first frame the
-     * clip's edge leaves it: the top below the status bar's bottom ([statusBottom]), the edge facing the [navigation]
-     * bar off its inner edge.
+     * T7: as the note's paper ([bloom], window pixels) grows over the scene, each bar returns to the theme's appearance
+     * in the first frame the paper's edge has passed the middle of it: the status bar (its bottom at [statusBottom])
+     * and the [navigation] bar, in a window whose bounds are [window].
      */
-    fun followLanding(clip: Rect, statusBottom: Float, navigation: NavigationBar) {
-        statusOnMaterial = clip.top < statusBottom
-        navigationOnMaterial = navigation.reach(clip) > 0f
+    fun followBloom(bloom: Rect, statusBottom: Float, navigation: NavigationBar, window: Rect) {
+        statusOnMaterial = bloom.top > statusBottom / 2
+        navigationOnMaterial = when (navigation.side) {
+            NavigationBar.Side.Bottom -> bloom.bottom < (navigation.inner + window.bottom) / 2
+            NavigationBar.Side.Left -> bloom.left > (window.left + navigation.inner) / 2
+            NavigationBar.Side.Right -> bloom.right < (navigation.inner + window.right) / 2
+        }
     }
 
     /** Under reduced motion the scene crossfades in place: both bars flip when its alpha passes one half. */

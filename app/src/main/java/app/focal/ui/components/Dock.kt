@@ -301,6 +301,7 @@ fun Dock(
     hidden: Boolean = false,
     requests: DockRequests? = null,
     rail: Boolean = false,
+    leavingOnMaterial: Boolean = false,
 ) {
     val circle = circleFace(state)
     val pill = pillFace(state)
@@ -318,6 +319,9 @@ fun Dock(
         else -> DockMetrics.circle
     }
     val edge = if (state is DockState.Live) material else null
+    // Finish over the scene (T7): the note's paper grows out of the pill, and the scene's Pause | Finish leave in the
+    // scene's dress over the note's controls, never turning into their paper dress (a black Finish) on the way out.
+    val leavingDress = if (leavingOnMaterial) Dress.Material else null
     if (rail) {
         // The rail's box is as wide as the labelled Resume at every moment, so the circle widening into it (and back)
         // never moves the box: both controls stay centred on the rail's axis.
@@ -331,14 +335,14 @@ fun Dock(
                 val circleSize = if (circle == CircleFace.None) 0.dp else DockMetrics.circle
                 val railCircleWidth = if (circle == CircleFace.Resume) resumeWidth else DockMetrics.circle
                 CircleSlot(
-                    face = circle, leaving = leaving?.circle, q = swap::q, actions = actions, edge = edge, rail = true,
+                    face = circle, leaving = leaving?.circle, q = swap::q, actions = actions, edge = edge, rail = true, leavingDress = leavingDress,
                     modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds).size(railCircleWidth, circleSize),
                 )
                 Spacer(Modifier.height(if (circleSize > 0.dp) DockMetrics.gap else 0.dp))
                 PillSlot(
                     face = pill, leaving = leaving?.pill, q = swap::q, notePill = (state as? DockState.Note)?.pill,
                     noteId = (state as? DockState.Note)?.noteId, actions = actions,
-                    edge = edge, hidden = hidden, requests = requests, rail = true, selected = selected,
+                    edge = edge, hidden = hidden, requests = requests, rail = true, selected = selected, leavingDress = leavingDress,
                     modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds).size(DockMetrics.circle),
                 )
             }
@@ -358,6 +362,7 @@ fun Dock(
                 q = swap::q,
                 actions = actions,
                 edge = edge,
+                leavingDress = leavingDress,
                 modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
                     .width(circleWidth).height(DockMetrics.height),
             )
@@ -383,6 +388,7 @@ fun Dock(
                 noteId = (state as? DockState.Note)?.noteId,
                 actions = actions,
                 edge = edge,
+                leavingDress = leavingDress,
                 hidden = hidden,
                 requests = requests,
                 selected = selected,
@@ -437,6 +443,8 @@ private fun CircleSlot(
     modifier: Modifier,
     rail: Boolean = false,
     onMore: () -> Unit = {},
+    /** The dress of a face on its way out, whatever the dress the slot now wipes to ([Dock]'s leavingOnMaterial). */
+    leavingDress: Dress? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val tooltip = rememberTooltipState()
@@ -475,8 +483,9 @@ private fun CircleSlot(
         .focusRing(FocalShapes.pill)
         .tapOrLabel(source, settledTap(face, onClick), rail) { scope.launch { tooltip.show() } }
     RailTooltip(description.takeIf { rail }, tooltip) {
-        DressWipe(edge, control) { dress ->
+        DressWipe(edge, control) { wiped ->
             SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
+                val dress = if (leavingDress != null && shown != face) leavingDress else wiped
                 if (shown != CircleFace.None) {
                     TonalContainer(dress, containerAlpha)
                     // Unbounded: "● Resume" keeps its width (never wraps) while the circle widens under it.
@@ -596,6 +605,8 @@ private fun PillSlot(
     requests: DockRequests?,
     rail: Boolean = false,
     selected: Int = 0,
+    /** The dress of a face on its way out, whatever the dress the slot now wipes to ([Dock]'s leavingOnMaterial). */
+    leavingDress: Dress? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val tooltip = rememberTooltipState()
@@ -668,19 +679,44 @@ private fun PillSlot(
         .focusRing(FocalShapes.pill)
         .tapOrLabel(source, settledTap(face, onClick), rail) { scope.launch { tooltip.show() } }
     RailTooltip(description.takeIf { rail }, tooltip) {
-        DressWipe(edge, control) { dress ->
+        DressWipe(edge, control) { wiped ->
+            // A black Record or Finish turning into the note's pill on paper (T16′, T7b): the pill's fill starts whole
+            // and runs back to the note's progress while the black container leaves with it, instead of black fading
+            // over the light track (a grey wash at the thumb).
+            val primaryLeaves = face == PillFace.NotePrimary && (leaving == PillFace.Record || leaving == PillFace.Finish) &&
+                (notePill as? NotePill.Copy)?.enabled != false
+            val dark = FocalTheme.colors.dark
+            // The scene's Finish is white: over Dark paper it is the fill's colour, over Light paper the paper's.
+            val sceneFinish = leavingDress == Dress.Material
+            val fromInk = primaryLeaves && (if (sceneFinish) dark else wiped == Dress.Paper)
+            // Finish over the scene in Light (T7): the scene's white Finish melts into the note's paper growing out of
+            // it (no shadow or ring off the material), and the note's fill runs in from the start edge instead of
+            // fading in under white.
+            val fromLight = primaryLeaves && sceneFinish && !dark
             SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
+                val dress = if (leavingDress != null && shown != face) leavingDress else wiped
+                val leavingInk = fromInk && shown != face
+                val melts = fromLight && shown != face
+                // Over Finish's paper (T7) the scene's white pill has neither its shadow nor its ring, which belong to
+                // the material, from the first frame: also while it is still the dock's face.
+                val plain = sceneFinish && dress == Dress.Material
+                // White into white paper: gone by the swap's middle, so the fill runs in crisp.
+                val primaryAlpha = when {
+                    leavingInk -> NoContainer
+                    melts -> { { 1f - smoothstep(0f, HALF, q()) } }
+                    else -> containerAlpha
+                }
                 when (shown) {
                     PillFace.Record -> {
                         val dot = FocalTheme.colors.recordDot
-                        PrimaryContainer(dress, containerAlpha)
+                        PrimaryContainer(dress, primaryAlpha, onPaper = plain)
                         PillContent(dress, contentAlpha) { ink ->
                             if (rail) RecordDot(dot, size = DockMetrics.railDot)
                             else LabelRow(stringResource(R.string.action_record), ink) { RecordDot(dot) }
                         }
                     }
                     PillFace.Finish -> {
-                        PrimaryContainer(dress, containerAlpha)
+                        PrimaryContainer(dress, primaryAlpha, onPaper = plain)
                         PillContent(dress, contentAlpha) { ink ->
                             if (rail) FinishSquare(ink, size = DockMetrics.railSquare)
                             else LabelRow(stringResource(R.string.action_finish), ink) { FinishSquare(ink) }
@@ -689,7 +725,16 @@ private fun PillSlot(
                     // Keyed by its note: another note's pill starts from that note's state, with no readiness tick
                     // and no fill left over from the one before (two panes switch notes under one dock).
                     PillFace.NotePrimary -> key(noteId) {
-                        NotePrimaryPill(notePill ?: NotePill.Copy(), copied, containerAlpha, contentAlpha, hidden, rail)
+                        NotePrimaryPill(
+                            notePill ?: NotePill.Copy(), copied, containerAlpha, contentAlpha, hidden, rail,
+                            fillFrom = when {
+                                shown != face -> null
+                                fromInk -> 1f
+                                fromLight -> 0f
+                                else -> null
+                            },
+                            swap = q,
+                        )
                     }
                     PillFace.Delete -> {
                         PrimaryContainer(dress, containerAlpha)
@@ -742,7 +787,21 @@ private fun LabelRow(text: String, color: Color, glyph: @Composable () -> Unit) 
  * Copy confirms with the check and "Copied" for 1600 ms.
  */
 @Composable
-private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerAlpha: () -> Float, contentAlpha: () -> Float, hidden: Boolean, rail: Boolean) {
+private fun BoxScope.NotePrimaryPill(
+    pill: NotePill,
+    copied: Boolean,
+    containerAlpha: () -> Float,
+    contentAlpha: () -> Float,
+    hidden: Boolean,
+    rail: Boolean,
+    /**
+     * Where the fill comes from while it takes over from a Record or Finish ([swap] 0 → 1): the whole pill, from one of
+     * the fill's own colour (on paper, or the scene's white one over Dark paper); nothing, from the scene's white one
+     * melting into Light paper.
+     */
+    fillFrom: Float? = null,
+    swap: () -> Float = { 1f },
+) {
     val colors = FocalTheme.colors
     val haptics = rememberFocalHaptics()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -766,6 +825,8 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
     }
     val enabled = pill !is NotePill.Copy || pill.enabled
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    // The fill as drawn: the progress, or more of the pill while it takes over from a black control.
+    val shownFill: () -> Float = { fillFrom?.let { from -> from + (fill.value - from) * swap().coerceIn(0f, 1f) } ?: fill.value }
     // Container: the `s1` track, the `inv` fill from the start edge (its leading end straight), clipped to the pill.
     // In the rail's circle the fill rises from the bottom, like a level.
     Box(
@@ -778,10 +839,10 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
                 drawOutline(outline, base, alpha = a)
                 if (enabled) clipPath(clip) {
                     if (rail) {
-                        val height = size.height * fill.value
+                        val height = size.height * shownFill()
                         drawRect(colors.inv, topLeft = Offset(0f, size.height - height), size = Size(size.width, height), alpha = a)
                     } else {
-                        val width = size.width * fill.value
+                        val width = size.width * shownFill()
                         val left = if (rtl) size.width - width else 0f
                         drawRect(colors.inv, topLeft = Offset(left, 0f), size = Size(width, size.height), alpha = a)
                     }
@@ -818,7 +879,7 @@ private fun BoxScope.NotePrimaryPill(pill: NotePill, copied: Boolean, containerA
         )
         Box(
             Modifier.matchParentSize().drawWithContent {
-                val width = size.width * fill.value
+                val width = size.width * shownFill()
                 clipRect(left = if (rtl) size.width - width else 0f, right = if (rtl) size.width else width) { this@drawWithContent.drawContent() }
             },
             contentAlignment = Alignment.Center,
@@ -925,6 +986,9 @@ private fun <F : Any> SlotSwap(shown: F, leaving: F?, q: () -> Float, face: @Com
 
 private const val HALF = 0.5f
 
+/** A container that is not drawn: another control's fill stands in for it (see PillSlot). */
+private val NoContainer: () -> Float = { 0f }
+
 /** Search, Pause, Play circles and the Resume pill: `s1` on paper, glass on the material. */
 @Composable
 private fun BoxScope.TonalContainer(dress: Dress, alpha: () -> Float) {
@@ -944,9 +1008,12 @@ private fun BoxScope.TonalContainer(dress: Dress, alpha: () -> Float) {
     )
 }
 
-/** Record, Finish and Copy: `inv` on paper; the material's white gradient with ring and shadow (spec 2.2). */
+/**
+ * Record, Finish and Copy: `inv` on paper; the material's white gradient with ring and shadow (spec 2.2). [onPaper]:
+ * the material's pill leaving over paper, its gradient only.
+ */
 @Composable
-private fun BoxScope.PrimaryContainer(dress: Dress, alpha: () -> Float) {
+private fun BoxScope.PrimaryContainer(dress: Dress, alpha: () -> Float, onPaper: Boolean = false) {
     val colors = FocalTheme.colors
     Box(
         Modifier.matchParentSize().drawWithCache {
@@ -957,7 +1024,10 @@ private fun BoxScope.PrimaryContainer(dress: Dress, alpha: () -> Float) {
             val radius = size.height / 2
             onDrawBehind {
                 val a = alpha()
-                if (dress == Dress.Paper) drawOutline(outline, colors.inv, alpha = a) else {
+                if (dress == Dress.Paper) drawOutline(outline, colors.inv, alpha = a) else if (onPaper) {
+                    // The material's white pill over paper (T7): its shadow and ring belong to the material.
+                    drawOutline(outline, gradient, alpha = a)
+                } else {
                     if (shadow != null && a > 0f) {
                         shadow.alpha = (Scene.actionShadow.alpha * a * 255).roundToInt()
                         drawIntoCanvas { it.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, radius, radius, shadow) }

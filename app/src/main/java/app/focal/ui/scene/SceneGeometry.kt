@@ -447,8 +447,30 @@ object Morph {
         )
     }
 
-    /** T7: the scene's clip contracts from the window into the dock pill's bounds, its corners growing to 28 dp. */
-    fun landing(q: Float, slots: SceneSlots): Pair<Rect, Float> = clip(q, slots.window, slots.pill) to slots.corner * q
+    /**
+     * Finish (T7, T7b): the note's paper grows out of the dock's primary pill (q = 0) until it has covered [window].
+     * Its corners keep the pill's [radius]; the sides and the bottom leave the window, corners and all, at
+     * [BLOOM_SIDES_GONE] of the way and the top at [BLOOM_COVERED], so no sliver of what it covers lingers at an edge
+     * while the spring settles: past that the shape is off screen. The edges only ever move outward.
+     */
+    fun bloom(q: Float, pill: Rect, window: Rect, radius: Float): Rect {
+        fun edge(from: Float, gone: Float, at: Float) = from + (gone - from) * (q / at)
+        return Rect(
+            left = edge(pill.left, window.left - radius, BLOOM_SIDES_GONE),
+            top = edge(pill.top, window.top - radius, BLOOM_COVERED),
+            right = edge(pill.right, window.right + radius, BLOOM_SIDES_GONE),
+            bottom = edge(pill.bottom, window.bottom + radius, BLOOM_SIDES_GONE),
+        )
+    }
+
+    /** T7: the paper growing out of the dock's pill into the note's page, in the scene's slots. */
+    fun landing(q: Float, slots: SceneSlots): Rect = bloom(q, slots.pill, slots.window, slots.corner)
+
+    /** The bloom's sides and bottom have left the window, rounded corners included. */
+    const val BLOOM_SIDES_GONE = 0.6f
+
+    /** The bloom has covered the whole window: its top edge has left it too. */
+    const val BLOOM_COVERED = 0.9f
 
     /**
      * Where a released drag settles (spec 6.5), from [p0] (p when the drag was claimed) and [p] now, with the finger's

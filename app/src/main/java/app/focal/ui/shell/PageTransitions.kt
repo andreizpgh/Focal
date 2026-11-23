@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -82,7 +83,6 @@ import androidx.navigationevent.NavigationEvent
 import app.focal.ui.components.BottomColumnState
 import app.focal.ui.components.DockMetrics
 import app.focal.ui.components.DockState
-import app.focal.ui.components.SceneMaterialPainter
 import app.focal.ui.design.FocalClock
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
@@ -92,6 +92,7 @@ import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalTiming
 import app.focal.ui.design.TriggerClock
 import app.focal.ui.design.smoothstep
+import app.focal.ui.scene.Morph
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.max
@@ -118,7 +119,10 @@ enum class PageMotion {
     /** T16: a row opens into its note's page; Back folds it back into the row. */
     Row,
 
-    /** T7b: Finish in the library dock: the live stage opens into the new note's page, which develops as in T7. */
+    /**
+     * T7b: Finish in the library dock: the new note's page grows out of the dock's pill over the library (as its paper
+     * grows over the scene in T7) and develops as in T7.
+     */
     LiveStage,
 }
 
@@ -473,7 +477,9 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
 
     /** What [c] has drawn this frame, for the change that reverses it. */
     private fun startOf(c: PageChange): ChangeStart = ChangeStart(
-        v = documentProgress(), body = body(c), rows = rows(c), title = titleProgress(c),
+        // A row's fold is drawn by its own geometry (rowFold): the opening that reverses it starts from there.
+        v = if (c.motion == PageMotion.Row && !c.push) 1f - titleProgress(c) else documentProgress(),
+        body = body(c), rows = rows(c), title = titleProgress(c),
         content = if (c.push) content(c) else smoothstep(CONTENT_FROM, 1f, progress(c)),
     )
 
@@ -687,7 +693,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         if (c.motion !in CONTAINERS || change !== c) return false
         var waited = false
         if (resolvedFor !== c) {
-            val ready = originCard(c) != null
+            val ready = hasOrigin(c)
             if (!ready && elapsed <= DECIDE_MS) return false
             resolved = ready
             resolvedFor = c
@@ -710,7 +716,22 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      * progress across tap Open, Stage pull-down (and cancel), Back, and Predictive Back so title, card, and origin
      * content always travel as one unit.
      */
-    internal fun titleProgress(c: PageChange): Float = progress(c)
+    internal fun titleProgress(c: PageChange): Float = rowFold(c)
+
+    /**
+     * The container's geometry (its clip, the flying title, the origin's content riding it): [progress], but folding
+     * into a row the rest of the way is squared, counted from where the fold started. A row is a borderless line among
+     * others: the band and the title land on it well before the spring's tail, so nothing creeps over the rows around
+     * it while they show again ([rowSheet]); an exit is quicker than an entry. Its speed is continuous at both ends.
+     */
+    private fun rowFold(c: PageChange): Float {
+        val p = progress(c)
+        if (c.motion != PageMotion.Row || c.push) return p
+        val from = (1f - c.start.v).coerceIn(0f, 1f)
+        if (from >= 1f) return p
+        val rest = 1f - ((p - from) / (1f - from)).coerceIn(0f, 1f)
+        return from + (1f - from) * (1f - rest * rest)
+    }
 
     /** True when a Note page uses the unified elevated-sheet transition over the Library (no on-screen Stage/Row origin). */
     private fun isNoteSheet(c: PageChange): Boolean =
@@ -788,6 +809,12 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         originOf(c)?.card?.takeIf { it.isAttached && it.size.width > 0 && !it.boundsInWindowOrEmpty().isEmpty }
 
     /**
+     * Whether [c]'s origin is on screen: the stage or the row it grows out of; for Finish in the library dock (T7b),
+     * the dock's pill, which is always there.
+     */
+    private fun hasOrigin(c: PageChange): Boolean = c.motion == PageMotion.LiveStage || originCard(c) != null
+
+    /**
      * Whether the change in flight is a container transform whose origin is on screen: decided by the clock at the
      * start of a frame ([decide]); a released predictive back decides as it is released ([pop]).
      */
@@ -860,7 +887,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
 
     /**
      * The origin surface tint alpha on the expanding paper sheet: tonal card tint for resting Stage only.
-     * Row unfolds pure paper; LiveStage expands pure paper underneath its separate 100%-opaque contracting obsidian capsule.
+     * Row unfolds pure paper; LiveStage's paper grows out of the dock's pill.
      */
     internal fun material(c: PageChange): Float = when {
         c.motion == PageMotion.Row || c.motion == PageMotion.LiveStage -> 0f
@@ -868,8 +895,45 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         else -> smoothstep(STAGE_MATERIAL_FROM, STAGE_MATERIAL_TO, progress(c))
     }
 
-    /** Every container transform draws an opaque paper sheet over the dimmed, recessed library. */
-    internal fun paperAlpha(c: PageChange): Float = 1f
+    /** Every container transform draws an opaque paper sheet over the dimmed, recessed library, but a row's fold. */
+    internal fun paperAlpha(c: PageChange): Float = rowSheet(c)
+
+    /**
+     * T16 Back: how much of the band folding into a row is still a sheet (1 → 0). A row has no edges of its own: left
+     * to the end, the band's edges would close in on it over the rows around it, cutting their lines in two. So the
+     * band's paper, soft past its edges (TransformLayers), and the scrim over the library dissolve as its row lands:
+     * whole while the flying title is [ROW_SHEET_FAR] or more from its line, gone once it is within [ROW_SHEET_NEAR]:
+     * from there nothing it carries overlaps a neighbour's lines. Without a flying title (a page scrolled past it), over [ROW_SHEET_FROM]
+     * to [ROW_SHEET_TO] of the fold's own way. 1 for every other change.
+     */
+    internal fun rowSheet(c: PageChange): Float {
+        if (c.motion != PageMotion.Row || c.push) return 1f
+        rowTitleLeft(c)?.let { left ->
+            return with(density) { smoothstep(ROW_SHEET_NEAR.toPx(), ROW_SHEET_FAR.toPx(), left) }
+        }
+        val from = (1f - c.start.v).coerceIn(0f, 1f)
+        val way = if (from >= 1f) 1f else ((rowFold(c) - from) / (1f - from)).coerceIn(0f, 1f)
+        return 1f - smoothstep(ROW_SHEET_FROM, ROW_SHEET_TO, way)
+    }
+
+    /** T16 Back: how far (px) the flying title's baseline still is from its row's, or null while no title flies. */
+    private fun rowTitleLeft(c: PageChange): Float? {
+        val id = noteIdOf(c.document) ?: return null
+        if (!flying(id)) return null
+        val frame = frames[c.document]?.takeIf { it.isAttached } ?: return null
+        val slot = originOf(c) ?: return null
+        val originTitle = slot.title?.takeIf { it.isAttached } ?: return null
+        val origin = slot.layout ?: return null
+        val page = titleOf(c) ?: return null
+        val layout = page.layout ?: return null
+        val pageCoordinates = page.coordinates?.takeIf { it.isAttached } ?: return null
+        if (origin.lineCount == 0 || layout.lineCount == 0) return null
+        val centre = Offset(frame.size.width / 2f, frame.size.height / 2f)
+        val from = frame.rectOf(originTitle).unscaledAround(centre, libraryScale())
+        val to = inPage(c, pageCoordinates, clip = false) ?: return null
+        val travel = abs(from.top + origin.firstBaseline - (to.top + layout.firstBaseline))
+        return travel * (1f - titleProgress(c))
+    }
 
     internal fun reveal(destination: Destination): PageReveal = PageReveal(
         chrome = {
@@ -981,12 +1045,16 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         }
     }
 
-    /** Unified origin content curve (Stage preview/footer or LiveStage wave/timer/text). */
+    /**
+     * Unified origin content curve (the stage's preview and footer, a row's own lines). Folding into a row, they are
+     * whole before its band has dissolved ([rowSheet]). LiveStage draws none: its paper grows out of the dock.
+     */
     internal fun content(c: PageChange): Float {
         val p = progress(c)
         return when {
-            c.motion == PageMotion.LiveStage -> smoothstep(LIVE_CONTENT_FROM, LIVE_CONTENT_TO, p)
+            c.motion == PageMotion.LiveStage -> 0f
             c.push -> smoothstep(OPEN_CONTENT_FROM, OPEN_CONTENT_TO, p)
+            c.motion == PageMotion.Row -> smoothstep(ROW_BACK_CONTENT_FROM, ROW_BACK_CONTENT_TO, p)
             else -> smoothstep(BACK_CONTENT_FROM, BACK_CONTENT_TO, p)
         }
     }
@@ -998,11 +1066,12 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         if (c.document == Destination.Licenses || c.motion == PageMotion.Cut) return 0f
         if (c.predictive) {
             if (!c.committed) return (1f - 0.55f * preview(c)).coerceIn(0f, 1f)
-            if (transforms(c)) return (1f - progress(c)).coerceIn(0f, 1f)
+            if (transforms(c)) return (1f - titleProgress(c)).coerceIn(0f, 1f)
             val v = documentProgress()
             return if (commitAt <= 0f) 0f else (v / commitAt).coerceIn(0f, 1f)
         }
-        if (transforms(c)) return if (active(c)) (1f - progress(c)).coerceIn(0f, 1f) else 0f
+        // Folding into a row, with its geometry ([rowFold]), so the rows around it are still by the time they show.
+        if (transforms(c)) return if (active(c)) (1f - titleProgress(c)).coerceIn(0f, 1f) else 0f
         if (sheetFade(c)) return documentProgress().coerceIn(0f, 1f)
         return 0f
     }
@@ -1022,10 +1091,13 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         return c.motion == PageMotion.Row && noteIdOf(c.document) == noteId && transforms(c) && active(c)
     }
 
-    /** True while the stage card is lifted into the morphing overlay and hidden from the receding library underneath. */
+    /**
+     * True while the stage card is lifted into the morphing overlay and hidden from the receding library underneath.
+     * The live stage stays where it is under Finish's paper (T7b), which covers it as it grows.
+     */
     internal fun hidesStage(): Boolean {
         val c = change ?: return false
-        return (c.motion == PageMotion.Stage || c.motion == PageMotion.LiveStage) && transforms(c) && active(c)
+        return c.motion == PageMotion.Stage && transforms(c) && active(c)
     }
 
     /** Recorded full-width content layer for a Row transform, if captured. */
@@ -1093,7 +1165,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         if (transforms(c)) {
             // The origin went away under a transform (the display let its page go): the page is drawn as it is
             // rather than through an overlay that has nothing left to draw it into.
-            if (active(c) && originCard(c) == null) return if (upper) PageLook.Shown else PageLook.Gone
+            if (active(c) && !hasOrigin(c)) return if (upper) PageLook.Shown else PageLook.Gone
             if (!upper) return if (c.push && !active(c)) PageLook.Gone else PageLook.Shown
             return when {
                 active(c) -> PageLook.Recorded
@@ -1170,7 +1242,10 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     private fun inPage(c: PageChange, title: LayoutCoordinates, clip: Boolean): Rect? =
         frames[c.document]?.takeIf { it.isAttached }?.localBoundingBoxOf(title, clipBounds = clip)
 
-    /** The stage holds its live recording while T7b waits for NotePage or expands into it, preventing any dark->light flash. */
+    /**
+     * The stage holds the recording it showed at Finish while T7b waits for the note's page and its paper grows over
+     * the library: it is being covered, not turning into the note on its way out.
+     */
     internal fun freezesStage(): Boolean {
         val c = change ?: return false
         return c.motion == PageMotion.LiveStage && c.push && (active(c) || waits(c))
@@ -1217,13 +1292,17 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         const val BACK_BODY_TO = 0.38f
         const val STAGE_MATERIAL_FROM = 0.24f
         const val STAGE_MATERIAL_TO = 0.92f
-        const val LIVE_CONTENT_FROM = 0.72f
-        const val LIVE_CONTENT_TO = 0.96f
         const val LIVE_CHROME_FROM = 0.28f
         const val LIVE_CHROME_TO = 0.72f
-        const val LIVE_CAPSULE_ARRIVE_AT = 0.82f
-        const val LIVE_CAPSULE_FADE_FROM = 0.84f
-        const val LIVE_CAPSULE_FADE_TO = 0.94f
+        /** T16 Back: the row's own lines arrive over this part of the fold, once the page's body has gone. */
+        const val ROW_BACK_CONTENT_FROM = 0.38f
+        const val ROW_BACK_CONTENT_TO = 0.70f
+        /** T16 Back: the band dissolves as its flying title comes from this far to this near its row ([rowSheet]). */
+        val ROW_SHEET_FAR = 16.dp
+        val ROW_SHEET_NEAR = 2.dp
+        /** ... or, with no flying title, over this part of the fold's way. */
+        const val ROW_SHEET_FROM = 0.60f
+        const val ROW_SHEET_TO = 0.94f
         const val PULLED_MATERIAL_TO = 0.90f
         const val PULLED_MATERIAL_FROM = 0.10f
         const val PULLED_CHROME_TO = 0.78f
@@ -1564,12 +1643,14 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
     val dark = colors.paper.luminance() < 0.5f
     val scrimMax = if (dark) DARK_SCRIM else LIGHT_SCRIM
     val shadowColor = if (dark) Color.Black else Color.Black.copy(alpha = 0.28f)
+    // T7b grows out of the dock's primary pill: where the dock placed it, or where it stands in one pane.
+    val pill: (Size) -> Rect = { size -> bottom.dockPillRect ?: restingPill(size, density, navBottom, rtl) }
     val frame: () -> TransformFrame? = {
         // Read the progress first: every layout, layer and draw lambda below follows it, whatever returns early.
         pages.observe()
         val coordinates = placement.coordinates
         if (coordinates == null || !coordinates.isAttached || !pages.transforms(change) || !pages.active(change)) null
-        else pages.frameIn(change, coordinates, density)
+        else pages.frameIn(change, coordinates, density, pill)
     }
     val titleInFlight: DrawScope.(TransformFrame) -> Flight? = { f ->
         val id = (change.document as? Destination.Note)?.id
@@ -1578,11 +1659,20 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
         else pages.flight(change, f, coordinates, this, colors)
     }
     val stageLike = change.motion != PageMotion.Row
-    // Subtle depth scrim separating the receding library underneath from the elevated expanding/folding sheet above.
+    // Folding into a row (T16 Back): a borderless line has no edges for the band to close in with, so the band has
+    // none either: no shadow, no hairlines, and its paper reaches [RowFoldFeather] past each edge, fading out, so the
+    // rows around it show again through a soft edge, never cut in two by a hard one. Inside the band, where the
+    // flying title and the row's lines are, the paper stays whole: nothing of a neighbour shows under them.
+    val rowFold = change.motion == PageMotion.Row && !change.push
+    // What the band holds is cut at its edges; only its paper reaches past them.
+    fun DrawScope.inBand(f: TransformFrame, block: DrawScope.() -> Unit) =
+        if (rowFold) clipRect(f.clip.left, f.clip.top, f.clip.right, f.clip.bottom) { block() } else block()
+    // Subtle depth scrim separating the receding library underneath from the elevated expanding/folding sheet above
+    // (it dissolves with a row's band, PageTransitions.rowSheet).
     Spacer(
         Modifier.fillMaxSize().drawBehind {
             val f = frame() ?: return@drawBehind
-            val scrim = (1f - f.p).coerceIn(0f, 1f) * scrimMax
+            val scrim = (1f - f.p).coerceIn(0f, 1f) * scrimMax * f.paperAlpha
             if (scrim > 0.001f) drawRect(Color.Black, alpha = scrim)
         },
     )
@@ -1597,12 +1687,15 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                     return@graphicsLayer
                 }
                 alpha = 1f
-                shape = RoundRectShape(f.clip, f.radius)
+                shape = if (rowFold) {
+                    val feather = RowFoldFeather.toPx()
+                    RoundRectShape(Rect(f.clip.left, f.clip.top - feather, f.clip.right, f.clip.bottom + feather), 0f)
+                } else RoundRectShape(f.clip, f.radius)
                 clip = true
                 // Native RenderThread elevation shadow peaks gently mid-flight and settles to 0 at both rest ends.
                 val arc = sin(PI.toFloat() * f.p.coerceIn(0f, 1f))
                 val maxShadow = if (stageLike) PageTransitions.CardShadowElevation else PageTransitions.RowShadowElevation
-                shadowElevation = arc * maxShadow.toPx()
+                shadowElevation = if (rowFold) 0f else arc * maxShadow.toPx()
                 ambientShadowColor = shadowColor
                 spotShadowColor = shadowColor
             },
@@ -1610,8 +1703,26 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
         // Pure opaque paper backing for Stage, Row Vertical Paper Unfold, and LiveStage (zero dark-over-white gray wash).
         Spacer(
             Modifier.fillMaxSize().drawBehind {
-                val a = frame()?.paperAlpha ?: 0f
-                if (a > 0f) drawRect(colors.paper, alpha = a)
+                val f = frame() ?: return@drawBehind
+                val a = f.paperAlpha
+                if (a <= 0f) return@drawBehind
+                if (!rowFold) {
+                    drawRect(colors.paper, alpha = a)
+                    return@drawBehind
+                }
+                val top = f.clip.top
+                val bottom = f.clip.bottom
+                val feather = RowFoldFeather.toPx()
+                val clear = colors.paper.copy(alpha = 0f)
+                drawRect(
+                    Brush.verticalGradient(0f to clear, 1f to colors.paper, startY = top - feather, endY = top),
+                    topLeft = Offset(0f, top - feather), size = Size(size.width, feather), alpha = a,
+                )
+                drawRect(colors.paper, topLeft = Offset(0f, top), size = Size(size.width, max(0f, bottom - top)), alpha = a)
+                drawRect(
+                    Brush.verticalGradient(0f to colors.paper, 1f to clear, startY = bottom, endY = bottom + feather),
+                    topLeft = Offset(0f, bottom), size = Size(size.width, feather), alpha = a,
+                )
             },
         )
         if (change.motion == PageMotion.Stage) {
@@ -1629,7 +1740,9 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
             Modifier.fillMaxSize().drawBehind {
                 val f = frame() ?: return@drawBehind
                 val layer = pages.layer ?: return@drawBehind
-                val needsSoftBottom = f.clip.bottom < size.height
+                // Finish's paper (T7b) grows over the page's own place: its text develops after the edge has passed.
+                val bloom = change.motion == PageMotion.LiveStage
+                val needsSoftBottom = !bloom && f.clip.bottom < size.height
                 val needsSoftTop = !stageLike && f.clip.top > 0f
                 fun drawPageLayer() {
                     if (f.preview <= 0f) {
@@ -1644,8 +1757,8 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                     }
                 }
                 if (!needsSoftBottom && !needsSoftTop) {
-                    drawPageLayer()
-                } else {
+                    inBand(f) { drawPageLayer() }
+                } else inBand(f) {
                     drawIntoCanvas { canvas ->
                         canvas.saveLayer(Rect(Offset.Zero, size), Paint())
                         drawPageLayer()
@@ -1655,8 +1768,8 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                 }
             },
         )
-        // Origin card content (Stage time/preview/footer, or Row duration/preview). LiveStage draws its content inside
-        // the separate 100%-opaque contracting obsidian capsule below.
+        // Origin card content (Stage time/preview/footer, or Row duration/preview). LiveStage has none: its paper grows
+        // out of the dock, and the live stage stays in the library under it until it is covered.
         if (change.motion != PageMotion.LiveStage) {
             Spacer(
                 Modifier
@@ -1674,7 +1787,7 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                         }
                         val text = if (stageLike) title?.let { stageTextHeld(pages.stage, it, f, topY) } else null
                         if (text == null) {
-                            translate(f.clip.left, topY) { drawLayer(layer) }
+                            inBand(f) { translate(f.clip.left, topY) { drawLayer(layer) } }
                             return@drawBehind
                         }
                         drawIntoCanvas { canvas ->
@@ -1690,7 +1803,7 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                 Modifier.fillMaxSize().drawBehind {
                     val f = frame() ?: return@drawBehind
                     val title = titleInFlight(f) ?: return@drawBehind
-                    drawFlyingTitle(title)
+                    inBand(f) { drawFlyingTitle(title) }
                 },
             )
         }
@@ -1702,6 +1815,7 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                 val arc = sin(PI.toFloat() * f.p.coerceIn(0f, 1f))
                 val width = RingWidth.toPx()
                 if (!stageLike) {
+                    if (rowFold) return@drawBehind
                     val edgeAlpha = arc * 0.85f
                     if (colors.stageIdleBorder.alpha <= 0f || edgeAlpha <= 0.001f) return@drawBehind
                     if (f.clip.top > 0.5f) {
@@ -1731,87 +1845,17 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
             },
         )
     }
-    // T7b (folded LiveStage -> Finish): unified with fullscreen T7 — the 100%-opaque obsidian recording capsule
-    // contracts cleanly from the top LiveStage card down into the black primary dock pill while uncovering the pure
-    // expanding NotePage paper underneath (zero dark-over-white gray wash on any frame).
-    if (change.motion == PageMotion.LiveStage) {
-        val painter = remember { SceneMaterialPainter() }
-        fun capsuleRect(f: TransformFrame, size: Size): Rect {
-            val pill = bottom.dockPillRect ?: run {
-                val dockH = with(density) { DockMetrics.height.toPx() }
-                val dockTop = size.height - navBottom - with(density) { FocalLayout.dockInset.toPx() } - dockH
-                val column = with(density) {
-                    min(size.width - 2 * FocalLayout.gutter.toPx(), FocalLayout.contentMaxWidth.toPx()).coerceAtLeast(0f)
-                }
-                val colLeft = (size.width - column) / 2f
-                val colRight = colLeft + column
-                val circleSpan = with(density) { DockMetrics.circle.toPx() + DockMetrics.gap.toPx() }
-                if (rtl) Rect(colLeft, dockTop, colRight - circleSpan, dockTop + dockH)
-                else Rect(colLeft + circleSpan, dockTop, colRight, dockTop + dockH)
-            }
-            val v = (1f - f.p).coerceIn(0f, 1f)
-            val capsuleV = smoothstep(0f, PageTransitions.LIVE_CAPSULE_ARRIVE_AT, v)
-            return lerp(f.origin, pill, capsuleV)
-        }
-        Box(
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    val f = frame()
-                    if (f == null) {
-                        alpha = 0f
-                        shadowElevation = 0f
-                        return@graphicsLayer
-                    }
-                    val v = (1f - f.p).coerceIn(0f, 1f)
-                    val capsuleAlpha = 1f - smoothstep(PageTransitions.LIVE_CAPSULE_FADE_FROM, PageTransitions.LIVE_CAPSULE_FADE_TO, v)
-                    if (capsuleAlpha <= 0.001f) {
-                        alpha = 0f
-                        shadowElevation = 0f
-                        return@graphicsLayer
-                    }
-                    val rect = capsuleRect(f, size)
-                    val radius = FocalShapes.sheetRadius.toPx()
-                    val capsuleV = smoothstep(0f, PageTransitions.LIVE_CAPSULE_ARRIVE_AT, v)
-                    alpha = capsuleAlpha
-                    shape = RoundRectShape(rect, radius)
-                    clip = true
-                    shadowElevation = sin(PI.toFloat() * capsuleV) * PageTransitions.CardShadowElevation.toPx()
-                    ambientShadowColor = shadowColor
-                    spotShadowColor = shadowColor
-                },
-        ) {
-            Spacer(
-                Modifier.fillMaxSize().drawBehind {
-                    val f = frame() ?: return@drawBehind
-                    val rect = capsuleRect(f, size)
-                    painter.draw(this, rect, grainOrigin = rect.topLeft - f.origin.topLeft, alpha = 1f)
-                    if (colors.stageRing.alpha > 0f) {
-                        val width = RingWidth.toPx()
-                        val radius = FocalShapes.sheetRadius.toPx()
-                        drawRoundRect(
-                            colors.stageRing,
-                            topLeft = rect.topLeft + Offset(width / 2f, width / 2f),
-                            size = Size(max(0f, rect.width - width), max(0f, rect.height - width)),
-                            cornerRadius = CornerRadius(max(0f, radius - width / 2f)),
-                            style = Stroke(width),
-                        )
-                    }
-                },
-            )
-            Spacer(
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { alpha = frame()?.content ?: 0f }
-                    .drawBehind {
-                        val f = frame() ?: return@drawBehind
-                        val layer = live.stageNote ?: return@drawBehind
-                        val rect = capsuleRect(f, size)
-                        translate(rect.left, rect.top) { drawLayer(layer) }
-                    },
-            )
-        }
-    }
+}
+
+/** The dock's primary pill in one pane while the dock has not reported where it placed it (window pixels). */
+private fun restingPill(size: Size, density: Density, navigationBottom: Float, rtl: Boolean): Rect = with(density) {
+    val dockHeight = DockMetrics.height.toPx()
+    val dockTop = size.height - navigationBottom - FocalLayout.dockInset.toPx() - dockHeight
+    val column = min(size.width - 2 * FocalLayout.gutter.toPx(), FocalLayout.contentMaxWidth.toPx()).coerceAtLeast(0f)
+    val left = (size.width - column) / 2f
+    val circleSpan = DockMetrics.circle.toPx() + DockMetrics.gap.toPx()
+    if (rtl) Rect(left, dockTop, left + column - circleSpan, dockTop + dockHeight)
+    else Rect(left + circleSpan, dockTop, left + column, dockTop + dockHeight)
 }
 
 private const val LIGHT_SCRIM = 0.08f
@@ -1837,6 +1881,9 @@ private fun DrawScope.drawFlyingTitle(title: Flight) {
 }
 
 private val RingWidth = 1.dp
+
+/** T16 Back: how far past each edge the band's paper reaches, fading out. */
+private val RowFoldFeather = 24.dp
 
 /** Which of the clip's edges fade the page's text out toward them. */
 private enum class ClipEdges { Bottom, Both }
@@ -1956,7 +2003,18 @@ private fun Rect.unscaledAround(centre: Offset, k: Float): Rect =
         bottom = centre.y + (bottom - centre.y) / k,
     )
 
-private fun PageTransitions.frameIn(c: PageChange, overlay: LayoutCoordinates, density: Density): TransformFrame? {
+private fun PageTransitions.frameIn(c: PageChange, overlay: LayoutCoordinates, density: Density, pill: (Size) -> Rect): TransformFrame? {
+    if (c.motion == PageMotion.LiveStage) {
+        // T7b: the page's paper grows out of the dock's pill over the library, as it grows over the scene in T7.
+        val window = Rect(Offset.Zero, Size(overlay.size.width.toFloat(), overlay.size.height.toFloat()))
+        val origin = pill(window.size)
+        val p = progress(c)
+        val radius = with(density) { FocalShapes.sheetRadius.toPx() }
+        return TransformFrame(
+            clip = Morph.bloom(1f - p, origin, window, radius), radius = radius, p = p, paperAlpha = 1f, material = 0f,
+            content = 0f, origin = origin, preview = 0f, edge = c.edge,
+        )
+    }
     val card = (when (c.motion) {
         PageMotion.Row -> rows[(c.document as? Destination.Note)?.id]
         else -> stage
@@ -1973,10 +2031,12 @@ private fun PageTransitions.frameIn(c: PageChange, overlay: LayoutCoordinates, d
         Rect(window.center.x - w / 2 + shift, window.center.y - h / 2, window.center.x + w / 2 + shift, window.center.y + h / 2)
     }
     val p = progress(c)
+    // The clip lands with the flying title (a row's fold is quicker than its spring, PageTransitions.rowFold).
+    val g = titleProgress(c)
     val targetRadius = if (c.motion == PageMotion.Row) 0f else with(density) { FocalShapes.sheetRadius.toPx() }
-    val radius = with(density) { lerp(FocalShapes.sheetRadius.toPx() * e, targetRadius, p) }
+    val radius = with(density) { lerp(FocalShapes.sheetRadius.toPx() * e, targetRadius, g) }
     return TransformFrame(
-        clip = lerp(base, origin, p), radius = radius, p = p, paperAlpha = paperAlpha(c), material = material(c),
+        clip = lerp(base, origin, g), radius = radius, p = p, paperAlpha = paperAlpha(c), material = material(c),
         content = content(c), origin = origin, preview = e, edge = c.edge,
     )
 }

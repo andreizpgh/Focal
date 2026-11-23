@@ -5,6 +5,23 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
+## [Unreleased]
+
+### Changed
+
+- **Finish grows the note out of the button.** From the recording screen and
+  from the folded card alike, the note's paper now grows out of the Finish pill
+  until it covers the window. The dark surface is covered edge by edge and never
+  moves across the page or fades to grey over white paper. The Finish pill
+  turns into the progress pill without a grey crossfade: a black pill's fill
+  runs back to the transcription's progress, and the recording screen's white
+  pill melts into the paper as the fill runs in. Back waits for the paper,
+  about 180 ms.
+- **Cleaner return to a row.** Folding a note back into its row lands the
+  title and band in about 160 ms instead of 300 ms. The band has no shadow or
+  hairlines; its paper fades out past its edges, so the neighbouring rows show
+  again softly instead of being cut by edges closing in over them.
+
 ## [0.5.5] - 2026-11-23
 
 ### Changed

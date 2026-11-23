@@ -416,6 +416,20 @@ ones stand in for amendments to the specification.
   composed it per visit); a tap on it during a fold opens its note once the fold
   has landed (6.1); a button whose face has just changed ignores a tap for the
   double-tap time (4.3).
+- **Finish and the row fold** (November 23) replace parts of 6.1. Finish no
+  longer contracts the scene into the dock's pill (T7) or opens the live stage
+  into the page (T7b): in both, the note's paper grows out of the pill under the
+  finger, its sides gone from the window at 60 % of the page spring and its top
+  at 90 %, and the dark scene or card is covered edge by edge instead of being
+  faded over paper. The pill becomes the progress pill without a grey
+  crossfade: a pill of the fill's colour (black Record or Finish on paper, the
+  scene's white Finish in Dark) hands over to a whole fill that runs back to the
+  progress; the scene's white Finish in Light melts into the paper, without its
+  shadow and ring, and the fill runs in. Back waits while the paper grows. A
+  row's fold (reverse T16) squares the rest of its way; its band has no shadow
+  or hairlines, its paper reaches 24 dp past its edges and fades out there, and
+  it dissolves with the scrim as the flying title comes within 16 dp of its
+  line.
 
 **Not resolved**
 

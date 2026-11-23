@@ -4,8 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -60,8 +58,8 @@ enum class SceneEntry {
 /**
  * The recording surface (spec 5, 6.4): not a destination but a root-level overlay driven by one value, the
  * expansion p (0 = the stage in the library, 1 = the full scene). Taps, the drag, Back and predictive back all move
- * the same value; everything drawn is a function of it, read in layout and draw lambdas. Finish settles the scene
- * into the dock's pill instead ([landing], T7) while the note's page arrives under it.
+ * the same value; everything drawn is a function of it, read in layout and draw lambdas. Finish instead puts the
+ * note's page under the scene and grows its paper over the scene out of the dock's pill ([landing], T7).
  *
  * The library reports what the morph grows out of: the stage's window bounds and its note content, or the empty
  * library's resting instrument.
@@ -77,9 +75,12 @@ class LiveSurfaceState internal constructor(open: Boolean) {
      */
     val wake = Animatable(1f)
 
-    /** T7: q, the settle into the dock pill (0 = the full scene, 1 = the pill's bounds). */
+    /**
+     * T7: q, the note's paper growing out of the dock's pill over the scene (0 = the pill, [Morph.BLOOM_COVERED] = the
+     * whole window, [Morph.bloom]).
+     */
     val landing = Animatable(0f)
-    /** T7: the scene's content (fadeFast from Finish) and the whole scene (fade, from half the travel). */
+    /** T7: the scene's content (fadeFast from Finish) and, under reduced motion only, the whole scene's crossfade. */
     val landingContent = Animatable(1f)
     val landingAlpha = Animatable(1f)
 
@@ -268,9 +269,12 @@ class LiveSurfaceState internal constructor(open: Boolean) {
     }
 
     /**
-     * T7, after [prepareLanding]: [openNote] puts the note's page under the scene, which contracts into the dock
-     * pill's bounds on `stage` while its content leaves on `fadeFast` and, from half the travel, the whole scene fades
-     * on `fade`. Under reduced motion the scene crossfades away in 150 ms. Then the surface is gone.
+     * T7, after [prepareLanding]: [openNote] puts the note's page under the scene, and the page's paper grows out of
+     * the dock's pill, the Finish under the finger, on the page spring until it has covered the window
+     * ([Morph.bloom]), while the scene's content leaves on `fadeFast`. The scene never moves or turns grey: what it
+     * still shows is the material at full strength, and the paper takes its place edge by edge (a dark surface faded
+     * over white paper is a grey wash). Under reduced motion the scene crossfades away in 150 ms. Then the surface is
+     * gone; the spring's tail, all of it off screen, is not waited for.
      */
     suspend fun land(reducedMotion: Boolean, openNote: () -> Unit) {
         try {
@@ -281,19 +285,17 @@ class LiveSurfaceState internal constructor(open: Boolean) {
             landingAlpha.snapTo(1f)
             openNote()
             // Counted from Finish (FocalMotion.fromTrigger): the first frame after the tap has already moved.
-            // Keep the contracting obsidian surface 100 % opaque all the way into the black primary dock pill so it
-            // never turns into a muddy semi-transparent gray rectangle over white paper in Light theme.
             if (reducedMotion || !spatial) {
                 withContext(FocalFullMotion) { landingAlpha.animateTo(0f, FocalMotion.fromTrigger(FocalMotion.reducedCrossfade)) }
             } else coroutineScope {
                 launch(start = CoroutineStart.UNDISPATCHED) {
-                    landingContent.animateTo(0f, FocalMotion.fromTrigger(tween(LANDING_CONTENT_MS, easing = LinearEasing)))
+                    landingContent.animateTo(0f, FocalMotion.fromTrigger(FocalMotion.fadeFast()))
                 }
-                launch {
-                    snapshotFlow { landing.value >= LANDING_HANDOFF }.first { it }
-                    landingAlpha.animateTo(0f, tween(LANDING_HANDOFF_MS, easing = LinearEasing))
+                val bloom = launch(start = CoroutineStart.UNDISPATCHED) {
+                    landing.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.pageUnit()))
                 }
-                landing.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.pageUnit()))
+                snapshotFlow { landing.value >= Morph.BLOOM_COVERED }.first { it }
+                bloom.cancel()
             }
         } finally {
             withContext(NonCancellable) {
@@ -307,9 +309,6 @@ class LiveSurfaceState internal constructor(open: Boolean) {
     }
 
     companion object {
-        private const val LANDING_CONTENT_MS = 60
-        private const val LANDING_HANDOFF = 0.96f
-        private const val LANDING_HANDOFF_MS = 48
         /** The pages behind the morph (spec 2.8.2 `libraryScale`). */
         const val PAGES_SCALE = 0.06f
 
@@ -359,13 +358,16 @@ fun LiveSurfaceHost(state: LiveSurfaceState, scene: @Composable () -> Unit) {
             backing = false
         }
     }
-    // While the scene settles into the note's page (T7, about half a second), Back waits: the page under it would
-    // otherwise fold into the library while the scene is still contracting into the dock, two opposite morphs at once.
+    // While the note's paper grows over the scene (T7, under 200 ms), Back waits: the page under it would otherwise
+    // fold into the library while the scene is still covering it, two opposite motions at once.
     BackHandler(enabled = state.landingNote != null) { }
     Box(Modifier.fillMaxSize().zIndex(if (state.landingNote != null) LANDING_Z else 0f)) { scene() }
 }
 
-/** While the scene settles into the dock's pill (T7) it is drawn above the dock, whose new page shows under it. */
+/**
+ * While the note's paper grows over the scene (T7) the scene is drawn above the dock: outside the paper the scene's
+ * own Pause | Finish show, inside it the note's dock, swapping from Finish as it does on paper.
+ */
 private const val LANDING_Z = 1f
 
 /** Keeps a [LiveSurfaceState] for the activity; an open scene survives recreation while [capturing]. */

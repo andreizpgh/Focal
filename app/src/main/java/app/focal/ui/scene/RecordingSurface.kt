@@ -135,10 +135,8 @@ import app.focal.ui.shell.SceneEntry
 import app.focal.ui.shell.SystemBarsState
 import app.focal.ui.state.LiveParagraph
 import app.focal.ui.state.PauseReason
-import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.roundToInt
-import kotlin.math.sin
 import kotlinx.coroutines.launch
 
 /** What the scene shows: immutable, from the recording view model in the app and from fakes in the gallery. */
@@ -172,8 +170,8 @@ class SceneActions(
  * resting instrument) into the full-window scene and folding back, every element a function of p read in the layout
  * and draw phases, so neither a drag nor a spring recomposes it. At p = 1 it is the scene: the chevron, the hero
  * wave, the big thin timer, the state slot, the hint or the live text, the "Latest" pill; Pause, Resume and Finish
- * are the root dock's, dressed by the material's edge. Finish settles it into the dock's pill (T7). Under reduced
- * motion, and when no origin is on screen, it crossfades in place at alpha p.
+ * are the root dock's, dressed by the material's edge. Finish grows the note's paper over it out of the dock's pill
+ * (T7). Under reduced motion, and when no origin is on screen, it crossfades in place at alpha p.
  *
  * [timerFocus] receives focus after an expand (spec 8.6).
  */
@@ -262,10 +260,10 @@ fun RecordingSurface(
             left = navigationInsets.getLeft(density, LayoutDirection.Ltr), right = navigationInsets.getRight(density, LayoutDirection.Ltr),
             bottom = navigationBottom.roundToInt(),
         )
-        LaunchedEffect(bars, spatial, slots, navigation) {
+        LaunchedEffect(bars, spatial, slots, landingSlots, navigation) {
             snapshotFlow {
                 when {
-                    live.landingNote != null && spatial -> BarsInput.Landing(Morph.landing(live.landing.value, slots).first)
+                    live.landingNote != null && spatial -> BarsInput.Landing(Morph.landing(live.landing.value, landingSlots))
                     live.landingNote != null -> BarsInput.Fade(live.landingAlpha.value)
                     spatial -> BarsInput.Morph(frame.value.clip)
                     else -> BarsInput.Fade(live.expansion.value)
@@ -273,7 +271,7 @@ fun RecordingSurface(
             }.collect { input ->
                 when (input) {
                     is BarsInput.Morph -> bars.followMaterial(input.clip, navigation, density)
-                    is BarsInput.Landing -> bars.followLanding(input.clip, slots.statusTop, navigation)
+                    is BarsInput.Landing -> bars.followBloom(input.bloom, slots.statusTop, navigation, slots.window)
                     is BarsInput.Fade -> bars.followCrossfade(input.alpha)
                 }
             }
@@ -305,29 +303,41 @@ fun RecordingSurface(
                 if (open) Modifier.semantics { collapse(collapseLabel) { actions.collapse(); true } } else Modifier.clearAndSetSemantics { },
             ),
     ) {
-        val shadowColor = if (colors.dark) Color.Black else Color.Black.copy(alpha = 0.28f)
-        // The material and everything on it, clipped to the morph's rounded rect (or the landing's).
+        // The material and everything on it, clipped to the morph's rounded rect. Finish (T7) leaves the scene where
+        // it is and cuts the note's paper out of it, growing from the dock's pill: the page and its dock show there.
+        val bloom = landing && spatial
         Box(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer {
+                    if (bloom) {
+                        this.clip = false
+                        alpha = 1f
+                        // The cut-out needs the scene in a layer of its own, or it would clear the page under it too.
+                        compositingStrategy = CompositingStrategy.Offscreen
+                        return@graphicsLayer
+                    }
                     val f = frame.value
-                    val (clip, radius) = if (landing && spatial) Morph.landing(live.landing.value, landingSlots) else f.clip to f.radius
-                    shape = MorphShape(clip, radius)
+                    shape = MorphShape(f.clip, f.radius)
                     this.clip = true
                     alpha = (if (spatial) 1f else live.expansion.value) * live.landingAlpha.value
-                    shadowElevation = if (landing && spatial) {
-                        sin(PI.toFloat() * live.landing.value.coerceIn(0f, 1f)) * LandingShadowElevation.toPx()
-                    } else 0f
-                    ambientShadowColor = shadowColor
-                    spotShadowColor = shadowColor
-                },
+                }
+                .then(
+                    if (!bloom) Modifier else Modifier.drawWithContent {
+                        drawContent()
+                        val paper = Morph.landing(live.landing.value, landingSlots)
+                        drawRoundRect(
+                            Color.Black, topLeft = paper.topLeft, size = paper.size, cornerRadius = CornerRadius(landingSlots.corner),
+                            blendMode = BlendMode.DstOut,
+                        )
+                    },
+                ),
         ) {
             if (entry == SceneEntry.Record && spatial && !landing) {
                 Spacer(Modifier.fillMaxSize().drawBehind { drawRect(colors.stageIdleSurface) })
             }
             Material(
-                live, frame, landingSlots, spatial, landing, colors.stageRing,
+                frame, landingSlots, spatial, landing, colors.stageRing,
                 wake = if ((entry == SceneEntry.RecordEmpty || entry == SceneEntry.Record) && spatial) live.wake else null,
             )
             if (entry == SceneEntry.Record && spatial) LeavingNote(live, frame, choreography)
@@ -358,10 +368,10 @@ fun RecordingSurface(
     }
 }
 
-/** What the system bars follow: the morph's clip, the landing's clip, or a crossfade's alpha. */
+/** What the system bars follow: the morph's clip, the note's paper growing over the scene (T7), or a crossfade's alpha. */
 private sealed interface BarsInput {
     data class Morph(val clip: Rect) : BarsInput
-    data class Landing(val clip: Rect) : BarsInput
+    data class Landing(val bloom: Rect) : BarsInput
     data class Fade(val alpha: Float) : BarsInput
 }
 
@@ -448,11 +458,10 @@ private const val WAKE_FADE_AT = 0.25f
  * The logo's material in the clip (spec 2.2): the gradient and the highlight stretch with the clip, the grain stays
  * put in the window, anchored where the card's own grain was, so the hand-off at p = 0 is seamless; the Dark ring
  * separates the card from dark paper as long as it is a card (alpha 1 - p). In T7 the material keeps the window's
- * size and the clip cuts it.
+ * size and the note's paper is cut out of it.
  */
 @Composable
 private fun Material(
-    live: LiveSurfaceState,
     frame: State<MorphFrame>,
     slots: SceneSlots,
     spatial: Boolean,
@@ -467,16 +476,12 @@ private fun Material(
             .graphicsLayer { alpha = wake?.value ?: 1f }
             .sceneMaterial(grainOrigin = { box().topLeft - frame.value.grainAnchor }),
     )
-    if (ring.alpha > 0f && spatial) {
+    // The Dark ring outlines the card; while Finish's paper grows over it (T7) the scene stays the window, ringless.
+    if (ring.alpha > 0f && spatial && !landing) {
         Spacer(
             Modifier.fillMaxSize().drawBehind {
-                val (clip, radius, ringAlpha) = if (landing) {
-                    val (c, r) = Morph.landing(live.landing.value, slots)
-                    Triple(c, r, sin(PI.toFloat() * live.landing.value.coerceIn(0f, 1f)))
-                } else {
-                    val f = frame.value
-                    Triple(f.clip, f.radius, f.ringAlpha)
-                }
+                val f = frame.value
+                val (clip, radius, ringAlpha) = Triple(f.clip, f.radius, f.ringAlpha)
                 if (ringAlpha <= 0.001f) return@drawBehind
                 val width = RingWidth.toPx()
                 drawRoundRect(
@@ -488,8 +493,6 @@ private fun Material(
         )
     }
 }
-
-private val LandingShadowElevation = 18.dp
 
 private val RingWidth = 1.dp
 
@@ -894,8 +897,9 @@ private fun LatestPill(open: Boolean, listState: LazyListState, slots: SceneSlot
 private const val JUMP_START_SCALE = 0.9f
 
 /**
- * T7: while the scene settles into the dock's pill, its own Pause | Finish in the scene's dress fade with its content
- * (the root dock, now the note's, is under the scene). Decorative: no touch, no semantics.
+ * T7: while the note's paper grows over the scene, the scene's own Pause | Finish in its dress fade with its content
+ * where the paper has not reached yet (the root dock, now the note's, is under the scene and shows through the paper,
+ * its Finish leaving in the scene's dress). Decorative: no touch, no semantics.
  */
 @Composable
 private fun LandingDock(paused: Boolean, live: LiveSurfaceState) {

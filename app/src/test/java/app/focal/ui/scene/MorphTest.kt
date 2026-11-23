@@ -250,11 +250,24 @@ class MorphTest {
         near(0.92f, Morph.frame(0f, 0f, rest, slots).timerScale)
     }
 
-    @Test fun landingSettlesIntoThePill() {
-        val (clip, radius) = Morph.landing(1f, slots)
-        assertEquals(slots.pill, clip)
-        near(28f, radius)
-        assertEquals(slots.window, Morph.landing(0f, slots).first)
+    /**
+     * T7: the note's paper starts as the dock's pill and only ever grows; its sides and bottom (rounded corners
+     * included) are off the window at 60 % of the way, its top at 90 %, where the window is covered.
+     */
+    @Test fun finishGrowsThePaperOutOfThePillUntilTheWindowIsCovered() {
+        assertEquals(slots.pill, Morph.landing(0f, slots))
+        var last = slots.pill
+        for (step in 1..20) {
+            val paper = Morph.landing(step / 20f, slots)
+            assertTrue(paper.left <= last.left && paper.top <= last.top && paper.right >= last.right && paper.bottom >= last.bottom)
+            last = paper
+        }
+        val sides = Morph.landing(Morph.BLOOM_SIDES_GONE, slots)
+        near(slots.window.left - slots.corner, sides.left)
+        near(slots.window.right + slots.corner, sides.right)
+        near(slots.window.bottom + slots.corner, sides.bottom)
+        assertTrue("the top is still on its way", sides.top > slots.window.top)
+        near(slots.window.top - slots.corner, Morph.landing(Morph.BLOOM_COVERED, slots).top)
     }
 
     /** Spec 6.5: flings win; otherwise 40 % of the travel in the drag's direction; otherwise back to where it was. */

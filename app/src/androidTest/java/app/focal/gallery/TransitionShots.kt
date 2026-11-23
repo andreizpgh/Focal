@@ -38,8 +38,8 @@ object TransitionShots {
         for (t in listOf(60L, 100L, 160L)) add(Shot("t16-row-open-$t-light", dark = false, settleMs = after(AT_MS, t)) { RowToNote(back = false) })
         for (t in listOf(60L, 120L, 200L)) add(Shot("t16-row-back-$t-light", dark = false, settleMs = after(AT_MS + OPEN_MS, t)) { RowToNote(back = true) })
         add(Shot("t16-row-back-120-dark", dark = true, settleMs = after(AT_MS + OPEN_MS, 120)) { RowToNote(back = true) })
-        for (t in listOf(60L, 140L, 240L)) add(Shot("t7-$t-light", dark = false, settleMs = t) { FullscreenFinishToNote() })
-        add(Shot("t7-140-dark", dark = true, settleMs = 140L) { FullscreenFinishToNote() })
+        for (t in listOf(60L, 140L, 240L)) add(Shot("t7-$t-light", dark = false, settleMs = after(AT_MS, t)) { FullscreenFinishToNote() })
+        add(Shot("t7-140-dark", dark = true, settleMs = after(AT_MS, 140)) { FullscreenFinishToNote() })
         for (t in listOf(20L, 80L, 140L, 240L)) add(Shot("t7b-$t-light", dark = false, settleMs = after(AT_MS, t)) { LiveToNote() })
         add(Shot("t7b-140-dark", dark = true, settleMs = after(AT_MS, 140)) { LiveToNote() })
         for (t in listOf(80L, 160L)) add(Shot("note-sheet-back-$t-light", dark = false, settleMs = after(AT_MS + OPEN_MS, t)) { SheetBackNote() })
@@ -48,6 +48,18 @@ object TransitionShots {
         for (t in listOf(80L, 160L)) add(Shot("search-close-$t-light", dark = false, settleMs = after(AT_MS, t)) { SearchClosing() })
         add(Shot("licenses-fade-90-light", dark = false, settleMs = after(AT_MS, 90)) { SettingsToLicenses() })
         add(Shot("licenses-fade-180-light", dark = false, settleMs = after(AT_MS, 180)) { SettingsToLicenses() })
+    }
+
+    /** Film strips (every 16 ms) of the row fold and both Finish settles, for frame-by-frame review. */
+    val film: List<Shot> = buildList {
+        val times = (0L..448L step 16L)
+        for (dark in listOf(false, true)) {
+            val theme = if (dark) "dark" else "light"
+            for (t in times) add(Shot("film-rowback-$theme-${"%03d".format(t)}", dark = dark, settleMs = after(AT_MS + OPEN_MS, t)) { RowToNote(back = true) })
+            for (t in times) add(Shot("film-rowopen-$theme-${"%03d".format(t)}", dark = dark, settleMs = after(AT_MS, t)) { RowToNote(back = false) })
+            for (t in times) add(Shot("film-t7-$theme-${"%03d".format(t)}", dark = dark, settleMs = after(AT_MS, t)) { FullscreenFinishToNote() })
+            for (t in times) add(Shot("film-t7b-$theme-${"%03d".format(t)}", dark = dark, settleMs = after(AT_MS, t)) { LiveToNote() })
+        }
     }
 }
 
@@ -109,13 +121,15 @@ private fun RowToNote(back: Boolean) {
     })
 }
 
-/** T7: Finish in the fullscreen recording surface contracts solid obsidian cleanly into the dock pill over pure paper. */
+/** T7: Finish in the fullscreen recording surface grows the note's paper out of the dock's pill over the scene. */
 @Composable
 private fun FullscreenFinishToNote() {
     val shell = rememberShellState()
     val scene = live()
     LaunchedEffect(shell) {
         shell.live.expansion.snapTo(1f)
+        // The open scene shows its own dock first, as in the app: Finish is tapped on its white pill.
+        waitFrames(AT_MS)
         shell.live.prepareLanding(saturday.id)
         shell.live.land(reducedMotion = false) { shell.open(Destination.Note(saturday.id), PageMotion.Cut) }
     }
@@ -131,7 +145,10 @@ private fun FullscreenFinishToNote() {
     )
 }
 
-/** T7b: Finish in the library dock opens the live stage into the new note's page, simulating recording ending right at Finish. */
+/**
+ * T7b: Finish in the library dock grows the new note's page out of the dock's pill over the library and its live stage,
+ * simulating recording ending right at Finish.
+ */
 @Composable
 private fun LiveToNote() {
     val shell = rememberShellState()
