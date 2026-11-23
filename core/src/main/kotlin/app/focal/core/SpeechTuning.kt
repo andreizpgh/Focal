@@ -87,10 +87,26 @@ object SpeechTuning {
     const val DOUBT_THRESHOLD = 0.5
 
     // Ephemeral live tail preview (in-memory only while recording with app visible; never alters committed windows).
-    /** Minimum durable audio in the open window before the first live preview runs. */
-    const val LIVE_PREVIEW_MIN_MS = 1_200L
-    /** Additional durable audio required before refreshing an open-window live preview. */
-    const val LIVE_PREVIEW_STEP_MS = 1_400L
-    /** Minimum detected speech in the open window before running a live preview decode. */
-    const val LIVE_PREVIEW_MIN_SPEECH_MS = 250L
+    /** Minimum durable audio in the open window before the first live preview runs while speaking continuously. */
+    const val LIVE_PREVIEW_MIN_MS = 2_800L
+    /** Shorter minimum audio when the speaker has already paused briefly (complete phrase, cleaner acoustics). */
+    const val LIVE_PREVIEW_PAUSE_MIN_MS = 1_800L
+    /** Trailing silence duration treated as a brief natural pause for cleaner live preview phrasing. */
+    const val LIVE_PREVIEW_PAUSE_MS = 350L
+    /** Additional durable audio required before refreshing an open-window live preview while continuously speaking. */
+    const val LIVE_PREVIEW_STEP_MS = 2_000L
+    /** Additional durable audio required before triggering an early pause-boundary refresh. */
+    const val LIVE_PREVIEW_PAUSE_STEP_MS = 600L
+    /** Minimum detected speech in the open window so Parakeet Ultra has enough context for language lock. */
+    const val LIVE_PREVIEW_MIN_SPEECH_MS = 1_100L
+    /** Shorter minimum detected speech when the speaker has already paused after a short phrase. */
+    const val LIVE_PREVIEW_PAUSE_MIN_SPEECH_MS = 650L
+    /** While actively speaking, withhold words ending inside this trailing margin so half-spoken words never appear. */
+    const val LIVE_PREVIEW_UNSTABLE_TAIL_MS = 450L
+    /** Minimum completed content words required before revealing the first non-paused preview. */
+    const val LIVE_PREVIEW_MIN_WORDS = 3
+    /** Maximum share of low-confidence words allowed on the very first non-paused preview pass. */
+    const val LIVE_PREVIEW_INITIAL_DOUBT_RATIO = 0.25
+    /** Maximum share of low-confidence words allowed in any live preview before withholding it as noisy. */
+    const val LIVE_PREVIEW_MAX_DOUBT_RATIO = 0.50
 }

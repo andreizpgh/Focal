@@ -2,6 +2,7 @@ package app.focal.speech
 
 import app.focal.core.DecodedWindow
 import app.focal.core.SpeechTuning
+import app.focal.core.Word
 import app.focal.core.WordBuilder
 import app.focal.data.NoteStore
 import app.focal.data.RawAsr
@@ -55,7 +56,7 @@ internal class UltraTranscriber(
         store.commitDecoded(window.id, ULTRA_ENGINE, RawAsr(result.text, result.asrTokens()))
     }
 
-    override suspend fun preview(store: NoteStore, noteId: String, startMs: Long, endMs: Long, threads: Int): String? {
+    override suspend fun preview(store: NoteStore, noteId: String, startMs: Long, endMs: Long, threads: Int): List<Word> {
         checkOwner()
         check(!closed) { "Speech engine is not open." }
         val context = currentCoroutineContext()
@@ -66,20 +67,19 @@ internal class UltraTranscriber(
 
         checkCancelled()
         val pcm = store.readAudio(noteId, startMs, endMs)
-        if (pcm.isEmpty()) return null
+        if (pcm.isEmpty()) return emptyList()
         var peak = 0
         for (sample in pcm) {
             val level = if (sample == Short.MIN_VALUE) 32768 else abs(sample.toInt())
             if (level > peak) peak = level
         }
-        if (peak <= 0 || 20.0 * log10(peak / 32768.0) < SpeechTuning.SILENCE_PEAK_DBFS) return null
+        if (peak <= 0 || 20.0 * log10(peak / 32768.0) < SpeechTuning.SILENCE_PEAK_DBFS) return emptyList()
         val samples = FloatArray(pcm.size) { pcm[it] / 32768f }
         val engine = decoder ?: openDecoder(threads, ::checkCancelled).also { decoder = it }
         checkCancelled()
         val result = engine.decode(samples)
         checkCancelled()
-        val words = WordBuilder.build(DecodedWindow(startMs, null, null, result.asrTokens()), 0)
-        return words.joinToString(" ") { it.text }.trim().takeIf { it.isNotEmpty() }
+        return WordBuilder.build(DecodedWindow(startMs, null, null, result.asrTokens()), 0)
     }
 
     override fun cancel() { cancelled.set(true) }
