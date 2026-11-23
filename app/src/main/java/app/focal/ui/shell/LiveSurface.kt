@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -279,13 +281,17 @@ class LiveSurfaceState internal constructor(open: Boolean) {
             landingAlpha.snapTo(1f)
             openNote()
             // Counted from Finish (FocalMotion.fromTrigger): the first frame after the tap has already moved.
+            // Keep the contracting obsidian surface 100 % opaque all the way into the black primary dock pill so it
+            // never turns into a muddy semi-transparent gray rectangle over white paper in Light theme.
             if (reducedMotion || !spatial) {
                 withContext(FocalFullMotion) { landingAlpha.animateTo(0f, FocalMotion.fromTrigger(FocalMotion.reducedCrossfade)) }
             } else coroutineScope {
-                launch(start = CoroutineStart.UNDISPATCHED) { landingContent.animateTo(0f, FocalMotion.fromTrigger(FocalMotion.fadeFast())) }
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    landingContent.animateTo(0f, FocalMotion.fromTrigger(tween(LANDING_CONTENT_MS, easing = LinearEasing)))
+                }
                 launch {
-                    snapshotFlow { landing.value >= HALF }.first { it }
-                    landingAlpha.animateTo(0f, FocalMotion.fade())
+                    snapshotFlow { landing.value >= LANDING_HANDOFF }.first { it }
+                    landingAlpha.animateTo(0f, tween(LANDING_HANDOFF_MS, easing = LinearEasing))
                 }
                 landing.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.pageUnit()))
             }
@@ -301,7 +307,9 @@ class LiveSurfaceState internal constructor(open: Boolean) {
     }
 
     companion object {
-        private const val HALF = 0.5f
+        private const val LANDING_CONTENT_MS = 60
+        private const val LANDING_HANDOFF = 0.96f
+        private const val LANDING_HANDOFF_MS = 48
         /** The pages behind the morph (spec 2.8.2 `libraryScale`). */
         const val PAGES_SCALE = 0.06f
 

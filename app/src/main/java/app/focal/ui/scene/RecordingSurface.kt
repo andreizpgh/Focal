@@ -128,14 +128,17 @@ import app.focal.ui.library.StageMetrics
 import app.focal.ui.library.spokenDuration
 import app.focal.ui.shell.LiveSurfaceState
 import app.focal.ui.shell.LocalDockAreas
+import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.NavigationBar
 import app.focal.ui.shell.SceneChoreography
 import app.focal.ui.shell.SceneEntry
 import app.focal.ui.shell.SystemBarsState
 import app.focal.ui.state.LiveParagraph
 import app.focal.ui.state.PauseReason
+import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlinx.coroutines.launch
 
 /** What the scene shows: immutable, from the recording view model in the app and from fakes in the gallery. */
@@ -206,6 +209,10 @@ fun RecordingSurface(
             window.width.toFloat(), window.height.toFloat(), statusTop, navigationBottom, timers.sceneLine, compact, density,
             area = area, landing = landingArea, rail = rail, rtl = rtl,
         )
+    }
+    val shellBottom = LocalShell.current.bottom
+    val landingSlots = remember(slots, shellBottom.dockPillRect) {
+        shellBottom.dockPillRect?.let { slots.copy(pill = it) } ?: slots
     }
     val entry = live.entry
     val landing = live.landingNote != null
@@ -298,23 +305,29 @@ fun RecordingSurface(
                 if (open) Modifier.semantics { collapse(collapseLabel) { actions.collapse(); true } } else Modifier.clearAndSetSemantics { },
             ),
     ) {
+        val shadowColor = if (colors.dark) Color.Black else Color.Black.copy(alpha = 0.28f)
         // The material and everything on it, clipped to the morph's rounded rect (or the landing's).
         Box(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer {
                     val f = frame.value
-                    val (clip, radius) = if (landing && spatial) Morph.landing(live.landing.value, slots) else f.clip to f.radius
+                    val (clip, radius) = if (landing && spatial) Morph.landing(live.landing.value, landingSlots) else f.clip to f.radius
                     shape = MorphShape(clip, radius)
                     this.clip = true
                     alpha = (if (spatial) 1f else live.expansion.value) * live.landingAlpha.value
+                    shadowElevation = if (landing && spatial) {
+                        sin(PI.toFloat() * live.landing.value.coerceIn(0f, 1f)) * LandingShadowElevation.toPx()
+                    } else 0f
+                    ambientShadowColor = shadowColor
+                    spotShadowColor = shadowColor
                 },
         ) {
             if (entry == SceneEntry.Record && spatial && !landing) {
                 Spacer(Modifier.fillMaxSize().drawBehind { drawRect(colors.stageIdleSurface) })
             }
             Material(
-                live, frame, slots, spatial, landing, colors.stageRing,
+                live, frame, landingSlots, spatial, landing, colors.stageRing,
                 wake = if ((entry == SceneEntry.RecordEmpty || entry == SceneEntry.Record) && spatial) live.wake else null,
             )
             if (entry == SceneEntry.Record && spatial) LeavingNote(live, frame, choreography)
@@ -454,20 +467,29 @@ private fun Material(
             .graphicsLayer { alpha = wake?.value ?: 1f }
             .sceneMaterial(grainOrigin = { box().topLeft - frame.value.grainAnchor }),
     )
-    if (ring.alpha > 0f && spatial && !landing) {
+    if (ring.alpha > 0f && spatial) {
         Spacer(
             Modifier.fillMaxSize().drawBehind {
-                val f = frame.value
-                if (f.ringAlpha <= 0f) return@drawBehind
+                val (clip, radius, ringAlpha) = if (landing) {
+                    val (c, r) = Morph.landing(live.landing.value, slots)
+                    Triple(c, r, sin(PI.toFloat() * live.landing.value.coerceIn(0f, 1f)))
+                } else {
+                    val f = frame.value
+                    Triple(f.clip, f.radius, f.ringAlpha)
+                }
+                if (ringAlpha <= 0.001f) return@drawBehind
                 val width = RingWidth.toPx()
                 drawRoundRect(
-                    ring, topLeft = f.clip.topLeft + Offset(width / 2, width / 2), size = Size(f.clip.width - width, f.clip.height - width),
-                    cornerRadius = CornerRadius(max(0f, f.radius - width / 2)), style = Stroke(width), alpha = f.ringAlpha,
+                    ring, topLeft = clip.topLeft + Offset(width / 2, width / 2),
+                    size = Size(max(0f, clip.width - width), max(0f, clip.height - width)),
+                    cornerRadius = CornerRadius(max(0f, radius - width / 2)), style = Stroke(width), alpha = ringAlpha,
                 )
             },
         )
     }
 }
+
+private val LandingShadowElevation = 18.dp
 
 private val RingWidth = 1.dp
 

@@ -150,7 +150,7 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
             prepare = { id -> activity?.let { NoteViewModel.prepare(it, id) } },
             openResult = { result ->
                 val hit = result.paragraphId?.let { NoteHit(it, result.hitStart, result.hitEnd) }
-                shell.open(Destination.Note(result.row.id, hit), PageMotion.Row)
+                shell.open(Destination.Note(result.row.id, hit), PageMotion.FadeThrough)
             },
             expand = { scope.launch { shell.live.expand(reduced) } },
             copy = { row ->

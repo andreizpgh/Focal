@@ -77,6 +77,8 @@ class BottomColumnState {
     internal var keyboardDriven by mutableStateOf(false)
     /** Nothing stands in the column (a landscape rail with no strip, rows or pill): its edge is the navigation inset. */
     internal var bareTarget by mutableStateOf(false)
+    /** Exact placed bounds of the primary dock pill (in root layout pixels), for pixel-accurate T7/T7b docking. */
+    internal var dockPillRect by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
 
     /** The same edge on `move` (exact while the keyboard drives it). Read it in draw or layout only. */
     internal val top = Animatable(Float.NaN)
@@ -298,6 +300,12 @@ fun BottomColumn(
         val feedbackShown = state.feedback.current != null
         state.topTarget = (if (feedbackShown) feedbackBottom - feedbackHeight else topmost).toFloat()
         state.bareTarget = rail && rows == null && stripHeight == 0 && !feedbackShown
+        if (!rail && dockHeight > 0) {
+            val circleSpan = DockMetrics.circle.roundToPx() + DockMetrics.gap.roundToPx()
+            val pillLeft = if (layoutDirection == LayoutDirection.Rtl) left.toFloat() else (left + circleSpan).toFloat()
+            val pillRight = if (layoutDirection == LayoutDirection.Rtl) (left + column - circleSpan).toFloat() else (left + column).toFloat()
+            state.dockPillRect = androidx.compose.ui.geometry.Rect(pillLeft, dockTop.toFloat(), pillRight, dockBottom.toFloat())
+        }
         layout(width, height) {
             feedbackPlaceables.forEach { it.place(left, feedbackBottom - it.height) }
             stripPlaceables.forEach { it.place(left, stripBottom - it.height) }

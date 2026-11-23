@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -53,6 +54,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.selected
@@ -165,12 +168,24 @@ fun NoteRowItem(
     val working = row.phase == NotePhase.TRANSCRIBING || row.phase == NotePhase.WAITING || row.phase == NotePhase.PREPARING_MODEL
     val titleText = noteTitle(row, dates)
     val menuActions = actions.menuActions(row)
+    val pages = LocalShell.current.pages
     val origin = rememberRowOrigin(row.id, titleMuted = row.title.isBlank(), dock = pageDock(row, capturing))
+    val rowLayer = rememberGraphicsLayer()
+    SideEffect { origin.layer = rowLayer }
     val prepare by rememberUpdatedState(actions.prepare)
     val platePath = remember { Path() }
     Box(
         modifier
             .fillMaxWidth()
+            .pageOrigin(origin)
+            .drawWithContent {
+                if (pages.recordsOrigin(row.id)) {
+                    rowLayer.record { this@drawWithContent.drawContent() }
+                    if (!pages.hidesRow(row.id)) drawLayer(rowLayer)
+                } else if (!pages.hidesRow(row.id)) {
+                    drawContent()
+                }
+            }
             .drawBehind {
                 val a = plate.value
                 if (a <= 0f) return@drawBehind
@@ -212,7 +227,6 @@ fun NoteRowItem(
         Box(
             Modifier
                 .fillMaxWidth()
-                .pageOrigin(origin)
                 .padding(horizontal = FocalLayout.gutter - RowMetrics.plateInset, vertical = RowMetrics.hitPad),
         ) {
             Column {
@@ -223,7 +237,8 @@ fun NoteRowItem(
                             maxLines = RowMetrics.TITLE_LINES, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .pageOrigin(origin, title = true),
+                                .pageOrigin(origin, title = true)
+                                .graphicsLayer { alpha = if (pages.flying(row.id)) 0f else 1f },
                         )
                     },
                     trailing = trailing,

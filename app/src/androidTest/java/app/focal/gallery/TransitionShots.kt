@@ -35,9 +35,11 @@ object TransitionShots {
         add(Shot("t16-open-100-dark", dark = true, settleMs = after(AT_MS, 100)) { StageToNote(back = false) })
         for (t in listOf(60L, 140L, 240L)) add(Shot("t16-back-$t-light", dark = false, settleMs = after(AT_MS + OPEN_MS, t)) { StageToNote(back = true) })
         add(Shot("t16-back-140-dark", dark = true, settleMs = after(AT_MS + OPEN_MS, 140)) { StageToNote(back = true) })
-        for (t in listOf(60L, 140L)) add(Shot("t16-row-open-$t-light", dark = false, settleMs = after(AT_MS, t)) { RowToNote(back = false) })
+        for (t in listOf(60L, 100L, 160L)) add(Shot("t16-row-open-$t-light", dark = false, settleMs = after(AT_MS, t)) { RowToNote(back = false) })
         for (t in listOf(60L, 120L, 200L)) add(Shot("t16-row-back-$t-light", dark = false, settleMs = after(AT_MS + OPEN_MS, t)) { RowToNote(back = true) })
         add(Shot("t16-row-back-120-dark", dark = true, settleMs = after(AT_MS + OPEN_MS, 120)) { RowToNote(back = true) })
+        for (t in listOf(60L, 140L, 240L)) add(Shot("t7-$t-light", dark = false, settleMs = t) { FullscreenFinishToNote() })
+        add(Shot("t7-140-dark", dark = true, settleMs = 140L) { FullscreenFinishToNote() })
         for (t in listOf(20L, 80L, 140L, 240L)) add(Shot("t7b-$t-light", dark = false, settleMs = after(AT_MS, t)) { LiveToNote() })
         add(Shot("t7b-140-dark", dark = true, settleMs = after(AT_MS, 140)) { LiveToNote() })
         for (t in listOf(80L, 160L)) add(Shot("note-sheet-back-$t-light", dark = false, settleMs = after(AT_MS + OPEN_MS, t)) { SheetBackNote() })
@@ -105,6 +107,28 @@ private fun RowToNote(back: Boolean) {
     FocalShell(shell, destination = { d ->
         if (d is Destination.Note) NotePageOf(note, d) else LibraryDestination(idleModel())
     })
+}
+
+/** T7: Finish in the fullscreen recording surface contracts solid obsidian cleanly into the dock pill over pure paper. */
+@Composable
+private fun FullscreenFinishToNote() {
+    val shell = rememberShellState()
+    val scene = live()
+    LaunchedEffect(shell) {
+        shell.live.expansion.snapTo(1f)
+        shell.live.prepareLanding(saturday.id)
+        shell.live.land(reducedMotion = false) { shell.open(Destination.Note(saturday.id), PageMotion.Cut) }
+    }
+    FocalShell(
+        shell,
+        destination = { destination ->
+            when (destination) {
+                is Destination.Note -> TranscribingNote(destination)
+                else -> LibraryDestination(libraryOf(scene))
+            }
+        },
+        scene = { SceneLayer(shell, scene) },
+    )
 }
 
 /** T7b: Finish in the library dock opens the live stage into the new note's page, simulating recording ending right at Finish. */

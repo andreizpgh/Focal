@@ -39,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1415,9 +1417,12 @@ fun NotePage(
                     Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            val bodyReveal = reveal.body()
-                            alpha = listFade.value * bodyReveal
-                            translationY = if (reveal.opening()) (1f - bodyReveal) * settleLiftPx else 0f
+                            alpha = listFade.value * reveal.body()
+                        }
+                        .drawWithContent {
+                            val shift = reveal.bodyShift()
+                            val dy = if (shift > 0f) shift else if (reveal.opening()) (1f - reveal.body()) * settleLiftPx else 0f
+                            if (dy > 0.5f) translate(0f, dy) { this@drawWithContent.drawContent() } else drawContent()
                         },
                 ) {
                     // The text column is at most 600 dp and centred (spec 2.5); the list itself spans the page, so it

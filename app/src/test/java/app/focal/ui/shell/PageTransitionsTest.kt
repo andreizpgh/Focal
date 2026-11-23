@@ -40,14 +40,16 @@ class PageTransitionsTest {
         assertEquals(null, pages.provisional())
     }
 
-    @Test fun secondaryRowUsesLateralSlideNotContainerTransform() {
-        assertFalse(PageMotion.Row in PageTransitions.CONTAINERS)
+    @Test fun secondaryRowUsesVerticalPaperUnfoldAndLiveStageKeepsPurePaper() {
+        assertTrue(PageMotion.Row in PageTransitions.CONTAINERS)
         assertTrue(PageMotion.Stage in PageTransitions.CONTAINERS)
         assertTrue(PageMotion.LiveStage in PageTransitions.CONTAINERS)
-        val open = PageChange(PageMotion.Row, a, push = true, other = Destination.Library)
-        val back = PageChange(PageMotion.Row, a, push = false, other = Destination.Library)
-        assertEquals(0f, pages.material(open), 0.0001f)
-        assertEquals(0f, pages.material(back), 0.0001f)
+        val rowOpen = PageChange(PageMotion.Row, a, push = true, other = Destination.Library)
+        val rowBack = PageChange(PageMotion.Row, a, push = false, other = Destination.Library)
+        val liveFinish = PageChange(PageMotion.LiveStage, a, push = true, other = Destination.Library)
+        assertEquals(0f, pages.material(rowOpen), 0.0001f)
+        assertEquals(0f, pages.material(rowBack), 0.0001f)
+        assertEquals(0f, pages.material(liveFinish), 0.0001f)
         assertEquals(1f, pages.libraryScale(), 0.0001f)
     }
 }
