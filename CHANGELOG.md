@@ -5,6 +5,31 @@ All notable changes to Focal are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Every release so far is a testing
 pre-release.
 
+## [0.5.4] - 2026-11-23
+
+### Changed
+
+- **Lateral slide transition for secondary notes and search results.** Opening or
+  closing a borderless row in the library or a search result now uses an opaque
+  side-sliding sheet with a leading hairline, soft shadow, and receding library
+  parallax on the same `359 ms` critically damped spring. The container
+  transform with gliding title stays dedicated to the bordered latest-note card
+  at the top of the library, eliminating disappearing card borders and title
+  jumps on secondary rows.
+- **Stabilized live dictation preview.** Live preview now waits for enough
+  acoustic context (`2.8 s` continuous speech or `1.8 s` after a brief pause),
+  trims unstable half-spoken trailing words while speaking, withholds
+  low-confidence passes, and keeps previously shown prefixes steady instead of
+  rewriting early syllables. Final committed windows and raw recognizer output
+  are unchanged.
+
+### Fixed
+
+- **Folded recording `Finish` flicker.** Froze the library's live stage card
+  until the note page finishes composing and tightened the obsidian-to-paper
+  handoff so tapping **Finish** while folded expands cleanly from dark into
+  paper without a split-second white flash or muddy gray overlap.
+
 ## [0.5.3] - 2026-11-23
 
 ### Added
