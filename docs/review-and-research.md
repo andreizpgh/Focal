@@ -2,10 +2,10 @@
 
 Focal stores original PCM audio, raw recognizer tokens, and edited text separately. Parakeet Ultra INT8 produces every transcript offline. Every other language, punctuation, or re-decoding model listed below ran in standalone evaluation scripts outside the APK (raw JSON outputs and harnesses are archived in Git at tag `v0.4.0`, commit `cd859d6`).
 
-## Current app behavior (0.5.1)
+## Current app behavior (1.0.0)
 
 - **Editing and review.** Tapping any word opens inline editing with **Listen** and **Done** right above the keyboard. Tapping **Review · N** (or an underlined word) steps through low-confidence spans with **Listen**, one-tap suggestions (nearby spellings, earlier edits in the same note, and Android's offline system spell-checker for misspelled non-words), and undoable **Keep** / **Next** / **Done**.
-- **Playback.** The player supports 0.5× to 2× speed in 0.25× steps (tap menu or press-and-drag) and keeps spoken-word highlighting active across both untouched and edited paragraphs.
+- **Playback.** The player supports 0.5× to 2× speed in 0.25× steps (tap menu or press-and-drag), word-boundary scrubber snapping (`SeekSnap`) with clickless fade-in on seek, and spoken-word highlighting across both untouched and edited paragraphs.
 - **Formatting.** Paragraphs split on pauses and sentence endings using Parakeet Ultra's own punctuation, with no synthetic comma or period insertion. ([Architecture](architecture.md) · [Speech quality](speech-quality.md))
 
 ## Experiment summary
@@ -21,7 +21,7 @@ Word-error counts measure whole-recording word edit distance against a frozen re
 | First-pass single-token alternatives | Strict filtering added 19 options across 343 underlines (4 helpful, 12 tied, 3 harmful); even an oracle over the full pool helped on 16 / 343. | Not shipped. Single subword forks rarely form complete words. ([First-pass study](benchmarks/2026-11-21-first-pass/README.md)) |
 | Full word continuations (TDT decoder branching) | Following top-3 branches from uncertain pieces (+73 ms median/window, 0 MB extra weights) put a helpful spelling in the pool at 52 / 343 spans (42 in top-2), but strict 1-best gave 23 helpful / 97 tied / 25 harmful, and a small ranker gave 3 helpful / 9 tied / 3 harmful. | Experimental. Not safe for auto-selection; worth revisiting only as human-picked chips in Review. ([Word continuations](benchmarks/2026-11-21-word-continuations/README.md)) |
 
-All timings above come from desktop CPUs or x86-64 Android emulators. Real ARM phone latency, memory, heat, and battery remain unmeasured.
+All experiment timings above come from desktop CPUs or x86-64 Android emulators. Initial ARM phone launch, memory, frame-timing, and short-run thermal measurements are in [testing](testing.md#100); long-duration battery, thermal throttling, and spontaneous phone WER remain open.
 
 ## Open questions for future work
 

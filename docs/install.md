@@ -23,7 +23,7 @@ On first launch, the recording screen may say **Preparing speech model** while t
 
 ## Updating
 
-- **From 0.5.7, 0.5.6, 0.5.5, 0.5.4, 0.5.3, 0.5.2, 0.5.1, 0.5.0, 0.4.0, or 0.3.2:** install **Focal-1.0.0.apk** directly over the existing app. It uses the same application ID, signing certificate, and SQLite schema, so all notes, titles, edits, review confirmations, and recordings stay intact.
+- **From 0.3.2–0.5.7:** install **Focal-1.0.0.apk** directly over the existing app. It uses the same application ID, signing certificate, and SQLite schema, so all notes, titles, edits, review confirmations, and recordings stay intact.
 
 <details>
 <summary>Upgrading from older builds (0.3.1 down to Alpha 1)</summary>
@@ -38,7 +38,7 @@ Builds from Alpha 2 onward share the same development signing certificate (check
 
 </details>
 
-## Known caveats while testing
+## Known caveats
 
 - Recording continues with the screen off or in the background, though some phone manufacturers aggressively restrict long background services.
 - Calls, another app taking the microphone, or low storage pause recording automatically and tell you why.

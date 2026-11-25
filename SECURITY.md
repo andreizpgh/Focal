@@ -12,7 +12,7 @@ Include the Focal version, the Android version and device, and the steps to
 reproduce. Do not include real recordings or transcripts; a synthetic example is
 enough.
 
-Only the latest release is supported. Focal releases are testing pre-releases.
+Only the latest release is supported.
 
 ## What matters most
 

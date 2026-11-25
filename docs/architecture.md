@@ -81,9 +81,11 @@ after process death. A note from an older version, or one whose audio was
 removed, cannot continue.
 
 **Finish** closes the microphone, syncs, and switches the service to the
-media-processing type (data sync before Android 15) to finish transcription. A
-recording with no bytes or perfectly constant samples is discarded. If microphone
-permission is revoked, the recording ends and the note says so.
+media-processing type (data sync before Android 15) to finish transcription. Empty
+or trivial recordings (no bytes, constant samples, or no recognized speech) are
+discarded atomically (`NoteStore.completeNote`) rather than leaving fallback notes
+behind. If microphone permission is revoked, the recording ends and the note says
+so.
 
 `SessionOperations` holds one capture slot and per-note processing claims inside
 the process, so recording, transcription, deletion and audio removal never act on
@@ -240,8 +242,10 @@ is posted unless that note is on screen, and is grouped with a summary. On Andro
 16 QPR2 and later the recording notification requests promotion as a Live Update
 (not yet verified). Lock-screen versions show no note text.
 
-The static "New recording" shortcut opens a non-exported trampoline activity,
-which hands the request to the main activity in memory. No exported intent can
+The static "New recording" shortcut and home-screen widget (`RecordWidgetProvider`)
+open a non-exported trampoline activity (`ShortcutActivity`), while the Quick
+Settings tile (`RecordTileService`) starts from SystemUI; each hands the request
+to `MainActivity` with a single-use in-memory nonce so no exported intent can
 make Focal record. Settings are also reachable from App info through
 `APPLICATION_PREFERENCES`.
 
@@ -287,14 +291,16 @@ so the range widens to its timed neighbours. Times are never invented.
 ## Playback
 
 `SpeechPlayer` streams the note's PCM file through `AudioTrack` at 0.5× to 2×
-speed in 0.25× steps (`PlaybackParams`) and reports the actual playback head. Losing audio
-focus or unplugging headphones pauses it. The player refuses to start while a
-recording is live, and leaving a note stops it.
+speed in 0.25× steps (`PlaybackParams`), with word-boundary scrubber snapping
+(`SeekSnap`) and clickless fade-in on seek, and reports the actual playback
+head. Losing audio focus or unplugging headphones pauses it. The player refuses
+to start while a recording is live, and leaving a note stops it.
 
 ## Interface
 
 `MainActivity` hosts the whole app. `SettingsActivity` serves App info's settings
-link; `ShortcutActivity` is the shortcut's trampoline.
+link; `ShortcutActivity` is the non-exported launcher-shortcut and widget
+trampoline, alongside `RecordWidgetProvider` and `RecordTileService`.
 
 - **State contract.** `app.focal.ui.state` has one view model per surface:
   `LibraryViewModel`, `RecordingViewModel`, `NoteViewModel` (per note),

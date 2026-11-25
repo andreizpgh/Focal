@@ -36,7 +36,7 @@ Tap **Record** and start talking. Text appears in paragraphs after each pause wh
 
 ### Status
 
-Focal 1.0.0 is the first stable release and installs directly over 0.5.7, 0.5.6, 0.5.5, 0.5.4, 0.5.3, 0.5.2, 0.5.1, 0.5.0, 0.4.0, and 0.3.2 (and migrates notes from Alpha 2–9). Unit tests, lint, Android 16 emulator suites with the bundled speech model, and a physical-device pass on a 6 GB POCO M4 Pro (Android 13 / HyperOS, ONNX CPU arena off) pass ([testing notes](docs/testing.md)); 60-minute screen-off battery/thermal runs, Android 14–16 phone checks, and quantitative multi-device dictation scoring remain open in the [phone checklist](docs/testing.md#phone-validation). Check important transcripts against the original audio.
+Focal 1.0.0 installs directly over 0.3.2–0.5.7 and migrates notes from Alpha 2–9. Unit tests, lint, Android 16 emulator suites (with the bundled model), and an initial physical-device check on a 6 GB POCO M4 Pro (Android 13 / HyperOS, ONNX CPU arena off) are recorded in [testing](docs/testing.md). Long 60-minute screen-off battery/thermal runs, Android 14–16 phone checks, and quantitative multi-device dictation scoring remain open in the [phone checklist](docs/testing.md#phone-validation). Check important transcripts against the original audio.
 
 ---
 

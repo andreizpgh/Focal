@@ -2,8 +2,9 @@
 
 Focal's speech measurements cover short read speech, continuous public
 recordings and a Russian classroom dictation. Recognition quality was measured
-on a desktop host and Android emulator. Physical phone performance and human
-proofreading time remain open.
+on a desktop host and Android emulator. Long-run physical phone battery/thermal
+profiling, multi-device phone WER, and human proofreading time remain open
+(see [testing](testing.md#100)).
 
 ## What Focal runs
 

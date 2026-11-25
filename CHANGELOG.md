@@ -691,6 +691,14 @@ recovery of interrupted recordings.
 First public alpha: background recording and local transcription with the
 bundled Whisper Base model.
 
+[1.0.0]: https://github.com/andreizpgh/Focal/releases/tag/v1.0.0
+[0.5.7]: https://github.com/andreizpgh/Focal/releases/tag/v0.5.7
+[0.5.6]: https://github.com/andreizpgh/Focal/releases/tag/v0.5.6
+[0.5.5]: https://github.com/andreizpgh/Focal/releases/tag/v0.5.5
+[0.5.4]: https://github.com/andreizpgh/Focal/releases/tag/v0.5.4
+[0.5.3]: https://github.com/andreizpgh/Focal/releases/tag/v0.5.3
+[0.5.2]: https://github.com/andreizpgh/Focal/releases/tag/v0.5.2
+[0.5.1]: https://github.com/andreizpgh/Focal/releases/tag/v0.5.1
 [0.5.0]: https://github.com/andreizpgh/Focal/releases/tag/v0.5.0
 [0.4.0]: https://github.com/andreizpgh/Focal/releases/tag/v0.4.0
 [0.3.2]: https://github.com/andreizpgh/Focal/releases/tag/v0.3.2
