@@ -1197,27 +1197,30 @@ class RecordingService : Service() {
         }
     }
 
-    /** Every window is decided: freshly finished empty recordings are discarded (with Undo if long & app visible), else "Note ready" is posted. */
+    /** Every window is decided: freshly finished empty recordings are discarded atomically (with Undo if long & app visible), else "Note ready" is posted. */
     private fun complete(id: String, fromFinish: Boolean): Outcome {
-        if (!store.markReady(id)) return Outcome.Blocked("Saved audio can still be transcribed.")
-        val note = store.note(id)
-        if (fromFinish && note != null && !note.legacy && note.failedWindows == 0 && store.paragraphs(id).isEmpty()) {
-            if (note.duration < SHORT_NO_SPEECH_MS) {
-                runCatching { store.delete(id) }
+        return when (
+            store.completeNote(
+                id,
+                discardShortMs = if (fromFinish) SHORT_NO_SPEECH_MS else 0L,
+                trashEmpty = fromFinish && AppPresence.visible,
+            )
+        ) {
+            NoteStore.CompleteResult.BLOCKED -> Outcome.Blocked("Saved audio can still be transcribed.")
+            NoteStore.CompleteResult.DELETED_SHORT -> {
                 RecordingState.events.tryEmit(ServiceEvent.NothingRecorded)
-                updateLive { if (it.noteId == id) it.copy(progress = 1f, pending = 0) else it }
-                return Outcome.Done
+                Outcome.Done
             }
-            if (AppPresence.visible && runCatching { store.deleteWithUndo(id) }.getOrDefault(false)) {
+            NoteStore.CompleteResult.TRASHED_EMPTY -> {
                 UndoableActions.trackTrashed(app, id)
                 RecordingState.events.tryEmit(ServiceEvent.NoSpeechDiscarded(id))
-                updateLive { if (it.noteId == id) it.copy(progress = 1f, pending = 0) else it }
-                return Outcome.Done
+                Outcome.Done
+            }
+            NoteStore.CompleteResult.READY -> {
+                store.note(id)?.let { notifications.ready(id, it.title, it.created, partial = it.failedWindows > 0) }
+                Outcome.Done
             }
         }
-        note?.let { notifications.ready(id, it.title, it.created, partial = it.failedWindows > 0) }
-        updateLive { if (it.noteId == id) it.copy(progress = 1f, pending = 0) else it }
-        return Outcome.Done
     }
 
     private fun publishProcessing(id: String, engine: Engine) {

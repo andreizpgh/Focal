@@ -3,8 +3,12 @@ package app.focal.recording
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import androidx.annotation.VisibleForTesting
+import app.focal.ShortcutActivity
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.util.Collections
+import java.util.IdentityHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
@@ -113,27 +117,62 @@ object AudioLevel {
     internal fun publish(level: Float) = bits.set(level.toRawBits())
 }
 
+internal class PresenceTracker(private val tracked: (Any) -> Boolean = { true }) {
+    private val started = Collections.newSetFromMap(IdentityHashMap<Any, Boolean>())
+
+    val visible: Boolean get() = synchronized(this) { started.isNotEmpty() }
+
+    fun onStarted(activity: Any) {
+        if (tracked(activity)) synchronized(this) { started.add(activity) }
+    }
+
+    fun onResumed(activity: Any, finishingOrDestroyed: Boolean) {
+        if (tracked(activity) && !finishingOrDestroyed) synchronized(this) { started.add(activity) }
+    }
+
+    fun onStopped(activity: Any) {
+        synchronized(this) { started.remove(activity) }
+    }
+
+    fun onDestroyed(activity: Any) {
+        synchronized(this) { started.remove(activity) }
+    }
+
+    fun clear() {
+        synchronized(this) { started.clear() }
+    }
+}
+
 /**
  * Whether one of Focal's activities is started, and which note the UI shows. Notifications skip what the
  * user can already see: the auto-pause alert while Focal is visible, "Note ready" for the note on screen.
  * The UI sets [shownNote] while a note screen is visible and clears it when it leaves.
+ *
+ * Activity membership is tracked by object identity (ignoring [ShortcutActivity], a translucent trampoline) so
+ * overlapping or out-of-order OEM activity transitions never drop [visible] to false while [MainActivity] is up.
  */
 object AppPresence : Application.ActivityLifecycleCallbacks {
-    private val started = AtomicInteger()
+    private val tracker = PresenceTracker { it !is ShortcutActivity }
     val shownNote = MutableStateFlow<String?>(null)
-    val visible: Boolean get() = started.get() > 0
+    val visible: Boolean get() = tracker.visible
 
     fun install(application: Application) = application.registerActivityLifecycleCallbacks(this)
 
     fun isShowing(noteId: String): Boolean = visible && shownNote.value == noteId
 
-    override fun onActivityStarted(activity: Activity) { started.incrementAndGet() }
-    override fun onActivityStopped(activity: Activity) { started.updateAndGet { maxOf(0, it - 1) } }
+    override fun onActivityStarted(activity: Activity) = tracker.onStarted(activity)
+    override fun onActivityStopped(activity: Activity) = tracker.onStopped(activity)
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-    override fun onActivityResumed(activity: Activity) = Unit
+    override fun onActivityResumed(activity: Activity) = tracker.onResumed(activity, activity.isFinishing || activity.isDestroyed)
     override fun onActivityPaused(activity: Activity) = Unit
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-    override fun onActivityDestroyed(activity: Activity) = Unit
+    override fun onActivityDestroyed(activity: Activity) = tracker.onDestroyed(activity)
+
+    @VisibleForTesting
+    internal fun resetForTests() {
+        tracker.clear()
+        shownNote.value = null
+    }
 }
 
 /** Free-space rules for recording. Audio costs about 115 MB per hour. */

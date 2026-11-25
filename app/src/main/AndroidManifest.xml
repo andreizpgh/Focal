@@ -45,8 +45,29 @@
         </activity>
         <!-- The shortcut's target. Not exported, so no other app can make Focal record. -->
         <activity android:name=".ShortcutActivity" android:exported="false" android:excludeFromRecents="true"
-            android:noHistory="true" android:theme="@android:style/Theme.NoDisplay" />
+            android:noHistory="true" android:taskAffinity="" android:theme="@android:style/Theme.NoDisplay" />
         <service android:name=".recording.RecordingService" android:exported="false"
             android:stopWithTask="false" android:foregroundServiceType="microphone|dataSync|mediaProcessing" />
+        <service
+            android:name=".recording.RecordTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_notification"
+            android:label="@string/action_record"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <receiver
+            android:name=".RecordWidgetProvider"
+            android:exported="true"
+            android:label="@string/action_record">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/record_widget_info" />
+        </receiver>
     </application>
 </manifest>

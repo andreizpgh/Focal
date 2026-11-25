@@ -380,4 +380,5 @@
     <string name="shortcut_short">Record</string>
     <string name="shortcut_long">New recording</string>
     <string name="shortcut_disabled">Recording isn’t available</string>
+    <string name="widget_record_description">Start a new recording.</string>
 </resources>

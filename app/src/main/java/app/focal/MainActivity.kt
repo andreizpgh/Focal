@@ -157,20 +157,31 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handle(intent)
+        // Quick Settings tile taps while MainActivity is already resumed behind the shade may deliver onNewIntent directly.
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            consumeShortcut(intent)
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        // Only the non-exported ShortcutActivity asks for this, in memory: no intent another app can send to
-        // this exported activity starts the microphone.
-        if (ShortcutRecord.consume()) recordFromShortcut()
+        // Only our internal non-exported ShortcutActivity or RecordTileService can pair this extra with an in-memory nonce.
+        consumeShortcut(intent)
         // Transcription that waits (process death, Android's background limit) continues only from here.
         (application as FocalApplication).resumeWaitingTranscription(this)
     }
 
+    private fun consumeShortcut(target: Intent?) {
+        val source = target ?: return
+        if (source.action != ACTION_FROM_SHORTCUT) return
+        val nonce = source.getLongExtra(EXTRA_SHORTCUT_NONCE, 0L)
+        source.removeExtra(EXTRA_SHORTCUT_NONCE)
+        if (ShortcutRecord.consume(nonce)) recordFromShortcut()
+    }
+
     private fun handle(intent: Intent) {
         when (intent.action) {
-            // The shortcut's request itself travels in memory (ShortcutRecord), handled in onResume.
+            // The shortcut's request itself travels in memory (ShortcutRecord), matched by nonce in onResume/onNewIntent.
             ACTION_FROM_SHORTCUT -> Unit
             ACTION_SHOW_RECORDING -> EntryRequests.post(EntryRequest.ShowRecording(intent.getStringExtra(RecordingService.NOTE)))
             else -> intent.getStringExtra(RecordingService.NOTE)?.let { EntryRequests.post(EntryRequest.OpenNote(it)) }
@@ -198,8 +209,9 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        /** Sent by [ShortcutActivity] ("New recording", res/xml/shortcuts.xml); carries no request itself. */
+        /** Sent by [ShortcutActivity] and [app.focal.recording.RecordTileService]; bound to [EXTRA_SHORTCUT_NONCE]. */
         const val ACTION_FROM_SHORTCUT = "app.focal.action.FROM_SHORTCUT"
+        const val EXTRA_SHORTCUT_NONCE = "app.focal.extra.SHORTCUT_NONCE"
         /** The recording notification: show the recording screen. */
         const val ACTION_SHOW_RECORDING = "app.focal.action.SHOW_RECORDING"
         /** Hard ceiling for holding the system splash while SQLite emits the first library frame. */

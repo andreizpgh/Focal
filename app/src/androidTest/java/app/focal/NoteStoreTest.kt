@@ -683,4 +683,32 @@ class NoteStoreTest {
         assertEquals(2, store.paragraphs(renamed).size)
         assertSearchIndexIntact(store)
     }
+
+    @Test fun completeNoteAtomicallyFinalizesDeletesShortOrTrashesEmpty() {
+        val spoken = store.create()
+        savedAudio(store, spoken, 3_000)
+        commit(store, spoken, plan(0, 0, 3_000, EndKind.FINAL), speech("Real note words.", startSec = 0.2))
+        store.duration(spoken, 3_000)
+        assertEquals(NoteStore.CompleteResult.READY, store.completeNote(spoken, discardShortMs = 2_000L, trashEmpty = true))
+        assertEquals(NoteState.READY, store.note(spoken)!!.state)
+
+        val shortEmpty = store.create()
+        savedAudio(store, shortEmpty, 1_500)
+        store.duration(shortEmpty, 1_500)
+        store.addWindow(shortEmpty, plan(0, 0, 1_500, EndKind.FINAL), skip = app.focal.core.WindowGate.Skip.SILENT)
+        assertEquals(NoteStore.CompleteResult.DELETED_SHORT, store.completeNote(shortEmpty, discardShortMs = 2_000L, trashEmpty = true))
+        assertNull(store.note(shortEmpty))
+        assertFalse(store.audioFile(shortEmpty).exists())
+        assertFalse(store.undoDelete(shortEmpty))
+
+        val longEmpty = store.create()
+        savedAudio(store, longEmpty, 4_000)
+        store.duration(longEmpty, 4_000)
+        store.addWindow(longEmpty, plan(0, 0, 4_000, EndKind.FINAL), skip = app.focal.core.WindowGate.Skip.SILENT)
+        assertEquals(NoteStore.CompleteResult.TRASHED_EMPTY, store.completeNote(longEmpty, discardShortMs = 2_000L, trashEmpty = true))
+        assertNull("Trashed empty note is hidden from active notes", store.note(longEmpty))
+        assertTrue(store.library().none { it.id == longEmpty })
+        assertTrue(store.undoDelete(longEmpty))
+        assertEquals(NoteState.READY, store.note(longEmpty)!!.state)
+    }
 }

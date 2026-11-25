@@ -17,22 +17,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import app.focal.R
 import app.focal.ui.components.FocalBottomSheet
 import app.focal.ui.components.FocalPrimaryPill
@@ -51,15 +49,87 @@ import app.focal.ui.design.FocalType
 enum class RationaleMode { Allow, OpenSettings }
 
 /**
+ * Activity-scoped in-memory continuation and rationale sheet state across configuration changes and
+ * permission/settings dialogs. Kept strictly out of SavedStateHandle so task removal or process death never
+ * resumes into microphone capture without a fresh user tap.
+ */
+internal class RecordFlowState {
+    data class Target(val appendTo: String? = null, val fromMs: Long = 0L)
+
+    var sheet by mutableStateOf<RationaleMode?>(null)
+        private set
+
+    private var target: Target? = null
+    private var awaitingPermission: Boolean = false
+    private var awaitingSettings: Boolean = false
+
+    fun armPermission(appendTo: String?, fromMs: Long) {
+        sheet = null
+        target = Target(appendTo, fromMs)
+        awaitingPermission = true
+        awaitingSettings = false
+    }
+
+    fun holdRationale(mode: RationaleMode, appendTo: String?, fromMs: Long) {
+        sheet = mode
+        target = Target(appendTo, fromMs)
+        awaitingPermission = false
+        awaitingSettings = false
+    }
+
+    fun armPermissionFromHold() {
+        sheet = null
+        target = target ?: Target()
+        awaitingPermission = true
+        awaitingSettings = false
+    }
+
+    fun consumePermission(): Target? {
+        if (!awaitingPermission) return null
+        awaitingPermission = false
+        return target
+    }
+
+    fun armSettingsFromHold() {
+        sheet = null
+        target = target ?: Target()
+        awaitingPermission = false
+        awaitingSettings = true
+    }
+
+    fun consumeSettings(): Target? {
+        if (!awaitingSettings) return null
+        awaitingSettings = false
+        val current = target
+        target = null
+        return current
+    }
+
+    fun clear() {
+        sheet = null
+        target = null
+        awaitingPermission = false
+        awaitingSettings = false
+    }
+}
+
+internal class RecordFlowViewModel : ViewModel() {
+    val state = RecordFlowState()
+}
+
+/**
  * Record's microphone permission (spec 5.11): the first tap shows the system dialog directly; after a denial the
  * rationale sheet explains and asks again; once Android stops asking, the sheet's pill opens the app's details,
  * and coming back with the permission granted starts the recording at once. On grant, capture starts with no
  * second tap.
  */
 @Stable
-class RecordFlow internal constructor() {
-    var sheet by mutableStateOf<RationaleMode?>(null)
-        internal set
+class RecordFlow internal constructor(private val state: RecordFlowState = RecordFlowState()) {
+    var sheet: RationaleMode?
+        get() = state.sheet
+        internal set(value) {
+            if (value == null) state.clear() else state.holdRationale(value, null, 0L)
+        }
     internal var start: (String?, Long) -> Unit = { _, _ -> }
     internal var allow: () -> Unit = {}
     internal var openDetails: () -> Unit = {}
@@ -70,57 +140,64 @@ class RecordFlow internal constructor() {
      */
     fun record(appendTo: String? = null, fromMs: Long = 0) = start(appendTo, fromMs)
 
-    fun dismiss() { sheet = null }
+    fun dismiss() {
+        state.clear()
+    }
 }
 
 @Composable
 fun rememberRecordFlow(record: (appendTo: String?, fromMs: Long) -> Unit): RecordFlow {
     val context = LocalContext.current
-    val flow = remember { RecordFlow() }
+    val owner = LocalViewModelStoreOwner.current
+    val state = if (owner != null) viewModel<RecordFlowViewModel>(viewModelStoreOwner = owner).state else remember { RecordFlowState() }
+    val flow = remember(state) { RecordFlow(state) }
     val onRecord by rememberUpdatedState(record)
-    var fromSettings by rememberSaveable { mutableStateOf(false) }
-    // The note the pending Record continues, kept while Android asks for the microphone (the activity may be recreated).
-    var target by rememberSaveable { mutableStateOf<String?>(null) }
-    var targetMs by rememberSaveable { mutableStateOf(0L) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) onRecord(target, targetMs)
-        else if (context.findActivity()?.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) == false) {
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val armed = state.consumePermission()
+        if (granted) {
+            state.clear()
+            if (armed != null) onRecord(armed.appendTo, armed.fromMs)
+        } else if (armed != null && context.findActivity()?.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) == false) {
             // Android will not ask again: the sheet's pill opens the app's details instead.
-            flow.sheet = RationaleMode.OpenSettings
+            state.holdRationale(RationaleMode.OpenSettings, armed.appendTo, armed.fromMs)
+        } else {
+            state.clear()
+        }
+    }
+    // Back from the app's details in this Activity with the permission granted: record at once.
+    val settingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val armed = state.consumeSettings()
+        if (armed != null && context.hasMicrophone()) {
+            state.clear()
+            onRecord(armed.appendTo, armed.fromMs)
         }
     }
     flow.start = { appendTo, fromMs ->
-        target = appendTo
-        targetMs = fromMs
         val activity = context.findActivity()
         when {
-            context.hasMicrophone() -> onRecord(appendTo, fromMs)
-            activity?.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) == true -> flow.sheet = RationaleMode.Allow
-            else -> launcher.launch(Manifest.permission.RECORD_AUDIO)
-        }
-    }
-    // Back from the app's details with the permission granted: record at once.
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && fromSettings) {
-                fromSettings = false
-                if (context.hasMicrophone()) {
-                    flow.sheet = null
-                    onRecord(target, targetMs)
-                }
+            context.hasMicrophone() -> {
+                state.clear()
+                onRecord(appendTo, fromMs)
+            }
+            activity?.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) == true -> {
+                state.holdRationale(RationaleMode.Allow, appendTo, fromMs)
+            }
+            else -> {
+                state.armPermission(appendTo, fromMs)
+                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
         }
-        lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer) }
     }
-    flow.allow = { launcher.launch(Manifest.permission.RECORD_AUDIO) }
+    flow.allow = {
+        state.armPermissionFromHold()
+        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
     flow.openDetails = {
-        fromSettings = true
+        state.armSettingsFromHold()
         try {
-            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
+            settingsLauncher.launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
         } catch (_: ActivityNotFoundException) {
-            fromSettings = false
+            state.clear()
         }
     }
     return flow
@@ -150,7 +227,6 @@ fun RecordFlowSheet(flow: RecordFlow) {
         FocalPrimaryPill(
             stringResource(if (shown == RationaleMode.Allow) R.string.perm_allow else R.string.perm_settings),
             onClick = {
-                flow.dismiss()
                 if (shown == RationaleMode.Allow) flow.allow() else flow.openDetails()
             },
             modifier = Modifier.fillMaxWidth().padding(top = FocalGrid.x32),

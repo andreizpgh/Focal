@@ -532,8 +532,11 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
         "SELECT sample FROM breaks WHERE note_id=? ORDER BY sample", arrayOf(noteId),
     ).use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }
 
-    fun progress(noteId: String): TranscriptionProgress {
-        val db = readableDatabase
+    enum class CompleteResult { BLOCKED, READY, DELETED_SHORT, TRASHED_EMPTY }
+
+    fun progress(noteId: String): TranscriptionProgress = progress(readableDatabase, noteId)
+
+    private fun progress(db: SQLiteDatabase, noteId: String): TranscriptionProgress {
         val (duration, legacy) = db.rawQuery("SELECT duration,legacy FROM notes WHERE id=?", arrayOf(noteId)).use {
             if (it.moveToFirst()) it.getLong(0) to (it.getInt(1) == 1) else return TranscriptionProgress(0, 0, 0, 0, 0)
         }
@@ -553,21 +556,56 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     fun hasUntranscribedAudio(note: Note): Boolean = progress(note.id).let { it.remainingMs > 0 || it.pendingWindows > 0 }
 
     /**
+     * Atomically completes transcription and decides whether an empty finished recording becomes ready, is deleted as a
+     * short tap (< [discardShortMs]), or moves straight to the trash for Undo ([trashEmpty]), emitting a single store
+     * change without flashing an intermediate `Note at …` state before discard.
+     */
+    fun completeNote(noteId: String, discardShortMs: Long = 0L, trashEmpty: Boolean = false): CompleteResult {
+        val result = writableDatabase.transaction {
+            val progress = progress(this, noteId)
+            if (progress.pendingWindows > 0 || progress.gaps > 0 || progress.remainingMs > 0) return@transaction CompleteResult.BLOCKED
+            val meta = rawQuery(
+                "SELECT duration,legacy,(SELECT count(*) FROM windows WHERE note_id=n.id AND state='FAILED') " +
+                    "FROM notes n WHERE n.id=? AND n.deleted_at IS NULL",
+                arrayOf(noteId),
+            ).use { if (it.moveToFirst()) Triple(it.getLong(0), it.getInt(1) == 1, it.getInt(2)) else null }
+                ?: return@transaction CompleteResult.BLOCKED
+            val (duration, legacy, failedWindows) = meta
+            execSQL("UPDATE paragraphs SET open=0 WHERE note_id=? AND open=1", arrayOf<Any>(noteId))
+            val visibleCount = rawQuery(
+                "SELECT count(*) FROM paragraphs WHERE note_id=? AND hidden=0 AND trim(text)!=''",
+                arrayOf(noteId),
+            ).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+            val emptyFinished = !legacy && failedWindows == 0 && visibleCount == 0
+            if (emptyFinished && discardShortMs > 0L && duration < discardShortMs) {
+                eraseNoteRows(noteId)
+                return@transaction CompleteResult.DELETED_SHORT
+            }
+            if (emptyFinished && trashEmpty) {
+                val trashed = update("notes", ContentValues().apply {
+                    put("state", NoteState.READY); put("error", ""); putNull("pause_reason")
+                    put("deleted_at", System.currentTimeMillis())
+                }, "id=? AND deleted_at IS NULL", arrayOf(noteId)) == 1
+                return@transaction if (trashed) CompleteResult.TRASHED_EMPTY else CompleteResult.BLOCKED
+            }
+            val updated = update("notes", ContentValues().apply {
+                put("state", NoteState.READY); put("error", ""); putNull("pause_reason")
+            }, "id=? AND deleted_at IS NULL", arrayOf(noteId)) == 1
+            if (updated) CompleteResult.READY else CompleteResult.BLOCKED
+        }
+        when (result) {
+            CompleteResult.BLOCKED -> Unit
+            CompleteResult.DELETED_SHORT -> try { deletePendingAudio(noteId) } finally { changed() }
+            CompleteResult.READY, CompleteResult.TRASHED_EMPTY -> changed()
+        }
+        return result
+    }
+
+    /**
      * Completes a transcription: all paragraphs close and the note becomes READY. Refused (false) while a
      * window is pending, a migrated range is untranscribed or saved audio lies beyond the last window.
      */
-    fun markReady(noteId: String): Boolean {
-        val ready = writableDatabase.transaction {
-            val progress = progress(noteId)
-            if (progress.pendingWindows > 0 || progress.gaps > 0 || progress.remainingMs > 0) return@transaction false
-            execSQL("UPDATE paragraphs SET open=0 WHERE note_id=? AND open=1", arrayOf<Any>(noteId))
-            update("notes", ContentValues().apply {
-                put("state", NoteState.READY); put("error", ""); putNull("pause_reason")
-            }, "id=? AND deleted_at IS NULL", arrayOf(noteId)) == 1
-        }
-        if (ready) changed()
-        return ready
-    }
+    fun markReady(noteId: String): Boolean = completeNote(noteId) == CompleteResult.READY
 
     // ---------------------------------------------------------------- paragraphs
 
@@ -1027,17 +1065,21 @@ class NoteStore(context: Context) : SQLiteOpenHelper(context, "focal.db", null, 
     /** Permanently deletes a note, its text and its audio now. */
     fun delete(id: String) { delete(id, onlyTrashed = false) }
 
+    private fun SQLiteDatabase.eraseNoteRows(id: String) {
+        insertWithOnConflict("pending_audio_deletions", null, ContentValues().apply { put("note_id", id) }, SQLiteDatabase.CONFLICT_IGNORE)
+        val paragraphIds = rawQuery("SELECT id FROM paragraphs WHERE note_id=?", arrayOf(id)).use { c ->
+            buildList { while (c.moveToNext()) add(c.getLong(0)) }
+        }
+        paragraphIds.forEach { unindexParagraph(it) }
+        noteSeq(this, id)?.let { unindexTitle(it) }
+        delete("notes", "id=?", arrayOf(id))
+    }
+
     private fun delete(id: String, onlyTrashed: Boolean) {
         val deleted = writableDatabase.transaction {
             if (onlyTrashed && rawQuery("SELECT 1 FROM notes WHERE id=? AND deleted_at IS NOT NULL", arrayOf(id)).use { !it.moveToFirst() })
                 return@transaction false
-            insertWithOnConflict("pending_audio_deletions", null, ContentValues().apply { put("note_id", id) }, SQLiteDatabase.CONFLICT_IGNORE)
-            val paragraphIds = rawQuery("SELECT id FROM paragraphs WHERE note_id=?", arrayOf(id)).use { c ->
-                buildList { while (c.moveToNext()) add(c.getLong(0)) }
-            }
-            paragraphIds.forEach { unindexParagraph(it) }
-            noteSeq(this, id)?.let { unindexTitle(it) }
-            delete("notes", "id=?", arrayOf(id))
+            eraseNoteRows(id)
             true
         }
         if (deleted) try { deletePendingAudio(id) } finally { changed() }
