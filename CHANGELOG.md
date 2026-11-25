@@ -2,8 +2,57 @@
 
 All notable changes to Focal are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
-[Semantic Versioning](https://semver.org/). Every release so far is a testing
-pre-release.
+[Semantic Versioning](https://semver.org/). Releases through 0.5.7 were testing
+pre-releases; 1.0.0 is the first stable release.
+
+## [1.0.0] - 2026-11-25
+
+### Added
+
+- **Quick Settings tile (`RecordTileService`).** Adds a SystemUI Quick Settings
+  tile that starts recording from the shade or lock screen (`unlockAndRun`),
+  focuses an active recording when tapped mid-session, and resets stale state
+  on process launch.
+- **Home-screen Record widget (`RecordWidgetProvider`).** Adds a dark-instrument
+  home-screen widget in a centered 1×1 circle and horizontally resizable 2×1 pill
+  without creating a blank entry in Recents.
+- **Swipe-to-dismiss bottom sheets, Settings progress labels, and empty-library
+  hint.** Modal confirmation/tool sheets now dismiss with a downward swipe;
+  Settings → Data rows show `Exporting…`, `Backing up…`, `Restoring…`,
+  `Removing…`, and `Deleting…` while busy; the empty-library hint guides new
+  users to Settings after an idle pause when layout space allows.
+
+### Changed
+
+- **Continuous dock and page transitions.** Synchronized `Record ↔ Copy` and
+  2-button ↔ 3-button dock morphs with Stage and Row page transitions alongside
+  `preferredFrameRate(High)` hints and cached row transforms.
+- **Scrubber word-boundary playback (`SeekSnap`).** Releasing the playback
+  scrubber snaps to word boundaries with a short pre-word lead and clickless
+  12 ms fade-in, keeps the snapped word highlight steady across glide, and
+  preserves parked-at-silence state across pause, rotation, and backgrounding.
+- **Undo restoration motion and landscape Resume rail.** Stage and Row notes
+  restored via **Undo** animate in with reversed removal motion; paused landscape
+  rail keeps **Resume** as a compact 56 dp circular dot button with tooltip;
+  empty-library copy is quieted to `"No notes yet"` / `"Transcribed offline on
+  this phone."`.
+
+### Fixed
+
+- **Atomic empty-note discard from widget, tile, and shortcuts.** Replaced
+  separate delete/check calls with atomic `NoteStore.completeNote()` and excluded
+  transient `ShortcutActivity` from foreground presence tracking so silent or
+  trivial widget/tile recordings discard cleanly without saving an empty fallback
+  note or flashing intermediate `Ready` state.
+- **Transcription-finish flicker and background overhead.** Observed paragraph
+  arrivals synchronously during composition, switched `WritingHead` bars to
+  sprite rendering, prioritized `NoteState.READY` in phase resolution, cached
+  component gradient brushes, and scoped `NoteRoute` away from per-second timer
+  updates.
+- **Nonce-bound shortcut/tile launches and process-death safety.** Bound internal
+  shortcut and tile launches to short-lived in-memory nonces and moved
+  microphone-settings continuation state into `Activity` `ViewModel` scope so
+  process death or dismissed tasks cannot reopen the microphone unexpectedly.
 
 ## [0.5.7] - 2026-11-23
 

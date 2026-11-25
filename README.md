@@ -3,13 +3,13 @@
   <h1>Focal</h1>
   <p>Offline voice notes for Android.</p>
   <p>
-    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/v0.5.7/Focal-0.5.7.apk">Download Focal 0.5.7</a></strong>
+    <strong><a href="https://github.com/andreizpgh/Focal/releases/download/v1.0.0/Focal-1.0.0.apk">Download Focal 1.0.0</a></strong>
     &nbsp;·&nbsp;
     <a href="docs/install.md">Install guide</a>
     &nbsp;·&nbsp;
-    <a href="https://github.com/andreizpgh/Focal/releases/tag/v0.5.7">Release notes</a>
+    <a href="https://github.com/andreizpgh/Focal/releases/tag/v1.0.0">Release notes</a>
   </p>
-  <sub>Android 8.0+ · ARM64 · ~0.7 GB · No internet permission · Testing pre-release</sub>
+  <sub>Android 8.0+ · ARM64 · ~0.7 GB · No internet permission</sub>
 </div>
 
 <br>
@@ -29,14 +29,14 @@
 Tap **Record** and start talking. Text appears in paragraphs after each pause while you keep speaking. When you finish, fix any mistakes directly on the page and copy the text.
 
 - **Offline speech recognition.** Uses [Parakeet Ultra INT8](docs/speech-quality.md) locally through `sherpa-onnx` over a small JNI bridge. The app declares no `INTERNET` permission, accounts, or analytics.
-- **Background capture and recovery.** Keeps recording with the screen off, syncs PCM audio to disk every second, recovers from calls or process death without losing saved audio, and lets you continue recording into an existing note.
+- **Background capture and recovery.** Keeps recording with the screen off, syncs PCM audio to disk every second, recovers from calls or process death without losing saved audio, lets you continue recording into an existing note, and starts quickly from the Quick Settings tile, app shortcut, or home-screen widget.
 - **Automatic language detection.** Supports 25 European languages without a language picker. Accuracy varies noticeably across languages and speakers ([multilingual benchmark](docs/benchmarks/2026-11-19-multilingual/README.md)).
 - **In-place editing and review.** Tap any word to edit it directly with **Listen** and **Done** right above the keyboard, or tap **Review · N** to step through low-confidence words, replay the surrounding audio, and apply suggestions or confirm with **Keep**.
 - **Audio playback and data ownership.** Play back from 0.5× to 2× (0.25× steps) with word-level highlighting, copy or share multiple selected notes at once, export all notes as Markdown, back up and restore archives offline, or delete audio files while keeping the text.
 
 ### Status
 
-Focal 0.5.7 is a testing pre-release and installs directly over 0.5.6, 0.5.5, 0.5.4, 0.5.3, 0.5.2, 0.5.1, 0.5.0, 0.4.0, and 0.3.2. Unit tests, lint, and Android 16 emulator suites pass with the bundled speech model, while physical ARM phone speed, heat, battery use, and spontaneous dictation accuracy remain open in the [phone checklist](docs/testing.md#phone-validation). Check important transcripts against the original audio.
+Focal 1.0.0 is the first stable release and installs directly over 0.5.7, 0.5.6, 0.5.5, 0.5.4, 0.5.3, 0.5.2, 0.5.1, 0.5.0, 0.4.0, and 0.3.2 (and migrates notes from Alpha 2–9). Unit tests, lint, Android 16 emulator suites with the bundled speech model, and a physical-device pass on a 6 GB POCO M4 Pro (Android 13 / HyperOS, ONNX CPU arena off) pass ([testing notes](docs/testing.md)); 60-minute screen-off battery/thermal runs, Android 14–16 phone checks, and quantitative multi-device dictation scoring remain open in the [phone checklist](docs/testing.md#phone-validation). Check important transcripts against the original audio.
 
 ---
 

@@ -127,18 +127,31 @@ to end, so before publishing a release is checked on emulators in three parts:
 
 ## What has been verified
 
-### 0.5.7 (pre-release physical phone check)
+### 1.0.0
 
-- **JVM, lint, and emulator checks:** `:core:test` (69 tests), `:app:testDebugUnitTest`
-  (251 tests), `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` (0 errors),
-  `:app:assembleDebug`, and `python3 -m unittest discover -s scripts/tests` (58 tests)
-  passed; targeted instrumented tests on an API 36 (Android 16) x86_64 emulator
-  (`NoteStoreTest`, `RecordingServiceTest`, `InterfaceTest`, `UiMotionTest`,
-  `WindowFoldsTest` — 84 tests) passed.
+- **JVM, lint, and script checks:** `:core:test` (69 tests), `:app:testDebugUnitTest`
+  (251 tests), `:app:lintDebug` (0 errors), and
+  `python3 -m unittest discover -s scripts/tests` (60 tests) pass.
+- **Instrumented suite (`-e focal.requireModel true`):** 166 of 166 tests
+  completed with 0 failures on an API 36 (Android 16) x86_64 emulator
+  (`fintrail36`) at `824 × 1830` (320 dpi; wide-display checks skip on the phone
+  viewport), covering `NoteStoreTest`, `LegacyDatabaseUpgradeTest`,
+  `NoteArchiveTest`, `RecordingServiceTest`, `UltraServiceTest`,
+  `EngineGuardProcessTest`, `EngineGuardServiceTest`, `NotificationsTest`,
+  `SpeechWorkflowTest`, `OfflineRecognizerTest` and `UltraTranscriberTest`
+  (public JFK fixture), `SileroVadTest`, `UltraModelTest`, `SpeechPlayerTest`,
+  `InterfaceTest`, `CopyFeedbackTest`, `FindRowsTest`, `NoteEditInputTest`,
+  `NoteEditSessionTest`, `NoteEditTest`, `ReplaceAllUndoTest`, `UiMotionTest`,
+  `WindowFoldsTest`, `SceneGestureTest`, and `LongNoteTest`.
+- **Screenshots:** Re-rendered and visually inspected all four README
+  screenshots via `GalleryTest` (`library/home-light`, `scene/rec-live-light`,
+  `note/playing-dark`, `note/review-light`).
 - **Physical phone — POCO M4 Pro (`2201117PG`, Android 13 / API 33, HyperOS OS1.0,
-  1080 × 2400 at 440 dpi, 90 Hz, 5.86 GB RAM / ONNX CPU arena off):** signed
-  debug-keystore ARM64 release APK (`0.5.7`, `versionCode 22`, 700,660,557 bytes,
-  16 KB aligned, `minifyReleaseWithR8`, `verifyReleaseAbis`).
+  1080 × 2400 at 440 dpi, 90 Hz, 5.86 GB RAM / ONNX CPU arena off):** measured on
+  the signed debug-keystore ARM64 pre-release APK (`0.5.7`, `versionCode 22`,
+  700,660,557 bytes, 16 KB aligned, `minifyReleaseWithR8`, `verifyReleaseAbis`)
+  built from `550fb76` (identical Kotlin/native code prior to the `1.0.0` version
+  bump and documentation/screenshot update).
   - **Launch & security:** cold `MainActivity` start (`am start -W`, 3 runs)
     451 / 356 / 355 ms `TotalTime` (458 / 361 / 360 ms `WaitTime`); warm
     `SettingsActivity` (`APPLICATION_PREFERENCES`) 161 ms in a separate
@@ -170,6 +183,10 @@ to end, so before publishing a release is checked on emulators in three parts:
     drain, call/other-app mic interruption, Android 14–16 FGS limits / predictive
     back / Live Updates, TalkBack/Switch Access, second phone (> 6 GB RAM with ONNX
     arena on), and quantitative RU/EN WER scoring.
+- **Release build & upgrade:** Verified with `scripts/release.py --stable`
+  (v2/v3 signing certificate `3e407a18…a3bc`, 16 KB alignment, `arm64-v8a` only,
+  all 5 locked model files byte for byte), full-history Gitleaks scan (0 leaks),
+  and in-place upgrade over `Focal-0.5.7.apk` on Android 16 emulator.
 
 ### 0.5.1
 
