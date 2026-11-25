@@ -204,8 +204,9 @@ either edge are left to the system Back gesture.
 Nothing on the library shows that a page lies beside it, so it is said once, in
 words: after the library has been at rest for a moment the feedback pill reads
 "Swipe left for settings" with **Open**, which opens the page with the swipe's
-own motion. The hint shows at most twice, only once the library holds a note,
-and never after settings has been opened. Nothing moves by itself.
+own motion. The hint shows at most twice (including on an empty library after a
+longer pause when there is room below the invitation), and never after settings
+has been opened. Nothing moves by itself.
 
 The page has its name beside the back arrow and four groups under small labels.
 A row is one line, and every row does something or leads somewhere: the theme;

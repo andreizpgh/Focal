@@ -1,8 +1,9 @@
 # Testing
 
 Focal is checked at three levels: JVM tests that need no device, instrumented
-tests on an emulator or device, and a manual phone checklist that has not been
-done yet. Emulator results do not establish phone speed, memory, heat, battery
+tests on an emulator or device, and a manual phone checklist (partially checked
+on a 6 GB ARM64 phone; long-run and multi-device checks remain open). Emulator
+results do not establish phone speed, memory, heat, battery
 life or background reliability.
 
 ## Automated checks
@@ -125,6 +126,50 @@ to end, so before publishing a release is checked on emulators in three parts:
   discards such a recording as "Nothing was recorded".
 
 ## What has been verified
+
+### 0.5.7 (pre-release physical phone check)
+
+- **JVM, lint, and emulator checks:** `:core:test` (69 tests), `:app:testDebugUnitTest`
+  (251 tests), `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` (0 errors),
+  `:app:assembleDebug`, and `python3 -m unittest discover -s scripts/tests` (58 tests)
+  passed; targeted instrumented tests on an API 36 (Android 16) x86_64 emulator
+  (`NoteStoreTest`, `RecordingServiceTest`, `InterfaceTest`, `UiMotionTest`,
+  `WindowFoldsTest` — 84 tests) passed.
+- **Physical phone — POCO M4 Pro (`2201117PG`, Android 13 / API 33, HyperOS OS1.0,
+  1080 × 2400 at 440 dpi, 90 Hz, 5.86 GB RAM / ONNX CPU arena off):** signed
+  debug-keystore ARM64 release APK (`0.5.7`, `versionCode 22`, 700,660,557 bytes,
+  16 KB aligned, `minifyReleaseWithR8`, `verifyReleaseAbis`).
+  - **Launch & security:** cold `MainActivity` start (`am start -W`, 3 runs)
+    451 / 356 / 355 ms `TotalTime` (458 / 361 / 360 ms `WaitTime`); warm
+    `SettingsActivity` (`APPLICATION_PREFERENCES`) 161 ms in a separate
+    `FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS` task; hot return to `MainActivity` 57 ms;
+    external launch of non-exported `ShortcutActivity` from `adb shell` (UID 2000)
+    rejected with `SecurityException: Permission Denial`.
+  - **Memory & foreground service (~5 min live RU/EN dictation + widget pass,
+    5 s polling):** idle `TOTAL PSS` 57.4 MB (`Native Heap` 18.4 MB) → peak
+    1,179 MB PSS / 1,285 MB RSS (`Native Heap` 929 MB, `Graphics` 188 MB) while
+    recording and decoding with Parakeet Ultra INT8 in 6 GB lean mode (steady
+    decoding plateau 986–1,077 MB PSS) → after `Finish`, `Native Heap` returned
+    to 48–55 MB (settled `TOTAL PSS` 229 MB, including ~95 MB purgeable Skia
+    scratch RenderTarget). `RecordingService` ran `isForeground=true` throughout
+    capture/transcription and exited cleanly with zero lingering services.
+  - **Frame timing & heat:** `dumpsys gfxinfo app.focal` across 9,056 frames
+    (post-reset, 90 Hz / 11.1 ms budget) reported 50th / 90th / 95th / 99th
+    percentiles of 27 / 36 / 40 / 57 ms (GPU 12 / 19 / 20 / 22 ms; 72.5% of frames
+    missed the 11.1 ms 90 Hz deadline during continuous recording-scene animation +
+    CPU decoding, while `BufferQueueProducer` ran ~73–87 fps). On AC power (39%),
+    CPU rose from 34.1 °C to 72.4 °C peak (skin 33.0 → 41.8 °C, battery
+    31.4 → 33.5 °C) with `Thermal Status: 0` throughout. Zero crashes, ANRs, OOMs,
+    or `Focal`/`FocalService`/`EngineGuard`/`SpeechModels` errors in `logcat`.
+  - **Manual confirmation on phone:** Russian dictation with English technical
+    terms and paragraph pause, English switch, short "Да" reply, landscape
+    `Pause → Resume` 56 dp circle, flicker-free `Finish`, scrubber playback,
+    reverse `Delete → Undo` animation, and silent home-widget recording discarded
+    without saving an empty note.
+  - **Still pending on phone:** 60-minute screen-off unplugged recording, battery
+    drain, call/other-app mic interruption, Android 14–16 FGS limits / predictive
+    back / Live Updates, TalkBack/Switch Access, second phone (> 6 GB RAM with ONNX
+    arena on), and quantitative RU/EN WER scoring.
 
 ### 0.5.1
 
@@ -491,6 +536,25 @@ temperature before each run.
       settings and the player strip.
 - [ ] The Live Update recording notification on Android 16 QPR2.
 - [ ] The "New recording" shortcut on the phone's launcher.
+- [ ] Quick Settings tile (`RecordTileService`): tap while unlocked and from the
+      lock screen (`unlockAndRun`), tap while already recording to open the live
+      scene, confirm a stale "Recording" tile resets after force-stop or process
+      death, and check whether the tile label reads clearly beside MIUI/HyperOS's
+      "Screen recorder" tile (since HyperOS omits `subtitle`).
+- [ ] Home-screen widget (`RecordWidgetProvider`) in 1×1 and 2×1 sizes on the
+      phone's launcher (including MIUI/HyperOS on Poco M4 Pro): centered 56 dp
+      circle/pill sizing, whether HyperOS supports horizontal resize (or needs a
+      separate 2×1 provider), launch animation vs icon launch (`taskAffinity`),
+      and zero blank Recents entry (`ShortcutActivity`).
+- [ ] Dock and page morphs at 90 and 120 Hz (check with developer refresh
+      overlay): stage and row taps waiting for a note to load, pulled stage
+      release and cancel, rapid Back mid-morph, both Finish transitions (`T7`
+      and `T7b`), and large font scale (`≥ 1.5×`) height stability without
+      snaps or ghost faces.
+- [ ] Audio playback and scrubber: `SeekSnap` word-boundary landing, silent park
+      within the last 300 ms of unaligned audio, clickless 12 ms fade-in on
+      seek, and rotation while parked; plus swipe-to-dismiss bottom sheets,
+      Settings data task busy labels, and the empty-library Settings hint.
 - [ ] TalkBack and Switch Access walk-through of record → read → edit → copy.
 - [ ] Haptics: four distinct ticks and no others; their feel on older phones.
 - [ ] Scroll and animation smoothness at 90 and 120 Hz, and grain or banding of

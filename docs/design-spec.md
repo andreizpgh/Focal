@@ -17,7 +17,7 @@ These product decisions bind the rest of the document, which cites them by ID. C
 | X1 | No settings button anywhere. Settings opens by a horizontal, finger-tracked swipe from right to left across the library content. The touch-down is at least 32 dp from the screen edges, so the system Back gesture is never taken; the gesture is direction-locked against the list's vertical scroll; a release past 35 % of the width or a fling completes on a no-bounce spring, otherwise it springs back; the settings page slides in from the right; a swipe from left to right, system Back or predictive back returns with the same progress-driven motion. Discoverability: a one-time peek on the very first launch, and once more after the first note is created if settings was never opened; it never repeats after settings has been opened once. Alternatives that must exist: a TalkBack custom action "Open settings" on the library; an `APPLICATION_PREFERENCES` intent filter, so Android's App info gear opens Focal's settings; the keyboard shortcut Ctrl+, . The settings page holds Theme, Storage and About | 4.23 |
 | X2 | The idle library dock is a 56 dp search circle (24–80) + a full-width Record pill (92–388). While recording: Pause circle + Finish pill. The empty library: the Record pill alone (24–388) | 4.3 |
 | X3 | The top of the library is pure content: the stage card starts under the status bar with the standard top margin; the time sits on the title line, right-aligned | 4.1.1, 4.22 |
-| X4 | The empty library has no card: the resting nine-bar wave centred on paper, "Speak, and it’s written down." + "Tap Record and talk. Text appears after each pause.", the Record pill below. No drag-to-record gesture anywhere: Record is enough. A drag down on the stage only expands a recording that is already running | 4.22.5, 6.5 |
+| X4 | The empty library has no card: the resting nine-bar wave centred on paper, "No notes yet" + "Transcribed offline on this phone.", the Record pill below. No drag-to-record gesture anywhere: Record is enough. A drag down on the stage only expands a recording that is already running | 4.22.5, 6.5 |
 | X5 | Pause shows only the pause-glyph badge on the dimmed wave (no word, no caption) for manual pauses and for call and silenced-microphone auto-pauses, on the stage and in the scene. The only caption is for the storage-full auto-pause, one short line: "Storage is full" | 4.21.4, 4.22.3, 5.3.5 |
 | X6 | Readiness: no check. The "Transcribing · N%" pill morphs once directly into the Copy pill; one soft shimmer sweep crosses the card; one `Confirm` haptic. Nothing else; no "Note ready" text in the app's UI. The words survive only outside it: in the system notification (posted only when the note is not on screen) and in TalkBack's spoken announcement | 4.22.4, T8″, 5.12, 8.2 |
 | X7 | Everything else stays as specified here: the card hierarchy and states, the sticky day header, the expand/collapse choreography, the scene, the note view, find and replace, the undo pill and search | throughout |
@@ -927,8 +927,8 @@ The empty library shows what the app *is*, calmly, on paper: the instrument at r
 | Element | Ref position (measured) | Style |
 |---|---|---|
 | **Instrument at rest** | box 112 tall × 144 wide, x 134–278, y 268–380, centred on (206, 324); centre-bar ink 301.6–346.4 (44.8 dp) | The nine bars in paper dress: `ink`, the centre bar's `centreBarTop → centreBarBottom` gradient, every bar at the mark's own alpha (3.1), the outer bars blurred with the mark's σ (s = 112/42 = 2.667, outer σ 5.9 dp); **42 % of the profile, still**; no glow (glow means a live level). Never the full profile, so it never reads as the logo (F2). Rasterised once per size and theme (3.4) |
-| Headline | 416–484 (box 56–356: max width 300, centred; 36 below the instrument's box) | "Speak, and it’s written down." `title` 28/34 600 `ink`, centred, balanced (two lines at 1.0×) |
-| Second line | 496–544 (12 below) | "Tap Record and talk." / "Text appears after each pause." `field` 17/24 400 `muted`, centred, two lines (an explicit line break in `empty_body`) |
+| Headline | 416–484 (box 56–356: max width 300, centred; 36 below the instrument's box) | "No notes yet" `title` 28/34 600 `ink`, centred, balanced |
+| Second line | 496–544 (12 below) | "Transcribed offline on this phone." `field` 17/24 400 `muted`, centred |
 | Dock | Record 24–388 × 819–875 | The `inv` pill alone; no search circle (there is nothing to search) |
 
 - **Balance.** The visible group runs from the centre bar's top (301.6) to the second line's bottom (544), centred at 422.8: 6.7 dp above the centre of the free paper (status-bar bottom 40 → dock top 819, centre 429.5), the optical centre. 261.6 dp of paper above the ink, 275 dp below the text.
@@ -940,7 +940,7 @@ The empty library shows what the app *is*, calmly, on paper: the instrument at r
 **Behaviour.**
 - **Tap Record** → T1′e (6.1). Record is the only way to start a recording, here and everywhere (X4).
 - **Nothing else responds:** no tap response, no drag. A horizontal swipe opens Settings like anywhere in the library (4.23).
-- **TalkBack:** the composition is one node: "Speak, and it’s written down. Tap Record and talk. Text appears after each pause." with the custom action "Open settings" (4.23.6). Record is the next node (it also carries "Open settings").
+- **TalkBack:** the composition is one node: "No notes yet. Transcribed offline on this phone." with the custom action "Open settings" (4.23.6). Record is the next node (it also carries "Open settings").
 - **Reduced motion:** nothing here moves; T1′e is the 150 ms crossfade (2.8.4).
 - **Empty → first note** (T27′): Finish always lands on the note (V7). Back folds the page into the stage, which appears here for the first time at 56–296 (reverse T16′), while the search circle grows in (width 0 → 56, `move`) and Record's left edge moves 24 → 92 (`move`). A discarded empty recording ("Nothing was recorded") folds back by reverse T1′e into the resting instrument, and the invitation returns (`fade`).
 - **Deleting the last note** (4.22.6): the stage fades out (`fadeFast`) and this composition fades in (`fade`); the search circle leaves (width → 0, `move`) and Record's left edge returns 92 → 24 (`move`). Undo reverses it.
@@ -1347,7 +1347,7 @@ The hint slot reads "Notifications are off, so Pause and Finish are only in Foca
 
 ### 5.14 Landscape, large screens, 200 % font
 
-- **Landscape phone** (height < 480 dp): top bar 48 dp. The dock becomes a 96 dp end-side rail with its controls stacked and vertically centred: the circle (56) above the primary control, which becomes a 56 dp circle with a glyph only (content description = label; tooltip shows it). The player strip stays a 48 dp row under the text column. The feedback pill spans the text column, 8 dp above the strip or the bottom inset. The scene uses two columns: instrument (wave, timer, state, centred) on the start half, text region on the end half, rail at the end edge.
+- **Landscape phone** (height < 480 dp): top bar 48 dp. The dock becomes a 96 dp end-side rail with its controls stacked and vertically centred: the circle (56) above the primary control, which becomes a 56 dp circle with a glyph only (content description = label; tooltip shows it); paused, Resume stays a 56 dp tonal circle with its red dot and "Resume" tooltip rather than widening the rail. The player strip stays a 48 dp row under the text column. The feedback pill spans the text column, 8 dp above the strip or the bottom inset. The scene uses two columns: instrument (wave, timer, state, centred) on the start half, text region on the end half, rail at the end edge.
 - **Width ≥ 600 dp:** the content column and the bottom column are capped at 600 and centred.
 - **Width ≥ 840 dp:** `ListDetailPaneScaffold` (Library | Note); the dock lives in the detail pane; Record sits at the list pane's bottom when the detail pane is empty; the scene overlays the whole window. No orientation locks.
 - **The stage** in landscape and on wide windows: 4.22.1. The morph's target is always the full window; in the landscape two-column scene the wave and the timer travel to the start half's centre.
@@ -1455,8 +1455,8 @@ English default in `res/values/strings.xml`. Sentence case. The one noun is **no
 | `search_hint` | Search notes |
 | `cd_search_close` / `cd_search_clear` | Close search / Clear |
 | `day_today` / `day_yesterday` | Today / Yesterday |
-| `empty_title` | Speak, and it’s written down. |
-| `empty_body` | Tap Record and talk.\nText appears after each pause. (two lines, an explicit break) |
+| `empty_title` | No notes yet |
+| `empty_body` | Transcribed offline on this phone. |
 | `search_count` (plurals) | %d note / %d notes |
 | `search_none` | No notes contain “%s”. |
 | `title_fallback` | Note at %s |
@@ -1571,7 +1571,7 @@ The scene draws no "Recording" or "Paused" and has no pause notices: "Recording"
 | `a11y_stage_paused` | Paused, %1$s. (automatic: Paused, %1$s, %2$s., with `a11y_reason_*`) |
 | `a11y_reason_call` / `a11y_reason_other_app` / `a11y_reason_storage` | paused for a call / paused for another app / paused, storage is full (spoken only; also the polite announcements "Paused for a call." and so on) |
 | `a11y_stage_note` | Latest note. %1$s. %2$s, %3$s. (title, full date and time, length) |
-| `a11y_stage_empty` | Speak, and it’s written down. Tap Record and talk. Text appears after each pause. |
+| `a11y_stage_empty` | No notes yet. Transcribed offline on this phone. |
 | `a11y_open_settings` | Open settings (custom action on the library's first node and the dock's pill, 4.23.6) |
 | `settings_pane` | Settings (the settings page's pane title) |
 | `a11y_copy_note_new` | Copy note, new (the fresh white Copy) |
@@ -1765,7 +1765,7 @@ The swipe is an accelerator, never the only path (X1).
 | Close search / Clear | Close search / Clear |
 | Stage, live | Recording, %1$s. Latest text: %2$s (paused: Paused, %1$s.; automatic: Paused, %1$s, paused for a call.); click label and `expand` action "Expand recording"; custom action "Open settings" |
 | Stage, note | Latest note. %1$s. %2$s, %3$s.; click label "Open note"; custom actions = the row menu, then "Open settings" |
-| Empty library composition | "Speak, and it’s written down. Tap Record and talk. Text appears after each pause."; custom action "Open settings" |
+| Empty library composition | "No notes yet. Transcribed offline on this phone."; custom action "Open settings" |
 | Stage Copy pill | Copy note (fresh: "Copy note, new"), then "Copied"; disabled while transcribing (the pill is a progress bar: "Transcribing, 82 percent") |
 | Scene chevron | Collapse. Recording continues |
 | Scene root | `collapse` action "Collapse" |
