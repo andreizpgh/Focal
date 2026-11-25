@@ -111,26 +111,29 @@ a secret is exposed.
 
 ## Releases
 
-Testing releases are GitHub pre-releases tagged `vX.Y.Z`, each with three assets:
+GitHub releases are tagged `vX.Y.Z` (`v0.5.x` as testing pre-releases with
+`--prerelease`, and `1.0.0+` as stable releases omitting `--prerelease` and
+passing `--stable` to `scripts/release.py`), each with three assets:
 `Focal-X.Y.Z.apk`, `SHA256SUMS` and `Focal-X.Y.Z-provenance.json`. CI cannot build
 them, because it has no speech model, so `scripts/release.py` builds, signs and
 verifies them on a machine that has it.
 
-They are signed with the Android SDK debug key that signed Alpha 2 to Alpha 9, so
-they install over those alphas as updates (tested over Alpha 9; migration tests
-cover the older alphas' databases). Its certificate SHA-256, the
-`--expected-cert` below, is the one recorded in `releases/stt-alpha-9.json`. The
-key marks a testing build, not a store release; it never enters Git.
+For direct distribution on GitHub Releases, builds from Alpha 2 onward — including
+`1.0.0` — are signed with the same direct-distribution certificate
+(`--expected-cert` matching the SHA-256 recorded in `releases/stt-alpha-9.json`),
+so existing installs upgrade in place without losing notes. The key is not a
+Google Play store key and never enters Git.
 
 1. Check out the release commit with a clean tree and the verified model
    (`python3 scripts/fetch-model.py`), and give the version a section in
    [CHANGELOG.md](CHANGELOG.md).
-2. Build, sign and verify:
+2. Build, sign and verify (pass `--stable` for `1.0.0+` stable releases; omit it
+   for testing pre-releases):
 
    ```sh
    export FOCAL_KEYSTORE=~/.android/debug.keystore FOCAL_KEY_ALIAS=androiddebugkey
    export FOCAL_KEYSTORE_PASS=android  # the SDK's fixed debug-key password
-   python3 scripts/release.py \
+   python3 scripts/release.py --stable \
      --expected-cert 3e407a18880c9277982d6ad6222b39738484a3b768e4d268415eb795709aa3bc
    ```
 
@@ -157,11 +160,12 @@ key marks a testing build, not a store release; it never enters Git.
    (`-Pfocal.emulatorRelease=true`, never published) end to end; and install the
    signed APK over the previous release: it must start and keep the notes, but it
    cannot record on an emulator.
-4. Create a draft pre-release at the provenance's `tag_commit`, with notes from the
-   changelog and the checks you ran:
+4. Create a draft release at the provenance's `tag_commit` (add `--prerelease` for
+   testing pre-releases; omit it for stable `1.0.0+` releases), with notes from
+   the changelog and the checks you ran:
 
    ```sh
-   gh release create vX.Y.Z --draft --prerelease --target COMMIT \
+   gh release create vX.Y.Z --draft --target COMMIT \
      --title "Focal X.Y.Z" --notes-file NOTES.md build/release/vX.Y.Z/*
    ```
 

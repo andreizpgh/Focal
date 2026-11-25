@@ -269,7 +269,7 @@ def lock_summary(model_lock, model_lock_bytes, runtime_lock, runtime_lock_bytes)
 
 
 def build_provenance(*, version, version_code, tag, source, apk, signing, locks, build, checks, not_established,
-                     created):
+                     created, prerelease=True):
     if not not_established:
         raise ReleaseError("the provenance must say what remains unverified")
     return {
@@ -278,7 +278,7 @@ def build_provenance(*, version, version_code, tag, source, apk, signing, locks,
         "version": version,
         "version_code": version_code,
         "tag": tag,
-        "prerelease": True,
+        "prerelease": bool(prerelease),
         "created_utc": created.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": source,
         "apk": apk,
@@ -401,6 +401,8 @@ def parse_arguments(argv):
     parser.add_argument("--phone-validated", action="store_true",
                         help="every phone check in docs/testing.md is ticked for this APK: record an empty "
                              "not_established list instead of refusing")
+    parser.add_argument("--stable", action="store_true",
+                        help="mark provenance as a stable release (prerelease: false) instead of a pre-release")
     parser.add_argument("--allow-dirty", action="store_true",
                         help="rehearse on a modified tree; the provenance then says clean: false. Never publish it")
     args = parser.parse_args(argv)
@@ -520,6 +522,7 @@ def release(args):
             not_established=pending_phone_checks((ROOT / "docs/testing.md").read_text(encoding="utf-8"),
                                                  allow_none=args.phone_validated),
             created=datetime.now(timezone.utc),
+            prerelease=not args.stable,
         )
         (staging / provenance_name).write_text(json.dumps(provenance, indent=2, ensure_ascii=False) + "\n",
                                                encoding="utf-8")

@@ -307,6 +307,11 @@ class ProvenanceTest(unittest.TestCase):
         with self.assertRaises(release.ReleaseError):
             release.build_provenance(**facts)
 
+    def test_provenance_stable_flag_clears_prerelease(self):
+        facts, _, _ = self.facts(prerelease=False)
+        provenance = release.build_provenance(**facts)
+        self.assertFalse(provenance["prerelease"])
+
     def test_the_committed_lock_files_summarise(self):
         model_bytes = (ROOT / release.MODEL_LOCK).read_bytes()
         runtime_bytes = (ROOT / release.RUNTIME_LOCK).read_bytes()
@@ -351,6 +356,12 @@ class ArgumentTest(unittest.TestCase):
 
     def test_a_signed_apk_needs_its_source_commit(self):
         self.assertIn("--signed-apk needs --source-commit", self.parse(["--expected-cert", CERT, "--signed-apk", "x.apk"], {}))
+
+    def test_stable_flag_sets_args_stable(self):
+        with mock.patch.dict(release.os.environ, {}, clear=True):
+            args = release.parse_arguments(["--signed-apk", "x.apk", "--source-commit", "HEAD",
+                                            "--expected-cert", CERT, "--stable"])
+        self.assertTrue(args.stable)
 
 
 if __name__ == "__main__":
