@@ -64,7 +64,7 @@ fun NoteRoute(destination: Destination.Note, appScope: CoroutineScope, landing: 
     val library: LibraryViewModel = viewModel(viewModelStoreOwner = activity)
     val state by note.state.collectAsStateWithLifecycle()
     val session = player.session.collectAsStateWithLifecycle()
-    val capture by recording.state.collectAsStateWithLifecycle()
+    val capture by recording.stateWithoutTime.collectAsStateWithLifecycle()
     val captureElsewhere = capture.live && capture.noteId != id
     val finishRequested by recording.finishRequested.collectAsStateWithLifecycle()
     val playback = remember(player, id) { RoutePlayback(player, id, session) }
@@ -240,6 +240,7 @@ private class RoutePlayback(private val player: PlaybackViewModel, private val n
     override fun positionMs(): Long = player.positionMs()
     override fun playWord(paragraph: ParagraphUi, offset: Int) = player.playWord(noteId, paragraph, offset)
     override fun playFrom(ms: Long) = player.playFrom(noteId, ms)
+    override fun parkAt(ms: Long) = player.parkAt(noteId, ms)
     override fun playRange(startMs: Long, endMs: Long) = player.playRange(noteId, startMs, endMs)
     override fun toggle() = player.toggle(noteId)
     override fun pause() = player.pause()

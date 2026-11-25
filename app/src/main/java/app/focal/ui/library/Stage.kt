@@ -41,7 +41,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
@@ -238,6 +241,7 @@ fun StageCard(
     shown: () -> Boolean = { true },
     liveSeconds: (() -> Long)? = null,
     selected: Boolean = false,
+    restoredIds: Set<String> = emptySet(),
 ) {
     val colors = FocalTheme.colors
     val reduced = LocalReducedMotion.current
@@ -284,20 +288,37 @@ fun StageCard(
             swapScale.snapTo(1f)
             return@LaunchedEffect
         }
-        // Phase 1: departing Stage note shrinks slightly and clears out of the card.
-        kotlinx.coroutines.coroutineScope {
-            launch { swapAlpha.animateTo(0f, FocalMotion.fadeFast()) }
-            launch { swapScale.animateTo(0.96f, FocalMotion.fadeFast()) }
-            launch { swapShiftDp.animateTo(-8f, FocalMotion.fadeFast()) }
-        }
-        // Phase 2: newly promoted note glides up into the Stage card.
-        shownNote = next
-        swapShiftDp.snapTo(18f)
-        swapScale.snapTo(0.98f)
-        kotlinx.coroutines.coroutineScope {
-            launch { swapAlpha.animateTo(1f, FocalMotion.fade()) }
-            launch { swapShiftDp.animateTo(0f, FocalMotion.move()) }
-            launch { swapScale.animateTo(1f, FocalMotion.move()) }
+        if (next.row.id in restoredIds) {
+            // Reverse Stage-note restore: demoted Stage note glides down toward row 0, then restored note returns from above.
+            kotlinx.coroutines.coroutineScope {
+                launch { swapAlpha.animateTo(0f, FocalMotion.fadeFast()) }
+                launch { swapScale.animateTo(0.98f, FocalMotion.fadeFast()) }
+                launch { swapShiftDp.animateTo(18f, FocalMotion.fadeFast()) }
+            }
+            shownNote = next
+            swapShiftDp.snapTo(-8f)
+            swapScale.snapTo(0.96f)
+            kotlinx.coroutines.coroutineScope {
+                launch { swapAlpha.animateTo(1f, FocalMotion.fade()) }
+                launch { swapShiftDp.animateTo(0f, FocalMotion.move()) }
+                launch { swapScale.animateTo(1f, FocalMotion.move()) }
+            }
+        } else {
+            // Phase 1: departing Stage note shrinks slightly and clears out of the card.
+            kotlinx.coroutines.coroutineScope {
+                launch { swapAlpha.animateTo(0f, FocalMotion.fadeFast()) }
+                launch { swapScale.animateTo(0.96f, FocalMotion.fadeFast()) }
+                launch { swapShiftDp.animateTo(-8f, FocalMotion.fadeFast()) }
+            }
+            // Phase 2: newly promoted note glides up into the Stage card.
+            shownNote = next
+            swapShiftDp.snapTo(18f)
+            swapScale.snapTo(0.98f)
+            kotlinx.coroutines.coroutineScope {
+                launch { swapAlpha.animateTo(1f, FocalMotion.fade()) }
+                launch { swapShiftDp.animateTo(0f, FocalMotion.move()) }
+                launch { swapScale.animateTo(1f, FocalMotion.move()) }
+            }
         }
     }
     // Keep same-note live updates (progress, edits, fresh flag) synchronous without triggering the swap animation.
@@ -577,30 +598,32 @@ fun previewAfterTitle(row: NoteRow): String =
  * read in the draw phase.
  */
 private fun Modifier.shimmer(progress: () -> Float): Modifier = graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        val u = progress()
+    .drawWithCache {
         val band = StageMetrics.shimmerWidth.toPx()
         val slant = size.height * tan(StageMetrics.SHIMMER_ANGLE * PI.toFloat() / HALF_TURN)
-        val x = FocalMotion.readyShimmer.easing.transform(u)
-        val centre = -band - slant + x * (size.width + 2 * (band + slant))
         val peak = Color.White.copy(alpha = Stage.SHIMMER_PEAK)
         val shoulder = Color.White.copy(alpha = Stage.SHIMMER_SHOULDER)
-        val brush = Brush.horizontalGradient(
+        val bandBrush = Brush.horizontalGradient(
             0f to Color.Transparent, StageMetrics.SHIMMER_SHOULDER_AT to shoulder, HALF to peak,
             1 - StageMetrics.SHIMMER_SHOULDER_AT to shoulder, 1f to Color.Transparent,
-            startX = centre - band / 2, endX = centre + band / 2,
+            startX = 0f, endX = band,
+        )
+        val maskBrush = Brush.verticalGradient(
+            0f to Color.Transparent, 1f to Color.Black,
+            startY = StageMetrics.shimmerMaskStart.toPx(), endY = StageMetrics.shimmerMaskEnd.toPx(),
         )
         val reach = size.height / cos(StageMetrics.SHIMMER_ANGLE * PI.toFloat() / HALF_TURN)
-        rotate(StageMetrics.SHIMMER_ANGLE, pivot = Offset(centre, size.height / 2)) {
-            drawRect(brush, topLeft = Offset(centre - band / 2, size.height / 2 - reach), size = androidx.compose.ui.geometry.Size(band, 2 * reach), alpha = sin(PI.toFloat() * u))
+        onDrawWithContent {
+            val u = progress()
+            val x = FocalMotion.readyShimmer.easing.transform(u)
+            val centre = -band - slant + x * (size.width + 2 * (band + slant))
+            rotate(StageMetrics.SHIMMER_ANGLE, pivot = Offset(centre, size.height / 2)) {
+                translate(left = centre - band / 2, top = 0f) {
+                    drawRect(bandBrush, topLeft = Offset(0f, size.height / 2 - reach), size = Size(band, 2 * reach), alpha = sin(PI.toFloat() * u))
+                }
+            }
+            drawRect(maskBrush, blendMode = BlendMode.DstIn)
         }
-        drawRect(
-            Brush.verticalGradient(
-                0f to Color.Transparent, 1f to Color.Black,
-                startY = StageMetrics.shimmerMaskStart.toPx(), endY = StageMetrics.shimmerMaskEnd.toPx(),
-            ),
-            blendMode = BlendMode.DstIn,
-        )
     }
 
 private const val HALF = 0.5f
@@ -662,15 +685,15 @@ private fun LiveStage(stage: StageUi.Live, meter: WaveMeter, seconds: () -> Long
                         .clipToBounds()
                         .clearAndSetSemantics { }
                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                Brush.verticalGradient(
-                                    0f to Color.Transparent, 1f to Color.Black,
-                                    endY = StageMetrics.liveMask.toPx() * lineScale(FocalType.stageText),
-                                ),
-                                blendMode = BlendMode.DstIn,
+                        .drawWithCache {
+                            val maskBrush = Brush.verticalGradient(
+                                0f to Color.Transparent, 1f to Color.Black,
+                                endY = StageMetrics.liveMask.toPx() * lineScale(FocalType.stageText),
                             )
+                            onDrawWithContent {
+                                drawContent()
+                                drawRect(maskBrush, blendMode = BlendMode.DstIn)
+                            }
                         },
                 ) {
                     StageTranscript(

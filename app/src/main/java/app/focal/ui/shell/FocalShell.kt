@@ -56,6 +56,7 @@ import app.focal.ui.components.BottomColumn
 import app.focal.ui.components.BottomColumnState
 import app.focal.ui.components.Dock
 import app.focal.ui.components.DockActions
+import app.focal.ui.components.DockPace
 import app.focal.ui.components.DockState
 import app.focal.ui.components.closedToNewTouches
 import app.focal.ui.components.inert
@@ -603,16 +604,25 @@ private fun ShellBottom(shell: ShellState, layout: WindowLayout) {
     val finishingHere = shell.finishing == current
     if (!finishingHere) shown.held = null
     val held = shown.held?.takeIf { finishingHere && shown.heldFor == current }
+    val holdsDock by remember(shell.pages, current) { derivedStateOf { shell.pages.holdsDock(current) } }
+    val pagePace by remember(shell.pages, current) { derivedStateOf { shell.pages.dockPace(current) } }
+    val pace = pagePace ?: DockPace.Tap(shell.dockClock)
     val content = held
         ?: scene
-        ?: registered?.also {
-            shown.content = it
-            shown.held = it
-            shown.heldFor = current
+        ?: if (holdsDock) {
+            shown.content?.let { BottomContent(it.dock, NoActions, it.strip, it.rows, it.dockHidden, it.dockHideProgress) }
+                ?: registered?.let { BottomContent(it.dock, NoActions, it.strip, it.rows, it.dockHidden, it.dockHideProgress) }
+                ?: return
+        } else {
+            registered?.also {
+                shown.content = it
+                shown.held = it
+                shown.heldFor = current
+            }
+                ?: shell.pages.arrivingDock(current)?.let { BottomContent(it, NoActions, strip = null, rows = null, dockHidden = false) }
+                ?: shown.content?.takeIf { current.hasDock }
+                ?: return
         }
-        ?: shell.pages.arrivingDock(current)?.let { BottomContent(it, NoActions, strip = null, rows = null, dockHidden = false) }
-        ?: shown.content?.takeIf { current.hasDock }
-        ?: return
     // The library's dock moves with its page; in two panes the whole window slides, the note's dock with it.
     val onLibrary = current == Destination.Library || layout.twoPane && current is Destination.Note
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -637,7 +647,7 @@ private fun ShellBottom(shell: ShellState, layout: WindowLayout) {
             },
         dock = {
             Dock(
-                content.dock, content.actions, material = shell.live.material, clock = shell.dockClock, hidden = content.dockHidden,
+                content.dock, content.actions, material = shell.live.material, pace = pace, hidden = content.dockHidden,
                 requests = shell.bottom.dock, rail = layout.rail,
                 // T7: the note's paper grows out of the pill under the finger, which was the scene's white Finish.
                 leavingOnMaterial = live.landingNote != null,

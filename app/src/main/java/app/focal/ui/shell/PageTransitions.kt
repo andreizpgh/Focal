@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,10 +33,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.FrameRateCategory
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -50,6 +53,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -82,6 +86,7 @@ import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigationevent.NavigationEvent
 import app.focal.ui.components.BottomColumnState
 import app.focal.ui.components.DockMetrics
+import app.focal.ui.components.DockPace
 import app.focal.ui.components.DockState
 import app.focal.ui.design.FocalClock
 import app.focal.ui.design.FocalLayout
@@ -258,6 +263,10 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
 
     /** Milliseconds since the change's trigger, advanced every frame while the change runs (infinite once done). */
     private var elapsed by mutableFloatStateOf(Float.POSITIVE_INFINITY)
+    /** Discrete clock-running flag for composition observers (never changes per frame). */
+    private var clockLive by mutableStateOf(false)
+    /** Discrete drag-released-to-open flag for composition observers. */
+    private var dragReleased by mutableStateOf(false)
     private var clock: Job? = null
 
     /** v when a predictive back was released: the fold runs from the previewed page over what remains of v. */
@@ -295,6 +304,96 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
 
     /** The dock [destination] will show, while it opens out of the stage or a row and has not registered its own. */
     internal fun arrivingDock(destination: Destination): DockState? = arriving?.takeIf { it.first == destination }?.second
+
+    /**
+     * The [PageChange] whose frame clock (after any page/origin wait) has actually begun running. Written in
+     * `withFrameNanos` alongside [arriving], so [holdsDock] releases in the exact frame card motion starts.
+     */
+    private var startedFor by mutableStateOf<PageChange?>(null)
+
+    /**
+     * True while [ShellBottom] must keep showing the previous dock even if [destination] has already composed and
+     * registered its [DestinationBottom]: for Stage/Row taps waiting for page/title layout or for the library to return,
+     * and while a Stage/Row tap sits queued behind an outgoing fold. Predictive back preview and LiveStage/Cut never hold.
+     */
+    internal fun holdsDock(destination: Destination): Boolean {
+        if (reduced) return false
+        val waiting = queued
+        if (waiting != null && waiting.document == destination &&
+            (waiting.motion == PageMotion.Stage || waiting.motion == PageMotion.Row)
+        ) return true
+        val c = change ?: return false
+        if (!clockLive) return false
+        if (c.motion != PageMotion.Stage && c.motion != PageMotion.Row) return false
+        if (c.predictive) return false
+        return if (c.push) !c.dragged && c.document == destination && startedFor !== c
+        else c.other == destination && (returns(c) || undecided(c) || startedFor !== c)
+    }
+
+    /**
+     * Returns [DockPace.Page] locking the dock 1:1 to [destination]'s active Stage/Row transition (normalized `0..1`
+     * from the change's start), or `null` when the dock runs on [DockPace.Tap] (including predictive back preview,
+     * Stage pull while still dragged, LiveStage, Cut, and idle states).
+     *
+     * Reads only discrete change/lifecycle states in composition; per-frame [elapsed]/[document] progress is read
+     * strictly inside [DockPace.Page.liveProgress].
+     */
+    internal fun dockPace(destination: Destination): DockPace? {
+        if (reduced || holdsDock(destination)) return null
+        val c = change ?: return null
+        if (c.motion != PageMotion.Stage && c.motion != PageMotion.Row) return null
+        if (c.predictive && !c.committed) return null
+        if (!c.predictive && !clockLive) return null
+        if (!transforms(c)) return null
+        return if (c.push) {
+            if (c.document != destination) return null
+            if (c.dragged) {
+                if (!dragReleased) return null
+                val v0 = releasedFrom
+                if (v0.isNaN() || v0 >= ONE_EPSILON) return null
+                DockPace.Page(
+                    liveProgress = {
+                        val current = change ?: return@Page 1f
+                        if (current.serial != c.serial) Float.NaN
+                        else if (!active(current)) 1f
+                        else ((documentProgress() - v0) / (1f - v0)).coerceIn(0f, 1f)
+                    },
+                    serial = c.serial,
+                    destinationKey = destination,
+                )
+            } else {
+                val v0 = c.start.v
+                if (v0 >= ONE_EPSILON) return null
+                DockPace.Page(
+                    liveProgress = {
+                        val current = change ?: return@Page 1f
+                        if (current.serial != c.serial) Float.NaN
+                        else if (!active(current)) 1f
+                        else ((documentProgress() - v0) / (1f - v0)).coerceIn(0f, 1f)
+                    },
+                    serial = c.serial,
+                    destinationKey = destination,
+                )
+            }
+        } else {
+            if (c.other != destination) return null
+            val p0 = if (c.predictive) 0f else (1f - c.start.v).coerceIn(0f, 1f)
+            if (p0 >= ONE_EPSILON) return null
+            DockPace.Page(
+                liveProgress = {
+                    val current = change ?: return@Page 1f
+                    if (current.serial != c.serial) Float.NaN
+                    else if (!active(current)) 1f
+                    else {
+                        val raw = if (current.motion == PageMotion.Row) titleProgress(current) else progress(current)
+                        ((raw - p0) / (1f - p0)).coerceIn(0f, 1f)
+                    }
+                },
+                serial = c.serial,
+                destinationKey = destination,
+            )
+        }
+    }
 
     /** T7, T7b: the time since Finish, for [developing] (see [PageReveal.develop]). */
     private val developClock = TriggerClock(scope, DEVELOP_MS)
@@ -358,21 +457,23 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
             provisionalPage = destination
             return true
         }
-        pull = null
-        letGo = null
-        provisionalPage = null
         val interrupted = inFlight(destination, push = true)
+        val shouldQueue = interrupted == null && motion != PageMotion.Cut && motion != PageMotion.LiveStage && change?.let(::folds) == true
         val c = PageChange(
             motion, destination, push = true, serial = ++serial, start = interrupted?.let(::startOf) ?: ChangeStart.Push, other = other,
         )
         carryDecision(interrupted, c)
-        // Another page is still folding away (a tap on the library right after Back): it lands first, quickened, while
-        // this page composes, and this change starts from there. The two never share a frame, and the tap is not lost.
-        if (interrupted == null && motion != PageMotion.Cut && motion != PageMotion.LiveStage && change?.let(::folds) == true) {
+        // Another page is still folding or returning (a tap on the library right after Back or short Stage release):
+        // it lands first, quickened, while this page composes. Keep pull/letGo intact so the return finishes cleanly.
+        if (shouldQueue) {
             queued = c
             arriving = null
             return false
         }
+        pull = null
+        letGo = null
+        provisionalPage = null
+        dragReleased = false
         queued = null
         begin(c)
         return !waits(c)
@@ -403,7 +504,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      * An opening that waits for the page folding away before it ([push]): that fold runs [HURRY] times as fast until it
      * has landed, then this change begins.
      */
-    private var queued: PageChange? = null
+    private var queued by mutableStateOf<PageChange?>(null)
 
     /** Whether [c] is a page folding or fading away on the clock: an opening asked for meanwhile waits for it. */
     private fun folds(c: PageChange): Boolean =
@@ -447,11 +548,14 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         pull = null
         letGo = null
         provisionalPage = null
+        dragReleased = false
         val current = change
         // A released predictive back, while its seek is under way. A gesture that was cancelled leaves its change
         // behind with the page whole again (nothing reports the cancel): a Back after it is an ordinary one.
         val seeking = (document?.value ?: 1f) < 1f
         if (motionOverride == null && current != null && current.predictive && !current.committed && current.document == top && seeking) {
+            clock?.cancel()
+            clockLive = false
             commitAt = document?.value ?: 1f
             val committed = current.copy(committed = true, serial = ++serial)
             change = committed
@@ -510,6 +614,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      */
     private var pageFromP = Float.NaN
 
+    private var releasedFrom = Float.NaN
+
     /** The stage starts to follow a finger toward [destination]'s page (its page is pushed next). False when it cannot now. */
     internal fun beginDrag(destination: Destination): Boolean {
         if (reduced || change?.let { active(it) || it.predictive } == true) return false
@@ -520,6 +626,8 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         arriving = null
         pull = 0f
         letGo = null
+        releasedFrom = Float.NaN
+        dragReleased = false
         pageFromP = Float.NaN
         startClock()
         return true
@@ -540,7 +648,10 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      */
     internal fun endDrag(open: Boolean, velocity: Float, drop: () -> Unit) {
         if (pull == null || letGo != null) return
-        letGo = LetGo(from = documentProgress(), to = if (open) 1f else 0f, velocity = velocity)
+        val from = documentProgress()
+        releasedFrom = if (open) from else Float.NaN
+        dragReleased = open
+        letGo = LetGo(from = from, to = if (open) 1f else 0f, velocity = velocity)
         provisionalPage = null
         if (!open) drop()
     }
@@ -585,6 +696,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         if (queued != null) return
         if (current != null && current.push && !current.predictive && current.motion in CONTAINERS && (pulling(current) || active(current))) return
         clock?.cancel()
+        clockLive = false
         change = PageChange(reverse(opened[top]), top, push = false, predictive = true, edge = edge, serial = ++serial, other = other)
     }
 
@@ -595,12 +707,18 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      */
     private fun startClock() {
         clock?.cancel()
-        val c = change ?: return
-        val end = clockEnd(c)
-        if (reduced || end <= 0f) {
-            elapsed = Float.POSITIVE_INFINITY
+        val c = change ?: run {
+            clockLive = false
             return
         }
+        val end = clockEnd(c)
+        if (reduced || end <= 0f) {
+            if (change === c) startedFor = c
+            elapsed = Float.POSITIVE_INFINITY
+            clockLive = false
+            return
+        }
+        clockLive = true
         elapsed = 0f
         flightReady = false
         titleFrom = Float.NaN
@@ -644,7 +762,10 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
                             } else {
                                 // The card is the stage again (what was left is a pixel or two); its page is gone
                                 // already. A note tapped meanwhile opens now (after the loop).
-                                if (change === c && queued == null) change = null
+                                if (change === c && queued == null) {
+                                    change = null
+                                    clockLive = false
+                                }
                             }
                         }
                         return@withFrameNanos
@@ -679,6 +800,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
                         trigger = now - (lead * scale).toLong()
                         elapsed = (now - trigger).toFloat() / NANOS_PER_MS / scale
                     }
+                    if (change === c && !undecided(c) && startedFor !== c) startedFor = c
                 }
                 // An opening runs on while its body, which waited for the title, is still arriving; a fold that a page
                 // waits for ends as it lands.
@@ -690,7 +812,10 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
                 queued = null
                 pull = null
                 letGo = null
+                dragReleased = false
                 begin(next)
+            } else if (change === c) {
+                clockLive = false
             }
         }
     }
@@ -813,7 +938,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     /** The title of [c]'s note page, while that page is composed. */
     internal fun titleOf(c: PageChange): PageTitle? = noteIdOf(c.document)?.let { pageTitles[it] }
 
-    private fun originOf(c: PageChange): Origin? {
+    internal fun originOf(c: PageChange): Origin? {
         val id = noteIdOf(c.document) ?: return null
         return when (c.motion) {
             PageMotion.Stage -> stage.takeIf { it.noteId == id }
@@ -848,7 +973,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
      * reduced motion no clock runs and the change snaps.
      */
     private fun undecided(c: PageChange): Boolean =
-        c.motion in CONTAINERS && !c.predictive && resolvedFor !== c && elapsed.isFinite()
+        c.motion in CONTAINERS && !c.predictive && resolvedFor !== c && clockLive
 
     /** Whether the transform is still drawing: the upper page has not reached its end. */
     internal fun active(c: PageChange? = change): Boolean {
@@ -1147,6 +1272,43 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         document?.value
     }
 
+    internal fun observeElapsed(): Float = elapsed
+    internal fun observeDocumentValue(): Float = document?.value ?: Float.NaN
+    internal fun isFlightReady(): Boolean = flightReady
+    internal fun isResolved(): Boolean = resolved
+    internal fun isResolvedFor(c: PageChange): Boolean = resolvedFor === c
+
+    /** True while [PageTransformOverlay] is holding for or animating a Stage, Row, or LiveStage transition. */
+    internal fun isTransforming(): Boolean {
+        if (reduced) return false
+        val c = change ?: return false
+        if (c.motion !in CONTAINERS) return false
+        if (c.predictive && !c.committed) return false
+        return active(c) || undecided(c) || waits(c) || returns(c)
+    }
+
+    /**
+     * True when every part of the recorded note page layer (chrome, body, and title) is completely invisible
+     * during an active transform, allowing both [PageFrame] `layer.record` and overlay `drawPageLayer` to skip.
+     */
+    internal fun skipsPageLayer(c: PageChange? = change): Boolean {
+        if (c == null || reduced || c.motion !in CONTAINERS) return false
+        if (c.predictive && !c.committed) return false
+        if (!transforms(c) || !active(c)) return false
+        if (chrome(c) > 0f || body(c) > 0f) return false
+        val id = noteIdOf(c.document)
+        return (id != null && flying(id)) || titleOffViewport(c)
+    }
+
+    private fun titleOffViewport(c: PageChange): Boolean {
+        if (c.document !in readied) return true
+        val frame = frames[c.document]?.takeIf { it.isAttached } ?: return true
+        val pageTitle = titleOf(c)?.coordinates?.takeIf { it.isAttached } ?: return true
+        val shown = inPage(c, pageTitle, clip = true) ?: return true
+        val height = frame.size.height.toFloat()
+        return min(shown.bottom, height) <= max(shown.top, 0f)
+    }
+
     /**
      * The upper page's progress v: from the clock, or a predictive back's NavDisplay progress (0 before a pushed page
      * is composed, and once a popped page has left).
@@ -1160,7 +1322,10 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
     /** A popped page left: nothing is in flight any more. */
     internal fun left(destination: Destination) {
         val c = change ?: return
-        if (c.document == destination && !c.push) change = null
+        if (c.document == destination && !c.push) {
+            change = null
+            clockLive = false
+        }
     }
 
     /**
@@ -1355,6 +1520,7 @@ class PageTransitions internal constructor(private val scope: CoroutineScope) {
         private const val NANOS_PER_MS = 1_000_000L
         const val CONTENT_FROM = 0.52f
         const val HALF = 0.5f
+        const val ONE_EPSILON = 0.999f
         const val PREVIEW_SCALE = 0.1f
         const val SHIFT_DIVISOR = 20f
         val ShiftInset = 8.dp
@@ -1525,8 +1691,9 @@ internal fun PageFrame(
             }
             .drawWithContent {
                 val look = pages.look(destination)
-                if (look.recorded) layer.record { this@drawWithContent.drawContent() }
-                else if (look.alpha > 0f) {
+                if (look.recorded) {
+                    if (!pages.skipsPageLayer()) layer.record { this@drawWithContent.drawContent() }
+                } else if (look.alpha > 0f) {
                     val elevated = look.preview > 0f || look.recede > 0f
                     // A previewed or receding page is a 100 % opaque sheet of paper over the receding library.
                     if (elevated) drawRect(paper)
@@ -1664,10 +1831,86 @@ private data class TransformFrame(
 internal fun PageTransformOverlay(pages: PageTransitions, live: LiveSurfaceState, bottom: BottomColumnState, modifier: Modifier = Modifier) {
     // Always laid out, so its place in the window is known before a transform's first frame.
     val placement = remember { OverlayPlacement() }
-    Box(modifier.fillMaxSize().onPlaced { placement.coordinates = it }) {
+    val transforming by remember(pages) { derivedStateOf { pages.isTransforming() } }
+    Box(
+        modifier
+            .fillMaxSize()
+            .preferredFrameRate(if (transforming) FrameRateCategory.High else FrameRateCategory.Normal)
+            .onPlaced { placement.coordinates = it },
+    ) {
         val change = pages.change
         if (change != null && change.motion in PageTransitions.CONTAINERS) TransformLayers(pages, live, bottom, change, placement)
     }
+}
+
+private class TransformFrameCache {
+    var serial = Int.MIN_VALUE
+    var elapsed = Float.NaN
+    var document = Float.NaN
+    var resolved = false
+    var resolvedForMatch = false
+    var flightReady = false
+    var width = -1
+    var height = -1
+    var committed = false
+    var edge = 0
+    var pillRect: Rect? = null
+    var overlayPos: Long = Long.MIN_VALUE
+    var originCardPos: Long = Long.MIN_VALUE
+    var originCardSize: Long = Long.MIN_VALUE
+    var originTitlePos: Long = Long.MIN_VALUE
+    var originTitleSize: Long = Long.MIN_VALUE
+    var originLayout: TextLayoutResult? = null
+    var pageTitlePos: Long = Long.MIN_VALUE
+    var pageTitleSize: Long = Long.MIN_VALUE
+    var pageLayout: TextLayoutResult? = null
+    var frame: TransformFrame? = null
+    var skipsPage = false
+    var flightComputed = false
+    var flight: Flight? = null
+
+    fun matches(
+        c: PageChange,
+        elapsed: Float,
+        document: Float,
+        resolved: Boolean,
+        resolvedForMatch: Boolean,
+        flightReady: Boolean,
+        width: Int,
+        height: Int,
+        pillRect: Rect?,
+        overlayPos: Long,
+        originCardPos: Long,
+        originCardSize: Long,
+        originTitlePos: Long,
+        originTitleSize: Long,
+        originLayout: TextLayoutResult?,
+        pageTitlePos: Long,
+        pageTitleSize: Long,
+        pageLayout: TextLayoutResult?,
+    ): Boolean = serial == c.serial &&
+        this.committed == c.committed &&
+        this.edge == c.edge &&
+        this.elapsed.bitsEqual(elapsed) &&
+        this.document.bitsEqual(document) &&
+        this.resolved == resolved &&
+        this.resolvedForMatch == resolvedForMatch &&
+        this.flightReady == flightReady &&
+        this.width == width &&
+        this.height == height &&
+        this.pillRect == pillRect &&
+        this.overlayPos == overlayPos &&
+        this.originCardPos == originCardPos &&
+        this.originCardSize == originCardSize &&
+        this.originTitlePos == originTitlePos &&
+        this.originTitleSize == originTitleSize &&
+        this.originLayout === originLayout &&
+        this.pageTitlePos == pageTitlePos &&
+        this.pageTitleSize == pageTitleSize &&
+        this.pageLayout === pageLayout
+
+    private fun Float.bitsEqual(other: Float): Boolean =
+        (isNaN() && other.isNaN()) || this == other
 }
 
 @Composable
@@ -1681,18 +1924,84 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
     val shadowColor = if (dark) Color.Black else Color.Black.copy(alpha = 0.28f)
     // T7b grows out of the dock's primary pill: where the dock placed it, or where it stands in one pane.
     val pill: (Size) -> Rect = { size -> bottom.dockPillRect ?: restingPill(size, density, navBottom, rtl) }
-    val frame: () -> TransformFrame? = {
+    val cache = remember(change.serial) { TransformFrameCache() }
+    fun refreshCache(): TransformFrame? {
         // Read the progress first: every layout, layer and draw lambda below follows it, whatever returns early.
         pages.observe()
         val coordinates = placement.coordinates
-        if (coordinates == null || !coordinates.isAttached || !pages.transforms(change) || !pages.active(change)) null
-        else pages.frameIn(change, coordinates, density, pill)
+        val attached = coordinates?.takeIf { it.isAttached }
+        val elapsed = pages.observeElapsed()
+        val doc = pages.observeDocumentValue()
+        val resolved = pages.isResolved()
+        val resolvedForMatch = pages.isResolvedFor(change)
+        val flightReady = pages.isFlightReady()
+        val width = coordinates?.size?.width ?: -1
+        val height = coordinates?.size?.height ?: -1
+        val pillRect = if (change.motion == PageMotion.LiveStage) bottom.dockPillRect else null
+        val overlayPos = attached?.positionInWindow()?.packedValue ?: Long.MIN_VALUE
+        val origin = pages.originOf(change)
+        val originCard = origin?.card?.takeIf { it.isAttached }
+        val originCardPos = originCard?.positionInWindow()?.packedValue ?: Long.MIN_VALUE
+        val originCardSize = originCard?.size?.packedValue ?: Long.MIN_VALUE
+        val originTitle = origin?.title?.takeIf { it.isAttached }
+        val originTitlePos = originTitle?.positionInWindow()?.packedValue ?: Long.MIN_VALUE
+        val originTitleSize = originTitle?.size?.packedValue ?: Long.MIN_VALUE
+        val originLayout = origin?.layout
+        val pageTitle = pages.titleOf(change)
+        val pageTitleCoords = pageTitle?.coordinates?.takeIf { it.isAttached }
+        val pageTitlePos = pageTitleCoords?.positionInWindow()?.packedValue ?: Long.MIN_VALUE
+        val pageTitleSize = pageTitleCoords?.size?.packedValue ?: Long.MIN_VALUE
+        val pageLayout = pageTitle?.layout
+        if (
+            !cache.matches(
+                change, elapsed, doc, resolved, resolvedForMatch, flightReady, width, height, pillRect,
+                overlayPos, originCardPos, originCardSize, originTitlePos, originTitleSize, originLayout,
+                pageTitlePos, pageTitleSize, pageLayout,
+            )
+        ) {
+            cache.serial = change.serial
+            cache.committed = change.committed
+            cache.edge = change.edge
+            cache.elapsed = elapsed
+            cache.document = doc
+            cache.resolved = resolved
+            cache.resolvedForMatch = resolvedForMatch
+            cache.flightReady = flightReady
+            cache.width = width
+            cache.height = height
+            cache.pillRect = pillRect
+            cache.overlayPos = overlayPos
+            cache.originCardPos = originCardPos
+            cache.originCardSize = originCardSize
+            cache.originTitlePos = originTitlePos
+            cache.originTitleSize = originTitleSize
+            cache.originLayout = originLayout
+            cache.pageTitlePos = pageTitlePos
+            cache.pageTitleSize = pageTitleSize
+            cache.pageLayout = pageLayout
+            cache.flightComputed = false
+            cache.flight = null
+            if (attached == null || !pages.transforms(change) || !pages.active(change)) {
+                cache.frame = null
+                cache.skipsPage = false
+            } else {
+                cache.frame = pages.frameIn(change, attached, density, pill)
+                cache.skipsPage = pages.skipsPageLayer(change)
+            }
+        }
+        return cache.frame
     }
+    val frame: () -> TransformFrame? = { refreshCache() }
     val titleInFlight: DrawScope.(TransformFrame) -> Flight? = { f ->
-        val id = (change.document as? Destination.Note)?.id
-        val coordinates = placement.coordinates
-        if (id == null || coordinates == null || !pages.flying(id)) null
-        else pages.flight(change, f, coordinates, this, colors)
+        refreshCache()
+        if (!cache.flightComputed) {
+            cache.flightComputed = true
+            val id = (change.document as? Destination.Note)?.id
+            val coordinates = placement.coordinates
+            cache.flight = if (id == null || coordinates == null || !pages.flying(id)) null
+            else pages.flight(change, f, coordinates, this, colors)
+        }
+        cache.flight
     }
     val stageLike = change.motion != PageMotion.Row
     // A row's band (T16, both ways): a borderless line has no edges for the band to grow out of or close in with, so
@@ -1702,6 +2011,9 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
     // whole: nothing of a neighbour shows under them.
     val row = change.motion == PageMotion.Row
     val scrim = if (row) 0f else scrimMax
+    val backingTopFeather = remember { LinearBrushCache() }
+    val backingBottomFeather = remember { LinearBrushCache() }
+    val overlayEdges = remember { EdgeMaskBrushCaches() }
     // What the band holds is cut at its edges; only its paper reaches past them.
     fun DrawScope.inBand(f: TransformFrame, block: DrawScope.() -> Unit) =
         if (row) clipRect(f.clip.left, f.clip.top, f.clip.right, f.clip.bottom) { block() } else block()
@@ -1755,11 +2067,11 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                 drawRect(colors.paper, topLeft = Offset(0f, top), size = Size(size.width, max(0f, bottom - top)), alpha = a)
                 if (feather < 1f) return@drawBehind
                 drawRect(
-                    Brush.verticalGradient(0f to clear, 1f to colors.paper, startY = top - feather, endY = top),
+                    backingTopFeather.get(clear, colors.paper, top - feather, top),
                     topLeft = Offset(0f, top - feather), size = Size(size.width, feather), alpha = a,
                 )
                 drawRect(
-                    Brush.verticalGradient(0f to colors.paper, 1f to clear, startY = bottom, endY = bottom + feather),
+                    backingBottomFeather.get(colors.paper, clear, bottom, bottom + feather),
                     topLeft = Offset(0f, bottom), size = Size(size.width, feather), alpha = a,
                 )
             },
@@ -1778,11 +2090,13 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
         Spacer(
             Modifier.fillMaxSize().drawBehind {
                 val f = frame() ?: return@drawBehind
+                if (cache.skipsPage) return@drawBehind
                 val layer = pages.layer ?: return@drawBehind
                 // Finish's paper (T7b) grows over the page's own place: its text develops after the edge has passed.
                 val bloom = change.motion == PageMotion.LiveStage
                 val needsSoftBottom = !bloom && f.clip.bottom < size.height
                 val needsSoftTop = !stageLike && f.clip.top > 0f
+                val soft = if (stageLike) ClipEdges.Bottom else ClipEdges.Both
                 fun drawPageLayer() {
                     if (f.preview <= 0f) {
                         drawLayer(layer)
@@ -1797,11 +2111,24 @@ private fun TransformLayers(pages: PageTransitions, live: LiveSurfaceState, bott
                 }
                 if (!needsSoftBottom && !needsSoftTop) {
                     inBand(f) { drawPageLayer() }
-                } else inBand(f) {
-                    drawIntoCanvas { canvas ->
-                        canvas.saveLayer(Rect(Offset.Zero, size), Paint())
+                } else if (PageEdgeMask.usesOpaqueEdgeFades(f.paperAlpha)) {
+                    // Backing is completely opaque: draw edge gradients onto paper/stage tint directly, avoiding saveLayer.
+                    val backing = PageEdgeMask.backingColor(
+                        paper = colors.paper,
+                        stageIdleSurface = colors.stageIdleSurface,
+                        isStage = change.motion == PageMotion.Stage,
+                        material = f.material,
+                    )
+                    inBand(f) {
                         drawPageLayer()
-                        clearEdges(f, soft = if (stageLike) ClipEdges.Bottom else ClipEdges.Both)
+                        paintEdgeFades(f, soft, backing, overlayEdges)
+                    }
+                } else inBand(f) {
+                    val layerRect = PageEdgeMask.boundedSaveLayerRect(f.clip, f.feather, size)
+                    if (!layerRect.isEmpty) drawIntoCanvas { canvas ->
+                        canvas.saveLayer(layerRect, Paint())
+                        drawPageLayer()
+                        clearEdges(f, soft = soft, caches = overlayEdges)
                         canvas.restore()
                     }
                 }
@@ -1928,23 +2255,88 @@ private const val ROW_FEATHER_GROWN = 0.2f
 /** Which of the clip's edges fade the page's text out toward them. */
 private enum class ClipEdges { Bottom, Both }
 
+/** Pure helpers for choosing opaque edge gradients vs a band-bounded offscreen layer. */
+internal object PageEdgeMask {
+    const val OPAQUE_PAPER_ALPHA = 0.999f
+
+    fun usesOpaqueEdgeFades(paperAlpha: Float): Boolean = paperAlpha >= OPAQUE_PAPER_ALPHA
+
+    fun backingColor(paper: Color, stageIdleSurface: Color, isStage: Boolean, material: Float): Color {
+        if (!isStage || material <= 0f) return paper
+        return stageIdleSurface.copy(alpha = stageIdleSurface.alpha * material).compositeOver(paper)
+    }
+
+    fun boundedSaveLayerRect(clip: Rect, feather: Float, viewport: Size): Rect {
+        val left = clip.left.coerceIn(0f, viewport.width)
+        val top = (clip.top - feather).coerceIn(0f, viewport.height)
+        val right = clip.right.coerceIn(left, viewport.width)
+        val bottom = (clip.bottom + feather).coerceIn(top, viewport.height)
+        return Rect(left, top, right, bottom)
+    }
+}
+
+private class LinearBrushCache {
+    private var lastFrom = Color.Unspecified
+    private var lastTo = Color.Unspecified
+    private var lastStartY = Float.NaN
+    private var lastEndY = Float.NaN
+    private var brush: Brush? = null
+
+    fun get(from: Color, to: Color, startY: Float, endY: Float): Brush {
+        val cached = brush
+        if (cached != null && from == lastFrom && to == lastTo && startY == lastStartY && endY == lastEndY) return cached
+        lastFrom = from
+        lastTo = to
+        lastStartY = startY
+        lastEndY = endY
+        return Brush.verticalGradient(0f to from, 1f to to, startY = startY, endY = endY).also { brush = it }
+    }
+}
+
+private class EdgeMaskBrushCaches {
+    val bottom = LinearBrushCache()
+    val top = LinearBrushCache()
+}
+
+/**
+ * Fades the page's text out toward the clip's bottom edge (and top edge for rows) by painting the known opaque
+ * [backing] color over those strips, avoiding an offscreen `saveLayer`.
+ */
+private fun DrawScope.paintEdgeFades(f: TransformFrame, soft: ClipEdges, backing: Color, caches: EdgeMaskBrushCaches) {
+    val clear = backing.copy(alpha = 0f)
+    val bottomFade = FocalLayout.bottomFade.toPx()
+    if (f.clip.bottom < size.height) {
+        drawRect(
+            caches.bottom.get(clear, backing, f.clip.bottom - bottomFade, f.clip.bottom),
+            topLeft = Offset(0f, f.clip.bottom - bottomFade), size = Size(size.width, bottomFade),
+        )
+    }
+    val topFade = FocalLayout.topFade.toPx()
+    if (soft == ClipEdges.Both && f.clip.top > 0f) {
+        drawRect(
+            caches.top.get(backing, clear, f.clip.top, f.clip.top + topFade),
+            topLeft = Offset(0f, f.clip.top), size = Size(size.width, topFade),
+        )
+    }
+}
+
 /**
  * Fades the page's text out toward the clip's bottom edge over the bottom fade's height (and toward its top edge over
  * the top fade's, for a row, whose clip's top runs through the page): the paper the page is drawn on meets paper
  * outside the clip, so a hard edge would cut glyphs in two. At the window's edges the page's own fades are there.
  */
-private fun DrawScope.clearEdges(f: TransformFrame, soft: ClipEdges) {
+private fun DrawScope.clearEdges(f: TransformFrame, soft: ClipEdges, caches: EdgeMaskBrushCaches) {
     val bottomFade = FocalLayout.bottomFade.toPx()
     if (f.clip.bottom < size.height) {
         drawRect(
-            Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, startY = f.clip.bottom - bottomFade, endY = f.clip.bottom),
+            caches.bottom.get(Color.Transparent, Color.Black, f.clip.bottom - bottomFade, f.clip.bottom),
             topLeft = Offset(0f, f.clip.bottom - bottomFade), size = Size(size.width, bottomFade), blendMode = BlendMode.DstOut,
         )
     }
     val topFade = FocalLayout.topFade.toPx()
     if (soft == ClipEdges.Both && f.clip.top > 0f) {
         drawRect(
-            Brush.verticalGradient(0f to Color.Black, 1f to Color.Transparent, startY = f.clip.top, endY = f.clip.top + topFade),
+            caches.top.get(Color.Black, Color.Transparent, f.clip.top, f.clip.top + topFade),
             topLeft = Offset(0f, f.clip.top), size = Size(size.width, topFade), blendMode = BlendMode.DstOut,
         )
     }

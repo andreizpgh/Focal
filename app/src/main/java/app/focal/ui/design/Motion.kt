@@ -277,6 +277,8 @@ object FocalTiming {
     const val SETTLE_PARAGRAPH_DELAY_MS = 160L
     /** The settings hint shows once the library has been at rest this long, and at most this many times. */
     const val SETTINGS_HINT_IDLE_MS = 1500L
+    /** On an empty library, wait longer so the invitation is read before offering the settings hint. */
+    const val SETTINGS_HINT_EMPTY_IDLE_MS = 6000L
     const val SETTINGS_HINT_MAX = 2
     /** Arriving text renders settled once it is older than this, so scrolling never replays it. */
     const val SETTLED_AFTER_MS = 600L

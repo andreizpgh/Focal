@@ -38,21 +38,33 @@ import java.nio.ByteBuffer
 internal class SceneMaterialPainter {
     private val grain = Grain.brush()
     private val grainMatrix = Matrix()
+    private var lastW = Float.NaN
+    private var lastH = Float.NaN
+    private var cachedGradient: Brush? = null
+    private var cachedHighlight: Brush? = null
+    private var cachedSquash = 1f
 
     fun draw(scope: DrawScope, rect: Rect, grainOrigin: Offset, alpha: Float) {
         if (alpha <= 0f || rect.width <= 0f || rect.height <= 0f) return
         val w = rect.width
         val h = rect.height
-        val gradient = Brush.verticalGradient(
-            0f to Scene.top, Scene.MID_STOP to Scene.mid, 1f to Scene.bottom, startY = 0f, endY = h,
-        )
         val radiusX = (w * Scene.HIGHLIGHT_RADIUS_X).coerceAtLeast(1f)
-        val radiusY = (h * Scene.HIGHLIGHT_RADIUS_Y).coerceAtLeast(1f)
-        val squash = radiusY / radiusX
-        val highlight = Brush.radialGradient(
-            0f to Color.White.copy(alpha = Scene.HIGHLIGHT_ALPHA), Scene.HIGHLIGHT_END to Color.Transparent,
-            center = Offset(w / 2f, 0f), radius = radiusX,
-        )
+        if (w != lastW || h != lastH || cachedGradient == null || cachedHighlight == null) {
+            lastW = w
+            lastH = h
+            val radiusY = (h * Scene.HIGHLIGHT_RADIUS_Y).coerceAtLeast(1f)
+            cachedSquash = radiusY / radiusX
+            cachedGradient = Brush.verticalGradient(
+                0f to Scene.top, Scene.MID_STOP to Scene.mid, 1f to Scene.bottom, startY = 0f, endY = h,
+            )
+            cachedHighlight = Brush.radialGradient(
+                0f to Color.White.copy(alpha = Scene.HIGHLIGHT_ALPHA), Scene.HIGHLIGHT_END to Color.Transparent,
+                center = Offset(w / 2f, 0f), radius = radiusX,
+            )
+        }
+        val gradient = cachedGradient!!
+        val highlight = cachedHighlight!!
+        val squash = cachedSquash
         grainMatrix.setTranslate(-grainOrigin.x, -grainOrigin.y)
         grain.shader.setLocalMatrix(grainMatrix)
         with(scope) {

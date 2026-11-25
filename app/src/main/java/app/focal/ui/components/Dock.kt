@@ -3,9 +3,6 @@ package app.focal.ui.components
 import android.graphics.Paint
 import android.os.Build
 import android.os.SystemClock
-import androidx.compose.animation.BoundsTransform
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.animateBounds
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -15,9 +12,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -25,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.PlainTooltip
@@ -52,11 +50,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ClipOp
@@ -65,7 +64,6 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.addOutline
-import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -75,12 +73,13 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -95,7 +94,6 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -114,7 +112,10 @@ import app.focal.ui.design.Scene
 import app.focal.ui.design.TriggerClock
 import app.focal.ui.design.rememberFocalHaptics
 import app.focal.ui.design.smoothstep
+import androidx.compose.ui.util.lerp
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -219,16 +220,9 @@ object DockMetrics {
     val resume = 148.dp
     /** The landscape rail (spec 5.14): the circle above the primary circle, centred in this box. */
     val railHeight = circle * 2 + gap
-    /** Glyph-only controls in the rail: the record dot and the finish square in a circle (spec 2.7). */
+    /** Glyph-only controls in the rail: the record dot and the finish square in a circle (spec 2.7, 5.14). */
     val railDot = FocalGrid.x12
     val railSquare = GlyphSize.finishSquare
-    /**
-     * Paused, the rail's circle still widens into a labelled Resume (R1, spec 15: a bare ● read as Record): the dot
-     * above "Resume", at least this wide (the 96 dp rail less 8 dp each side) and 8 dp inside the label.
-     */
-    val railResume = 80.dp
-    val railResumePadding = FocalGrid.x8
-    val railResumeGap = FocalGrid.x4
     val glyphGap = FocalGrid.x8
     /** The record dot of a note's "Continue recording" circle: the rail's size, a glyph on its own. */
     val appendDot = FocalGrid.x12
@@ -272,32 +266,182 @@ private fun pillFace(state: DockState) = when (state) {
     is DockState.Selecting -> PillFace.Delete
 }
 
-/** Every dock morph follows a tap (Search, Record, Pause, Finish, a page change): it counts from it. */
-@OptIn(ExperimentalSharedTransitionApi::class)
-private val MoveBounds = BoundsTransform { _, _ -> FocalMotion.fromTrigger(FocalMotion.move()) }
+/** How a dock transition advances: from a tap clock ([Tap]) or locked 1:1 to a page transition ([Page]). */
+sealed interface DockPace {
+    data class Tap(val clock: TriggerClock? = null) : DockPace
+
+    /**
+     * Locked 1:1 to a page transition. Equality is scoped to `(serial, destinationKey)` so [derivedStateOf] callers
+     * stay stable across frames, while [liveProgress] returns `Float.NaN` if superseded by a newer transition so
+     * mid-flight reversals hold the last drawn dock progress instead of jumping to `1f`.
+     */
+    class Page(val liveProgress: () -> Float, val serial: Int, val destinationKey: Any? = null) : DockPace {
+        fun progress(): Float = liveProgress().let { if (it.isNaN()) 1f else it }
+
+        override fun equals(other: Any?): Boolean =
+            other is Page && serial == other.serial && destinationKey == other.destinationKey
+
+        override fun hashCode(): Int = 31 * serial + (destinationKey?.hashCode() ?: 0)
+    }
+}
+
+/** Animated slot lengths (in pixels) for the bottom dock: each circle carries its trailing gap (`0f` when absent). */
+@Immutable
+internal data class DockSlots(val first: Float, val second: Float, val primary: Float)
+
+/** Exact measured sizes and layout coordinates produced by [DockSlotLayout.layoutHorizontal]. */
+internal data class HorizontalDockPlacement(
+    val firstWidth: Int,
+    val firstHeight: Int,
+    val secondWidth: Int,
+    val secondHeight: Int,
+    val pillWidth: Int,
+    val firstX: Int,
+    val secondX: Int,
+    val pillX: Int,
+    val visualFirstX: Int,
+    val visualSecondX: Int,
+    val visualPillX: Int,
+) {
+    fun firstY(layoutHeight: Int, circlePx: Float): Int =
+        ((layoutHeight - circlePx / 2f) - firstHeight / 2f).roundToInt()
+
+    fun secondY(layoutHeight: Int, circlePx: Float): Int =
+        ((layoutHeight - circlePx / 2f) - secondHeight / 2f).roundToInt()
+
+    fun pillY(layoutHeight: Int, pillHeight: Int): Int =
+        layoutHeight - pillHeight
+}
+
+/** Exact measured sizes and coordinates produced by [DockSlotLayout.layoutRail]. */
+internal data class RailDockPlacement(
+    val firstWidth: Int,
+    val firstHeight: Int,
+    val pillSize: Int,
+    val firstX: Int,
+    val firstY: Int,
+    val pillX: Int,
+    val pillY: Int,
+)
+
+/** Pure, deterministic layout math shared directly between [Dock]'s custom [Layout] and unit tests. */
+internal object DockSlotLayout {
+    /**
+     * Computes target slot lengths in pixels inside [totalPx]: each present circle slot includes [gapPx], while an
+     * absent slot is `0f`, and [DockSlots.primary] takes whatever width remains.
+     */
+    fun targets(firstWidthPx: Float, secondWidthPx: Float, totalPx: Float, gapPx: Float): DockSlots {
+        val firstSlot = if (firstWidthPx > 0f) firstWidthPx + gapPx else 0f
+        val secondSlot = if (secondWidthPx > 0f) secondWidthPx + gapPx else 0f
+        val primary = (totalPx - firstSlot - secondSlot).coerceAtLeast(0f)
+        return DockSlots(firstSlot, secondSlot, primary)
+    }
+
+    /** Interpolates [from] toward [to] at progress [g] inside [totalPx]. */
+    fun interpolate(from: DockSlots, to: DockSlots, g: Float, totalPx: Float): DockSlots {
+        val firstSlot = lerp(from.first, to.first, g).coerceAtLeast(0f)
+        val secondSlot = lerp(from.second, to.second, g).coerceAtLeast(0f)
+        val primary = (totalPx - firstSlot - secondSlot).coerceAtLeast(0f)
+        return DockSlots(firstSlot, secondSlot, primary)
+    }
+
+    /**
+     * Visual diameter `0..circlePx` for an emerging/exiting circle inside a slot of length [slotPx] carrying [gapPx].
+     * Remains `0f` until the slot has opened past [gapPx], then grows symmetrically as a true circle up to [circlePx].
+     */
+    fun circleDiameter(slotPx: Float, circlePx: Float, gapPx: Float): Float =
+        (slotPx - gapPx).coerceIn(0f, circlePx)
+
+    /**
+     * Visual container `(widthPx, heightPx)` for a circle/pill slot of total length [slotPx] (including [gapPx]).
+     * Below [circlePx], height equals width (`d x d`) so an emerging or exiting circle never stretches into a capsule.
+     */
+    fun circleBox(slotPx: Float, circlePx: Float, gapPx: Float): Pair<Float, Float> {
+        val content = (slotPx - gapPx).coerceAtLeast(0f)
+        val height = content.coerceIn(0f, circlePx)
+        return content to height
+    }
+
+    fun layoutHorizontal(
+        slots: DockSlots,
+        totalWidth: Int,
+        circlePx: Float,
+        gapPx: Float,
+        rtl: Boolean = false,
+    ): HorizontalDockPlacement {
+        val (w1, h1) = circleBox(slots.first, circlePx, gapPx)
+        val (w2, h2) = circleBox(slots.second, circlePx, gapPx)
+        val firstW = w1.roundToInt()
+        val firstH = h1.roundToInt()
+        val secondW = w2.roundToInt()
+        val secondH = h2.roundToInt()
+        val xSecond = slots.first.roundToInt()
+        val xPill = (slots.first + slots.second).roundToInt().coerceIn(0, totalWidth)
+        val pillWidth = (totalWidth - xPill).coerceAtLeast(0)
+        val visualFirstX = if (rtl) totalWidth - firstW else 0
+        val visualSecondX = if (rtl) totalWidth - xSecond - secondW else xSecond
+        val visualPillX = if (rtl) 0 else xPill
+        return HorizontalDockPlacement(
+            firstWidth = firstW,
+            firstHeight = firstH,
+            secondWidth = secondW,
+            secondHeight = secondH,
+            pillWidth = pillWidth,
+            firstX = 0,
+            secondX = xSecond,
+            pillX = xPill,
+            visualFirstX = visualFirstX,
+            visualSecondX = visualSecondX,
+            visualPillX = visualPillX,
+        )
+    }
+
+    fun layoutRail(
+        slotFirst: Float,
+        railWidthPx: Int,
+        railHeightPx: Int,
+        circlePx: Float,
+        gapPx: Float,
+    ): RailDockPlacement {
+        val d1 = circleDiameter(slotFirst, circlePx, gapPx).roundToInt()
+        val pillSize = circlePx.roundToInt()
+        val stackTop = (railHeightPx - (slotFirst + circlePx)) / 2f
+        val firstX = ((railWidthPx - d1) / 2f).roundToInt()
+        val firstY = stackTop.roundToInt()
+        val pillX = ((railWidthPx - pillSize) / 2f).roundToInt()
+        val pillY = (stackTop + slotFirst).roundToInt()
+        return RailDockPlacement(d1, d1, pillSize, firstX, firstY, pillX, pillY)
+    }
+
+    /** Container fill alpha for an emerging/exiting circle (`0 -> 0.5` of [circlePx]; exact reverse on exit). */
+    fun emergingContainerAlpha(diameterPx: Float, circlePx: Float): Float =
+        if (circlePx <= 0f) 0f else smoothstep(0f, HALF, diameterPx / circlePx)
+
+    /** Glyph/dot alpha for an emerging/exiting circle (`0.6 -> 1.0` of [circlePx]; exact reverse on exit). */
+    fun emergingGlyphAlpha(diameterPx: Float, circlePx: Float): Float =
+        if (circlePx <= 0f) 0f else smoothstep(EMERGING_GLYPH_FROM, 1f, diameterPx / circlePx)
+}
 
 /**
  * The dock (spec 4.3): a 56 dp circle and a 56 dp pill on the bottom column, with a second circle between them on a
- * note that can go on recording. Bounds animate on `move`
- * (`animateBounds` in a `LookaheadScope`); glyphs and labels fade through; containers that change crossfade without
- * a coverage dip. Both slots swap on one q, so the circle and the pill are always at the same phase; a change that a
- * tap announced counts from the tap ([clock], started in its handler), even when the new contents arrive a frame or
- * two later. While a capture runs, [material] (the recording material's bounds in the window, read in the draw
- * phase) wipes each control from its paper dress to its material dress (spec 2.8.6), so a drag never recomposes the
- * dock. Touch and semantics belong to the control, never to a dress.
+ * note that can go on recording. One [DockLayout] interpolates every slot's length including its trailing gap;
+ * glyphs and labels fade through; containers that change crossfade without a coverage dip. Slots follow [pace]:
+ * either locked 1:1 to a page transition ([DockPace.Page]) or animated from a tap ([DockPace.Tap]). While a capture
+ * runs, [material] (the recording material's bounds in the window, read in the draw phase) wipes each control from its
+ * paper dress to its material dress (spec 2.8.6), so a drag never recomposes the dock. Touch and semantics belong to
+ * the control, never to a dress.
  *
  * In a short window it is a [rail] (spec 5.14): the circle above the primary control, which is a 56 dp circle with
  * its glyph only (the label is its content description, and a long press shows it), centred in a fixed box so that a
  * circle growing in moves the primary one on `move`.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun Dock(
     state: DockState,
     actions: DockActions,
     modifier: Modifier = Modifier,
     material: (() -> Rect)? = null,
-    clock: TriggerClock? = null,
+    pace: DockPace = DockPace.Tap(),
     hidden: Boolean = false,
     requests: DockRequests? = null,
     rail: Boolean = false,
@@ -316,92 +460,144 @@ fun Dock(
     // ⋮ over a selection opens its menu above the dock, at the dock's end.
     var selectionMenu by remember { mutableStateOf(false) }
     if (second != CircleFace.More && selectionMenu) SideEffect { selectionMenu = false }
-    val swap = rememberDockSwap(DockFaces(circle, pill, second), clock)
-    val leaving = if (holdLeaving) swap.left() else swap.leaving()
-    val circleWidth = when (circle) {
-        CircleFace.None -> 0.dp
-        CircleFace.Resume -> DockMetrics.resume
+    val density = LocalDensity.current
+    val circleWidthDp = when {
+        circle == CircleFace.None -> 0.dp
+        !rail && circle == CircleFace.Resume -> DockMetrics.resume
         else -> DockMetrics.circle
     }
+    val secondWidthDp = if (second == CircleFace.None) 0.dp else DockMetrics.circle
+    val circlePx = with(density) { DockMetrics.circle.toPx() }
+    val gapPx = with(density) { DockMetrics.gap.toPx() }
+    val firstWidthPx = with(density) {
+        if (rail) (if (circle == CircleFace.None) 0f else circlePx)
+        else (if (circleWidthDp > 0.dp) circleWidthDp.toPx() else 0f)
+    }
+    val secondWidthPx = with(density) {
+        if (rail || secondWidthDp <= 0.dp) 0f else secondWidthDp.toPx()
+    }
+    val targetSlots = DockSlotLayout.targets(firstWidthPx, secondWidthPx, totalPx = 0f, gapPx = gapPx)
+    val targets = DockGeometryTargets(targetSlots.first, targetSlots.second)
+    val swap = rememberDockSwap(DockFaces(circle, pill, second), pace, targets)
+    val leaving = if (holdLeaving) swap.left() else swap.leaving()
+    val pagePace = swap.pace is DockPace.Page
     val edge = if (state is DockState.Live) material else null
     // Finish over the scene (T7): the note's paper grows out of the pill, and the scene's Pause | Finish leave in the
     // scene's dress over the note's controls, never turning into their paper dress (a black Finish) on the way out.
     val leavingDress = if (leavingOnMaterial) Dress.Material else null
-    if (rail) {
-        // The rail's box is as wide as the labelled Resume at every moment, so the circle widening into it (and back)
-        // never moves the box: both controls stay centred on the rail's axis.
-        val resumeWidth = railResumeWidth()
-        LookaheadScope {
-            Column(
-                modifier.size(resumeWidth, DockMetrics.railHeight),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                val circleSize = if (circle == CircleFace.None) 0.dp else DockMetrics.circle
-                val railCircleWidth = if (circle == CircleFace.Resume) resumeWidth else DockMetrics.circle
-                CircleSlot(
-                    face = circle, leaving = leaving?.circle, q = swap::q, actions = actions, edge = edge, rail = true, leavingDress = leavingDress,
-                    modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds).size(railCircleWidth, circleSize),
+    val firstDiameter: () -> Float = { DockSlotLayout.circleDiameter(swap.currentFirst(), circlePx, gapPx) }
+    val secondDiameter: () -> Float = { DockSlotLayout.circleDiameter(swap.currentSecond(), circlePx, gapPx) }
+    val firstEmerging = (circle == CircleFace.None) != ((leaving?.circle ?: circle) == CircleFace.None)
+    val secondEmerging = (second == CircleFace.None) != ((leaving?.second ?: second) == CircleFace.None)
+    val firstBoxModifier = if (rail) Modifier else Modifier.fillMaxSize()
+    val secondBoxModifier = Modifier.fillMaxSize()
+    val selecting = state as? DockState.Selecting
+    Box(
+        if (rail) modifier.size(DockMetrics.circle, DockMetrics.railHeight) else modifier.fillMaxWidth(),
+    ) {
+        Layout(
+            contents = listOf(
+                {
+                    CircleSlot(
+                        face = circle,
+                        leaving = leaving?.circle,
+                        q = swap::q,
+                        pagePace = pagePace,
+                        actions = actions,
+                        edge = edge,
+                        modifier = if (rail) Modifier.fillMaxSize() else firstBoxModifier,
+                        rail = rail,
+                        leavingDress = leavingDress,
+                        emergingDiameter = firstDiameter.takeIf { firstEmerging },
+                        circlePx = circlePx,
+                    )
+                },
+                {
+                    CircleSlot(
+                        face = second,
+                        leaving = leaving?.second,
+                        q = swap::q,
+                        pagePace = pagePace,
+                        actions = actions,
+                        edge = null,
+                        modifier = secondBoxModifier,
+                        onMore = { selectionMenu = true },
+                        emergingDiameter = secondDiameter.takeIf { secondEmerging },
+                        circlePx = circlePx,
+                    )
+                },
+                {
+                    PillSlot(
+                        face = pill,
+                        leaving = leaving?.pill,
+                        q = swap::q,
+                        pagePace = pagePace,
+                        notePill = (state as? DockState.Note)?.pill,
+                        noteId = (state as? DockState.Note)?.noteId,
+                        actions = actions,
+                        edge = edge,
+                        modifier = Modifier,
+                        hidden = hidden,
+                        requests = requests,
+                        rail = rail,
+                        selected = selected,
+                        leavingDress = leavingDress,
+                    )
+                },
+            ),
+            modifier = if (rail) Modifier.size(DockMetrics.circle, DockMetrics.railHeight) else Modifier.fillMaxWidth(),
+        ) { (firstMeasurables, secondMeasurables, pillMeasurables), constraints ->
+            val fromSlots = DockSlots(swap.fromGeom.first, swap.fromGeom.second, 0f)
+            val toSlots = DockSlots(swap.toGeom.first, swap.toGeom.second, 0f)
+            val g = swap.g()
+            if (rail) {
+                val widthPx = DockMetrics.circle.roundToPx()
+                val heightPx = DockMetrics.railHeight.roundToPx()
+                val slots = DockSlotLayout.interpolate(fromSlots, toSlots, g, 0f)
+                val placement = DockSlotLayout.layoutRail(
+                    slotFirst = slots.first,
+                    railWidthPx = widthPx,
+                    railHeightPx = heightPx,
+                    circlePx = circlePx,
+                    gapPx = gapPx,
                 )
-                Spacer(Modifier.height(if (circleSize > 0.dp) DockMetrics.gap else 0.dp))
-                PillSlot(
-                    face = pill, leaving = leaving?.pill, q = swap::q, notePill = (state as? DockState.Note)?.pill,
-                    noteId = (state as? DockState.Note)?.noteId, actions = actions,
-                    edge = edge, hidden = hidden, requests = requests, rail = true, selected = selected, leavingDress = leavingDress,
-                    modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds).size(DockMetrics.circle),
-                )
+                val firstPlaceable = firstMeasurables.first().measure(Constraints.fixed(placement.firstWidth, placement.firstHeight))
+                val pillPlaceable = pillMeasurables.first().measure(Constraints.fixed(placement.pillSize, placement.pillSize))
+                return@Layout layout(widthPx, heightPx) {
+                    if (firstPlaceable.width > 0 && firstPlaceable.height > 0) {
+                        firstPlaceable.placeRelative(placement.firstX, placement.firstY)
+                    }
+                    pillPlaceable.placeRelative(placement.pillX, placement.pillY)
+                }
+            }
+            val totalWidth = constraints.maxWidth
+            val minHeightPx = DockMetrics.height.roundToPx()
+            val slots = DockSlotLayout.interpolate(fromSlots, toSlots, g, totalWidth.toFloat())
+            val placement = DockSlotLayout.layoutHorizontal(
+                slots = slots,
+                totalWidth = totalWidth,
+                circlePx = circlePx,
+                gapPx = gapPx,
+                rtl = layoutDirection == LayoutDirection.Rtl,
+            )
+            val firstPlaceable = firstMeasurables.first().measure(Constraints.fixed(placement.firstWidth, placement.firstHeight))
+            val secondPlaceable = secondMeasurables.first().measure(Constraints.fixed(placement.secondWidth, placement.secondHeight))
+            val pillPlaceable = pillMeasurables.first().measure(
+                Constraints(minWidth = placement.pillWidth, maxWidth = placement.pillWidth, minHeight = minHeightPx, maxHeight = constraints.maxHeight),
+            )
+            val layoutHeight = maxOf(minHeightPx, pillPlaceable.height)
+            layout(totalWidth, layoutHeight) {
+                if (firstPlaceable.width > 0 && firstPlaceable.height > 0) {
+                    firstPlaceable.placeRelative(placement.firstX, placement.firstY(layoutHeight, circlePx))
+                }
+                if (secondPlaceable.width > 0 && secondPlaceable.height > 0) {
+                    secondPlaceable.placeRelative(placement.secondX, placement.secondY(layoutHeight, circlePx))
+                }
+                pillPlaceable.placeRelative(placement.pillX, placement.pillY(layoutHeight, pillPlaceable.height))
             }
         }
-        return
-    }
-    val selecting = state as? DockState.Selecting
-    LookaheadScope {
-        Row(
-            modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start,
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            CircleSlot(
-                face = circle,
-                leaving = leaving?.circle,
-                q = swap::q,
-                actions = actions,
-                edge = edge,
-                leavingDress = leavingDress,
-                modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
-                    .width(circleWidth).height(DockMetrics.height),
-            )
-            Spacer(Modifier.width(if (circleWidth > 0.dp) DockMetrics.gap else 0.dp))
-            // The second circle grows in between them on `move`, and the pill gives it the room.
-            val secondWidth = if (second == CircleFace.None) 0.dp else DockMetrics.circle
-            CircleSlot(
-                face = second,
-                leaving = leaving?.second,
-                q = swap::q,
-                actions = actions,
-                edge = null,
-                modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
-                    .width(secondWidth).height(DockMetrics.height),
-                onMore = { selectionMenu = true },
-            )
-            Spacer(Modifier.width(if (secondWidth > 0.dp) DockMetrics.gap else 0.dp))
-            PillSlot(
-                face = pill,
-                leaving = leaving?.pill,
-                q = swap::q,
-                notePill = (state as? DockState.Note)?.pill,
-                noteId = (state as? DockState.Note)?.noteId,
-                actions = actions,
-                edge = edge,
-                leavingDress = leavingDress,
-                hidden = hidden,
-                requests = requests,
-                selected = selected,
-                modifier = Modifier.animateBounds(this@LookaheadScope, boundsTransform = MoveBounds)
-                    .weight(1f)
-                    .heightIn(min = DockMetrics.height),
-            )
-            // Anchored to the dock's row: it opens above it, its end on the dock's end.
+        if (!rail) {
+            // Anchored to the dock's wrapping Box: opens above it, its end on the dock's end.
             FocalMenu(expanded = selectionMenu, onDismiss = { selectionMenu = false }, above = true) {
                 if (selecting?.hasText == true) {
                     FocalMenuItem(
@@ -443,6 +639,7 @@ private fun CircleSlot(
     face: CircleFace,
     leaving: CircleFace?,
     q: () -> Float,
+    pagePace: Boolean,
     actions: DockActions,
     edge: (() -> Rect)?,
     modifier: Modifier,
@@ -450,6 +647,9 @@ private fun CircleSlot(
     onMore: () -> Unit = {},
     /** The dress of a face on its way out, whatever the dress the slot now wipes to ([Dock]'s leavingOnMaterial). */
     leavingDress: Dress? = null,
+    /** Non-null when this slot is emerging from or exiting to [CircleFace.None]: supplies visual diameter `0..circlePx`. */
+    emergingDiameter: (() -> Float)? = null,
+    circlePx: Float = 0f,
 ) {
     val source = remember { MutableInteractionSource() }
     val tooltip = rememberTooltipState()
@@ -489,13 +689,19 @@ private fun CircleSlot(
         .tapOrLabel(source, settledTap(face, onClick), rail) { scope.launch { tooltip.show() } }
     RailTooltip(description.takeIf { rail }, tooltip) {
         DressWipe(edge, control) { wiped ->
-            SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
+            SlotSwap(face, leaving, q, pagePace, Modifier.fillMaxSize()) { shown, containerAlpha, contentAlpha ->
                 val dress = if (leavingDress != null && shown != face) leavingDress else wiped
                 if (shown != CircleFace.None) {
-                    TonalContainer(dress, containerAlpha)
-                    // Unbounded: "● Resume" keeps its width (never wraps) while the circle widens under it.
+                    val slotContainerAlpha: () -> Float = if (emergingDiameter != null) {
+                        { DockSlotLayout.emergingContainerAlpha(emergingDiameter(), circlePx) }
+                    } else containerAlpha
+                    val slotContentAlpha: () -> Float = if (emergingDiameter != null) {
+                        { DockSlotLayout.emergingGlyphAlpha(emergingDiameter(), circlePx) }
+                    } else contentAlpha
+                    TonalContainer(dress, slotContainerAlpha)
+                    // Unbounded: "● Resume" keeps its width and glyphs keep 24 dp while a circle emerges or widens.
                     Box(
-                        Modifier.wrapContentWidth(unbounded = true).heightIn(min = if (rail) 0.dp else DockMetrics.height).graphicsLayer { alpha = contentAlpha() },
+                        Modifier.wrapContentWidth(unbounded = true).wrapContentHeight(unbounded = true).graphicsLayer { alpha = slotContentAlpha() },
                         contentAlignment = Alignment.Center,
                     ) { CircleContent(shown, dress, rail) }
                 }
@@ -555,31 +761,10 @@ private fun RailTooltip(label: String?, state: TooltipState, content: @Composabl
     )
 }
 
-/** The rail's labelled Resume: [DockMetrics.railResume], or wider when "Resume" needs it (a large font). */
-@Composable
-private fun railResumeWidth(): Dp {
-    val label = stringResource(R.string.action_resume)
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    return remember(label, density) {
-        val text = with(density) { measurer.measure(label, FocalType.label, maxLines = 1).size.width.toDp() }
-        maxOf(DockMetrics.railResume, text + DockMetrics.railResumePadding * 2)
-    }
-}
-
 @Composable
 private fun CircleContent(face: CircleFace, dress: Dress, rail: Boolean) {
     val colors = FocalTheme.colors
     val ink = if (dress == Dress.Material) Scene.ink else colors.ink
-    if (rail && face == CircleFace.Resume) {
-        // A rail item's stack: the pill's ● above its word, centred (R1 kept in the rail's width).
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            RecordDot(colors.recordDot)
-            Spacer(Modifier.height(DockMetrics.railResumeGap))
-            Text(stringResource(R.string.action_resume), style = FocalType.label, color = ink, maxLines = 1, softWrap = false)
-        }
-        return
-    }
     when (face) {
         CircleFace.Search -> Glyph(FocalIcon.Search, ink)
         CircleFace.Pause -> Glyph(FocalIcon.Pause, ink)
@@ -590,7 +775,11 @@ private fun CircleContent(face: CircleFace, dress: Dress, rail: Boolean) {
         CircleFace.More -> Glyph(FocalIcon.More, ink)
         // The dot Record and Resume carry: on a note it records more of the same note.
         CircleFace.Append -> RecordDot(colors.recordDot, size = DockMetrics.appendDot)
-        CircleFace.Resume -> LabelRow(stringResource(R.string.action_resume), ink) { RecordDot(colors.recordDot) }
+        CircleFace.Resume -> if (rail) {
+            RecordDot(colors.recordDot, size = DockMetrics.railDot)
+        } else {
+            LabelRow(stringResource(R.string.action_resume), ink) { RecordDot(colors.recordDot) }
+        }
         CircleFace.None -> Unit
     }
 }
@@ -601,6 +790,7 @@ private fun PillSlot(
     face: PillFace,
     leaving: PillFace?,
     q: () -> Float,
+    pagePace: Boolean,
     notePill: NotePill?,
     noteId: String?,
     actions: DockActions,
@@ -698,7 +888,9 @@ private fun PillSlot(
             // it (no shadow or ring off the material), and the note's fill runs in from the start edge instead of
             // fading in under white.
             val fromLight = primaryLeaves && sceneFinish && !dark
-            SlotSwap(face, leaving, q) { shown, containerAlpha, contentAlpha ->
+            val pillSwapModifier = if (rail) Modifier.fillMaxSize() else Modifier.fillMaxWidth().heightIn(min = DockMetrics.height)
+            val morphing = leaving != null
+            SlotSwap(face, leaving, q, pagePace, pillSwapModifier) { shown, containerAlpha, contentAlpha ->
                 val dress = if (leavingDress != null && shown != face) leavingDress else wiped
                 val leavingInk = fromInk && shown != face
                 val melts = fromLight && shown != face
@@ -715,14 +907,14 @@ private fun PillSlot(
                     PillFace.Record -> {
                         val dot = FocalTheme.colors.recordDot
                         PrimaryContainer(dress, primaryAlpha, onPaper = plain)
-                        PillContent(dress, contentAlpha) { ink ->
+                        PillContent(dress, morphing, contentAlpha) { ink ->
                             if (rail) RecordDot(dot, size = DockMetrics.railDot)
                             else LabelRow(stringResource(R.string.action_record), ink) { RecordDot(dot) }
                         }
                     }
                     PillFace.Finish -> {
                         PrimaryContainer(dress, primaryAlpha, onPaper = plain)
-                        PillContent(dress, contentAlpha) { ink ->
+                        PillContent(dress, morphing, contentAlpha) { ink ->
                             if (rail) FinishSquare(ink, size = DockMetrics.railSquare)
                             else LabelRow(stringResource(R.string.action_finish), ink) { FinishSquare(ink) }
                         }
@@ -731,7 +923,7 @@ private fun PillSlot(
                     // and no fill left over from the one before (two panes switch notes under one dock).
                     PillFace.NotePrimary -> key(noteId) {
                         NotePrimaryPill(
-                            notePill ?: NotePill.Copy(), copied, containerAlpha, contentAlpha, hidden, rail,
+                            notePill ?: NotePill.Copy(), copied, containerAlpha, contentAlpha, hidden, rail, morphing,
                             fillFrom = when {
                                 shown != face -> null
                                 fromInk -> 1f
@@ -743,7 +935,7 @@ private fun PillSlot(
                     }
                     PillFace.Delete -> {
                         PrimaryContainer(dress, containerAlpha)
-                        PillContent(dress, contentAlpha) { ink ->
+                        PillContent(dress, morphing, contentAlpha) { ink ->
                             if (rail) Glyph(FocalIcon.Delete, ink)
                             else LabelRow(deleteLabel, ink) { Glyph(FocalIcon.Delete, ink, size = GlyphSize.inPill) }
                         }
@@ -767,10 +959,16 @@ private fun progressDescription(progress: NotePill.Progress): String = when (pro
 }
 
 @Composable
-private fun PillContent(dress: Dress, alpha: () -> Float, content: @Composable (Color) -> Unit) {
+private fun PillContent(dress: Dress, morphing: Boolean, alpha: () -> Float, content: @Composable (Color) -> Unit) {
     val ink = if (dress == Dress.Material) Scene.actionLabel else FocalTheme.colors.onInv
     // Sized by its content, so a label that wraps at a large font scale grows the pill (min 56 dp).
-    Box(Modifier.fillMaxWidth().heightIn(min = DockMetrics.height).graphicsLayer { this.alpha = alpha() }, contentAlignment = Alignment.Center) {
+    // Unbounded width while morphing avoids mid-morph text reflow, while wrapping still works at rest.
+    Box(
+        Modifier.fillMaxWidth().heightIn(min = DockMetrics.height)
+            .then(if (morphing) Modifier.wrapContentWidth(unbounded = true) else Modifier)
+            .graphicsLayer { this.alpha = alpha() },
+        contentAlignment = Alignment.Center,
+    ) {
         content(ink)
     }
 }
@@ -799,6 +997,7 @@ private fun BoxScope.NotePrimaryPill(
     contentAlpha: () -> Float,
     hidden: Boolean,
     rail: Boolean,
+    morphing: Boolean,
     /**
      * Where the fill comes from while it takes over from a Record or Finish ([swap] 0 → 1): the whole pill, from one of
      * the fill's own colour (on paper, or the scene's white one over Dark paper); nothing, from the scene's white one
@@ -832,24 +1031,33 @@ private fun BoxScope.NotePrimaryPill(
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     // The fill as drawn: the progress, or more of the pill while it takes over from a black control.
     val shownFill: () -> Float = { fillFrom?.let { from -> from + (fill.value - from) * swap().coerceIn(0f, 1f) } ?: fill.value }
+    val clip = remember { Path() }
     // Container: the `s1` track, the `inv` fill from the start edge (its leading end straight), clipped to the pill.
     // In the rail's circle the fill rises from the bottom, like a level.
     Box(
-        Modifier.matchParentSize().drawWithCache {
-            val outline = FocalShapes.pill.createOutline(size, layoutDirection, this)
-            val clip = Path().apply { addOutline(outline) }
-            onDrawBehind {
-                val a = containerAlpha()
-                val base = if (enabled) lerp(colors.s1, colors.inv, inverted.value) else colors.s1
-                drawOutline(outline, base, alpha = a)
-                if (enabled) clipPath(clip) {
-                    if (rail) {
-                        val height = size.height * shownFill()
-                        drawRect(colors.inv, topLeft = Offset(0f, size.height - height), size = Size(size.width, height), alpha = a)
-                    } else {
-                        val width = size.width * shownFill()
-                        val left = if (rtl) size.width - width else 0f
-                        drawRect(colors.inv, topLeft = Offset(left, 0f), size = Size(width, size.height), alpha = a)
+        Modifier.matchParentSize().drawBehind {
+            val a = containerAlpha()
+            if (a <= 0f || size.width <= MIN_DRAW_PX || size.height <= MIN_DRAW_PX) return@drawBehind
+            val radius = minOf(size.width, size.height) / 2f
+            val corner = CornerRadius(radius)
+            val base = if (enabled) lerp(colors.s1, colors.inv, inverted.value) else colors.s1
+            drawRoundRect(base, cornerRadius = corner, alpha = a)
+            if (enabled) {
+                val fraction = shownFill()
+                if (fraction >= FULL_FILL) {
+                    drawRoundRect(colors.inv, cornerRadius = corner, alpha = a)
+                } else if (fraction > 0f) {
+                    clip.rewind()
+                    clip.addRoundRect(RoundRect(0f, 0f, size.width, size.height, radius, radius))
+                    clipPath(clip) {
+                        if (rail) {
+                            val height = size.height * fraction
+                            drawRect(colors.inv, topLeft = Offset(0f, size.height - height), size = Size(size.width, height), alpha = a)
+                        } else {
+                            val width = size.width * fraction
+                            val left = if (rtl) size.width - width else 0f
+                            drawRect(colors.inv, topLeft = Offset(left, 0f), size = Size(width, size.height), alpha = a)
+                        }
                     }
                 }
             }
@@ -859,7 +1067,7 @@ private fun BoxScope.NotePrimaryPill(
         // The rail's circle has room for the glyph only: the progress is its level, Copy its glyph.
         val ink = if (enabled) colors.onInv else colors.faint
         Box(
-            Modifier.matchParentSize().graphicsLayer { alpha = contentAlpha() * smoothstep(0.5f, 1f, copyShown.value) },
+            Modifier.matchParentSize().graphicsLayer { alpha = contentAlpha() * smoothstep(HALF, 1f, copyShown.value) },
             contentAlignment = Alignment.Center,
         ) { CopyGlyph(copied, ink) }
         return
@@ -872,15 +1080,16 @@ private fun BoxScope.NotePrimaryPill(
         }
         is NotePill.Copy -> stringResource(R.string.action_transcribing)
     }
-    // The progress label twice: ink underneath, onInv on top clipped to the fill, so it reads at every percentage.
+    // The progress label twice: ink underneath, onInv on top clipped to the fill width of the full pill track.
+    val unboundedWhenMorphing = if (morphing) Modifier.wrapContentWidth(unbounded = true) else Modifier
     Box(
         Modifier.fillMaxWidth().heightIn(min = DockMetrics.height)
-            .graphicsLayer { alpha = contentAlpha() * (1 - smoothstep(0f, 0.5f, copyShown.value)) },
+            .graphicsLayer { alpha = contentAlpha() * (1 - smoothstep(0f, HALF, copyShown.value)) },
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label, style = FocalType.label, color = colors.ink, textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = FocalGrid.x16),
+            modifier = Modifier.then(unboundedWhenMorphing).padding(horizontal = FocalGrid.x16),
         )
         Box(
             Modifier.matchParentSize().drawWithContent {
@@ -890,16 +1099,18 @@ private fun BoxScope.NotePrimaryPill(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-            label, style = FocalType.label, color = colors.onInv, textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = FocalGrid.x16),
-        )
+                label, style = FocalType.label, color = colors.onInv, textAlign = TextAlign.Center,
+                modifier = Modifier.then(unboundedWhenMorphing).padding(horizontal = FocalGrid.x16),
+            )
         }
     }
     val ink = if (enabled) colors.onInv else colors.faint
     Box(
-        Modifier.matchParentSize().graphicsLayer { alpha = contentAlpha() * smoothstep(0.5f, 1f, copyShown.value) },
+        Modifier.matchParentSize().graphicsLayer { alpha = contentAlpha() * smoothstep(HALF, 1f, copyShown.value) },
         contentAlignment = Alignment.Center,
-    ) { CopyContent(copied, ink) }
+    ) {
+        Box(unboundedWhenMorphing, contentAlignment = Alignment.Center) { CopyContent(copied, ink) }
+    }
 }
 
 /** Copy and Copied in the rail's circle: the copy glyph turning into the check (T9 without its labels). */
@@ -929,70 +1140,180 @@ private fun CopyContent(copied: Boolean, ink: Color) {
 @Immutable
 private data class DockFaces(val circle: CircleFace, val pill: PillFace, val second: CircleFace = CircleFace.None)
 
+@Immutable
+private data class DockGeometryTargets(val first: Float, val second: Float)
+
 /**
- * One fade-through for the whole dock (spec 4.3, Q7): the faces that leave and the faces that arrive, on one q
- * (`fadeFast`). It counts from the tap that changed the dock when [clock] was started for it (claimed in the first
- * frame after the tap); a change no tap announced (a pause from the notification, a page that loaded) runs its own.
+ * One coordinated swap for the whole dock (spec 4.3, Q7): faces and slot geometries advance together on [pace]
+ * (either locked 1:1 to a page transition via [DockPace.Page] or triggered from a tap via [DockPace.Tap]).
  */
 @Stable
-private class DockSwap(val shown: DockFaces, private val from: DockFaces?, private val clock: TriggerClock?, private val serial: Int) {
-    val own = Animatable(if (from == null || clock != null) 1f else 0f)
-    val runsOwn: Boolean get() = from != null && clock == null
-    val claimed: Int? get() = if (clock != null) serial else null
+private class DockSwap(
+    val shown: DockFaces,
+    private val from: DockFaces?,
+    val pace: DockPace,
+    private val tapClock: TriggerClock?,
+    private val tapSerial: Int,
+    val fromGeom: DockGeometryTargets,
+    val toGeom: DockGeometryTargets,
+    val initialGeomVelocity: Float = 0f,
+) {
+    val ownAlpha = Animatable(if (from == null || tapClock != null || pace is DockPace.Page) 1f else 0f)
+    val ownGeom = Animatable(if (fromGeom == toGeom || pace is DockPace.Page) 1f else 0f)
+    val runsOwnAlpha: Boolean get() = from != null && pace is DockPace.Tap && tapClock == null
+    val runsOwnGeom: Boolean get() = fromGeom != toGeom && pace is DockPace.Tap
+    val claimedTapSerial: Int? get() = if (pace is DockPace.Tap && tapClock != null) tapSerial else null
 
-    fun q(): Float = when {
-        from == null -> 1f
-        clock != null -> if (clock.serial == serial) FocalClock.fadeFast(clock.elapsed) else 1f
-        else -> own.value
+    private var lastPageProgress = if (from == null && fromGeom == toGeom) 1f else 0f
+
+    private fun pageProgress(): Float {
+        val sample = (pace as DockPace.Page).liveProgress()
+        return if (sample.isNaN()) lastPageProgress else sample.coerceIn(0f, 1f).also { lastPageProgress = it }
     }
 
-    /** The faces still leaving, read in composition (a derived state: it changes once, when the swap ends). */
-    val settled = derivedStateOf { q() >= 1f }
+    fun q(): Float = when (pace) {
+        is DockPace.Page -> if (from == null && fromGeom == toGeom) 1f else pageProgress()
+        is DockPace.Tap -> when {
+            from == null -> 1f
+            tapClock != null -> if (tapClock.serial == tapSerial) FocalClock.fadeFast(tapClock.elapsed) else 1f
+            else -> ownAlpha.value
+        }
+    }
+
+    fun g(): Float = when (pace) {
+        is DockPace.Page -> if (fromGeom == toGeom) 1f else pageProgress()
+        is DockPace.Tap -> if (fromGeom == toGeom) 1f else ownGeom.value
+    }
+
+    fun currentFirst(): Float = lerp(fromGeom.first, toGeom.first, g()).coerceAtLeast(0f)
+    fun currentSecond(): Float = lerp(fromGeom.second, toGeom.second, g()).coerceAtLeast(0f)
+
+    fun currentGeometry(): DockGeometryTargets = DockGeometryTargets(currentFirst(), currentSecond())
+
+    /** The faces still leaving (kept until both alpha and geometry settle so shrinking circles never pop out). */
+    val settled = derivedStateOf { q() >= 1f && g() >= 1f }
     fun leaving(): DockFaces? = if (settled.value) null else from
 
     /** The faces this swap leaves, settled or not (drawn at nothing once it has settled). */
     fun left(): DockFaces? = from
 
     /** What leaves if the dock changes again now: a swap caught before its midpoint keeps what was leaving. */
-    fun outgoing(): DockFaces = if (from != null && q() < HALF) from else shown
+    fun outgoing(): DockFaces {
+        val midpoint = if (pace is DockPace.Page) PAGE_CROSSOVER else HALF
+        return if (from != null && q() < midpoint) from else shown
+    }
 }
 
-private class DockSwapMemory(var swap: DockSwap, var claimed: Int = 0)
+private class DockSwapMemory(var swap: DockSwap, var claimedTap: Int = 0)
 
 @Composable
-private fun rememberDockSwap(faces: DockFaces, clock: TriggerClock?): DockSwap {
-    val memory = remember { DockSwapMemory(DockSwap(faces, null, null, 0)) }
-    val swap = remember(faces) {
+private fun rememberDockSwap(faces: DockFaces, pace: DockPace, targets: DockGeometryTargets): DockSwap {
+    val memory = remember {
+        DockSwapMemory(DockSwap(faces, null, DockPace.Tap(), null, 0, targets, targets))
+    }
+    val swap = remember(faces, targets, pace) {
         val last = memory.swap
-        if (last.shown == faces) last else Snapshot.withoutReadObservation {
+        if (last.shown == faces && last.toGeom == targets && (last.pace == pace || last.settled.value)) last
+        else if (last.shown == faces && last.pace == pace && last.settled.value) DockSwap(faces, null, pace, null, 0, targets, targets)
+        else Snapshot.withoutReadObservation {
             val from = last.outgoing().takeIf { it != faces }
-            val fresh = clock?.takeIf { it.elapsed <= FocalTiming.TRIGGER_LEAD_MS && it.serial != memory.claimed }
-            DockSwap(faces, from, fresh, fresh?.serial ?: 0)
+            val drawn = last.currentGeometry()
+            val tapVelocity = if (last.ownGeom.isRunning) {
+                geomVelocity(last.fromGeom, last.toGeom, drawn, targets, last.ownGeom.velocity)
+            } else 0f
+            val tapClock = (pace as? DockPace.Tap)?.clock
+            val fresh = tapClock?.takeIf { it.elapsed <= FocalTiming.TRIGGER_LEAD_MS && it.serial != memory.claimedTap }
+            DockSwap(faces, from, pace, fresh, fresh?.serial ?: 0, drawn, targets, tapVelocity)
         }
     }
     SideEffect {
         memory.swap = swap
-        swap.claimed?.let { memory.claimed = it }
+        swap.claimedTapSerial?.let { memory.claimedTap = it }
     }
-    if (swap.runsOwn) LaunchedEffect(swap) { swap.own.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.fadeFast())) }
+    if (swap.runsOwnAlpha || swap.runsOwnGeom) LaunchedEffect(swap) {
+        coroutineScope {
+            if (swap.runsOwnAlpha) launch { swap.ownAlpha.animateTo(1f, FocalMotion.fromTrigger(FocalMotion.fadeFast())) }
+            if (swap.runsOwnGeom) swap.ownGeom.animateTo(
+                1f,
+                FocalMotion.fromTrigger(FocalMotion.move()),
+                initialVelocity = swap.initialGeomVelocity,
+            )
+        }
+    }
     return swap
 }
 
+private fun geomVelocity(
+    prevFrom: DockGeometryTargets,
+    prevTo: DockGeometryTargets,
+    drawn: DockGeometryTargets,
+    nextTo: DockGeometryTargets,
+    prevNormalizedVelocity: Float,
+): Float {
+    val deltas = listOf(
+        (prevTo.first - prevFrom.first) to (nextTo.first - drawn.first),
+        (prevTo.second - prevFrom.second) to (nextTo.second - drawn.second),
+    )
+    val dominant = deltas.maxByOrNull { abs(it.second) } ?: return 0f
+    if (abs(dominant.second) < 1f) return 0f
+    val pxVelocity = dominant.first * prevNormalizedVelocity
+    return (pxVelocity / dominant.second).coerceIn(-MAX_GEOM_VELOCITY, MAX_GEOM_VELOCITY)
+}
+
 /**
- * Draws the slot's face during a swap (spec 4.3, Q7): the incoming container beneath at full alpha and the outgoing
- * one on top at 1 - q, so the coverage never dips; contents fade through, the outgoing at 1 - smoothstep(0, 0.5, q)
- * and the incoming at smoothstep(0.5, 1, q).
+ * Draws the slot's face during a swap (spec 4.3, Q7): incoming container beneath at full alpha, outgoing on top so
+ * coverage never dips, and contents crossfade cleanly without double text.
  */
 @Composable
-private fun <F : Any> SlotSwap(shown: F, leaving: F?, q: () -> Float, face: @Composable BoxScope.(F, containerAlpha: () -> Float, contentAlpha: () -> Float) -> Unit) {
+private fun <F : Any> SlotSwap(
+    shown: F,
+    leaving: F?,
+    q: () -> Float,
+    pagePace: Boolean,
+    modifier: Modifier,
+    face: @Composable BoxScope.(F, containerAlpha: () -> Float, contentAlpha: () -> Float) -> Unit,
+) {
     val outgoing = leaving?.takeIf { it != shown }
-    Box(Modifier.fillMaxWidth().heightIn(min = DockMetrics.height), contentAlignment = Alignment.Center) {
-        key(shown) { face(shown, { 1f }, { if (outgoing == null) 1f else smoothstep(HALF, 1f, q()) }) }
-        outgoing?.let { old -> key(old) { face(old, { 1 - q() }, { 1 - smoothstep(0f, HALF, q()) }) } }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        key(shown) {
+            face(
+                shown,
+                { 1f },
+                {
+                    if (outgoing == null) 1f
+                    else if (pagePace) smoothstep(PAGE_IN_CONTENT_FROM, PAGE_IN_CONTENT_TO, q())
+                    else smoothstep(HALF, 1f, q())
+                },
+            )
+        }
+        outgoing?.let { old ->
+            key(old) {
+                face(
+                    old,
+                    {
+                        if (pagePace) 1f - smoothstep(PAGE_OUT_CONTAINER_FROM, PAGE_OUT_CONTAINER_TO, q())
+                        else 1f - q()
+                    },
+                    {
+                        if (pagePace) 1f - smoothstep(0f, PAGE_CROSSOVER, q())
+                        else 1f - smoothstep(0f, HALF, q())
+                    },
+                )
+            }
+        }
     }
 }
 
 private const val HALF = 0.5f
+private const val PAGE_CROSSOVER = 0.40f
+private const val PAGE_IN_CONTENT_FROM = 0.40f
+private const val PAGE_IN_CONTENT_TO = 0.85f
+private const val PAGE_OUT_CONTAINER_FROM = 0.10f
+private const val PAGE_OUT_CONTAINER_TO = 0.70f
+private const val EMERGING_GLYPH_FROM = 0.6f
+private const val MIN_DRAW_PX = 0.5f
+private const val FULL_FILL = 0.999f
+private const val MAX_GEOM_VELOCITY = 12f
 
 /** A container that is not drawn: another control's fill stands in for it (see PillSlot). */
 private val NoContainer: () -> Float = { 0f }
@@ -1001,19 +1322,45 @@ private val NoContainer: () -> Float = { 0f }
 @Composable
 private fun BoxScope.TonalContainer(dress: Dress, alpha: () -> Float) {
     val colors = FocalTheme.colors
+    val glassHighlightCache = remember { GlassHighlightCache() }
     Box(
-        Modifier.matchParentSize().drawWithCache {
-            val outline = FocalShapes.pill.createOutline(size, layoutDirection, this)
-            val highlight = glassHighlight(outline, DockMetrics.ring.toPx())
-            onDrawBehind {
-                val a = alpha()
-                if (dress == Dress.Paper) drawOutline(outline, colors.s1, alpha = a) else {
-                    drawOutline(outline, Scene.glass, alpha = a)
-                    drawPath(highlight, Scene.glassHighlight, alpha = a)
-                }
+        Modifier.matchParentSize().drawBehind {
+            val a = alpha()
+            if (a <= 0f || size.width <= MIN_DRAW_PX || size.height <= MIN_DRAW_PX) return@drawBehind
+            val corner = CornerRadius(minOf(size.width, size.height) / 2f)
+            if (dress == Dress.Paper) {
+                drawRoundRect(colors.s1, cornerRadius = corner, alpha = a)
+            } else {
+                drawRoundRect(Scene.glass, cornerRadius = corner, alpha = a)
+                val highlight = glassHighlightCache.highlight(size, DockMetrics.ring.toPx())
+                drawPath(highlight, Scene.glassHighlight, alpha = a)
             }
         },
     )
+}
+
+private class GlassHighlightCache {
+    private var lastSize = Size.Unspecified
+    private var lastRing = Float.NaN
+    private val cached = Path()
+    private val shape = Path()
+    private val shifted = Path()
+
+    fun highlight(size: Size, ring: Float): Path {
+        if (lastSize == size && lastRing == ring) return cached
+        lastSize = size
+        lastRing = ring
+        val radius = minOf(size.width, size.height) / 2f
+        val rect = RoundRect(0f, 0f, size.width, size.height, radius, radius)
+        shape.rewind()
+        shape.addRoundRect(rect)
+        shifted.rewind()
+        shifted.addRoundRect(rect)
+        shifted.translate(Offset(0f, ring))
+        cached.rewind()
+        cached.op(shape, shifted, PathOperation.Difference)
+        return cached
+    }
 }
 
 /**
@@ -1023,30 +1370,36 @@ private fun BoxScope.TonalContainer(dress: Dress, alpha: () -> Float) {
 @Composable
 private fun BoxScope.PrimaryContainer(dress: Dress, alpha: () -> Float, onPaper: Boolean = false) {
     val colors = FocalTheme.colors
+    val density = LocalDensity.current
+    val ring = with(density) { DockMetrics.ring.toPx() }
+    val shadow = remember(density) {
+        with(density) {
+            actionShadowPaint(DockMetrics.actionShadowY.toPx(), DockMetrics.actionShadowSigma.toPx(), Scene.actionShadow)
+        }
+    }
+    val gradient = remember { Brush.verticalGradient(listOf(Scene.actionTop, Scene.actionBottom)) }
     Box(
-        Modifier.matchParentSize().drawWithCache {
-            val outline = FocalShapes.pill.createOutline(size, layoutDirection, this)
-            val gradient = Brush.verticalGradient(listOf(Scene.actionTop, Scene.actionBottom))
-            val ring = DockMetrics.ring.toPx()
-            val shadow = actionShadowPaint(DockMetrics.actionShadowY.toPx(), DockMetrics.actionShadowSigma.toPx(), Scene.actionShadow)
-            val radius = size.height / 2
-            onDrawBehind {
-                val a = alpha()
-                if (dress == Dress.Paper) drawOutline(outline, colors.inv, alpha = a) else if (onPaper) {
-                    // The material's white pill over paper (T7): its shadow and ring belong to the material.
-                    drawOutline(outline, gradient, alpha = a)
-                } else {
-                    if (shadow != null && a > 0f) {
-                        shadow.alpha = (Scene.actionShadow.alpha * a * 255).roundToInt()
-                        drawIntoCanvas { it.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, radius, radius, shadow) }
-                    }
-                    drawRoundRect(
-                        Scene.actionRing, topLeft = Offset(-ring, -ring),
-                        size = Size(size.width + 2 * ring, size.height + 2 * ring),
-                        cornerRadius = CornerRadius(radius + ring), alpha = a,
-                    )
-                    drawOutline(outline, gradient, alpha = a)
+        Modifier.matchParentSize().drawBehind {
+            val a = alpha()
+            if (a <= 0f || size.width <= MIN_DRAW_PX || size.height <= MIN_DRAW_PX) return@drawBehind
+            val radius = minOf(size.width, size.height) / 2f
+            val corner = CornerRadius(radius)
+            if (dress == Dress.Paper) {
+                drawRoundRect(colors.inv, cornerRadius = corner, alpha = a)
+            } else if (onPaper) {
+                // The material's white pill over paper (T7): its shadow and ring belong to the material.
+                drawRoundRect(gradient, cornerRadius = corner, alpha = a)
+            } else {
+                if (shadow != null) {
+                    shadow.alpha = (Scene.actionShadow.alpha * a * 255).roundToInt()
+                    drawIntoCanvas { it.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, radius, radius, shadow) }
                 }
+                drawRoundRect(
+                    Scene.actionRing, topLeft = Offset(-ring, -ring),
+                    size = Size(size.width + 2 * ring, size.height + 2 * ring),
+                    cornerRadius = CornerRadius(radius + ring), alpha = a,
+                )
+                drawRoundRect(gradient, cornerRadius = corner, alpha = a)
             }
         },
     )

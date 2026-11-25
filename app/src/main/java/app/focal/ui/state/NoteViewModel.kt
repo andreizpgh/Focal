@@ -193,7 +193,7 @@ class NoteViewModel(application: Application, val noteId: String) : AndroidViewM
                 (phase == NotePhase.READY || phase == NotePhase.PARTIAL_FAILURE),
             paragraphs = data.paragraphs, blankParagraphs = data.blank, gaps = data.gaps, failedParts = note.failedWindows,
             endReason = EndReason.of(note.endReason),
-            noSpeech = note.state == NoteState.READY && data.paragraphs.isEmpty(),
+            noSpeech = phase == NotePhase.READY && data.paragraphs.isEmpty(),
             legacy = note.legacy,
         )
     // Five seconds after its page (or a prefetch) last looked, the reads stop and the state goes back to not loaded: a

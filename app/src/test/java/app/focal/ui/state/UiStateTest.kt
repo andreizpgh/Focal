@@ -10,6 +10,7 @@ import app.focal.data.WaitCause
 import app.focal.recording.LiveSession
 import app.focal.recording.SpeechAvailability
 import app.focal.speech.EngineFault
+import app.focal.ui.note.Arrivals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -147,8 +148,27 @@ class NotePhasesTest {
         assertEquals(NotePhase.WAITING, NotePhases.of(note(NoteState.INTERRUPTED), LiveSession("other"), ready))
         assertEquals(NotePhase.PREPARING_MODEL, NotePhases.of(note(NoteState.INTERRUPTED), LiveSession(), SpeechAvailability.PREPARING))
         assertEquals(NotePhase.READY, NotePhases.of(note(NoteState.READY), LiveSession(), ready))
+        assertEquals(NotePhase.READY, NotePhases.of(note(NoteState.READY), LiveSession("n", processing = true), ready))
         assertEquals(NotePhase.PARTIAL_FAILURE, NotePhases.of(note(NoteState.READY, failed = 2), LiveSession(), ready))
+        assertEquals(NotePhase.PARTIAL_FAILURE, NotePhases.of(note(NoteState.READY, failed = 2), LiveSession("n", processing = true), ready))
         assertEquals(NotePhase.ERROR, NotePhases.of(note(NoteState.ERROR), LiveSession(), ready))
+    }
+
+    @Test fun arrivalsObserveSynchronouslyBeforeLookupAndStayIdempotent() {
+        val arrivals = Arrivals()
+        fun p(id: Long, text: String) = ParagraphUi(id, 0, text, 0, 1_000, emptyList(), exactTimes = true, edited = false, canRestore = false, open = false)
+        val initial = listOf(p(1L, "Initial"))
+        arrivals.observe(initial, transcribing = true, nowMs = 100L)
+        assertNull(arrivals.of(1L, 100L))
+
+        val grown = listOf(p(1L, "Initial grown"), p(2L, "Second"))
+        arrivals.observe(grown, transcribing = true, nowMs = 200L)
+        // Same composition frame lookup immediately sees arrivals without waiting for a second frame.
+        assertEquals(Arrivals.Arrival(7, 200L), arrivals.of(1L, 200L))
+        assertEquals(Arrivals.Arrival(0, 200L), arrivals.of(2L, 200L))
+        // Repeated call with same list instance does not overwrite timestamps.
+        arrivals.observe(grown, transcribing = true, nowMs = 500L)
+        assertEquals(Arrivals.Arrival(7, 200L), arrivals.of(1L, 500L))
     }
 
     @Test fun aStoppedEngineIsTheReasonEveryWaitingNoteWaits() {

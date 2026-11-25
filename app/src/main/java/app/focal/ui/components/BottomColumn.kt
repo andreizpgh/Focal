@@ -153,17 +153,6 @@ fun railDock(areaLeft: Float, areaRight: Float, statusTop: Float, navigationTop:
     Rect(left, top, left + width, top + height)
 }
 
-/**
- * The rail dock's x: centred on the rail's axis (the circles' centre), but never closer than 4 dp to the rail's outer
- * edge, so a wide labelled Resume at a large font grows toward the content instead of off the window.
- */
-private fun Density.railX(circles: Rect, width: Int, rtl: Boolean): Int {
-    val axis = circles.center.x
-    val outer = if (rtl) axis - WindowLayout.railWidth.toPx() / 2 + FocalGrid.x4.toPx() else axis + WindowLayout.railWidth.toPx() / 2 - FocalGrid.x4.toPx()
-    val centred = axis - width / 2f
-    return (if (rtl) maxOf(centred, outer) else minOf(centred, outer - width)).roundToInt()
-}
-
 @Composable
 fun rememberBottomColumnState(): BottomColumnState {
     val state = remember { BottomColumnState() }
@@ -224,6 +213,11 @@ fun BottomColumn(
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) LaunchedEffect(rows != null) {
         // API 26-29 do not animate the IME inset: soften the jump to the settled position.
         snapshotFlow { ime.getBottom(density) }.distinctUntilChanged().collect {
+            rowsAlpha.snapTo(0f)
+            rowsAlpha.animateTo(1f, FocalMotion.fadeFast())
+        }
+    } else LaunchedEffect(rows != null) {
+        if (rows != null) {
             rowsAlpha.snapTo(0f)
             rowsAlpha.animateTo(1f, FocalMotion.fadeFast())
         }
@@ -312,7 +306,7 @@ fun BottomColumn(
             // A dock that has faded out is not placed: rows, the feedback pill and the page's last lines stand where
             // it stood, and an invisible Record or Copy must not take their taps, nor TalkBack's focus.
             if (!dockHidden || fade.value < 1f || dockHideProgress != null) {
-                dockPlaceables.forEach { it.place(railBox?.let { box -> railX(box, it.width, layoutDirection == LayoutDirection.Rtl) } ?: left, dockBottom - it.height) }
+                dockPlaceables.forEach { it.place(railBox?.left?.roundToInt() ?: left, dockBottom - it.height) }
             }
             // Rows over the dock: they arrive where it stands (Find's rows before the keyboard has lifted them) while it
             // fades, and a dock drawn over them would cover the row being typed in.
@@ -341,6 +335,7 @@ fun BottomFade(
 ) {
     val paper = FocalTheme.colors.paper
     val ime = WindowInsets.ime
+    val brushCache = remember { BottomBrushCache() }
     Spacer(
         modifier.drawBehind {
             val top = state.top.value
@@ -355,12 +350,28 @@ fun BottomFade(
             val end = if (overKeyboard) imeTop else elementEnd
             val start = end - (if (keyboard || overKeyboard) keyboardFade.toPx() else state.fadeHeight(this))
             drawRect(
-                Brush.verticalGradient(0f to Color.Transparent, 1f to paper, startY = start, endY = end),
+                brushCache.get(paper, start, end),
                 topLeft = Offset(0f, start), size = Size(size.width, end - start), alpha = strength,
             )
             drawRect(paper, topLeft = Offset(0f, end), size = Size(size.width, size.height - end), alpha = strength)
         },
     )
+}
+
+private class BottomBrushCache {
+    private var lastColor = Color.Unspecified
+    private var lastStart = Float.NaN
+    private var lastEnd = Float.NaN
+    private var brush: Brush? = null
+
+    fun get(paper: Color, start: Float, end: Float): Brush {
+        val cached = brush
+        if (cached != null && paper == lastColor && start == lastStart && end == lastEnd) return cached
+        lastColor = paper
+        lastStart = start
+        lastEnd = end
+        return Brush.verticalGradient(0f to Color.Transparent, 1f to paper, startY = start, endY = end).also { brush = it }
+    }
 }
 
 /** Find and replace rows (spec 4.9.2): fields fill the start column, the controls keep 136 dp, 8 dp apart. */

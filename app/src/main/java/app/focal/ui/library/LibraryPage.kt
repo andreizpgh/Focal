@@ -101,6 +101,7 @@ import app.focal.ui.state.NoteRow
 import app.focal.ui.state.SearchRow
 import app.focal.ui.state.SearchUiState
 import java.time.LocalDate
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** What the library page does; the route provides it from the view models (the gallery from fakes). */
@@ -171,6 +172,8 @@ fun LibraryPage(
     rename: LibraryRenameState = rememberLibraryRenameState(),
     searchList: LazyListState = rememberLazyListState(),
     selection: LibrarySelectionState = rememberLibrarySelectionState(),
+    restoredIds: Set<String> = emptySet(),
+    onEmptyContentBottom: ((Float) -> Unit)? = null,
 ) {
     val shell = LocalShell.current
     val bottom = shell.bottom
@@ -182,7 +185,18 @@ fun LibraryPage(
     var stagePromoting by remember { mutableStateOf(false) }
     val stageNoteId = (model.stage as? StageUi.Note)?.row?.id
     val currentStageNoteId by rememberUpdatedState(stageNoteId)
-    LaunchedEffect(stageNoteId) { stagePromoting = false }
+    val stageMemory = remember { StageMemory(stageNoteId) }
+    if (stageMemory.lastId != stageNoteId) {
+        stageMemory.demotedId = if (stageMemory.lastId != null && stageNoteId != null && stageNoteId in restoredIds) stageMemory.lastId else null
+        stageMemory.lastId = stageNoteId
+    }
+    LaunchedEffect(stageNoteId) {
+        stagePromoting = false
+        if (stageMemory.demotedId != null) {
+            delay(DEMOTED_STAGE_WINDOW_MS)
+            stageMemory.demotedId = null
+        }
+    }
     val imeVisible = WindowInsets.isImeVisible
     val density = LocalDensity.current
 
@@ -371,6 +385,9 @@ fun LibraryPage(
                 renaming = renaming, renameField = renameField, imePadded = renaming != null,
                 openSettings = actions.openSettings, stageFocus = stageFocus, liveSeconds = liveSeconds,
                 stagePromoting = stagePromoting,
+                restoredIds = restoredIds,
+                demotedStageId = stageMemory.demotedId,
+                onEmptyContentBottom = onEmptyContentBottom,
                 // The library itself is on screen: no page, settings, search or scene over it.
                 onScreen = {
                     !shell.libraryCovered && !searchState.open && shell.settings.progress.value <= 0f && shell.live.expansion.value <= 0f
@@ -420,7 +437,10 @@ private fun LibraryContent(
     stageFocus: FocusRequester?,
     liveSeconds: (() -> Long)?,
     stagePromoting: Boolean,
+    restoredIds: Set<String>,
+    demotedStageId: String?,
     onScreen: () -> Boolean,
+    onEmptyContentBottom: ((Float) -> Unit)? = null,
 ) {
     val shell = LocalShell.current
     val reduced = LocalReducedMotion.current
@@ -444,15 +464,18 @@ private fun LibraryContent(
             listScale.snapTo(1f)
         } else {
             emptyAlpha.animateTo(0f, FocalMotion.fadeFast())
-            listScale.snapTo(1f)
-            listAlpha.animateTo(1f, FocalMotion.fade())
+            listScale.snapTo(0.96f)
+            kotlinx.coroutines.coroutineScope {
+                launch { listAlpha.animateTo(1f, FocalMotion.fade()) }
+                launch { listScale.animateTo(1f, FocalMotion.move()) }
+            }
         }
     }
     // Whether each is still on screen, read through derived state: not every frame of their crossfade.
     val emptyShown by remember { derivedStateOf { emptyAlpha.value > 0f } }
     val listShown by remember { derivedStateOf { listAlpha.value > 0f } }
     if (empty || emptyShown) {
-        EmptyLibrary(openSettings, Modifier.fillMaxSize().graphicsLayer { alpha = emptyAlpha.value })
+        EmptyLibrary(openSettings, Modifier.fillMaxSize().graphicsLayer { alpha = emptyAlpha.value }, onContentBottom = onEmptyContentBottom)
     }
     if (!empty || listShown) {
         Box(
@@ -464,7 +487,7 @@ private fun LibraryContent(
         ) {
             LibraryList(
                 model, dates, today, meter, listState, stageActions, rowActions, selection, renaming, renameField, imePadded, stageFocus,
-                liveSeconds, stagePromoting, onScreen,
+                liveSeconds, stagePromoting, restoredIds, demotedStageId, onScreen,
             )
         }
     }
@@ -491,6 +514,8 @@ private fun LibraryList(
     stageFocus: FocusRequester?,
     liveSeconds: (() -> Long)?,
     stagePromoting: Boolean,
+    restoredIds: Set<String>,
+    demotedStageId: String?,
     onScreen: () -> Boolean,
 ) {
     val shell = LocalShell.current
@@ -634,6 +659,7 @@ private fun LibraryList(
                         shown = stageShown,
                         liveSeconds = liveSeconds,
                         selected = row != null && selection.contains(row.id),
+                        restoredIds = restoredIds,
                     )
                 }
             }
@@ -659,10 +685,12 @@ private fun LibraryList(
                     )
                 }
                 itemsIndexed(day.rows, key = { _, row -> row.id }, contentType = { _, _ -> ROW_TYPE }) { at, row ->
+                    val restoredRow = row.id in restoredIds
+                    val demotedRow = row.id == demotedStageId
                     NoteRowItem(
                         row, dates, rowActions,
                         modifier = Modifier.animateItem(
-                            fadeInSpec = itemFadeIn,
+                            fadeInSpec = if (restoredRow || demotedRow) null else itemFadeIn,
                             placementSpec = itemPlacement,
                             // A row promoted from top of list into the Stage card hands off cleanly instead of fading like a deletion.
                             fadeOutSpec = if (stagePromoting && index == 0 && at == 0) null else itemFadeOut,
@@ -673,6 +701,8 @@ private fun LibraryList(
                         // Within a day the rows touch; a day's label parts it from the next.
                         joinsAbove = day.rows.getOrNull(at - 1)?.let { selection.contains(it.id) } == true,
                         joinsBelow = day.rows.getOrNull(at + 1)?.let { selection.contains(it.id) } == true,
+                        restored = restoredRow,
+                        fromStage = demotedRow,
                     )
                 }
             }
@@ -691,7 +721,10 @@ private val RESULTS_RISE = FocalGrid.x12
 private const val STAGE_KEY = "stage"
 private const val DAY_TYPE = "day"
 private const val ROW_TYPE = "row"
+private const val DEMOTED_STAGE_WINDOW_MS = 600L
 private fun dayKey(epochDay: Long) = "day:$epochDay"
+
+private class StageMemory(var lastId: String?, var demotedId: String? = null)
 
 /** The first label sits 32 dp under the stage (spec 4.12.1). */
 private fun firstLabelGap(afterStage: Boolean) = if (afterStage) FocalGrid.x32 else 0.dp

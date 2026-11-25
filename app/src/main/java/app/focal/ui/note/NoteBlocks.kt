@@ -48,6 +48,7 @@ import app.focal.ui.components.NineBars
 import app.focal.ui.components.PressPlate
 import app.focal.ui.components.WaveDress
 import app.focal.ui.components.WaveMode
+import app.focal.ui.components.WaveRenderer
 import app.focal.ui.components.focusRing
 import app.focal.ui.components.markBox
 import app.focal.ui.components.pressScale
@@ -377,7 +378,12 @@ private val GapPlate = PressPlate(FocalShapes.pill)
 internal fun WritingHead(working: Boolean, modifier: Modifier = Modifier) {
     val colors = FocalTheme.colors
     Box(modifier.fillMaxWidth().padding(horizontal = FocalLayout.gutter)) {
-        NineBars(WaveMode.Working(paused = !working), WaveDress.paper(colors), Modifier.markBox(NoteBlockMetrics.writingHead))
+        NineBars(
+            WaveMode.Working(paused = !working),
+            WaveDress.paper(colors),
+            Modifier.markBox(NoteBlockMetrics.writingHead),
+            renderer = WaveRenderer.inFlight,
+        )
     }
 }
 

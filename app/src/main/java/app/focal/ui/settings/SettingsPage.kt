@@ -80,6 +80,7 @@ import app.focal.ui.design.FocalType
 import app.focal.ui.design.LocalWindowLayout
 import app.focal.ui.design.chromeAlign
 import app.focal.ui.design.tabular
+import app.focal.ui.state.SettingsDataTask
 import app.focal.ui.state.SettingsUiState
 import app.focal.ui.state.ThemeMode
 
@@ -185,39 +186,56 @@ fun SettingsPage(
                 GroupLabel(stringResource(R.string.settings_data))
                 SettingsRow(
                     stringResource(R.string.data_export_notes),
-                    value = stringResource(R.string.data_export_format),
+                    value = if (state.busyTask == SettingsDataTask.EXPORT) {
+                        stringResource(R.string.data_exporting)
+                    } else {
+                        stringResource(R.string.data_export_format)
+                    },
                     onClick = { if (canActOnNotes) actions.exportNotes() },
                     enabled = hasNotes && !state.busy,
+                    busy = state.busyTask == SettingsDataTask.EXPORT,
                 )
                 SettingsRow(
                     stringResource(R.string.data_backup),
+                    value = if (state.busyTask == SettingsDataTask.BACKUP) {
+                        stringResource(R.string.data_backing_up)
+                    } else "",
                     onClick = { if (canActOnNotes) choosingBackup = true },
                     enabled = hasNotes && !state.busy,
+                    busy = state.busyTask == SettingsDataTask.BACKUP,
                 )
                 SettingsRow(
                     stringResource(R.string.data_restore),
+                    value = if (state.busyTask == SettingsDataTask.RESTORE) {
+                        stringResource(R.string.data_restoring)
+                    } else "",
                     onClick = { if (!state.busy) actions.restoreBackup() },
                     enabled = !state.busy,
+                    busy = state.busyTask == SettingsDataTask.RESTORE,
                 )
                 SettingsRow(
                     stringResource(R.string.storage_remove_all),
                     value = when {
+                        state.busyTask == SettingsDataTask.REMOVE_AUDIO -> stringResource(R.string.data_removing)
                         !state.usageKnown -> ""
                         state.notesWithAudio > 0 -> audio
                         else -> stringResource(R.string.storage_none)
                     },
                     onClick = { if (canActOnAudio) confirmingRemoveAudio = true },
                     enabled = hasAudio && !state.busy,
+                    busy = state.busyTask == SettingsDataTask.REMOVE_AUDIO,
                 )
                 SettingsRow(
                     stringResource(R.string.data_delete_all),
                     value = when {
+                        state.busyTask == SettingsDataTask.DELETE_ALL -> stringResource(R.string.data_deleting)
                         !state.usageKnown -> ""
                         state.noteCount > 0 -> pluralStringResource(R.plurals.data_note_count, state.noteCount, state.noteCount)
                         else -> stringResource(R.string.data_none)
                     },
                     onClick = { if (canActOnNotes) confirmingDeleteAll = true },
                     enabled = hasNotes && !state.busy,
+                    busy = state.busyTask == SettingsDataTask.DELETE_ALL,
                 )
                 GroupLabel(stringResource(R.string.settings_about))
                 SettingsRow(
@@ -411,6 +429,7 @@ private fun SettingsRow(
     onClick: (() -> Unit)? = null,
     spoken: String? = null,
     enabled: Boolean = true,
+    busy: Boolean = false,
 ) {
     val colors = FocalTheme.colors
     val source = remember { MutableInteractionSource() }
@@ -427,11 +446,11 @@ private fun SettingsRow(
             .padding(horizontal = FocalLayout.gutter, vertical = SettingsMetrics.rowPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, style = FocalType.field, color = if (enabled) colors.ink else colors.faint, textAlign = chromeAlign(), modifier = Modifier.weight(1f))
+        Text(title, style = FocalType.field, color = if (enabled || busy) colors.ink else colors.faint, textAlign = chromeAlign(), modifier = Modifier.weight(1f))
         if (value != null) {
             Spacer(Modifier.width(SettingsMetrics.trailingGap))
             Text(
-                value, style = FocalType.field.tabular(), color = if (enabled) colors.recede else colors.faint,
+                value, style = FocalType.field.tabular(), color = if (enabled || busy) colors.recede else colors.faint,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = SettingsMetrics.valueMaxWidth),
             )
         }

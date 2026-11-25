@@ -1,6 +1,7 @@
 package app.focal.ui.state
 
 import android.app.Application
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.focal.FocalApplication
@@ -15,6 +16,7 @@ import app.focal.recording.SpeechAvailability
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -29,10 +32,15 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
+
+/** Note IDs just brought back by Delete -> Undo, so the library can reverse their delete animation. */
+@Immutable
+data class RestoredNotes(val ids: Set<String> = emptySet(), val generation: Long = 0L)
 
 /** One-off library outcomes for the feedback pill. */
 sealed interface LibraryEvent {
@@ -62,6 +70,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private val refresh = MutableStateFlow(0)
     private val eventFlow = MutableSharedFlow<LibraryEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<LibraryEvent> = eventFlow.asSharedFlow()
+    private val restoredFlow = MutableStateFlow(RestoredNotes())
+    val restored: StateFlow<RestoredNotes> = restoredFlow.asStateFlow()
 
     /** The service state that affects rows; elapsed time and meter ticks are not part of it. */
     private data class LiveRows(val noteId: String?, val capturing: Boolean, val paused: Boolean, val processing: Boolean,
@@ -138,7 +148,28 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     /** Undo on "3 notes deleted": every one comes back; [LibraryEvent.TooLateToUndo] once if any was already gone. */
     fun undoDelete(noteIds: List<String>) = launch {
-        val late = noteIds.filterNot { UndoableActions.undoDelete(app, it) }
+        val batch = noteIds.toSet()
+        var generation = 0L
+        if (batch.isNotEmpty()) {
+            restoredFlow.update { current ->
+                generation = current.generation + 1
+                RestoredNotes(current.ids + batch, generation)
+            }
+        }
+        val restored = mutableSetOf<String>()
+        val late = mutableListOf<String>()
+        for (id in noteIds) {
+            if (UndoableActions.undoDelete(app, id)) restored += id else late += id
+        }
+        if (restored.isEmpty() && batch.isNotEmpty()) {
+            restoredFlow.update { if (it.generation == generation) RestoredNotes(emptySet(), generation) else it }
+        } else if (restored.isNotEmpty()) {
+            val gen = generation
+            viewModelScope.launch {
+                delay(RESTORE_WINDOW_MS)
+                restoredFlow.update { if (it.generation == gen) RestoredNotes(emptySet(), gen) else it }
+            }
+        }
         late.firstOrNull()?.let { eventFlow.emit(LibraryEvent.TooLateToUndo(it)) }
     }
 
@@ -224,6 +255,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     companion object {
         const val SEARCH_DEBOUNCE_MS = 120L
         private const val MAX_QUERY_CHARS = 200
+        private const val RESTORE_WINDOW_MS = 600L
 
         internal fun row(
             note: Note, live: LiveSession, model: ModelState, removals: Set<String> = emptySet(),

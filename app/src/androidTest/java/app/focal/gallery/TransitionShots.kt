@@ -79,7 +79,7 @@ private fun rowNoteAt(index: Int): NoteUiState {
         return NoteUiState(
             noteId = row.id, loaded = true, title = row.title, titleIsCustom = true, created = row.created, durationMs = row.durationMs,
             phase = NotePhase.READY, audioPresent = true, canPlay = true, editable = true,
-            paragraphs = timedParagraphs(listOf(row.preview), row.durationMs), canRemoveAudio = true,
+            paragraphs = timedParagraphs(listOf(row.preview), row.durationMs), canRemoveAudio = true, canAppend = true,
         )
 }
 

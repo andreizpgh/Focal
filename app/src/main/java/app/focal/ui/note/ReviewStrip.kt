@@ -1,5 +1,6 @@
 package app.focal.ui.note
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +37,7 @@ import app.focal.ui.components.pressScale
 import app.focal.ui.components.scrollEdgeFade
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
+import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
@@ -96,7 +99,9 @@ internal fun ReviewStrip(
                 ListenPill(listening = listening, onClick = onListen)
             }
             suggestions.forEach { wording ->
-                SuggestionPill(text = wording, onClick = { onPickSuggestion(wording) })
+                key(wording) {
+                    SuggestionPill(text = wording, onClick = { onPickSuggestion(wording) })
+                }
             }
         }
         if (primary != null) {
@@ -217,6 +222,7 @@ private fun PrimaryReviewPill(primary: ReviewPrimary, onClick: () -> Unit) {
             Modifier
                 .heightIn(min = ReviewStripMetrics.pillHeight)
                 .background(colors.inv, FocalShapes.pill)
+                .animateContentSize(FocalMotion.move())
                 .padding(horizontal = FocalGrid.x16),
             contentAlignment = Alignment.Center,
         ) {

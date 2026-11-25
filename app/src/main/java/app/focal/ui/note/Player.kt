@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -93,7 +94,9 @@ import app.focal.ui.library.spokenDuration
 import app.focal.ui.state.PlaybackViewModel
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Player strip geometry (spec 4.10) and the jump pill's (4.11). */
@@ -128,10 +131,31 @@ class PlayerPosition(private val audio: () -> Long) {
     var frame by mutableLongStateOf(0L)
     /** The playhead under the finger, while it is dragged. */
     var scrubMs by mutableStateOf<Long?>(null)
+    private val glideOffset = Animatable(0f)
+
+    internal val gliding: Boolean get() = glideOffset.isRunning || glideOffset.value != 0f
+
+    internal fun invalidate() { frame++ }
+
+    internal suspend fun glide(fromMs: Long, toMs: Long, reduced: Boolean) {
+        frame++
+        val delta = (fromMs - toMs).toFloat()
+        if (reduced || abs(delta) <= 1f) {
+            glideOffset.snapTo(0f)
+        } else {
+            glideOffset.snapTo(delta)
+            glideOffset.animateTo(0f, FocalMotion.press())
+        }
+    }
+
+    internal suspend fun cancelGlide() {
+        if (glideOffset.value != 0f || glideOffset.isRunning) glideOffset.snapTo(0f)
+    }
 
     fun ms(): Long {
         frame
-        return (scrubMs ?: audio()).coerceIn(0, durationMs.coerceAtLeast(0))
+        val raw = scrubMs ?: (audio() + glideOffset.value.roundToInt().toLong())
+        return raw.coerceIn(0, durationMs.coerceAtLeast(0))
     }
 
     /** Whole seconds shown: changes once a second, so the time labels recompose once a second. */
@@ -147,7 +171,7 @@ class PlayerPosition(private val audio: () -> Long) {
 @Composable
 internal fun PlayerStrip(
     position: PlayerPosition,
-    onSeek: (Long) -> Unit,
+    onSeek: (Long) -> Long,
     modifier: Modifier = Modifier,
     speed: Float = 1f,
     onSelectSpeed: ((Float) -> Unit)? = null,
@@ -156,6 +180,7 @@ internal fun PlayerStrip(
     val reduced = LocalReducedMotion.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val seek by rememberUpdatedState(onSeek)
+    val scope = rememberCoroutineScope()
     val head = remember { Animatable(PlayerMetrics.playhead.value) }
     val dragging = position.scrubMs != null
     LaunchedEffect(dragging, reduced) {
@@ -186,7 +211,10 @@ internal fun PlayerStrip(
                         (position.seconds * MS).toFloat(), 0f..PlayerSteps.rangeEnd(duration), PlayerSteps.steps(duration),
                     )
                     setProgress { target ->
-                        seek(target.roundToInt().toLong().coerceIn(0, duration))
+                        val fromMs = position.ms()
+                        val toMs = seek(target.roundToInt().toLong().coerceIn(0, duration))
+                        position.invalidate()
+                        scope.launch(start = CoroutineStart.UNDISPATCHED) { position.glide(fromMs, toMs, reduced) }
                         true
                     }
                 }
@@ -194,6 +222,7 @@ internal fun PlayerStrip(
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         down.consume()
+                        scope.launch(start = CoroutineStart.UNDISPATCHED) { position.cancelGlide() }
                         val left = track.left
                         val width = track.width.coerceAtLeast(1f)
                         fun at(x: Float): Long {
@@ -209,7 +238,12 @@ internal fun PlayerStrip(
                                 position.scrubMs = at(change.position.x)
                                 change.consume()
                             }
-                            position.scrubMs?.let(seek)
+                            position.scrubMs?.let { raw ->
+                                val fromMs = position.ms()
+                                val toMs = seek(raw)
+                                position.invalidate()
+                                scope.launch(start = CoroutineStart.UNDISPATCHED) { position.glide(fromMs, toMs, reduced) }
+                            }
                         } finally {
                             // Also when the strip leaves under the finger (the audio ended, a recording began), which
                             // cancels the gesture: a scrub position left behind would hold the next playback's playhead.

@@ -234,11 +234,14 @@ internal fun ParagraphText(
     val developed = remember { Animatable(if (arrival == null || reduced) 1f else 0f) }
     val shown = remember { Animatable(if (whole && !reduced) 0f else 1f) }
     val rise = remember { Animatable(if (whole && !reduced) 1f else 0f) }
+    var appliedArrival by remember { mutableStateOf(arrival) }
+    fun arrivalPending() = arrival != null && !reduced && appliedArrival != arrival
     LaunchedEffect(arrival, reduced) {
         if (arrival == null || reduced) {
             if (developed.value != 1f || developed.isRunning) developed.snapTo(1f)
             if (shown.value != 1f || shown.isRunning) shown.snapTo(1f)
             if (rise.value != 0f || rise.isRunning) rise.snapTo(0f)
+            appliedArrival = arrival
             return@LaunchedEffect
         }
         developed.snapTo(0f)
@@ -246,6 +249,7 @@ internal fun ParagraphText(
             shown.snapTo(0f)
             rise.snapTo(1f)
         }
+        appliedArrival = arrival
         delay((arrival.atMs + FocalTiming.DEVELOP_DELAY_MS - SystemClock.uptimeMillis()).coerceAtLeast(0))
         launch { shown.animateTo(1f, FocalMotion.fadeSlow()) }
         launch { rise.animateTo(0f, FocalMotion.move()) }
@@ -261,7 +265,7 @@ internal fun ParagraphText(
     }
     val hit by remember(id, focus) { derivedStateOf { focus.hit?.takeIf { it.paragraphId == id }?.let { it.start until it.end } } }
     // Only an extended paragraph recomposes while it develops: its new range is a span (spec 10).
-    val rangeInk = if (rangeStart != null) lerp(colors.faint, colors.ink, developed.value) else null
+    val rangeInk = if (rangeStart != null) lerp(colors.faint, colors.ink, if (arrivalPending()) 0f else developed.value) else null
     val text = remember(paragraph.text, matches, current, rangeStart, rangeInk, colors.ink, colors.onInv) {
         buildAnnotatedString {
             append(paragraph.text)
@@ -297,7 +301,8 @@ internal fun ParagraphText(
     val selectionColor = LocalTextSelectionColors.current.backgroundColor
     val haptics = rememberFocalHaptics()
     val color = ColorProducer {
-        val ink = if (whole) lerp(colors.faint, colors.ink, developed.value) else colors.ink
+        val dev = if (arrivalPending()) 0f else developed.value
+        val ink = if (whole) lerp(colors.faint, colors.ink, dev) else colors.ink
         lerp(ink, colors.recede, receded.value)
     }
     BasicText(
@@ -311,8 +316,9 @@ internal fun ParagraphText(
         modifier = modifier
             .fillMaxWidth()
             .graphicsLayer {
-                alpha = shown.value * entered()
-                translationY = rise.value * ParagraphMetrics.developRise.toPx()
+                val pendingWhole = arrivalPending() && whole
+                alpha = (if (pendingWhole) 0f else shown.value) * entered()
+                translationY = (if (pendingWhole) 1f else rise.value) * ParagraphMetrics.developRise.toPx()
             }
             .drawWithCache {
                 val result = layoutState.value

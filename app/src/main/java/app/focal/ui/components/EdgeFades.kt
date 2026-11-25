@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -31,10 +32,11 @@ import app.focal.ui.design.FocalTheme
 fun PaperTopFade(solidBelowStatus: Dp, modifier: Modifier, fade: Dp = FocalLayout.topFade, alpha: () -> Float = { 1f }) {
     val paper = FocalTheme.colors.paper
     val status = WindowInsets.statusBars
+    val brush = remember { EdgeBrushCache() }
     Spacer(
         modifier.drawBehind {
             val solid = status.getTop(this).toFloat() + solidBelowStatus.toPx()
-            drawEdge(paper, solid, solid + fade.toPx(), alpha())
+            drawEdge(paper, solid, solid + fade.toPx(), alpha(), brush)
         },
     )
 }
@@ -51,14 +53,16 @@ fun PaperTopFade(solidBelowStatus: Dp, modifier: Modifier, fade: Dp = FocalLayou
 fun LibraryTopFade(stageBottom: () -> Float, modifier: Modifier) {
     val paper = FocalTheme.colors.paper
     val status = WindowInsets.statusBars
+    val bandBrush = remember { EdgeBrushCache() }
+    val statusBrush = remember { EdgeBrushCache() }
     Spacer(
         modifier.drawBehind {
             val top = status.getTop(this).toFloat()
             val edge = FocalLayout.topFade.toPx()
             val bottom = stageBottom()
             val band = if (bottom.isNaN()) 1f else ((top + edge - bottom) / edge).coerceIn(0f, 1f)
-            if (band > 0f) drawEdge(paper, top + StickyLabelMetrics.bandSolid(this), top + StickyLabelMetrics.bandEnd(this), band)
-            drawEdge(paper, top, top + edge, 1f)
+            if (band > 0f) drawEdge(paper, top + StickyLabelMetrics.bandSolid(this), top + StickyLabelMetrics.bandEnd(this), band, bandBrush)
+            drawEdge(paper, top, top + edge, 1f, statusBrush)
         },
     )
 }
@@ -88,11 +92,27 @@ fun Modifier.scrollEdgeFade(scroll: ScrollState, width: Dp = FocalLayout.topFade
         )
     }
 
-private fun DrawScope.drawEdge(paper: Color, solidEnd: Float, fadeEnd: Float, alpha: Float) {
+private fun DrawScope.drawEdge(paper: Color, solidEnd: Float, fadeEnd: Float, alpha: Float, cache: EdgeBrushCache) {
     if (alpha <= 0f) return
     drawRect(paper, size = Size(size.width, solidEnd), alpha = alpha)
     drawRect(
-        Brush.verticalGradient(0f to paper, 1f to Color.Transparent, startY = solidEnd, endY = fadeEnd),
+        cache.get(paper, solidEnd, fadeEnd),
         topLeft = Offset(0f, solidEnd), size = Size(size.width, fadeEnd - solidEnd), alpha = alpha,
     )
+}
+
+private class EdgeBrushCache {
+    private var lastColor = Color.Unspecified
+    private var lastStart = Float.NaN
+    private var lastEnd = Float.NaN
+    private var brush: Brush? = null
+
+    fun get(paper: Color, solidEnd: Float, fadeEnd: Float): Brush {
+        val cached = brush
+        if (cached != null && paper == lastColor && solidEnd == lastStart && fadeEnd == lastEnd) return cached
+        lastColor = paper
+        lastStart = solidEnd
+        lastEnd = fadeEnd
+        return Brush.verticalGradient(0f to paper, 1f to Color.Transparent, startY = solidEnd, endY = fadeEnd).also { brush = it }
+    }
 }

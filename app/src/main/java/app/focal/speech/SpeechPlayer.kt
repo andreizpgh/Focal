@@ -29,6 +29,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.RandomAccessFile
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.roundToInt
 
 /** Positions are absolute milliseconds in the original, mono PCM16 recording. */
 data class PlaybackState(
@@ -38,6 +41,7 @@ data class PlaybackState(
     val durationMs: Long = 0,
     val isPlaying: Boolean = false,
     val speed: Float = 1f,
+    val parked: Boolean = false,
 )
 
 class SpeechPlayer(private val context: Context, private val store: NoteStore, private val scope: CoroutineScope) {
@@ -153,6 +157,24 @@ class SpeechPlayer(private val context: Context, private val store: NoteStore, p
     /** Plays the whole recording of [noteId] from [positionMs] (clamped to the audio). */
     fun playFrom(noteId: String, positionMs: Long, onError: (String) -> Unit) = synchronized(lock) {
         startLocked(Source(noteId, null), positionMs.coerceAtLeast(0), onError)
+    }
+
+    /** Parks [noteId] at [positionMs] in paused state without starting audio output (used when scrubbing near end). */
+    fun parkAt(noteId: String, positionMs: Long) = synchronized(lock) {
+        pauseLocked()
+        val existingDuration = playback.value.takeIf { it.noteId == noteId }?.durationMs?.takeIf { it > 0L }
+        val duration = existingDuration ?: ((store.audioBytes(noteId) / BYTES_PER_FRAME) * 1000L / SAMPLE_RATE)
+        val clamped = if (duration > 0L) positionMs.coerceIn(0L, duration) else positionMs.coerceAtLeast(0L)
+        source = Source(noteId, null)
+        playback.value = PlaybackState(
+            noteId = noteId,
+            passageId = null,
+            positionMs = clamped,
+            durationMs = duration,
+            isPlaying = false,
+            speed = playbackSpeed,
+            parked = true,
+        )
     }
 
     /** Plays [startMs, endMs) of [noteId] only, for example an untranscribed gap. */
@@ -320,10 +342,15 @@ class SpeechPlayer(private val context: Context, private val store: NoteStore, p
                 input.seek(startFrame * BYTES_PER_FRAME)
                 val endByte = rangeEnd * BYTES_PER_FRAME
                 val buffer = ByteArray(4096)
+                var streamedSamples = 0
                 while (input.filePointer < endByte) {
                     currentCoroutineContext().ensureActive()
                     val count = input.read(buffer, 0, minOf(buffer.size.toLong(), endByte - input.filePointer).toInt())
                     check(count > 0 && count % BYTES_PER_FRAME == 0) { "Saved audio ended unexpectedly." }
+                    if (startFrame > 0L && streamedSamples < FADE_IN_SAMPLES) {
+                        applyFadeInPcm16Le(buffer, count, streamedSamples, FADE_IN_SAMPLES)
+                        streamedSamples += count / BYTES_PER_FRAME
+                    }
                     var offset = 0
                     while (offset < count) {
                         currentCoroutineContext().ensureActive()
@@ -372,9 +399,36 @@ class SpeechPlayer(private val context: Context, private val store: NoteStore, p
         }
     }
 
-    private companion object {
+    internal companion object {
         const val SAMPLE_RATE = 16000
         const val BYTES_PER_FRAME = 2
-        const val MAX_OUTPUT_BUFFER_BYTES = 65536
+        const val FADE_IN_SAMPLES = 192
+        private const val MAX_OUTPUT_BUFFER_BYTES = 65536
+    }
+}
+
+/**
+ * Applies a 12 ms (`rampSamples = 192` at 16 kHz) raised-cosine fade-in directly to little-endian PCM16 output chunks
+ * starting from a non-zero seek/resume offset, eliminating start clicks without altering stored audio files.
+ */
+internal fun applyFadeInPcm16Le(
+    buffer: ByteArray,
+    byteCount: Int,
+    startSampleOffset: Int,
+    rampSamples: Int = SpeechPlayer.FADE_IN_SAMPLES,
+) {
+    if (rampSamples <= 0 || startSampleOffset < 0 || startSampleOffset >= rampSamples || byteCount <= 1) return
+    val totalSamples = byteCount / 2
+    val fadeCount = minOf(totalSamples, rampSamples - startSampleOffset)
+    for (i in 0 until fadeCount) {
+        val offset = i * 2
+        val low = buffer[offset].toInt() and 0xFF
+        val high = buffer[offset + 1].toInt()
+        val sample = ((high shl 8) or low).toShort()
+        val t = (startSampleOffset + i).toDouble() / rampSamples
+        val gain = 0.5 * (1.0 - cos(PI * t))
+        val scaled = (sample * gain).roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+        buffer[offset] = (scaled and 0xFF).toByte()
+        buffer[offset + 1] = ((scaled shr 8) and 0xFF).toByte()
     }
 }

@@ -115,7 +115,7 @@ internal fun rows(): List<NoteRow> = FakeNotes.mapIndexed { index, note ->
     NoteRow(
         id = "note-$index", title = note.title, titleIsCustom = true, created = epoch(dayOf(note.day), note.time),
         durationMs = durationMs(note.duration), preview = note.preview, phase = NotePhase.READY, progress = null,
-        audioPresent = true, failedParts = 0, canRemoveAudio = true,
+        audioPresent = true, failedParts = 0, canRemoveAudio = true, canAppend = true,
     )
 }
 

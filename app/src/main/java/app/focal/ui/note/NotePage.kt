@@ -100,6 +100,7 @@ import app.focal.ui.state.NotePhase
 import app.focal.ui.state.NoteUiState
 import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.PlayingWord
+import app.focal.ui.state.SeekSnap
 import app.focal.ui.state.WriteQueue
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
@@ -254,8 +255,8 @@ fun NotePage(
     LaunchedEffect(note.paragraphs, page.editing) { session.sync(note.paragraphs, page.editing) }
     val transcribing = note.phase == NotePhase.TRANSCRIBING || note.phase == NotePhase.PREPARING_MODEL ||
         note.phase == NotePhase.WAITING || note.phase == NotePhase.RECORDING || note.phase == NotePhase.PAUSED
-    // New text is noted once the composition is applied; the paragraphs it shows are composed after it, in layout.
-    SideEffect { page.arrivals.observe(note.paragraphs, transcribing, SystemClock.uptimeMillis()) }
+    // Observe synchronously before ParagraphItem reads arrivals.of(...) so Frame 0 already carries any new arrival.
+    page.arrivals.observe(note.paragraphs, transcribing, SystemClock.uptimeMillis())
     val writing = transcribing && !note.noSpeech
     // Times only while there is audio to go to: without it they are numbers about nothing.
     val times = paragraphTimes && note.audioPresent
@@ -293,26 +294,54 @@ fun NotePage(
     fun lineHeight(id: Long, offset: Int?): () -> Float = { lineBox(page.layouts[id], offset).let { it.second - it.first } }
     val follow = remember { FollowJob() }
     val scrubbing by remember { derivedStateOf { position.scrubMs != null } }
-    LaunchedEffect(playingHere, audio.playing, scrubbing, paragraphs, items) {
+    LaunchedEffect(playingHere, audio.playing, audio.parked, scrubbing, paragraphs, items, note.gaps) {
         if (!playingHere) {
+            page.seekPin = null
             focus.playingId = null
             focus.playingWord = null
             page.playingOutside = null
             return@LaunchedEffect
         }
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            var lastLocatedMs = Long.MIN_VALUE
+            var initialized = false
             do {
+                var locatedThisFrame = false
                 withFrameMillis {
                     if (playback.session.playing) position.frame++
-                    val location = PlayingWord.locate(paragraphs, position.ms())
-                    val paragraph = location?.let { paragraphs.getOrNull(it.paragraphIndex) }
-                    if (focus.playingId != paragraph?.id) focus.playingId = paragraph?.id
-                    val word = location?.wordIndex
-                    if (focus.playingWord != word) focus.playingWord = word
+                    val ms = position.ms()
+                    if (!initialized || ms != lastLocatedMs) {
+                        initialized = true
+                        lastLocatedMs = ms
+                        locatedThisFrame = true
+                        val scrubOrParked = position.scrubMs != null || audio.parked
+                        if (position.scrubMs != null) page.seekPin = null
+                        val location = if (scrubOrParked) {
+                            SeekSnap.locateScrub(paragraphs, note.gaps, ms)
+                        } else {
+                            val pin = page.seekPin
+                            if (pin != null) {
+                                if (!position.gliding && (ms >= pin.wordStartMs || ms < pin.targetMs - 200L)) {
+                                    page.seekPin = null
+                                    PlayingWord.locate(paragraphs, ms)
+                                } else {
+                                    pin.location
+                                }
+                            } else {
+                                PlayingWord.locate(paragraphs, ms)
+                            }
+                        }
+                        val paragraph = location?.let { paragraphs.getOrNull(it.paragraphIndex) }
+                        val word = location?.wordIndex
+                        val suppressParagraph = audio.parked && word == null
+                        val nextId = if (suppressParagraph) null else paragraph?.id
+                        if (focus.playingId != nextId) focus.playingId = nextId
+                        if (focus.playingWord != word) focus.playingWord = word
+                    }
                 }
                 val id = focus.playingId
                 val index = id?.let { indexOf[it] }
-                if (id != null && index != null) {
+                if (locatedThisFrame && id != null && index != null && !audio.parked) {
                     val paragraph = paragraphs.firstOrNull { it.id == id }
                     val word = focus.playingWord?.let { paragraph?.words?.getOrNull(it) }
                     val line = lineBox(page.layouts[id], word?.start)
@@ -344,8 +373,8 @@ fun NotePage(
         listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) page.followSuspended = true }
     }
     // The end of the audio (or of a gap's range) ends the session: the strip leaves, the paragraphs return to ink.
-    LaunchedEffect(audio.playing, audio.noteId) {
-        if (audio.playing || audio.noteId != note.noteId) return@LaunchedEffect
+    LaunchedEffect(audio.playing, audio.noteId, audio.parked) {
+        if (audio.playing || audio.noteId != note.noteId || audio.parked) return@LaunchedEffect
         val end = page.rangeEndMs ?: position.durationMs
         if (end > 0 && playback.positionMs() >= end - END_SLACK_MS) {
             page.rangeEndMs = null
@@ -821,6 +850,7 @@ fun NotePage(
 
     val playFromWord: (ParagraphUi, Int) -> Unit = { paragraph, offset ->
         page.rangeEndMs = null
+        page.seekPin = null
         page.playerDismissed = false
         page.followSuspended = false
         playback.playWord(paragraph, offset)
@@ -1110,6 +1140,7 @@ fun NotePage(
                 val clip = paragraph.listenRange(selection.min, selection.max, lead)
                 val end = (clip.last + 1).coerceAtMost(position.durationMs.takeIf { it > 0 } ?: Long.MAX_VALUE)
                 page.playerDismissed = true
+                page.seekPin = null
                 page.listening = true
                 page.rangeEndMs = end
                 playback.playRange(clip.first, end)
@@ -1151,6 +1182,7 @@ fun NotePage(
             play = {
                 page.playerDismissed = false
                 page.followSuspended = false
+                page.seekPin = null
                 // The page's own playback from here on: a gap's range that was paused no longer ends it.
                 page.rangeEndMs = null
                 if (playback.session.noteId == note.noteId) playback.toggle() else {
@@ -1160,7 +1192,10 @@ fun NotePage(
                 }
             },
             // A pause and nothing else: a toggle would restart a gap's range as the whole note's playback.
-            pausePlayback = { playback.pause() },
+            pausePlayback = {
+                page.seekPin = null
+                playback.pause()
+            },
             copy = actions.copy,
             append = actions.recordMore,
             pause = actions.pause, resume = actions.resume, finish = actions.finish,
@@ -1184,9 +1219,26 @@ fun NotePage(
                     }) {
                         PlayerStrip(
                             position,
-                            onSeek = { ms ->
+                            onSeek = { rawMs ->
                                 page.rangeEndMs = null
-                                playback.playFrom(ms)
+                                val resolved = SeekSnap.resolve(paragraphs, note.gaps, rawMs, position.durationMs)
+                                val snapped = resolved.targetMs
+                                if (snapped != null) {
+                                    val loc = resolved.location
+                                    val wordStart = loc?.wordIndex?.let { idx ->
+                                        paragraphs.getOrNull(loc.paragraphIndex)?.words?.getOrNull(idx)?.startMs
+                                    }
+                                    page.seekPin = if (loc != null && wordStart != null && snapped < wordStart) {
+                                        SeekPin(loc, snapped, wordStart)
+                                    } else null
+                                    playback.playFrom(snapped)
+                                    snapped
+                                } else {
+                                    page.seekPin = null
+                                    val parked = rawMs.coerceIn(0L, position.durationMs.coerceAtLeast(0L))
+                                    playback.parkAt(parked)
+                                    parked
+                                }
                             },
                             speed = audio.speed,
                             onSelectSpeed = playback::setSpeed,
@@ -1423,7 +1475,10 @@ fun NotePage(
                             val shift = reveal.bodyShift()
                             val dy = if (shift > 0f) shift else if (reveal.opening()) (1f - reveal.body()) * settleLiftPx else 0f
                             if (dy > 0.5f) translate(0f, dy) { this@drawWithContent.drawContent() } else drawContent()
-                        },
+                        }
+                        // Isolate LazyColumn in its own RenderNode so bodyShift only re-records translate + drawRenderNode
+                        // without shifting title layout coordinates read via localBoundingBoxOf.
+                        .graphicsLayer {},
                 ) {
                     // The text column is at most 600 dp and centred (spec 2.5); the list itself spans the page, so it
                     // scrolls from its margins too.
@@ -1503,6 +1558,7 @@ fun NotePage(
                                     item.gap, playable = note.audioPresent && note.canPlay && !page.editing && !find.open,
                                     onPlay = {
                                         page.rangeEndMs = item.gap.endMs
+                                        page.seekPin = null
                                         page.playerDismissed = false
                                         playback.playRange(item.gap.startMs, item.gap.endMs)
                                     },
@@ -1541,7 +1597,7 @@ fun NotePage(
                 page.followSuspended = false
                 page.playingOutside = null
             },
-            modifier = Modifier.fillMaxSize().zIndex(FADES_Z),
+            modifier = Modifier.fillMaxSize().zIndex(FADES_Z).graphicsLayer { alpha = reveal.chrome() },
         )
         Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite; contentDescription = announcement })
     }

@@ -95,6 +95,7 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
     val library: LibraryViewModel = viewModel()
     val recording: RecordingViewModel = viewModel()
     val libraryState by library.state.collectAsStateWithLifecycle()
+    val restored by library.restored.collectAsStateWithLifecycle()
     // The recording without its timer: the library is rebuilt when the session changes, not once a second. The time
     // reaches only the live stage's timer and its spoken description.
     val recordingState by recording.stateWithoutTime.collectAsStateWithLifecycle()
@@ -227,10 +228,13 @@ fun LibraryRoute(record: () -> Unit, sheetOpen: Boolean, meter: WaveMeter, state
         capturing = model.live != null,
         blocked = sheetOpen,
         layer = layer,
+        loaded = model.loaded,
         library = {
             LibraryPage(
                 model, search, meter, dates, today, actions, listState = states.list, searchState = states.search, query = states.query,
                 stageFocus = stageFocus, liveSeconds = { liveSeconds.value }, rename = states.rename, searchList = states.searchList,
+                restoredIds = restored.ids,
+                onEmptyContentBottom = { layer.emptyContentBottom = it },
             )
         },
         settings = {

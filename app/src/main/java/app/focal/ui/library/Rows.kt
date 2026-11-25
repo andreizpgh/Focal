@@ -24,6 +24,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,8 +85,12 @@ import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
 import app.focal.ui.design.FocalType
 import app.focal.ui.design.FocalWeight
+import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.alignWith
 import app.focal.ui.design.rememberFocalHaptics
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import app.focal.ui.shell.LocalShell
 import app.focal.ui.shell.pageOrigin
 import app.focal.ui.shell.rememberFocusReport
@@ -152,8 +157,32 @@ fun NoteRowItem(
     /** The rows right above and below are selected too: the plates join into one block, square where they meet. */
     joinsAbove: Boolean = false,
     joinsBelow: Boolean = false,
+    restored: Boolean = false,
+    fromStage: Boolean = false,
 ) {
     val colors = FocalTheme.colors
+    val reduced = LocalReducedMotion.current
+    val shell = LocalShell.current
+    val enterMode = remember {
+        when {
+            reduced || shell.libraryCovered -> 0
+            fromStage -> 2
+            restored -> 1
+            else -> 0
+        }
+    }
+    val enterAlpha = remember { Animatable(if (enterMode != 0) 0f else 1f) }
+    val enterScale = remember { Animatable(when (enterMode) { 1 -> 0.96f; 2 -> 0.98f; else -> 1f }) }
+    val enterShiftDp = remember { Animatable(when (enterMode) { 1 -> -6f; 2 -> -14f; else -> 0f }) }
+    LaunchedEffect(enterMode) {
+        if (enterMode == 0) return@LaunchedEffect
+        if (enterMode == 2) delay(DEMOTE_STAGE_DELAY_MS)
+        coroutineScope {
+            launch { enterAlpha.animateTo(1f, FocalMotion.fade()) }
+            launch { enterScale.animateTo(1f, FocalMotion.move()) }
+            launch { enterShiftDp.animateTo(0f, FocalMotion.move()) }
+        }
+    }
     val source = remember { MutableInteractionSource() }
     val haptics = rememberFocalHaptics()
     // The plate of a selected row: it arrives and leaves on `fadeFast`, read in the draw phase.
@@ -172,17 +201,28 @@ fun NoteRowItem(
     val origin = rememberRowOrigin(row.id, titleMuted = row.title.isBlank(), dock = pageDock(row, capturing))
     val rowLayer = rememberGraphicsLayer()
     SideEffect { origin.layer = rowLayer }
+    val recordsOrigin = remember(pages, row.id) { derivedStateOf { pages.recordsOrigin(row.id) } }
+    val hidesRow = remember(pages, row.id) { derivedStateOf { pages.hidesRow(row.id) } }
+    val flyingTitle = remember(pages, row.id) { derivedStateOf { pages.flying(row.id) } }
     val prepare by rememberUpdatedState(actions.prepare)
     val platePath = remember { Path() }
     Box(
         modifier
+            .then(
+                if (enterMode == 0) Modifier else Modifier.graphicsLayer {
+                    alpha = enterAlpha.value
+                    scaleX = enterScale.value
+                    scaleY = enterScale.value
+                    translationY = enterShiftDp.value.dp.toPx()
+                },
+            )
             .fillMaxWidth()
             .pageOrigin(origin)
             .drawWithContent {
-                if (pages.recordsOrigin(row.id)) {
+                if (recordsOrigin.value) {
                     rowLayer.record { this@drawWithContent.drawContent() }
-                    if (!pages.hidesRow(row.id)) drawLayer(rowLayer)
-                } else if (!pages.hidesRow(row.id)) {
+                    if (!hidesRow.value) drawLayer(rowLayer)
+                } else if (!hidesRow.value) {
                     drawContent()
                 }
             }
@@ -238,7 +278,7 @@ fun NoteRowItem(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .pageOrigin(origin, title = true)
-                                .graphicsLayer { alpha = if (pages.flying(row.id)) 0f else 1f },
+                                .graphicsLayer { alpha = if (flyingTitle.value) 0f else 1f },
                         )
                     },
                     trailing = trailing,
@@ -256,6 +296,7 @@ fun NoteRowItem(
     }
 }
 
+private const val DEMOTE_STAGE_DELAY_MS = 60L
 private val RowTitleStyle = FocalType.rowTitle.copy(lineBreak = LineBreak.Heading)
 
 /**

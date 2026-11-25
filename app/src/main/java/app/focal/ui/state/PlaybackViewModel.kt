@@ -31,7 +31,7 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
     private val failed: (String) -> Unit = { report(R.string.error_playback) }
 
     val session: StateFlow<PlaybackSession> = player.playback
-        .map { PlaybackSession(it.noteId, it.isPlaying, it.durationMs, it.speed) }
+        .map { PlaybackSession(it.noteId, it.isPlaying, it.durationMs, it.speed, it.parked) }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackSession())
 
@@ -48,6 +48,9 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
         if (blocked()) return
         player.playFrom(noteId, positionMs, failed)
     }
+
+    /** Parks [noteId] in paused state at [positionMs] (used when seeking into trailing silence near the end). */
+    fun parkAt(noteId: String, positionMs: Long) = player.parkAt(noteId, positionMs)
 
     /** Plays exactly [startMs, endMs), for example a gap that could not be transcribed. */
     fun playRange(noteId: String, startMs: Long, endMs: Long) {
@@ -87,6 +90,8 @@ class PlaybackViewModel(application: Application) : AndroidViewModel(application
     companion object {
         /** Playback starts this long before the tapped word. */
         const val PREROLL_MS = 500L
+        /** Scrubber release plays this long before a snapped word's start (clamped per previous word gap). */
+        const val SCRUB_LEAD_MS = 150L
         val SPEEDS = floatArrayOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
         /** Quick tap cycle presets; long-press / drag offers every 0.25× step in [SPEEDS]. */
         val QUICK_SPEEDS = floatArrayOf(1f, 1.5f, 2f)

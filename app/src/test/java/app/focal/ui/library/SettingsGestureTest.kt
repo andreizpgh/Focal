@@ -29,16 +29,13 @@ class SettingsGestureTest {
         assertTrue(SettingsGesture.locks(20f, 0f, 0f, 1f))
     }
 
-    @Test fun theHintShowsAtMostTwiceOnlyWithNotesAndNeverAfterSettingsOpened() {
-        // An empty library invites to record; it says nothing about settings.
-        assertFalse(HintRules.allowed(opened = false, shown = 0, hasNotes = false, visit = 1, firstHintVisit = null))
-        assertTrue(HintRules.allowed(opened = false, shown = 0, hasNotes = true, visit = 1, firstHintVisit = null))
+    @Test fun theHintShowsAtMostTwiceAndNeverAfterSettingsOpened() {
+        assertTrue(HintRules.allowed(opened = false, shown = 0, visit = 1, firstHintVisit = null))
         // The second time only in a later visit than the first.
-        assertFalse(HintRules.allowed(opened = false, shown = 1, hasNotes = true, visit = 1, firstHintVisit = 1))
-        assertTrue(HintRules.allowed(opened = false, shown = 1, hasNotes = true, visit = 2, firstHintVisit = 1))
-        assertTrue(HintRules.allowed(opened = false, shown = 1, hasNotes = true, visit = 1, firstHintVisit = null))
-        assertFalse(HintRules.allowed(opened = false, shown = 1, hasNotes = false, visit = 2, firstHintVisit = 1))
-        assertFalse(HintRules.allowed(opened = false, shown = 2, hasNotes = true, visit = 5, firstHintVisit = 1))
-        assertFalse(HintRules.allowed(opened = true, shown = 0, hasNotes = true, visit = 1, firstHintVisit = null))
+        assertFalse(HintRules.allowed(opened = false, shown = 1, visit = 1, firstHintVisit = 1))
+        assertTrue(HintRules.allowed(opened = false, shown = 1, visit = 2, firstHintVisit = 1))
+        assertTrue(HintRules.allowed(opened = false, shown = 1, visit = 1, firstHintVisit = null))
+        assertFalse(HintRules.allowed(opened = false, shown = 2, visit = 5, firstHintVisit = 1))
+        assertFalse(HintRules.allowed(opened = true, shown = 0, visit = 1, firstHintVisit = null))
     }
 }

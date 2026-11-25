@@ -13,6 +13,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -24,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
@@ -35,10 +37,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.focal.R
 import app.focal.data.Preferences
 import app.focal.ui.components.FeedbackAction
+import app.focal.ui.components.FeedbackMetrics
 import app.focal.ui.components.FeedbackResult
 import app.focal.ui.design.FocalGestures
 import app.focal.ui.design.FocalGrid
+import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalTiming
+import app.focal.ui.design.FocalType
 import app.focal.ui.design.LocalReducedMotion
 import app.focal.ui.design.LocalWindowLayout
 import app.focal.ui.design.WindowLayout
@@ -89,13 +94,13 @@ object SettingsGesture {
 }
 
 /**
- * When the hint that settings are a swipe away may show (spec 4.23.5): never after settings was opened, never more
- * than twice, and only once the library holds a note (an empty library has its own invitation, to record); the second
- * time only in a later visit than the first.
+ * When the hint that settings are a swipe away may show (spec 4.23.5): never after settings was opened and never more
+ * than twice (including once on an empty library for someone restoring a backup); the second time only in a later visit
+ * than the first.
  */
 object HintRules {
-    fun allowed(opened: Boolean, shown: Int, hasNotes: Boolean, visit: Int, firstHintVisit: Int?): Boolean = when {
-        opened || shown >= FocalTiming.SETTINGS_HINT_MAX || !hasNotes -> false
+    fun allowed(opened: Boolean, shown: Int, visit: Int, firstHintVisit: Int?): Boolean = when {
+        opened || shown >= FocalTiming.SETTINGS_HINT_MAX -> false
         shown == 0 -> true
         else -> firstHintVisit == null || visit > firstHintVisit
     }
@@ -120,6 +125,8 @@ class SettingsLayerState {
         internal set
     /** The settings hint is in the feedback pill: a touch on the library puts it away (the person has moved on). */
     internal var hinting by mutableStateOf(false)
+    /** Placed bottom Y coordinate of the empty-library invitation group in window px (0f when not showing). */
+    var emptyContentBottom by mutableFloatStateOf(0f)
 }
 
 /**
@@ -137,6 +144,7 @@ fun LibraryHost(
     capturing: Boolean,
     blocked: Boolean,
     layer: SettingsLayerState,
+    loaded: Boolean = true,
     library: @Composable () -> Unit,
     settings: @Composable () -> Unit,
 ) {
@@ -174,7 +182,7 @@ fun LibraryHost(
             }
         }
     }
-    SettingsHint(strip, preferences, layer, touched, hasNotes, capturing, blocked, armed)
+    SettingsHint(strip, preferences, layer, touched, loaded, hasNotes, capturing, blocked, armed)
 
     Box(
         Modifier
@@ -307,6 +315,7 @@ private fun SettingsHint(
     preferences: Preferences?,
     layer: SettingsLayerState,
     touched: Boolean,
+    loaded: Boolean,
     hasNotes: Boolean,
     capturing: Boolean,
     blocked: Boolean,
@@ -314,6 +323,7 @@ private fun SettingsHint(
 ) {
     if (preferences == null) return
     val shell = LocalShell.current
+    val density = LocalDensity.current
     val reduced = LocalReducedMotion.current
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -327,15 +337,32 @@ private fun SettingsHint(
         derivedStateOf { strip.progress.value <= 0f && !strip.progress.isRunning && shell.live.expansion.value <= 0f }
     }
     val isArmed = armed()
+    val emptyMeasured = hasNotes || layer.emptyContentBottom > 0f
     // The hint gives way to what the person does next: a recording, a sheet, search, a selection.
     if (layer.hinting && (capturing || blocked || !isArmed)) LaunchedEffect(Unit) { shell.bottom.feedback.dismiss() }
-    val idle = resumed.isAtLeast(Lifecycle.State.RESUMED) && focused && atRest && !touched && !capturing && !blocked && hasNotes &&
-        isArmed && shell.bottom.feedback.current == null
-    LaunchedEffect(idle) {
+    val idle = loaded && emptyMeasured && resumed.isAtLeast(Lifecycle.State.RESUMED) && focused && atRest &&
+        !touched && !capturing && !blocked && isArmed && shell.bottom.feedback.current == null
+    LaunchedEffect(idle, hasNotes) {
         if (!idle) return@LaunchedEffect
-        delay(FocalTiming.SETTINGS_HINT_IDLE_MS)
+        delay(if (hasNotes) FocalTiming.SETTINGS_HINT_IDLE_MS else FocalTiming.SETTINGS_HINT_EMPTY_IDLE_MS)
+        if (!hasNotes) {
+            val emptyBottom = layer.emptyContentBottom
+            val dockTop = shell.bottom.topTarget
+            if (emptyBottom <= 0f || dockTop.isNaN()) return@LaunchedEffect
+            val wraps = density.fontScale >= FeedbackMetrics.WRAP_FONT_SCALE
+            val requiredSpace = with(density) {
+                val minH = FeedbackMetrics.minHeight.toPx()
+                val textPlusPadding = if (wraps) {
+                    FocalType.meta.lineHeight.toPx() * 2f + (FeedbackMetrics.wrapPadding * 2).toPx()
+                } else {
+                    minH
+                }
+                maxOf(minH, textPlusPadding) + FocalLayout.bottomGap.toPx()
+            }
+            if (emptyBottom > dockTop - requiredSpace) return@LaunchedEffect
+        }
         val visit = LibraryVisits.count
-        if (!HintRules.allowed(preferences.settingsOpened, preferences.settingsPeeks, hasNotes, visit, LibraryVisits.firstHintVisit)) return@LaunchedEffect
+        if (!HintRules.allowed(preferences.settingsOpened, preferences.settingsPeeks, visit, LibraryVisits.firstHintVisit)) return@LaunchedEffect
         preferences.settingsPeeks += 1
         if (LibraryVisits.firstHintVisit == null) LibraryVisits.firstHintVisit = visit
         // In the page's own scope: showing the pill ends the calm this effect is keyed on, which must not take the

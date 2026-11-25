@@ -100,7 +100,7 @@ fun CopyLabel(copied: Boolean, ink: Color, style: TextStyle, glyph: Dp, gap: Dp,
         val loose = Constraints(maxWidth = constraints.maxWidth)
         val icon = glyphs.first().measure(loose)
         val gapPx = gap.roundToPx()
-        val labelCap = max(0, constraints.maxWidth - icon.width - gapPx)
+        val labelCap = if (constraints.hasBoundedWidth) max(0, constraints.maxWidth - icon.width - gapPx) else Constraints.Infinity
         val label = copy.first().measure(Constraints(maxWidth = labelCap))
         val confirmed = done.first().measure(Constraints(maxWidth = labelCap))
         val copyWidth = icon.width + gapPx + label.width

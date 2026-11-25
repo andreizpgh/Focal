@@ -45,7 +45,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val app = application as FocalApplication
     private val store = app.store
     private val visible = MutableStateFlow(false)
-    private val busy = MutableStateFlow(false)
+    private val busy = MutableStateFlow<SettingsDataTask?>(null)
     private val eventFlow = MutableSharedFlow<String>(extraBufferCapacity = 4)
 
     /** One-off status sentences for the Settings feedback pill. */
@@ -85,7 +85,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .flowOn(Dispatchers.IO)
         .onStart { emit(lastUsage) }
 
-    private fun stateOf(settings: Settings, usage: Usage?, isBusy: Boolean) = SettingsUiState(
+    private fun stateOf(settings: Settings, usage: Usage?, busyTask: SettingsDataTask?) = SettingsUiState(
         theme = ThemeMode.of(settings.theme),
         audioBytes = usage?.audioBytes ?: 0L,
         notesWithAudio = usage?.notesWithAudio ?: 0,
@@ -93,11 +93,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         paragraphTimes = settings.paragraphTimes,
         usageKnown = usage != null,
         noteCount = usage?.noteCount ?: 0,
-        busy = isBusy,
+        busyTask = busyTask,
     )
 
     val state: StateFlow<SettingsUiState> = combine(app.preferences.settings, usage, busy, ::stateOf)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), stateOf(app.preferences.settings.value, null, false))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), stateOf(app.preferences.settings.value, null, null))
 
     /** The speech model's install state (Settings may show it; recording never waits for it). */
     val model: StateFlow<ModelStatus> = app.models.status
@@ -107,7 +107,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setParagraphTimes(shown: Boolean) = app.preferences.paragraphTimes(shown)
 
     /** Exports every settled note as a Markdown ZIP to the user-chosen SAF [uri]. */
-    fun exportMarkdown(uri: Uri) = runDataTask {
+    fun exportMarkdown(uri: Uri) = runDataTask(SettingsDataTask.EXPORT) {
         try {
             app.storageReady.await()
             val out = app.contentResolver.openOutputStream(uri) ?: error("Could not open output stream.")
@@ -120,7 +120,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     /** Saves an offline restorable backup ZIP (JSON + optional audio) to [uri]. */
-    fun exportBackup(uri: Uri, includeAudio: Boolean) = runDataTask {
+    fun exportBackup(uri: Uri, includeAudio: Boolean) = runDataTask(SettingsDataTask.BACKUP) {
         try {
             app.storageReady.await()
             val out = app.contentResolver.openOutputStream(uri) ?: error("Could not open output stream.")
@@ -133,7 +133,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     /** Restores notes from a Focal backup ZIP at [uri] without overwriting existing notes. */
-    fun restoreBackup(uri: Uri) = runDataTask {
+    fun restoreBackup(uri: Uri) = runDataTask(SettingsDataTask.RESTORE) {
         try {
             app.storageReady.await()
             val input = app.contentResolver.openInputStream(uri) ?: error("Could not open input stream.")
@@ -154,7 +154,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * "Remove all audio", confirmed: the audio of every note that can lose it now goes at once (their text stays). A
      * note whose audio is still needed keeps it; the row then shows what is left.
      */
-    fun removeAllAudio() = runDataTask {
+    fun removeAllAudio() = runDataTask(SettingsDataTask.REMOVE_AUDIO) {
         val withAudio = try { store.library().filter { it.audioPresent } } catch (error: Exception) {
             if (error is CancellationException) throw error
             emptyList()
@@ -175,7 +175,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * "Delete all notes", confirmed: permanently deletes every settled note and its saved audio. Active recordings
      * or transcriptions are left untouched.
      */
-    fun deleteAllNotes() = runDataTask {
+    fun deleteAllNotes() = runDataTask(SettingsDataTask.DELETE_ALL) {
         val settled = try { store.library().filter { it.state !in NoteState.ACTIVE } } catch (error: Exception) {
             if (error is CancellationException) throw error
             emptyList()
@@ -192,10 +192,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private fun runDataTask(block: suspend () -> Unit) {
-        if (!busy.compareAndSet(false, true)) return
+    private fun runDataTask(task: SettingsDataTask, block: suspend () -> Unit) {
+        if (!busy.compareAndSet(null, task)) return
         viewModelScope.launch(Dispatchers.IO) {
-            try { block() } finally { busy.value = false }
+            try { block() } finally { busy.value = null }
         }
     }
 

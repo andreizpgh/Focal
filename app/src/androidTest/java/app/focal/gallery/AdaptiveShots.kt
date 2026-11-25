@@ -46,7 +46,7 @@ object AdaptiveShots {
         addAll(sized("land-library", Landscape) { Library(idleModel()) })
         add(sized("land-empty", Landscape, dark = false) { Library(LibraryModel(loaded = true)) })
         addAll(sized("land-recording", Landscape) { Library(liveModel(paused = false)) })
-        // Paused, the rail's circle still widens into a labelled Resume (R1).
+        // Paused, the rail's circle stays 56 dp with its red RecordDot and "Resume" tooltip.
         addAll(sized("land-recording-paused", Landscape) { Library(liveModel(paused = true)) })
         addAll(sized("land-scene", Landscape) { SceneFrame(1f, live()) })
         add(sized("land-scene-start", Landscape, dark = false) { SceneFrame(1f, start()) })

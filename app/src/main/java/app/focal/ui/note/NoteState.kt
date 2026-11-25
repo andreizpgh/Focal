@@ -19,6 +19,7 @@ import app.focal.data.TextMatch
 import app.focal.ui.state.EditOutcome
 import app.focal.ui.state.ParagraphUi
 import app.focal.ui.state.PlaybackSession
+import app.focal.ui.state.WordLocation
 import app.focal.ui.state.WriteQueue
 
 /** Playback as the note page uses it: the activity's player, or a fake in the gallery. */
@@ -30,6 +31,7 @@ interface NotePlayback {
     fun positionMs(): Long
     fun playWord(paragraph: ParagraphUi, offset: Int)
     fun playFrom(ms: Long)
+    fun parkAt(ms: Long) {}
     fun playRange(startMs: Long, endMs: Long)
     fun toggle()
     fun pause()
@@ -37,6 +39,9 @@ interface NotePlayback {
     fun setSpeed(speed: Float) {}
     fun cycleSpeed() {}
 }
+
+/** What the note page's scrub-release word pin holds until playback reaches [wordStartMs]. */
+internal data class SeekPin(val location: WordLocation, val targetMs: Long, val wordStartMs: Long)
 
 /** What the note page does beyond playback and editing; the route provides it from the view models. */
 @Stable
@@ -125,6 +130,8 @@ class NotePageState internal constructor(editing: Boolean, field: FieldFocus?, i
     val stripBack = Animatable(0f)
     /** Where a gap's range playback ends: playback that reaches it ends the session. */
     var rangeEndMs: Long? = null
+    /** Snapped word pinned across scrub-release pre-roll until playback enters [SeekPin.wordStartMs]. */
+    internal var seekPin: SeekPin? = null
     /** Edit's ▶ started the playback now running: a short clip of the words at the caret, without strip or follow. */
     var listening by mutableStateOf(false)
         internal set

@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
@@ -59,12 +61,26 @@ object EmptyMetrics {
 
 /**
  * The empty library (spec 4.22.5): no card. The nine bars at rest in ink on paper (42 % of the profile, still,
- * never the full mark), "Speak, and it's written down." and the two teaching lines, centred as one group on the free
- * paper above the dock, 6.7 dp above its centre. Nothing responds to touch here but the settings swipe; TalkBack
- * reads it as one node with the "Open settings" action. It fills the window.
+ * never the full mark), "No notes yet" and its quiet subtitle ("Transcribed offline on this phone."), centred as one
+ * group on the free paper above the dock, 6.7 dp above its centre. Nothing responds to touch here but the settings
+ * swipe; TalkBack reads it as one node with the "Open settings" action. It fills the window.
  */
 @Composable
-fun EmptyLibrary(openSettings: () -> Unit, modifier: Modifier = Modifier) {
+fun EmptyLibrary(
+    openSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+    onContentBottom: ((Float) -> Unit)? = null,
+) {
+    val currentOnBottom = rememberUpdatedState(onContentBottom)
+    val reportedBottom = remember { object { var value = Float.NaN } }
+    if (onContentBottom != null) {
+        DisposableEffect(Unit) {
+            onDispose {
+                reportedBottom.value = Float.NaN
+                currentOnBottom.value?.invoke(0f)
+            }
+        }
+    }
     val colors = FocalTheme.colors
     val density = LocalDensity.current
     val instrument = if (density.fontScale >= EmptyMetrics.LARGE_FONT) EmptyMetrics.instrumentLarge else EmptyMetrics.instrument
@@ -98,7 +114,6 @@ fun EmptyLibrary(openSettings: () -> Unit, modifier: Modifier = Modifier) {
                 )
             },
             {
-                // Each of its two lines wraps balanced at large font sizes ("Text appears after / each pause.").
                 Text(
                     stringResource(R.string.empty_body), style = FocalType.field.copy(lineBreak = LineBreak.Heading),
                     color = colors.recede, textAlign = TextAlign.Center,
@@ -126,6 +141,11 @@ fun EmptyLibrary(openSettings: () -> Unit, modifier: Modifier = Modifier) {
         val freeBottom = constraints.maxHeight - navigation.getBottom(this) - (FocalLayout.dockInset + dockBelow).roundToPx()
         val centre = (freeTop + freeBottom) / 2f - EmptyMetrics.opticalLift.toPx()
         val top = (centre - (inkTop + groupBottom) / 2f).roundToInt().coerceAtLeast(freeTop)
+        val bottomY = (top + groupBottom).toFloat()
+        if (reportedBottom.value != bottomY) {
+            reportedBottom.value = bottomY
+            currentOnBottom.value?.invoke(bottomY)
+        }
         layout(width, constraints.maxHeight) {
             mark.place((width - mark.width) / 2, top)
             headline.place((width - headline.width) / 2, top + headlineTop)

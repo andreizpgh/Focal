@@ -155,9 +155,9 @@ fun FocalApplication.modelStates(): Flow<ModelState> = combine(models.status, en
 object NotePhases {
     fun of(note: Note, live: LiveSession, speech: SpeechAvailability): NotePhase = when {
         live.noteId == note.id && live.capturing -> if (live.paused) NotePhase.PAUSED else NotePhase.RECORDING
+        note.state == NoteState.READY -> if (note.failedWindows > 0) NotePhase.PARTIAL_FAILURE else NotePhase.READY
         live.noteId == note.id && live.processing ->
             if (live.speech == SpeechAvailability.PREPARING) NotePhase.PREPARING_MODEL else NotePhase.TRANSCRIBING
-        note.state == NoteState.READY -> if (note.failedWindows > 0) NotePhase.PARTIAL_FAILURE else NotePhase.READY
         note.state == NoteState.ERROR -> NotePhase.ERROR
         // RECORDING, PAUSED, PROCESSING without a live session (a moment before recovery) and INTERRUPTED.
         speech == SpeechAvailability.PREPARING -> NotePhase.PREPARING_MODEL
@@ -423,6 +423,7 @@ data class PlaybackSession(
     val playing: Boolean = false,
     val durationMs: Long = 0,
     val speed: Float = 1f,
+    val parked: Boolean = false,
 )
 
 enum class ThemeMode(val key: String) {
@@ -432,6 +433,9 @@ enum class ThemeMode(val key: String) {
         fun of(key: String): ThemeMode = entries.firstOrNull { it.key == key } ?: SYSTEM
     }
 }
+
+/** Which bulk Settings → Data operation is currently in progress. */
+enum class SettingsDataTask { EXPORT, BACKUP, RESTORE, REMOVE_AUDIO, DELETE_ALL }
 
 /** Settings: [audioBytes] is the space the kept audio of [notesWithAudio] notes uses; [noteCount] is settled notes. */
 @Immutable
@@ -446,6 +450,9 @@ data class SettingsUiState(
     val usageKnown: Boolean = true,
     /** Settled notes available for export, backup, or bulk deletion. */
     val noteCount: Int = notesWithAudio,
+    /** Currently running Settings → Data operation, if any. */
+    val busyTask: SettingsDataTask? = null,
+) {
     /** An export, backup, restore, or delete-all operation is currently running. */
-    val busy: Boolean = false,
-)
+    val busy: Boolean get() = busyTask != null
+}

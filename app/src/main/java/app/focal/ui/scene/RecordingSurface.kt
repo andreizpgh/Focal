@@ -542,6 +542,8 @@ private fun TextRegion(
     // keeps its latest stretch bright and says it in the state line alone (4.21.4).
     val stageFocus = !scene.storageFull
     val paragraphs = scene.paragraphs
+    val topMask = remember { VerticalGradientCache() }
+    val bottomMask = remember { BottomMaskCache() }
     Box(
         Modifier
             .fillMaxSize()
@@ -556,18 +558,16 @@ private fun TextRegion(
                 val masked = max(listState.overflow(FocalType.sceneText.lineHeight.toPx()), f.stageTextAlpha)
                 val mask = f.textMask * masked
                 if (mask >= 1f) drawRect(
-                    Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, startY = f.textTop, endY = f.textTop + mask),
+                    topMask.get(f.textTop, f.textTop + mask),
                     blendMode = BlendMode.DstIn,
                 )
                 // While "↓ Latest" shows, the text ends 8 dp above it: no glyph sits under or against its glass.
                 val a = latest.value
                 if (a > 0f) {
                     val end = slots.latestBottom - (SceneMetrics.jumpHeight + SceneMetrics.jumpClearance).toPx()
+                    val fade = SceneMetrics.jumpFade.toPx()
                     drawRect(
-                        Brush.verticalGradient(
-                            0f to Color.Black, 1f to Color.Black.copy(alpha = 1 - a),
-                            startY = end - SceneMetrics.jumpFade.toPx(), endY = end,
-                        ),
+                        bottomMask.get(end - fade, end, a),
                         blendMode = BlendMode.DstIn,
                     )
                 }
@@ -898,6 +898,39 @@ private fun LatestPill(open: Boolean, listState: LazyListState, slots: SceneSlot
 }
 
 private const val JUMP_START_SCALE = 0.9f
+
+private class VerticalGradientCache {
+    private var lastStartY = Float.NaN
+    private var lastEndY = Float.NaN
+    private var brush: Brush? = null
+
+    fun get(startY: Float, endY: Float): Brush {
+        val cached = brush
+        if (cached != null && startY == lastStartY && endY == lastEndY) return cached
+        lastStartY = startY
+        lastEndY = endY
+        return Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, startY = startY, endY = endY).also { brush = it }
+    }
+}
+
+private class BottomMaskCache {
+    private var lastStartY = Float.NaN
+    private var lastEndY = Float.NaN
+    private var lastAlpha = Float.NaN
+    private var brush: Brush? = null
+
+    fun get(startY: Float, endY: Float, alpha: Float): Brush {
+        val cached = brush
+        if (cached != null && startY == lastStartY && endY == lastEndY && alpha == lastAlpha) return cached
+        lastStartY = startY
+        lastEndY = endY
+        lastAlpha = alpha
+        return Brush.verticalGradient(
+            0f to Color.Black, 1f to Color.Black.copy(alpha = 1 - alpha),
+            startY = startY, endY = endY,
+        ).also { brush = it }
+    }
+}
 
 /**
  * T7: while the note's paper grows over the scene, the scene's own Pause | Finish in its dress fade with its content

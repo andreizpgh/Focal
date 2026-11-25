@@ -158,7 +158,7 @@ private fun TypeSheet() {
         ).forEach { (name, style) ->
             Column {
                 FakeCaption(name)
-                Text("Speak, and it’s written down. 0123456789 Ёж", style = style, color = c.ink, maxLines = 1)
+                Text("No notes yet. Transcribed offline. 0123456789 Ёж", style = style, color = c.ink, maxLines = 1)
             }
         }
         Box(Modifier.fillMaxWidth().height(220.dp).sceneMaterial(FocalShapes.sheetRadius, ring = c.stageRing).padding(FocalGrid.x20)) {

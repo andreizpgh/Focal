@@ -67,8 +67,8 @@
     <string name="search_none">No notes contain “%s”.</string>
     <string name="day_today">Today</string>
     <string name="day_yesterday">Yesterday</string>
-    <string name="empty_title">Speak, and it’s written down.</string>
-    <string name="empty_body">Tap Record and talk.\nText appears after each pause.</string>
+    <string name="empty_title">No notes yet</string>
+    <string name="empty_body">Transcribed offline on this phone.</string>
     <string name="title_fallback">Note at %s</string>
     <string name="dateline_today">Today, %s</string>
     <string name="dateline_yesterday">Yesterday, %s</string>
@@ -334,7 +334,7 @@
     <string name="a11y_reason_storage">paused, storage is full</string>
     <string name="a11y_stage_note">Latest note. %1$s. %2$s, %3$s.</string>
     <string name="a11y_stage_note_reason">%1$s %2$s</string>
-    <string name="a11y_stage_empty">Speak, and it’s written down. Tap Record and talk. Text appears after each pause.</string>
+    <string name="a11y_stage_empty">No notes yet. Transcribed offline on this phone.</string>
     <string name="a11y_copy_note">Copy note</string>
     <string name="a11y_copy_note_new">Copy note, new</string>
     <string name="a11y_expand_recording">Expand recording</string>
@@ -381,4 +381,9 @@
     <string name="shortcut_long">New recording</string>
     <string name="shortcut_disabled">Recording isn’t available</string>
     <string name="widget_record_description">Start a new recording.</string>
+    <string name="data_exporting">Exporting…</string>
+    <string name="data_backing_up">Backing up…</string>
+    <string name="data_restoring">Restoring…</string>
+    <string name="data_removing">Removing…</string>
+    <string name="data_deleting">Deleting…</string>
 </resources>

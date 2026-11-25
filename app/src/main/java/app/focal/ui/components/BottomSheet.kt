@@ -4,6 +4,9 @@ import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,15 +35,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.unit.dp
+import app.focal.ui.design.FocalGestures
 import app.focal.ui.design.FocalGrid
 import app.focal.ui.design.FocalLayout
 import app.focal.ui.design.FocalMotion
 import app.focal.ui.design.FocalShapes
 import app.focal.ui.design.FocalTheme
+import kotlin.math.min
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
 /** Bottom sheet geometry (spec 4.19). */
@@ -63,19 +71,27 @@ fun FocalBottomSheet(visible: Boolean, onDismiss: () -> Unit, content: @Composab
     var composed by remember { mutableStateOf(visible) }
     val shown = remember { Animatable(if (visible) 1f else 0f) }
     val back = remember { Animatable(0f) }
+    val drag = remember { Animatable(0f) }
     var height by remember { mutableFloatStateOf(0f) }
+    var dismissVelocity by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(visible) {
         if (visible) {
             composed = true
+            dismissVelocity = 0f
             back.snapTo(0f)
+            drag.snapTo(0f)
             shown.animateTo(1f, FocalMotion.moveUnit())
         } else {
-            shown.animateTo(0f, FocalMotion.moveUnit())
+            val remaining = (height - drag.value).coerceAtLeast(1f)
+            val initialV = if (dismissVelocity > 0f) -dismissVelocity / remaining else 0f
+            dismissVelocity = 0f
+            shown.animateTo(0f, FocalMotion.moveUnit(), initialVelocity = initialV)
             composed = false
         }
     }
     if (!composed) return
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
     PredictiveBackHandler(enabled = visible) { events ->
         try {
             events.collect { event -> back.snapTo(event.progress) }
@@ -86,6 +102,11 @@ fun FocalBottomSheet(visible: Boolean, onDismiss: () -> Unit, content: @Composab
             throw cancelled
         }
     }
+    val dragState = rememberDraggableState { delta ->
+        val maxDrag = if (height > 0f) height else Float.MAX_VALUE
+        val next = (drag.value + delta).coerceIn(0f, maxDrag)
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { drag.snapTo(next) }
+    }
     val colors = FocalTheme.colors
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         Box(
@@ -93,14 +114,37 @@ fun FocalBottomSheet(visible: Boolean, onDismiss: () -> Unit, content: @Composab
                 .fillMaxSize()
                 .semantics { hideFromAccessibility() }
                 .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
-                .drawBehind { drawRect(colors.scrim, alpha = shown.value * (1 - back.value)) },
+                .drawBehind {
+                    val dragFraction = if (height > 0f) (drag.value / height).coerceIn(0f, 1f) else 0f
+                    drawRect(colors.scrim, alpha = shown.value * (1f - back.value) * (1f - dragFraction))
+                },
         )
         Column(
             Modifier
                 .widthIn(max = FocalLayout.contentMaxWidth)
                 .fillMaxWidth()
                 .onSizeChanged { height = it.height.toFloat() }
-                .graphicsLayer { translationY = (1 - shown.value) * height + back.value * height }
+                .draggable(
+                    state = dragState,
+                    orientation = Orientation.Vertical,
+                    enabled = visible,
+                    onDragStopped = { velocity ->
+                        val flingThreshold = with(density) { FocalGestures.FLING_DP_PER_S.dp.toPx() }
+                        val distThreshold = if (height > 0f) min(height * 0.30f, with(density) { 96.dp.toPx() }) else Float.MAX_VALUE
+                        if (velocity > flingThreshold || (drag.value > distThreshold && velocity > -flingThreshold)) {
+                            dismissVelocity = velocity.coerceAtLeast(0f)
+                            onDismiss()
+                        } else {
+                            dismissVelocity = 0f
+                            scope.launch { drag.animateTo(0f, FocalMotion.press()) }
+                        }
+                    },
+                )
+                .graphicsLayer {
+                    val remaining = (height - drag.value).coerceAtLeast(0f)
+                    val offset = (1f - shown.value) * remaining + back.value * height + drag.value
+                    translationY = if (height > 0f) offset.coerceAtMost(height) else offset
+                }
                 .semantics { isTraversalGroup = true }
                 .background(if (colors.dark) colors.s1 else colors.paper, FocalShapes.sheetTop)
                 .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
