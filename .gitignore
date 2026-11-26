@@ -39,7 +39,6 @@ app/src/main/assets/model-provenance.json
 *.db-shm
 *.db-wal
 captures/
-.codex-attachments/
 .DS_Store
 __pycache__/
 *.pyc
